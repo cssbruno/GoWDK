@@ -11,14 +11,23 @@ import (
 // Files returns files under root that match at least one include pattern and no
 // exclude pattern. Patterns use slash-separated paths and support **.
 func Files(root string, includes, excludes []string) ([]string, error) {
+	files, _, err := FilesAndDirs(root, includes, excludes)
+	return files, err
+}
+
+// FilesAndDirs returns matching files plus traversed, non-excluded directories
+// under root. Directory paths are useful for polling callers that want to
+// detect additions and removals without rewalking the tree on every tick.
+func FilesAndDirs(root string, includes, excludes []string) ([]string, []string, error) {
 	var files []string
+	var dirs []string
 	includeMatchers, err := compileGlobs(includes)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	excludeMatchers, err := compileGlobs(excludes)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
@@ -48,6 +57,7 @@ func Files(root string, includes, excludes []string) ([]string, error) {
 			if rel != "." && matchesExcludedDir(excludeMatchers, rel) {
 				return filepath.SkipDir
 			}
+			dirs = append(dirs, path)
 			return nil
 		}
 
@@ -57,11 +67,12 @@ func Files(root string, includes, excludes []string) ([]string, error) {
 		files = append(files, path)
 		return nil
 	}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	sort.Strings(files)
-	return files, nil
+	sort.Strings(dirs)
+	return files, dirs, nil
 }
 
 type globPattern string

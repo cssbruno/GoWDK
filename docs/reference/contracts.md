@@ -32,8 +32,9 @@ Addons: []gowdk.Addon{
 }
 ```
 
-The implemented runtime registry is currently independent from compiler
-integration.
+Enable `addons/realtime` alongside `addons/contracts` when the app wants an
+explicit config feature for browser presentation-event fanout. The implemented
+runtime registry is currently independent from compiler integration.
 
 Go does not support generic methods, so the API uses generic functions over a
 registry. Keep this shape while the repository targets Go 1.26; revisit it when
@@ -245,6 +246,10 @@ result, events, err := contracts.CaptureCommandEvents[CreatePatient, CreatePatie
 
 Each captured `EventEnvelope` contains a stable event ID, event category, Go
 type name, and typed value. Capturing does not run event subscribers.
+
+For tests, `runtime/testkit` wraps this path with an in-memory registry helper
+and typed event assertions. See `docs/reference/testing.md` and
+`examples/contracts/patients/contracts_test.go`.
 
 For dependency-free outbox integration, implement the small `Outbox` interface:
 
@@ -495,6 +500,7 @@ Dependency-free adapters:
   `EventSource` for tests, local development, and single-process apps.
 - `runtime/contracts/sse` provides an `http.Handler` and
   `PresentationFanout` for server-sent browser presentation events.
+  `addons/realtime` re-exports this dependency-free SSE hub as `NewSSE`.
 
 Optional broker and realtime adapters:
 
@@ -513,6 +519,9 @@ go get github.com/cssbruno/gowdk/runtime/contracts/redisstream
 go get github.com/cssbruno/gowdk/runtime/contracts/natsbroker
 go get github.com/cssbruno/gowdk/runtime/contracts/websocketfanout
 ```
+
+See `docs/reference/realtime.md` for the transport choice, config setup, and
+deployment caveats.
 
 ## Sink Recipes
 
@@ -783,6 +792,56 @@ Current behavior:
 If the scanner cannot see the query input fields yet, generated query adapters
 construct a zero-value query input before dispatch.
 
+## `.gwdk` Realtime Subscriptions
+
+Use `g:subscribe` beside `g:query` to bind a query-owned region to a
+browser-facing presentation event:
+
+```html
+<section g:query="patients.GetPatientPage" g:subscribe="patients.PatientNotice">
+  <h1>Patients</h1>
+</section>
+```
+
+Current behavior:
+
+- Renders `data-gowdk-subscribe="patients.PatientNotice"` and a validated
+  `data-gowdk-subscribe-type` marker beside the `data-gowdk-query` marker.
+- Adds a subscription record to
+  `internal/gwdkir.Program.RealtimeSubscriptions`.
+- Records query and event aliases, imported package paths when declared with
+  `.gwdk import`, local query/event types, owner metadata, guards, and exact
+  source spans.
+- Requires `realtime.Addon()` in project config.
+- `gowdk check` and CLI `gowdk build` fail when the event reference is missing,
+  linked to an invalid Go handler signature, registered as a domain or
+  integration event, or bound only to non-web runtime roles.
+- `gowdk build` adds `realtime_subscription` events with status and source
+  line/column to `gowdk-build-report.json`.
+- Generated apps with bound subscriptions expose `RealtimeEventsPath`, mount
+  `/_gowdk/realtime/events`, and stream only subscribed presentation event
+  types through the dependency-free SSE fanout by default.
+- Generated realtime streams inherit subscribed page guards. The generated
+  handler chooses page guards from `?path=...` or the same-origin referer path
+  when available, otherwise it fails closed by requiring the union of guarded
+  subscriptions before opening the SSE response.
+- `RegisterRealtimeFanout(realtime.PresentationFanout)` can replace the
+  generated fanout for app-owned transport setup.
+- Generated `gowdk.js` connects subscribed pages to the SSE stream and applies
+  explicit `replaceHTML` patches from presentation event payloads to matching
+  query-owned regions.
+- Requires package-qualified Go references such as
+  `patients.PatientNotice`.
+- Must be on the same element as `g:query`; unbounded subscriptions are
+  rejected.
+
+Only explicit `replaceHTML` client patches are supported today. The
+dependency-free SSE adapter sends a `retry: 1000` directive for browser
+EventSource reconnects and uses bounded per-client buffers; events are dropped
+for clients whose buffers are full rather than blocking command execution.
+Custom retry/backoff/replay, active session-change stream revocation, derived
+invalidation, and richer patch shapes remain separate follow-up pieces.
+
 Templates must not declare backend facts:
 
 ```html
@@ -804,7 +863,10 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Form-local `g:command` references and element-local `g:query` references
   include exact source line and column in IR and build reports.
 - Missing, invalid, or non-web-only command/query references produce
-  `contract_reference_*` diagnostics in `gowdk check` and stop CLI builds.
+  `contract_reference_*` diagnostics in `gowdk check`, in LSP dirty-buffer
+  diagnostics, and stop CLI builds. Diagnostic suggestions point to
+  `gowdk contracts list` and `gowdk contracts graph` when scanned registration
+  state needs inspection.
 - Generated fallback contract routes that remain in appgen for allowed
   non-bound modes return explicit HTTP 501 no-store responses.
 - Other contract diagnostics do not all have exact source spans yet.

@@ -121,6 +121,13 @@ type Options struct {
 	ActionInputFields map[string][]ActionInputField
 	Package           string
 	Uses              map[string]string
+	// Tainted names interpolation values that carry request-time,
+	// attacker-influenceable data (e.g. SSR load {} fields). Tainted values are
+	// rejected in URL-bearing, event-handler, style, and srcdoc attributes the
+	// same way route params are, so they cannot smuggle a javascript:/data: URL
+	// past HTML-text escaping.
+	Tainted                map[string]bool
+	RealtimeEventTypeNames map[string]string
 }
 
 // ActionInputField describes Go action input metadata available while rendering
@@ -204,6 +211,17 @@ type QueryReference struct {
 	End   int
 }
 
+// SubscriptionReference records one query-bounded presentation-event
+// subscription intent.
+type SubscriptionReference struct {
+	Query      string
+	QueryStart int
+	QueryEnd   int
+	Event      string
+	EventStart int
+	EventEnd   int
+}
+
 // RenderWithOptions renders a view markup fragment with component support,
 // interpolation data, and page-scoped action endpoints.
 func RenderWithOptions(source string, components map[string]Component, data map[string]string, options Options) (string, error) {
@@ -219,13 +237,15 @@ func RenderWithOptions(source string, components map[string]Component, data map[
 func RenderNodesWithOptions(nodes []Node, components map[string]Component, data map[string]string, options Options) (string, error) {
 	return renderParsedNodes(nodes, renderContext{
 		renderComponentContext: renderComponentContext{
-			components:   components,
-			ownerPackage: options.Package,
-			uses:         cloneValues(options.Uses),
-			stack:        map[string]bool{},
+			components:             components,
+			ownerPackage:           options.Package,
+			uses:                   cloneValues(options.Uses),
+			realtimeEventTypeNames: cloneValues(options.RealtimeEventTypeNames),
+			stack:                  map[string]bool{},
 		},
 		renderDataContext: renderDataContext{
 			values:       cloneValues(data),
+			tainted:      cloneTaintSet(options.Tainted),
 			actions:      cloneValues(options.Actions),
 			actionFields: cloneActionInputFields(options.ActionInputFields),
 			stateFields:  map[string]bool{},
@@ -436,6 +456,27 @@ func QueryReferences(source string) ([]QueryReference, error) {
 func QueryReferencesFromNodes(nodes []Node) ([]QueryReference, error) {
 	var refs []QueryReference
 	if err := collectQueryReferences(nodes, &refs); err != nil {
+		return nil, err
+	}
+	return refs, nil
+}
+
+// SubscriptionReferences returns package-qualified presentation-event
+// references declared by g:subscribe on query-owned elements.
+func SubscriptionReferences(source string) ([]SubscriptionReference, error) {
+	nodes, err := Parse(source)
+	if err != nil {
+		return nil, err
+	}
+	return SubscriptionReferencesFromNodes(nodes)
+}
+
+// SubscriptionReferencesFromNodes returns package-qualified presentation-event
+// references declared by g:subscribe on query-owned elements in an
+// already-parsed view fragment.
+func SubscriptionReferencesFromNodes(nodes []Node) ([]SubscriptionReference, error) {
+	var refs []SubscriptionReference
+	if err := collectSubscriptionReferences(nodes, &refs); err != nil {
 		return nil, err
 	}
 	return refs, nil

@@ -47,6 +47,44 @@ func collectQueryReferences(nodes []Node, refs *[]QueryReference) error {
 	return nil
 }
 
+func collectSubscriptionReferences(nodes []Node, refs *[]SubscriptionReference) error {
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case Element:
+			directives, err := typed.directiveValues()
+			if err != nil {
+				return err
+			}
+			if directives.Subscribe != "" {
+				*refs = append(*refs, SubscriptionReference{
+					Query:      directives.Query,
+					QueryStart: directives.QueryStart,
+					QueryEnd:   directives.QueryEnd,
+					Event:      directives.Subscribe,
+					EventStart: directives.SubscribeStart,
+					EventEnd:   directives.SubscribeEnd,
+				})
+			}
+			if err := collectSubscriptionReferences(typed.Children, refs); err != nil {
+				return err
+			}
+		case ComponentCall:
+			for _, attr := range typed.Attrs {
+				if attr.Name == "g:event" {
+					return fmt.Errorf("component %s must not declare g:event; domain and integration events are backend-owned facts", typed.Name)
+				}
+				if attr.Name == "g:subscribe" {
+					return fmt.Errorf("component %s must not declare g:subscribe; realtime subscriptions must be declared on query-owned HTML elements", typed.Name)
+				}
+			}
+			if err := collectSubscriptionReferences(typed.Children, refs); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func collectContractReferences(nodes []Node, refs *[]ContractReference) error {
 	for _, node := range nodes {
 		switch typed := node.(type) {

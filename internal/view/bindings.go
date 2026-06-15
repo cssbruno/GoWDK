@@ -46,7 +46,7 @@ func (node Element) initialStyleValue(ctx *renderContext, bindings []styleBindin
 			return "", err
 		}
 		if tainted && unsafeRouteParamAttr(attr.Name) {
-			return "", fmt.Errorf("route param interpolation is not allowed in %q attributes", attr.Name)
+			return "", fmt.Errorf("request-time interpolation (route param or load field) is not allowed in %q attributes", attr.Name)
 		}
 		declarations = append(declarations, strings.TrimSpace(value))
 	}
@@ -268,16 +268,19 @@ func (node Element) SPAInputType(value string) bool {
 }
 
 type postDirectives struct {
-	Action       string
-	Route        string
-	Command      string
-	CommandStart int
-	CommandEnd   int
-	Query        string
-	QueryStart   int
-	QueryEnd     int
-	Target       string
-	Swap         string
+	Action         string
+	Route          string
+	Command        string
+	CommandStart   int
+	CommandEnd     int
+	Query          string
+	QueryStart     int
+	QueryEnd       int
+	Subscribe      string
+	SubscribeStart int
+	SubscribeEnd   int
+	Target         string
+	Swap           string
 }
 
 func (node Element) postDirectives(ctx *renderContext) (postDirectives, error) {
@@ -382,7 +385,7 @@ func (node Element) directiveValues() (postDirectives, error) {
 		if attr.Name == "g:event" {
 			return postDirectives{}, fmt.Errorf("frontend templates must not declare g:event; domain and integration events are backend-owned facts, use g:command for backend intent or g:on:* for local UI events")
 		}
-		if attr.Name != "g:post" && attr.Name != "g:command" && attr.Name != "g:query" && attr.Name != "g:target" && attr.Name != "g:swap" {
+		if attr.Name != "g:post" && attr.Name != "g:command" && attr.Name != "g:query" && attr.Name != "g:subscribe" && attr.Name != "g:target" && attr.Name != "g:swap" {
 			return postDirectives{}, fmt.Errorf("unsupported directive attribute %q in SPA build", attr.Name)
 		}
 		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
@@ -399,6 +402,19 @@ func (node Element) directiveValues() (postDirectives, error) {
 			directives.Query = query
 			directives.QueryStart = attr.Start
 			directives.QueryEnd = attr.End
+			continue
+		}
+		if attr.Name == "g:subscribe" {
+			if directives.Subscribe != "" {
+				return postDirectives{}, fmt.Errorf("element declares multiple g:subscribe directives")
+			}
+			event := strings.TrimSpace(attr.Value)
+			if !contractReferencePattern.MatchString(event) {
+				return postDirectives{}, fmt.Errorf("g:subscribe %q must be a package-qualified Go presentation event reference", event)
+			}
+			directives.Subscribe = event
+			directives.SubscribeStart = attr.Start
+			directives.SubscribeEnd = attr.End
 			continue
 		}
 		if node.Name != "form" {
@@ -446,6 +462,9 @@ func (node Element) directiveValues() (postDirectives, error) {
 	}
 	if directives.Command != "" && directives.Query != "" {
 		return postDirectives{}, fmt.Errorf("form must not declare both g:command and g:query")
+	}
+	if directives.Subscribe != "" && directives.Query == "" {
+		return postDirectives{}, fmt.Errorf("g:subscribe requires g:query on the same element")
 	}
 	if directives.Swap != "" && directives.Target == "" {
 		return postDirectives{}, fmt.Errorf("g:swap requires g:target")

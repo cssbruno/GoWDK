@@ -282,6 +282,13 @@ The repository root includes `gowdk.config.go` so these example commands have
 the same required project config shape as a scaffolded app. Outside this
 repository, run `gowdk init` first or pass `--config <file>`.
 
+For a lesson-by-lesson path through pages, build-time Go data, components,
+CSS/assets, actions, validation, CSRF, APIs, fragments, SSR, guards,
+database-owned Go code, one-binary deploys, Caddy, diagnostics, tests,
+Tailwind, and WASM islands, use the [Native Learning Path](learning/native.md).
+For website-style onboarding and hosted execution constraints, use the
+[Playground Onboarding and Sandboxing](product/playground.md) contract.
+
 Dynamic SPA routes work when literal `paths {}` entries are present:
 
 ```sh

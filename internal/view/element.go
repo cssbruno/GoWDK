@@ -280,7 +280,7 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 			return err
 		}
 		if tainted && unsafeRouteParamAttr(attr.Name) {
-			return fmt.Errorf("route param interpolation is not allowed in %q attributes", attr.Name)
+			return fmt.Errorf("request-time interpolation (route param or load field) is not allowed in %q attributes", attr.Name)
 		}
 		if err := validateRenderedHTMLAttrSafety(attr.Name, value); err != nil {
 			return err
@@ -318,6 +318,16 @@ func (node Element) render(ctx *renderContext, out *renderOutput) error {
 		out.write(` data-gowdk-query="`)
 		out.write(gowhtml.Escape(directives.Query))
 		out.writeByte('"')
+	}
+	if directives.Subscribe != "" {
+		out.write(` data-gowdk-subscribe="`)
+		out.write(gowhtml.Escape(directives.Subscribe))
+		out.writeByte('"')
+		if eventType := ctx.realtimeEventTypeNames[directives.Subscribe]; eventType != "" {
+			out.write(` data-gowdk-subscribe-type="`)
+			out.write(gowhtml.Escape(eventType))
+			out.writeByte('"')
+		}
 	}
 	if directives.Target != "" {
 		out.write(` data-gowdk-target="`)

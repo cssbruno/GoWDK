@@ -187,13 +187,14 @@ func (node ComponentCall) render(ctx *renderContext, out *renderOutput) error {
 	}
 	childCtx := renderContext{
 		renderComponentContext: renderComponentContext{
-			components:   ctx.components,
-			ownerPackage: component.Package,
-			uses:         component.Uses,
-			stack:        cloneStack(ctx.stack),
-			slotHTML:     slotHTML,
-			slots:        slots,
-			scopeIDs:     append([]string(nil), component.ScopeIDs...),
+			components:             ctx.components,
+			ownerPackage:           component.Package,
+			uses:                   component.Uses,
+			realtimeEventTypeNames: ctx.realtimeEventTypeNames,
+			stack:                  cloneStack(ctx.stack),
+			slotHTML:               slotHTML,
+			slots:                  slots,
+			scopeIDs:               append([]string(nil), component.ScopeIDs...),
 		},
 		renderDataContext: renderDataContext{
 			values:       values,

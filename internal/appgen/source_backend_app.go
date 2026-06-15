@@ -36,6 +36,15 @@ func backendRuntimeImportMap(options Options) map[string]string {
 		imports["context"] = "context"
 		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
 	}
+	if generatedRealtimeEnabled(options) {
+		imports["context"] = "context"
+		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
+		imports["gowdkrealtime"] = "github.com/cssbruno/gowdk/addons/realtime"
+	}
+	if generatedRealtimeStreamUsesRouteMatching(options) {
+		imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
+		imports["neturl"] = "net/url"
+	}
 	if len(executableCommandContractExposures(contractExposures)) > 0 {
 		imports["sync"] = "sync"
 	}

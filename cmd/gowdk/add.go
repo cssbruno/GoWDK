@@ -94,6 +94,12 @@ var addonRegistry = map[string]addonSpec{
 		Summary:    "build-time sitemap.xml and robots.txt output",
 		Options:    "Options",
 	},
+	"realtime": {
+		Name:       "realtime",
+		ImportPath: "github.com/cssbruno/gowdk/addons/realtime",
+		Package:    "realtime",
+		Summary:    "browser presentation-event fanout over SSE or WebSocket",
+	},
 	"ssr": {
 		Name:       "ssr",
 		ImportPath: "github.com/cssbruno/gowdk/addons/ssr",

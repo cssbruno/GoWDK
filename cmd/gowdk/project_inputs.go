@@ -58,6 +58,10 @@ func discoverBuildFiles(config gowdk.Config, outputDir string, moduleNames []str
 	return discoverConfiguredFiles(config, outputDir, moduleNames, root)
 }
 
+func discoverBuildFilesAndDirs(config gowdk.Config, outputDir string, moduleNames []string, root string) ([]string, []string, error) {
+	return discoverConfiguredFilesAndDirs(config, outputDir, moduleNames, root)
+}
+
 func discoverProjectFiles(config gowdk.Config, moduleNames []string, root string) ([]string, error) {
 	return discoverConfiguredFiles(config, config.Build.Output, moduleNames, root)
 }
@@ -81,6 +85,27 @@ func discoverConfiguredFiles(config gowdk.Config, outputDir string, moduleNames 
 		excludes = append(excludes, pattern)
 	}
 	return discover.Files(root, includes, excludes)
+}
+
+func discoverConfiguredFilesAndDirs(config gowdk.Config, outputDir string, moduleNames []string, root string) ([]string, []string, error) {
+	if strings.TrimSpace(root) == "" {
+		var err error
+		root, err = os.Getwd()
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	modules, err := buildModules(config.Modules, moduleNames)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	includes := buildSourceIncludes(config, modules, len(moduleNames) > 0)
+	excludes := buildSourceExcludes(config, modules)
+	if pattern := outputExcludePattern(root, outputDir); pattern != "" {
+		excludes = append(excludes, pattern)
+	}
+	return discover.FilesAndDirs(root, includes, excludes)
 }
 
 func loadCommandInputs(args []string, command string, allowJSON bool) (cliOptions, []string, error) {

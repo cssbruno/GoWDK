@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cssbruno/gowdk"
 )
@@ -154,6 +155,53 @@ func TestServerPublishesComponentClientDiagnostics(t *testing.T) {
 	if start["line"] != float64(6) || start["character"] != float64(0) ||
 		end["line"] != float64(6) || end["character"] != float64(1) {
 		t.Fatalf("expected client statement range, got %#v", diagnosticRange)
+	}
+
+	assertResponseID(t, messages[2], float64(2))
+}
+
+func TestServerPublishesContractReferenceDiagnostics(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "gowdk.config.go"), []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pagePath := filepath.Join(root, "pages", "patients.page.gwdk")
+	uri := fileURI(pagePath)
+	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\npage patients\nroute \"/patients\"\nguard public\n\nview {\n  <main>\n    <form method=\"post\" action=\"/patients\" g:command=\"patients.CreatePatient\">\n      <input name=\"name\" />\n    </form>\n  </main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}`) +
+		framed(`{"jsonrpc":"2.0","method":"exit"}`)
+
+	var output bytes.Buffer
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	if err := server.Serve(stringsReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	messages := readOutputMessages(t, output.Bytes())
+	if len(messages) != 3 {
+		t.Fatalf("expected 3 output messages, got %d", len(messages))
+	}
+	params := messages[1]["params"].(map[string]any)
+	if params["uri"] != uri {
+		t.Fatalf("unexpected diagnostic uri: %#v", params["uri"])
+	}
+	diagnostics := params["diagnostics"].([]any)
+	if len(diagnostics) != 1 {
+		t.Fatalf("expected one contract reference diagnostic, got %#v", diagnostics)
+	}
+	diagnostic := diagnostics[0].(map[string]any)
+	if diagnostic["code"] != "contract_reference_missing" {
+		t.Fatalf("expected contract_reference_missing code, got %#v", diagnostic)
+	}
+	if message := diagnostic["message"].(string); !strings.Contains(message, "command patients.CreatePatient has no scanned Go registration") {
+		t.Fatalf("unexpected diagnostic message: %q", message)
+	}
+	diagnosticRange := diagnostic["range"].(map[string]any)
+	start := diagnosticRange["start"].(map[string]any)
+	if start["line"] != float64(8) || start["character"].(float64) <= 0 {
+		t.Fatalf("expected g:command range, got %#v", diagnosticRange)
 	}
 
 	assertResponseID(t, messages[2], float64(2))
@@ -306,6 +354,63 @@ func TestServerReturnsDefinitionForWorkspaceComponentFile(t *testing.T) {
 	}
 	assertResponseID(t, messages[2], float64(2))
 	assertLocation(t, messages[2], componentURI, 2, 0)
+}
+
+func TestServerWorkspaceComponentCacheRefreshesWhenDiskComponentChanges(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "gowdk.config.go"), []byte("package app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pagePath := filepath.Join(root, "pages", "app.page.gwdk")
+	componentPath := filepath.Join(root, "components", "runtime-card.cmp.gwdk")
+	if err := os.MkdirAll(filepath.Dir(pagePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(componentPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pageSource := "package demo\n\npage app\nroute \"/\"\n\nview {\n  <main><RuntimeCard /></main>\n}\n"
+	firstComponentSource := "package demo\n\ncomponent RuntimeCard\n\nview {\n  <section></section>\n}\n"
+	secondComponentSource := "package demo\n\n\ncomponent RuntimeCard\n\nview {\n  <section></section>\n}\n"
+	if err := os.WriteFile(pagePath, []byte(pageSource), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(componentPath, []byte(firstComponentSource), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	doc := document{URI: fileURI(pagePath), Path: pagePath, Version: 1, Text: pageSource}
+	server.documents[doc.URI] = doc
+
+	first, ok := server.resolveComponentDefinition(doc, "RuntimeCard")
+	if !ok {
+		t.Fatal("expected initial workspace component definition")
+	}
+	if got := lspRangeFromSourceSpan(first.Span, first.Text).Start.Line; got != 2 {
+		t.Fatalf("expected initial component definition on line 2, got %d", got)
+	}
+	firstCacheKey := server.workspaceComponentCache.key
+
+	if err := os.WriteFile(componentPath, []byte(secondComponentSource), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		second, ok := server.resolveComponentDefinition(doc, "RuntimeCard")
+		if !ok {
+			t.Fatal("expected refreshed workspace component definition")
+		}
+		line := lspRangeFromSourceSpan(second.Span, second.Text).Start.Line
+		if line == 3 && server.workspaceComponentCache.key != firstCacheKey {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected component cache refresh to line 3, got line %d with cache key %q", line, server.workspaceComponentCache.key)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func TestServerReturnsDefinitionForOpenGoHandlerSymbols(t *testing.T) {

@@ -9,17 +9,22 @@ import (
 	"github.com/cssbruno/gowdk/internal/view"
 )
 
-func clientRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, outputDir string, layouts map[string]gwdkir.Layout, components map[string]view.Component) ([]plannedAssetArtifact, error) {
-	for _, page := range pages {
+func clientRuntimeArtifacts(config gowdk.Config, ir gwdkir.Program, outputDir string, layouts map[string]gwdkir.Layout, components map[string]view.Component) ([]plannedAssetArtifact, error) {
+	for _, page := range ir.Pages {
 		viewSource, err := composePageViewSource(page, layouts)
 		if err != nil {
 			return nil, err
 		}
-		usesSPANavigation, err := pageUsesSPANavigationRuntime(config, page, viewSource, composedPageViewNodes(page), components)
+		viewNodes := composedPageViewNodes(page)
+		usesSPANavigation, err := pageUsesSPANavigationRuntime(config, page, viewSource, viewNodes, components)
 		if err != nil {
 			return nil, err
 		}
-		if pageUsesPartialRuntime(page, viewSource) || usesSPANavigation {
+		usesRealtime, err := pageUsesRealtimeRuntime(page, viewSource, viewNodes, components)
+		if err != nil {
+			return nil, err
+		}
+		if pageUsesPartialRuntime(page, viewSource) || usesSPANavigation || usesRealtime {
 			return []plannedAssetArtifact{{
 				AssetArtifact:        AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(clientRuntimeAssetPath))},
 				contents:             clientrt.Source(),
@@ -32,7 +37,7 @@ func clientRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, outputDir 
 
 func runtimeArtifacts(config gowdk.Config, ir gwdkir.Program, outputDir string, layouts map[string]gwdkir.Layout, components map[string]view.Component) ([]plannedAssetArtifact, error) {
 	var artifacts []plannedAssetArtifact
-	clientRuntime, err := clientRuntimeArtifacts(config, ir.Pages, outputDir, layouts, components)
+	clientRuntime, err := clientRuntimeArtifacts(config, ir, outputDir, layouts, components)
 	if err != nil {
 		return nil, err
 	}

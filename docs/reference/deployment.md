@@ -10,6 +10,19 @@ Deployment orchestration is user-owned. GOWDK can emit a minimal Docker context
 for one-binary deploys, but it does not generate Kubernetes manifests, platform
 adapters, or CDN configuration.
 
+| Shape | Use When | Current Command Surface |
+| --- | --- | --- |
+| Static output | The app has no generated request-time handlers. | `gowdk build --out <dir>` |
+| Single binary | Static output and generated request-time handlers ship together. | `gowdk build --out <dir> --app <dir> --bin <file>` |
+| Split frontend/backend | Static frontend and generated backend routes deploy separately. | `gowdk build --out <dir> --app <dir> --bin <file> --backend-app <dir> --backend-bin <file>` |
+| Backend-only | A generated backend route app is deployed behind another frontend. | `gowdk build --backend-app <dir> --backend-bin <file>` |
+| Go WASM artifact | A host can execute a Go `js/wasm` generated app artifact. | `gowdk build --out <dir> --app <dir> --wasm <file>` |
+
+Optional deployment recipe generators are planned in
+[#423](https://github.com/cssbruno/GoWDK/issues/423). Until then, copy these
+recipes into app-owned infrastructure and review every environment-specific
+setting.
+
 ## Build Output Files
 
 Build build output:
@@ -85,6 +98,41 @@ change which files were embedded.
 Single-binary deploy is the primary GOWDK differentiator. Prefer this path when
 the app needs generated actions, APIs, partial fragments, guards, CSRF, SSR, or
 embedded assets in one artifact.
+
+## Split Frontend And Backend
+
+Use split frontend/backend output when static pages and backend routes have
+different scaling, network, or deployment requirements. A split build creates:
+
+- frontend build output and, when requested, a frontend binary that serves that
+  output;
+- a backend-only generated app and binary for generated action, API, fragment,
+  SSR, and contract routes;
+- frontend proxy metadata for generated backend routes.
+
+The frontend process forwards generated backend routes to
+`GOWDK_BACKEND_ORIGIN`. Set that variable to the internal backend origin, such
+as `http://127.0.0.1:8081` on one host or a private service URL in a platform
+network. Keep CSRF secrets and backend-only service credentials on the backend
+process. Keep TLS, public host routing, compression, and request-ID generation
+at the edge or reverse proxy.
+
+Deploy frontend and backend artifacts together when route manifests, endpoint
+metadata, CSRF policy, or generated asset paths changed. Roll them back
+together for the same reason.
+
+## Backend-Only
+
+`gowdk build --backend-app <dir> --backend-bin <file>` writes a generated
+backend route app without embedding frontend output. Use this for API/action
+services behind an app-owned frontend or split deployment. A backend-only app
+still exposes `/_gowdk/health`, generated headers, registered middleware,
+guards, rate limits, CSRF checks where applicable, and request-time route
+dispatch.
+
+Backend-only output does not serve static pages. Pair it with static output, a
+frontend binary, or a non-GOWDK frontend only when route ownership is explicit
+and the frontend knows where generated endpoints live.
 
 ## Process Lifecycle And Logs
 
@@ -296,6 +344,44 @@ Export, scrape, or aggregate them through app-owned telemetry code. Keep metrics
 labels low-cardinality and avoid user identifiers, tokens, submitted values, or
 full URLs with sensitive query strings.
 
+## Logging, Readiness, And Shutdown
+
+Generated server entrypoints log startup and fatal listen errors with the Go
+standard logger. App-owned middleware and handlers own request logs, structured
+logs, sampling, trace IDs, and log sinks. Do not log secrets, raw submitted form
+values, bearer tokens, CSRF tokens, private keys, database URLs, or full query
+strings that may contain user data.
+
+Use `/_gowdk/health` as a process/readiness check after the binary starts and
+after each deployment step. If the app depends on a database, queue, cache, or
+third-party service, expose those checks in app-owned endpoints or middleware;
+GOWDK health responses must not include secret or tenant-specific details.
+
+Generated entrypoints use the standard HTTP server shape. Platform shutdown,
+drain time, signal handling, and connection draining remain deployment-owned:
+configure systemd, containers, load balancers, or app-owned wrappers to stop
+sending traffic before replacing the process.
+
+## Artifact Layout
+
+Keep deploy artifacts immutable and grouped by build:
+
+```text
+release-YYYY-MM-DD/
+  bin/site
+  dist/site/
+  .gowdk/app/        # optional generated source for debugging/rebuilds
+  checksums.txt
+  gowdk-build-report.json
+  gowdk-routes.json
+  gowdk-assets.json
+  gowdk-security.json
+```
+
+Do not serve `.gowdk/` or non-public reports directly from a static host. For a
+single binary, the embedded output is already inside `bin/site`; keep the source
+reports next to the artifact for audit and rollback, not as public web files.
+
 ## Cache Defaults
 
 Generated binaries use explicit cache headers:
@@ -377,6 +463,20 @@ curl -fsS http://127.0.0.1:8080/_gowdk/health
 
 Then smoke-test one static page and one generated request-time route if the app
 uses actions, APIs, fragments, SSR, guards, or CSRF.
+
+## Backups, Incidents, And Dependencies
+
+GOWDK does not own application data backups, restore testing, incident response,
+dependency update policy, or platform patching. Treat generated artifacts as
+replaceable build output. Back up app-owned databases, object storage, queues,
+event logs, user uploads, secrets, and deployment descriptors according to the
+platform that owns them.
+
+Before a release, record the GOWDK version, Go version, module checksums,
+enabled addons, build target, artifact checksum, and runtime environment names.
+During an incident, use generated route, asset, build, and security reports to
+identify which routes and endpoints are present, then debug user-owned handlers
+and infrastructure through the app's normal observability stack.
 
 ## Module And Target Builds
 

@@ -475,9 +475,13 @@ under `/assets/gowdk/`.
 ## Addons
 
 `Addons` registers optional features such as spa, actions, partial, SSR, API,
-embed, CSS, rate limiting, contracts, auth, DB, and SEO output. Current
-validation uses SSR feature registration for render-mode checks, and SPA builds
-invoke addons that implement `gowdk.CSSProcessor` or `gowdk.SEOProvider`.
+embed, CSS, contracts, realtime, auth, DB helpers, rate limiting, and SEO
+output. Current validation uses feature registration for render-mode,
+realtime, and other compiler checks; SPA builds invoke addons that implement
+`gowdk.CSSProcessor` or `gowdk.SEOProvider`.
+
+DB helper usage is ordinary Go code around `database/sql`; see [db.md](db.md)
+for migrations, transactions, readiness, and sqlc usage.
 
 Use `gowdk add --list` to print built-in addon names, and `gowdk add <name>` to
 insert the canonical import and `<name>.Addon()` constructor into
@@ -492,10 +496,14 @@ imported from their canonical package paths. Most are no-argument constructors;
 import (
 	"github.com/cssbruno/gowdk/addons/actions"
 	"github.com/cssbruno/gowdk/addons/api"
+	"github.com/cssbruno/gowdk/addons/auth"
+	"github.com/cssbruno/gowdk/addons/contracts"
 	"github.com/cssbruno/gowdk/addons/css"
+	"github.com/cssbruno/gowdk/addons/db"
 	"github.com/cssbruno/gowdk/addons/embed"
 	"github.com/cssbruno/gowdk/addons/partial"
 	"github.com/cssbruno/gowdk/addons/ratelimit"
+	"github.com/cssbruno/gowdk/addons/realtime"
 	"github.com/cssbruno/gowdk/addons/seo"
 	"github.com/cssbruno/gowdk/addons/spa"
 	"github.com/cssbruno/gowdk/addons/ssr"
@@ -510,9 +518,13 @@ var Config = gowdk.Config{
 		partial.Addon(),
 		ssr.Addon(),
 		api.Addon(),
+		auth.Addon(),
+		contracts.Addon(),
 		embed.Addon(),
 		css.Addon(),
+		db.Addon(),
 		ratelimit.Addon(),
+		realtime.Addon(),
 		seo.Addon(seo.Options{
 			BaseURL: "https://example.com",
 		}),

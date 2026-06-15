@@ -126,11 +126,59 @@ func injectLiveReloadScript(html []byte) []byte {
 	const script = `<script>
 (() => {
   const overlayID = "__gowdk-error-overlay";
+  const parsePayload = (data) => {
+    if (!data) return { message: "Check the terminal for details." };
+    try {
+      const parsed = JSON.parse(data);
+      if (parsed && typeof parsed === "object") return parsed;
+    } catch (_) {}
+    return { message: data };
+  };
+  const formatPosition = (position) => {
+    if (!position || !position.line || !position.column) return "";
+    return position.line + ":" + position.column;
+  };
+  const formatRange = (range) => {
+    if (!range) return "";
+    const start = formatPosition(range.start);
+    const end = formatPosition(range.end);
+    if (!start) return "";
+    if (!end || end === start) return start;
+    return start + "-" + end;
+  };
+  const formatTime = (value) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString();
+  };
+  const formatDiagnostic = (diagnostic) => {
+    const tags = [];
+    if (diagnostic.code) tags.push("[" + diagnostic.code + "]");
+    if (diagnostic.severity) tags.push(diagnostic.severity);
+    if (diagnostic.file) {
+      const range = formatRange(diagnostic.range);
+      tags.push(diagnostic.file + (range ? ":" + range : ""));
+    }
+    if (diagnostic.route) tags.push("route " + diagnostic.route);
+    if (diagnostic.endpoint) tags.push("endpoint " + diagnostic.endpoint);
+    if (diagnostic.pageId) tags.push("page " + diagnostic.pageId);
+    if (diagnostic.component) tags.push("component " + diagnostic.component);
+    return "- " + (tags.length ? tags.join(" ") + ": " : "") + (diagnostic.message || "diagnostic");
+  };
+  const addSection = (lines, title, values) => {
+    const list = Array.isArray(values) ? values.filter(Boolean) : [];
+    if (list.length === 0) return;
+    if (lines.length > 0 && lines[lines.length - 1] !== "") lines.push("");
+    lines.push(title);
+    for (const value of list) lines.push(value);
+  };
   const removeOverlay = () => {
     const current = document.getElementById(overlayID);
     if (current) current.remove();
   };
-  const showOverlay = (message) => {
+  const showOverlay = (payload) => {
+    payload = typeof payload === "string" ? parsePayload(payload) : (payload || {});
     let overlay = document.getElementById(overlayID);
     if (!overlay) {
       overlay = document.createElement("div");
@@ -139,14 +187,20 @@ func injectLiveReloadScript(html []byte) []byte {
       overlay.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:rgba(24,24,27,.96);color:#fff;font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:24px;overflow:auto;white-space:pre-wrap;";
       document.body.appendChild(overlay);
     }
-    overlay.textContent = "GOWDK build failed\n\n" + message;
+    const lines = ["GOWDK build failed", ""];
+    lines.push(payload.message || "Check the terminal for details.");
+    addSection(lines, "Diagnostics", (payload.diagnostics || []).map(formatDiagnostic));
+    addSection(lines, "Last successful build", [formatTime(payload.lastSuccessfulBuild)]);
+    addSection(lines, "Changed files", payload.changedFiles || []);
+    addSection(lines, "Runtime attribution", [payload.route ? "route " + payload.route : "", payload.endpoint ? "endpoint " + payload.endpoint : ""]);
+    overlay.textContent = lines.join("\n").trimEnd();
   };
   const events = new EventSource("/__gowdk/reload");
   events.addEventListener("reload", () => {
     removeOverlay();
     window.location.reload();
   });
-  events.addEventListener("build-error", (event) => showOverlay(event.data || "Check the terminal for details."));
+  events.addEventListener("build-error", (event) => showOverlay(parsePayload(event.data)));
 })();
 </script>`
 	lower := strings.ToLower(string(html))

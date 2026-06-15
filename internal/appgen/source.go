@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
 func appPackageSource(options Options) (source string, err error) {
@@ -89,6 +90,15 @@ func runtimeImportMap(options Options) map[string]string {
 	if len(executableContracts) > 0 {
 		imports["context"] = "context"
 		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
+	}
+	if generatedRealtimeEnabled(options) {
+		imports["context"] = "context"
+		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
+		imports["gowdkrealtime"] = "github.com/cssbruno/gowdk/addons/realtime"
+	}
+	if generatedRealtimeStreamUsesRouteMatching(options) {
+		imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
+		imports["neturl"] = "net/url"
 	}
 	if len(executableCommandContractExposures(executableContracts)) > 0 {
 		imports["sync"] = "sync"
@@ -266,12 +276,13 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 		csrfOptions = full
 	}
 	decls := actionHandlerDecls(adapter.Actions, csrfEnabled(direct), generatedUsesRateLimit(direct))
-	decls = append(decls, apiFuncDecl(adapter.APIs, generatedUsesRateLimit(direct)))
+	decls = append(decls, apiFuncDecl(adapter.APIs, csrfEnabled(direct), generatedUsesRateLimit(direct)))
 	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(direct)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(direct), generatedUsesRateLimit(direct))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
-	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures)...)
+	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures, generatedRealtimeEnabled(direct))...)
 	decls = append(decls, contractRegistryDecls(adapter.ContractExposures)...)
+	decls = append(decls, realtimeDecls(direct)...)
 	switch {
 	case adapter.HasRegistrations():
 		decls = append(decls, newBackendRouterDecl(adapter))
@@ -283,7 +294,9 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	}
 	csrf := csrfEnabled(csrfOptions)
 	if csrf {
-		decls = append(decls, csrfTokenSourceVarDecl(), csrfValidatorVarDecl(), csrfNewFuncDecl(csrfOptions.Config.Build.CSRF))
+		// Gate the principal binding on full's guards, since guardDecls(full)
+		// below is what declares the authProvider var the binding reads.
+		decls = append(decls, csrfTokenSourceVarDecl(), csrfValidatorVarDecl(), csrfNewFuncDecl(full))
 	}
 	decls = append(decls, rateLimitDecls(full)...)
 	decls = append(decls, guardDecls(full)...)
@@ -294,19 +307,20 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 func backendGeneratedDecls(options Options) []ast.Decl {
 	adapter := backendAdapterIR(options)
 	decls := actionHandlerDecls(adapter.Actions, csrfEnabled(options), generatedUsesRateLimit(options))
-	decls = append(decls, apiFuncDecl(adapter.APIs, generatedUsesRateLimit(options)))
+	decls = append(decls, apiFuncDecl(adapter.APIs, csrfEnabled(options), generatedUsesRateLimit(options)))
 	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(options)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(options), generatedUsesRateLimit(options))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
-	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures)...)
+	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures, generatedRealtimeEnabled(options))...)
 	decls = append(decls, contractRegistryDecls(adapter.ContractExposures)...)
+	decls = append(decls, realtimeDecls(options)...)
 	if adapter.HasRegistrations() {
 		decls = append(decls, newBackendRouterDecl(adapter))
 	} else {
 		decls = append(decls, emptyBackendHandlerDecl())
 	}
 	if csrfEnabled(options) {
-		decls = append(decls, csrfTokenSourceVarDecl(), csrfValidatorVarDecl(), csrfNewFuncDecl(options.Config.Build.CSRF))
+		decls = append(decls, csrfTokenSourceVarDecl(), csrfValidatorVarDecl(), csrfNewFuncDecl(options))
 	}
 	decls = append(decls, rateLimitDecls(options)...)
 	decls = append(decls, guardDecls(options)...)
@@ -393,6 +407,9 @@ func serveMuxDecl(options Options, embedded bool) ast.Decl {
 		)
 	}
 	stmts = append(stmts, define([]ast.Expr{id("mux")}, call(sel("http", "NewServeMux"))))
+	if generatedRealtimeEnabled(options) {
+		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), id("RealtimeEventsPath"), call(id("realtimeEventsHandler")))))
+	}
 	if embedded {
 		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), stringLit("/"), &ast.CallExpr{
 			Fun: sel("gowdkruntime", "ApplyMiddlewares"),
@@ -734,7 +751,16 @@ func importSpecSource(imports map[string]string) string {
 
 func csrfEnabled(options Options) bool {
 	adapter := backendAdapterIR(options)
-	return options.Config.Build.CSRF.EnabledForGeneratedEndpoints() && (adapter.HasEndpointKind(BackendEndpointAction) || contractExposuresParseForm(executableContractExposures(adapter.ContractExposures)))
+	return options.Config.Build.CSRF.EnabledForGeneratedEndpoints() && (adapter.HasEndpointKind(BackendEndpointAction) || adapter.HasCSRFSensitiveAPI() || contractExposuresParseForm(executableContractExposures(adapter.ContractExposures)))
+}
+
+func (ir BackendAdapterIR) HasCSRFSensitiveAPI() bool {
+	for _, api := range ir.APIs {
+		if gwdkir.HTTPMethodRequiresCSRF(api.Method) {
+			return true
+		}
+	}
+	return false
 }
 
 func csrfHelperSource(options Options) (source string, err error) {
@@ -746,7 +772,7 @@ func csrfHelperSource(options Options) (source string, err error) {
 	return printActionDecls([]ast.Decl{
 		csrfTokenSourceVarDecl(),
 		csrfValidatorVarDecl(),
-		csrfNewFuncDecl(options.Config.Build.CSRF),
+		csrfNewFuncDecl(options),
 	})
 }
 
@@ -770,7 +796,8 @@ func csrfValidatorVarDecl() ast.Decl {
 	}
 }
 
-func csrfNewFuncDecl(config gowdk.CSRFConfig) *ast.FuncDecl {
+func csrfNewFuncDecl(genOptions Options) *ast.FuncDecl {
+	config := genOptions.Config.Build.CSRF
 	secretEnv := config.SecretEnvName()
 	options := []ast.Expr{keyValue("Secret", call(&ast.ArrayType{Elt: id("byte")}, id("secret")))}
 	if config.CookieName != "" {
@@ -784,6 +811,13 @@ func csrfNewFuncDecl(config gowdk.CSRFConfig) *ast.FuncDecl {
 	}
 	if config.Insecure {
 		options = append(options, keyValue("Insecure", id("true")))
+	}
+	// Bind the token to the authenticated principal when the app resolves one,
+	// so a token minted for one user is rejected for another. Only wired when
+	// native RBAC guards exist, because that is what declares the authProvider
+	// var the binding reads.
+	if generatedUsesNativeRBACGuards(genOptions) {
+		options = append(options, keyValue("Binding", csrfPrincipalBindingExpr()))
 	}
 	return funcDecl("newCSRF", nil, []*ast.Field{
 		{Type: &ast.StarExpr{X: sel("gowdkactions", "CSRF")}},
@@ -802,6 +836,41 @@ func csrfNewFuncDecl(config gowdk.CSRFConfig) *ast.FuncDecl {
 			Elts: options,
 		})}},
 	})
+}
+
+// csrfPrincipalBindingExpr builds the CSRFOptions.Binding func literal that
+// ties a CSRF token to the authenticated principal's ID. It returns nil for
+// anonymous requests so the token remains a valid signed double-submit token
+// before login and becomes session-bound once a principal resolves.
+func csrfPrincipalBindingExpr() ast.Expr {
+	return &ast.FuncLit{
+		Type: &ast.FuncType{
+			Params: &ast.FieldList{List: []*ast.Field{
+				{Names: []*ast.Ident{id("request")}, Type: &ast.StarExpr{X: sel("http", "Request")}},
+			}},
+			Results: &ast.FieldList{List: []*ast.Field{
+				{Type: &ast.ArrayType{Elt: id("byte")}},
+			}},
+		},
+		Body: block(
+			&ast.IfStmt{
+				Cond: &ast.BinaryExpr{X: id("authProvider"), Op: token.EQL, Y: id("nil")},
+				Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil")}}),
+			},
+			define([]ast.Expr{id("principal"), id("err")}, call(selExpr(id("authProvider"), "Principal"), id("request"))),
+			&ast.IfStmt{
+				Cond: &ast.BinaryExpr{
+					X:  notNil("err"),
+					Op: token.LOR,
+					Y:  &ast.BinaryExpr{X: id("principal"), Op: token.EQL, Y: id("nil")},
+				},
+				Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil")}}),
+			},
+			&ast.ReturnStmt{Results: []ast.Expr{
+				call(&ast.ArrayType{Elt: id("byte")}, selExpr(id("principal"), "ID")),
+			}},
+		),
+	}
 }
 
 func backendCallbackName(options Options) string {

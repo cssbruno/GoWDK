@@ -1,0 +1,35 @@
+package endpoints
+
+page endpoints.api
+route "/endpoints/api"
+guard public
+
+api Session GET "/api/session"
+api Search GET "/api/search"
+api ListItems GET "/api/items"
+api CreateItem POST "/api/items"
+api UpdateItem PATCH "/api/items/update"
+api DeleteItem DELETE "/api/items/delete"
+api DeployWebhook POST "/api/webhooks/deploy"
+
+view {
+  <main>
+    <h1>API endpoint cookbook</h1>
+    <p>These endpoints are declared in native GOWDK syntax and implemented in Go handlers.</p>
+
+    <section>
+      <h2>Session and search</h2>
+      <p>Try GET /api/session or GET /api/search?q=go from the generated binary.</p>
+    </section>
+
+    <section>
+      <h2>JSON CRUD</h2>
+      <p>Use GET and POST /api/items, then PATCH /api/items/update or DELETE /api/items/delete with an id query value.</p>
+    </section>
+
+    <section>
+      <h2>Webhook</h2>
+      <p>POST JSON to /api/webhooks/deploy with X-GOWDK-Event set to deploy.finished.</p>
+    </section>
+  </main>
+}

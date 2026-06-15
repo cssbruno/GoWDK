@@ -139,6 +139,10 @@ level, the current baseline already includes:
   standalone fragment routes, and concrete or dynamic request-time SSR pages
   with declared `load {}` fields through buildgen, appgen, `runtime/app`, and
   `runtime/route`.
+- compiler-validated query-bounded `g:subscribe` metadata for presentation
+  events, including IR records, build-report events, exact event-type HTML
+  markers, generated client `replaceHTML` patches, and
+  missing/invalid/non-web-role diagnostics.
 - `gowdk audit` posture and policy evaluation for routes, backend endpoints,
   command/query contract web endpoints, and frontend audit surfaces, with
   declared `*.audit.gwdk` policies, generated runtime audit tests,
@@ -175,13 +179,13 @@ are stable.
 | 11 | Guards and runtime context | Generated guards work for SSR, actions, and APIs. The request context helper contract is documented around `context.Context`, `app.Request(ctx)`, `app.Params(ctx)`, `app.CSRF(ctx)`, and `app.Session(ctx)`, or the project deliberately switches to an explicit app context. |
 | 12 | Request-time page rendering | Generated SSR handlers execute `load {}`, enforce guards, decode typed route params, expose route-level metadata, support redirects and error pages, and run full request-time user logic through the integrated request-time page lane. |
 | 13 | Errors, cache, and hybrid | SSR/action/API error boundaries are defined. Static files, SPA routes, backend endpoints, partial responses, SSR routes, and hybrid pages get cache and revalidation policy. Hybrid pages use the explicit request-time lane while streaming, data refresh, and non-HTTP revalidation remain separate planned capabilities. |
-| 14 | Contract-driven runtime | Queries, commands, domain events, integration events, presentation events, and jobs are typed Go contracts. Frontend UI events trigger commands or queries. Commands have one owner. Domain and integration events are backend-owned facts emitted after backend success. Presentation events notify realtime UI. Local in-process dispatch is default, optional worker/cron roles can run the same registrations, and CLI tooling can list, trace, or graph contracts. |
+| 14 | Contract-driven runtime | Queries, commands, domain events, integration events, presentation events, and jobs are typed Go contracts. Frontend UI events trigger commands or queries. Commands have one owner. Domain and integration events are backend-owned facts emitted after backend success. Presentation events notify realtime UI through explicit, query-bounded subscription metadata, generated subscription-filtered SSE fanout, and generated bounded client patches. Local in-process dispatch is default, optional worker/cron roles can run the same registrations, and CLI tooling can list, trace, or graph contracts. |
 | 15 | Static-first SPA navigation | SPA routes remain real URLs that work on direct open and refresh. Generated JS may intercept internal links, fetch built page shells or fragments, swap page regions, preserve scroll/focus, prefetch static route assets, and show loading/error UI, but it must not own routing, auth, business rules, validation, backend behavior, global app state, loading policy, or cache policy. |
 | 16 | Components and client language | Components gain real `g:if` mount/unmount, richer expression props, child-to-parent events, bindable state, typed exports, named/scoped slots, scoped CSS/assets, a documented component contract, a proper reactive dependency graph, predictable batching, and cycle diagnostics. |
 | 17 | Islands and WASM | Generated JavaScript islands stay compiler-owned local UI behavior. Component-level WASM islands get a production ABI, browser-side Go logic contracts, and entrypoint/export validation. Deploy-target WASM artifacts remain separate from browser island WASM. |
 | 18 | CSS, assets, and packaging | External addon loading is hardened, richer page-aware CSS processor contracts are stable, and Tailwind/CSS deployment docs stay explicit that external tooling is user-installed. Implemented CSS asset hashing, component CSS scope/hash metadata, component non-CSS asset emission, and binary cache policy remain stable. Module selection remains artifact packaging, not runtime module orchestration. |
 | 19 | Framework adapters | GOWDK Runtime remains `net/http` first. Optional Chi, Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; Chi/Echo/Gin can mount routes from generated OpenAPI metadata, and generated code stays framework-neutral by default. |
-| 20 | Dev and tooling | `gowdk dev` can run generated app/runtime flows for backend routes and SSR. Backend process restart/proxy behavior is decided. Faster rebuild caching, deploy previews, richer LSP completions, and editor navigation are added. |
+| 20 | Dev and tooling | `gowdk dev` can run generated app/runtime flows for backend routes and SSR, skip unchanged rebuilds, cache watched input state, and show SPA/static browser rebuild failures with diagnostic codes, source ranges, last-good build time, and changed files. Backend process restart/proxy behavior is decided. Deploy previews, component-aware HMR, generated-app runtime browser overlay delivery, richer LSP completions, and editor navigation are added; runtime overlay delivery and component HMR are tracked in [#424](https://github.com/cssbruno/GoWDK/issues/424). |
 | 21 | Documentation sync | README, requirements, architecture, deployment, roadmap, and examples stay synchronized with implemented behavior and commands. |
 
 ## Candidate Release Order
@@ -264,10 +268,10 @@ without making any minor version a production-readiness target.
   generated Docker contexts, richer platform manifests, and rollback before any
   production-ready claim.
 - P2 ecosystem polish is owned by optional docs, examples, website pages, or
-  CLI generators: addon discovery, performance profiling, migration guides,
-  image guidance, SEO metadata beyond sitemap/robots, and PWA/offline guidance
-  must not add mandatory npm, framework, or platform dependencies to the
-  repository core.
+  CLI generators: playground onboarding, addon discovery, performance
+  profiling, migration guides, image guidance, SEO metadata beyond
+  sitemap/robots, and PWA/offline guidance must not add mandatory npm,
+  framework, hosted execution, or platform dependencies to the repository core.
 
 ## Non-Goals For Repository Core
 
@@ -284,5 +288,6 @@ without making any minor version a production-readiness target.
 ## Planning Sources
 
 - `docs/product/requirements.md`: requirement status.
+- `docs/product/playground.md`: docs-first playground and sandboxing contract.
 - `docs/engineering/architecture.md`: architecture and implemented boundaries.
 - `docs/engineering/release-plan.md`: open-ended 0.x hardening checklist.

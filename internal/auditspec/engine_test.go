@@ -20,6 +20,7 @@ func TestBaselineFlagsMissingCSRFAndPublicAPI(t *testing.T) {
 		Endpoints: []securitymanifest.EndpointEntry{
 			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", Guards: []string{"public"}, CSRF: false, Public: true},
 			{ID: "Health", Kind: "api", Method: "GET", Path: "/api/health", CSRF: false, DefaultDeny: true},
+			{ID: "Update", Kind: "api", Method: "POST", Path: "/api/status", Guards: []string{"public"}, CSRF: false, Public: true},
 			{ID: "Refresh", Kind: "fragment", Method: "GET", Path: "/frag", DefaultDeny: true},
 			{ID: "patients.CreatePatient", Kind: "command", Method: "POST", Path: "/patients", CSRF: false, DefaultDeny: true},
 			{ID: "patients.GetPatientPage", Kind: "query", Method: "GET", Path: "/patients", CSRF: false, DefaultDeny: true},
@@ -34,6 +35,9 @@ func TestBaselineFlagsMissingCSRFAndPublicAPI(t *testing.T) {
 	if got["audit_api_public_by_omission"] != 1 {
 		t.Fatalf("expected one public-by-omission API finding, got %d", got["audit_api_public_by_omission"])
 	}
+	if got["audit_api_missing_csrf"] != 1 {
+		t.Fatalf("expected one API missing-CSRF finding, got %d", got["audit_api_missing_csrf"])
+	}
 	if got["audit_command_missing_csrf"] != 1 {
 		t.Fatalf("expected one missing-CSRF command finding, got %d", got["audit_command_missing_csrf"])
 	}
@@ -47,6 +51,7 @@ func TestBaselinePassesWhenPostureIsSound(t *testing.T) {
 		Endpoints: []securitymanifest.EndpointEntry{
 			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", Guards: []string{"auth.required"}, CSRF: true},
 			{ID: "List", Kind: "api", Method: "GET", Path: "/api/list", Guards: []string{"permission:list.read"}},
+			{ID: "Update", Kind: "api", Method: "POST", Path: "/api/status", Guards: []string{"permission:status.write"}, CSRF: true},
 			{ID: "patients.CreatePatient", Kind: "command", Method: "POST", Path: "/patients", Guards: []string{"auth.required"}, CSRF: true},
 			{ID: "patients.GetPatientPage", Kind: "query", Method: "GET", Path: "/patients", Guards: []string{"auth.required"}},
 		},
@@ -108,6 +113,7 @@ func TestDeclaredRequireCSRFResolvesCodeByEndpointKind(t *testing.T) {
 	manifest := securitymanifest.SecurityManifest{
 		Endpoints: []securitymanifest.EndpointEntry{
 			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", Guards: []string{"auth.required"}, CSRF: false},
+			{ID: "Update", Kind: "api", Method: "GET", Path: "/api/status", Guards: []string{"auth.required"}, CSRF: false},
 			{ID: "patients.CreatePatient", Kind: "command", Method: "POST", Path: "/patients", Guards: []string{"auth.required"}, CSRF: false},
 		},
 	}
@@ -116,7 +122,7 @@ func TestDeclaredRequireCSRFResolvesCodeByEndpointKind(t *testing.T) {
 	policies := []Policy{{
 		Name:      "csrf_everywhere",
 		Source:    "security.audit.gwdk:1",
-		Selectors: []Selector{{Raw: "act:*", Kind: SelectorEndpoint}, {Raw: "command:*", Kind: SelectorEndpoint}},
+		Selectors: []Selector{{Raw: "act:*", Kind: SelectorEndpoint}, {Raw: "api:*", Kind: SelectorEndpoint}, {Raw: "command:*", Kind: SelectorEndpoint}},
 		Rules:     []Rule{{Kind: RuleRequireCSRF}},
 	}}
 	got := codes(Evaluate(manifest, policies))
@@ -125,6 +131,9 @@ func TestDeclaredRequireCSRFResolvesCodeByEndpointKind(t *testing.T) {
 	}
 	if got["audit_command_missing_csrf"] != 1 {
 		t.Fatalf("expected one command CSRF finding, got %#v", got)
+	}
+	if got["audit_api_missing_csrf"] != 1 {
+		t.Fatalf("expected one API CSRF finding, got %#v", got)
 	}
 }
 

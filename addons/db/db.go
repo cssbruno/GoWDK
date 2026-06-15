@@ -1,8 +1,9 @@
 // Package db is the GOWDK database plumbing addon. It enables the db feature and
 // ships a thin, driver-agnostic helper for opening a *sql.DB on top of the
-// standard library's database/sql. It is designed to pair with sqlc: you own
-// the schema, the queries, the generated models, and all domain logic. GOWDK
-// owns none of that and adds no driver, ORM, or query opinions.
+// standard library's database/sql. It is designed to pair with sqlc and
+// user-authored SQL files: you own the schema, the queries, the generated
+// models, migrations, and all domain logic. GOWDK owns none of that and adds no
+// driver, ORM, repository, or query opinions.
 //
 // The helper imports no SQL driver. Your application registers a driver with a
 // blank import (for example _ "github.com/jackc/pgx/v5/stdlib") and passes its

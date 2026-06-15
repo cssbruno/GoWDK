@@ -1434,12 +1434,15 @@ func TestAddCommandListsKnownAddons(t *testing.T) {
 		"Available addons:",
 		"actions",
 		"api",
+		"auth",
 		"contracts",
 		"css",
+		"db",
 		"embed",
 		"partial",
 		"ratelimit",
 		"seo",
+		"realtime",
 		"ssr",
 		"static",
 	} {
@@ -1516,6 +1519,43 @@ var Config = gowdk.Config{}
 	for _, expected := range []string{
 		`"github.com/cssbruno/gowdk/addons/seo"`,
 		"Addons: []gowdk.Addon{seo.Addon(seo.Options{})}",
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected updated config to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestAddCommandWiresRealtimeAddonIntoConfig(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{}
+`)
+
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"add", "realtime", "--config", config})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if !strings.Contains(stdout, `added addon "realtime"`) {
+		t.Fatalf("expected add confirmation, got:\n%s", stdout)
+	}
+	payload, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`"github.com/cssbruno/gowdk/addons/realtime"`,
+		"Addons: []gowdk.Addon{realtime.Addon()}",
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected updated config to contain %q:\n%s", expected, source)
@@ -1808,6 +1848,154 @@ var Config = gowdk.Config{
 	})
 }
 
+func TestDevRuntimeProcessRestartWaitsForPreviousAppExit(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "main.go")
+	writeCLIFile(t, source, `package main
+
+func main() {
+	select {}
+}
+`)
+	binary := filepath.Join(root, "app")
+	if os.PathSeparator == '\\' {
+		binary += ".exe"
+	}
+	build := exec.Command("go", "build", "-o", binary, source)
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build helper app: %v\n%s", err, output)
+	}
+
+	process := &devRuntimeProcess{
+		plan: devRuntime{Enabled: true, BinaryPath: binary},
+		addr: "127.0.0.1:0",
+	}
+	if err := process.restart(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(process.stop)
+	first := activeDevRuntimeCommand(t, process)
+
+	if err := process.restart(); err != nil {
+		t.Fatal(err)
+	}
+	if first.ProcessState == nil {
+		t.Fatal("expected restart to wait for the previous app process to exit")
+	}
+	second := activeDevRuntimeCommand(t, process)
+	if second == first {
+		t.Fatal("expected restart to launch a new app process")
+	}
+
+	process.stop()
+	if second.ProcessState == nil {
+		t.Fatal("expected stop to wait for the active app process to exit")
+	}
+	process.mu.Lock()
+	active := process.cmd
+	waitDone := process.waitDone
+	process.mu.Unlock()
+	if active != nil || waitDone != nil {
+		t.Fatalf("expected stopped process state to be cleared, got cmd=%v waitDone=%v", active, waitDone)
+	}
+}
+
+func TestDevServeStateRebindsStaticOutputDir(t *testing.T) {
+	root := t.TempDir()
+	firstDir := filepath.Join(root, "dist-one")
+	secondDir := filepath.Join(root, "dist-two")
+	if err := os.MkdirAll(firstDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(secondDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	firstAbs, err := filepath.Abs(firstDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondAbs, err := filepath.Abs(secondDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	serve := newDevServeState("127.0.0.1:0")
+	t.Cleanup(serve.close)
+	serve.useStatic(firstAbs)
+	firstServer := serve.server
+	if firstServer == nil || serve.staticDir != firstAbs {
+		t.Fatalf("expected initial static server for %q, got server=%v dir=%q", firstAbs, firstServer, serve.staticDir)
+	}
+
+	serve.useStatic(firstAbs)
+	if serve.server != firstServer {
+		t.Fatal("expected unchanged static output dir to keep the existing server")
+	}
+
+	serve.useStatic(secondAbs)
+	if serve.server == nil || serve.staticDir != secondAbs {
+		t.Fatalf("expected rebound static server for %q, got server=%v dir=%q", secondAbs, serve.server, serve.staticDir)
+	}
+	if serve.server == firstServer {
+		t.Fatal("expected output dir change to replace the static server")
+	}
+}
+
+func TestDevServeStateStartsRuntimeAfterStaticMode(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "dist")
+	if err := os.MkdirAll(staticDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	appDir := filepath.Join(root, "app")
+	writeCLIFile(t, filepath.Join(appDir, "go.mod"), "module example.com/devapp\n\ngo 1.24\n")
+	writeCLIFile(t, filepath.Join(appDir, "cmd", "server", "main.go"), `package main
+
+func main() {
+	select {}
+}
+`)
+	binaryPath := filepath.Join(root, "bin", "devapp")
+	if os.PathSeparator == '\\' {
+		binaryPath += ".exe"
+	}
+
+	serve := newDevServeState("127.0.0.1:0")
+	t.Cleanup(serve.close)
+	serve.useStatic(staticDir)
+	if serve.server == nil {
+		t.Fatal("expected static server before runtime transition")
+	}
+
+	runtime := devRuntime{Enabled: true, AppDir: appDir, BinaryPath: binaryPath}
+	if err := serve.useRuntime(runtime); err != nil {
+		t.Fatal(err)
+	}
+	if serve.server != nil || serve.staticDir != "" {
+		t.Fatalf("expected static server to stop after runtime transition, got server=%v dir=%q", serve.server, serve.staticDir)
+	}
+	if serve.process == nil {
+		t.Fatal("expected runtime process to start after runtime transition")
+	}
+	if serve.process.plan != runtime {
+		t.Fatalf("unexpected runtime plan: %#v", serve.process.plan)
+	}
+	activeDevRuntimeCommand(t, serve.process)
+	if _, err := os.Stat(binaryPath); err != nil {
+		t.Fatalf("expected runtime binary to be built: %v", err)
+	}
+}
+
+func activeDevRuntimeCommand(t *testing.T, process *devRuntimeProcess) *exec.Cmd {
+	t.Helper()
+	process.mu.Lock()
+	defer process.mu.Unlock()
+	if process.cmd == nil {
+		t.Fatal("expected active dev runtime command")
+	}
+	return process.cmd
+}
+
 func TestParsePreviewOptions(t *testing.T) {
 	options, err := parsePreviewOptions([]string{"--addr=127.0.0.1:9090", "--hot", "--out", "preview-dist", "home.page.gwdk"})
 	if err != nil {
@@ -1999,6 +2187,137 @@ view {
 			t.Fatalf("expected generated css output to be excluded from snapshot: %#v", snapshot)
 		}
 	})
+}
+
+func TestDevBuildStateConfigChangeRequestsReload(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Source: gowdk.SourceConfig{Include: []string{"*.gwdk"}},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
+
+page home
+route "/"
+
+view {
+  <main>Home</main>
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		state, err := newDevBuildState(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		first, err := state.snapshot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Source: gowdk.SourceConfig{Include: []string{"pages/*.gwdk"}},
+}
+`)
+		second, err := state.snapshot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		change := second.diff(first)
+		if !state.configChanged(change) {
+			t.Fatalf("expected config change to request a dev plan reload: %#v", change)
+		}
+	})
+}
+
+func TestDevInputTrackerDetectsAddedSourceBeforeRediscovery(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Source: gowdk.SourceConfig{Include: []string{"*.gwdk"}},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "home.page.gwdk"), `package app
+
+page home
+route "/"
+
+view {
+  <main>Home</main>
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		state, err := newDevBuildState(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		first, err := state.snapshot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		about := filepath.Join(root, "about.page.gwdk")
+		writeCLIFile(t, about, `package app
+
+page about
+route "/about"
+
+view {
+  <main>About</main>
+}
+`)
+		second, err := waitForSnapshotChange(state, first)
+		if err != nil {
+			t.Fatal(err)
+		}
+		change := second.diff(first)
+		if len(change.Changed) == 0 {
+			t.Fatalf("expected cached tracker to detect a directory change for the added source: %#v", change)
+		}
+
+		refreshed, err := newDevInputTracker(state.plan)
+		if err != nil {
+			t.Fatal(err)
+		}
+		refreshedSnapshot, err := refreshed.snapshot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		absAbout, err := canonicalInputPath(about)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := refreshedSnapshot[absAbout]; !ok {
+			t.Fatalf("expected refreshed tracker to include added source %q: %#v", absAbout, refreshedSnapshot)
+		}
+	})
+}
+
+func waitForSnapshotChange(state devBuildState, previous inputSnapshot) (inputSnapshot, error) {
+	deadline := time.Now().Add(time.Second)
+	for {
+		current, err := state.snapshot()
+		if err != nil {
+			return nil, err
+		}
+		if !current.same(previous) {
+			return current, nil
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("snapshot did not change before deadline")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func TestInputSnapshotDiffReportsChangedAddedAndRemovedPaths(t *testing.T) {

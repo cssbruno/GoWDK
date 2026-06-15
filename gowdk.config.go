@@ -2,7 +2,11 @@
 
 package gowdkconfig
 
-import "github.com/cssbruno/gowdk"
+import (
+	"github.com/cssbruno/gowdk"
+	contractsaddon "github.com/cssbruno/gowdk/addons/contracts"
+	"github.com/cssbruno/gowdk/addons/realtime"
+)
 
 var Config = gowdk.Config{
 	Source: gowdk.SourceConfig{
@@ -19,6 +23,10 @@ var Config = gowdk.Config{
 	},
 	Build: gowdk.BuildConfig{
 		Output: "gowdk_cache",
+	},
+	Addons: []gowdk.Addon{
+		contractsaddon.Addon(),
+		realtime.Addon(),
 	},
 	CSS: gowdk.CSSConfig{
 		Include: []string{

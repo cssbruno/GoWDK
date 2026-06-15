@@ -122,6 +122,23 @@ view {
 }
 `,
 	},
+	"missing_realtime_addon": {
+		Details: "The source declares g:subscribe for a browser-facing presentation event, but the loaded config does not enable the realtime addon.",
+		NextSteps: []string{
+			"Enable realtime.Addon() in gowdk.config.go when browser presentation-event fanout is intentional.",
+			"Remove g:subscribe when the query region should stay static or update through normal fragments/actions.",
+		},
+		Invalid: `view {
+  <section g:query="patients.GetPatientPage" g:subscribe="patients.PatientNotice"></section>
+}
+`,
+		Fixed: `var Config = gowdk.Config{
+  Addons: []gowdk.Addon{
+    realtime.Addon(),
+  },
+}
+`,
+	},
 	"spa_dynamic_route_missing_paths": {
 		Details: "Build-time SPA pages with dynamic route params need concrete paths at build time. Request-time pages can skip paths because params are decoded per request.",
 		NextSteps: []string{
@@ -218,6 +235,13 @@ guard public
 		NextSteps: []string{
 			"Remove Build.CSRF.Disabled and provide a runtime CSRF secret so generated actions validate tokens before decoding.",
 			"Override the built-in baseline.actions policy in a *.audit.gwdk file if the endpoint is intentionally exempt.",
+		},
+	},
+	"audit_api_missing_csrf": {
+		Details: "gowdk audit derives a state-changing API endpoint without CSRF enforcement. The built-in security baseline treats unsafe browser-reachable API methods as cross-site-forgeable unless another policy explicitly overrides that posture.",
+		NextSteps: []string{
+			"Remove Build.CSRF.Disabled and provide a runtime CSRF secret so generated state-changing APIs validate tokens before user handlers run.",
+			"Override the built-in baseline.api policy in a *.audit.gwdk file only when the API uses another cross-site request strategy.",
 		},
 	},
 	"audit_api_public_by_omission": {

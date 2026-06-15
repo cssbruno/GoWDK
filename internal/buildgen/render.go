@@ -23,7 +23,7 @@ const (
 	renderModeRequestTime renderModePolicy = "request-time"
 )
 
-func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, data map[string]string, policy renderModePolicy) (string, error) {
+func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, data map[string]string, realtimeEventTypeNames map[string]string, policy renderModePolicy) (string, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
 	if policy == renderModeSPA && mode != gowdk.SPA && mode != gowdk.Action {
 		return "", fmt.Errorf("%s: SPA build cannot emit request-time %s pages yet", page.ID, mode)
@@ -48,9 +48,11 @@ func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]vie
 
 	pageComponents := componentRegistryForPage(page, components)
 	body, err := renderPageView(viewSource, viewNodes, pageComponents, data, view.Options{
-		Actions:           actionRoutes(page, data),
-		ActionInputFields: actionFields,
-		Package:           page.Package,
+		Actions:                actionRoutes(page, data),
+		ActionInputFields:      actionFields,
+		Package:                page.Package,
+		Tainted:                requestTimeTaintedFields(page, policy),
+		RealtimeEventTypeNames: realtimeEventTypeNames,
 	})
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
@@ -78,6 +80,28 @@ func renderPageView(source string, nodes []view.Node, components map[string]view
 		return view.RenderNodesWithOptions(nodes, components, data, options)
 	}
 	return view.RenderWithOptions(source, components, data, options)
+}
+
+// requestTimeTaintedFields returns the interpolation names that carry
+// request-time, attacker-influenceable data for a page. Currently this is the
+// set of SSR load {} field paths, which must be treated like route params:
+// rejected in URL/event/style/srcdoc attributes so an attacker-controlled value
+// cannot inject a javascript:/data: URL past HTML-text escaping. Build {} data
+// is trusted and route params taint syntactically via param("..."), so neither
+// is included here.
+func requestTimeTaintedFields(page gwdkir.Page, policy renderModePolicy) map[string]bool {
+	if policy != renderModeRequestTime || !page.Blocks.Load {
+		return nil
+	}
+	fields, err := parseLoadFields(page.Blocks.LoadBody)
+	if err != nil {
+		return nil
+	}
+	tainted := make(map[string]bool, len(fields))
+	for _, path := range fields {
+		tainted[path] = true
+	}
+	return tainted
 }
 
 func composePageViewSource(page gwdkir.Page, layouts map[string]gwdkir.Layout) (string, error) {
@@ -224,7 +248,11 @@ func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, viewN
 	if err != nil {
 		return nil, err
 	}
-	if pageUsesPartialRuntime(page, viewSource) || usesSPANavigation {
+	usesRealtime, err := pageUsesRealtimeRuntime(page, viewSource, viewNodes, components)
+	if err != nil {
+		return nil, err
+	}
+	if pageUsesPartialRuntime(page, viewSource) || usesSPANavigation || usesRealtime {
 		scripts = append(scripts, gowdk.Script{Src: clientRuntimeHref})
 	}
 	if len(page.Stores) > 0 {
@@ -248,6 +276,34 @@ func pageUsesPartialRuntime(page gwdkir.Page, viewSource string) bool {
 		return false
 	}
 	return len(page.Blocks.Actions) > 0
+}
+
+func pageUsesRealtimeRuntime(page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component) (bool, error) {
+	if viewHasRealtimeSubscription(viewSource, viewNodes) {
+		return true, nil
+	}
+	usages, err := recursiveViewComponentCallUsagesForView(viewSource, viewNodes, components, page.Package, componentUses(page.Uses))
+	if err != nil {
+		return false, err
+	}
+	for _, usage := range usages {
+		if viewHasRealtimeSubscription(usage.component.Body, usage.component.Nodes) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func viewHasRealtimeSubscription(source string, nodes []view.Node) bool {
+	if !strings.Contains(source, "g:subscribe") && len(nodes) == 0 {
+		return false
+	}
+	if len(nodes) > 0 {
+		refs, err := view.SubscriptionReferencesFromNodes(nodes)
+		return err == nil && len(refs) > 0
+	}
+	refs, err := view.SubscriptionReferences(source)
+	return err == nil && len(refs) > 0
 }
 
 func pageUsesSPANavigationRuntime(config gowdk.Config, page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component) (bool, error) {

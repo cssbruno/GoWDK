@@ -39,6 +39,14 @@ type CSRFOptions struct {
 	HeaderName string
 	Insecure   bool
 	SameSite   http.SameSite
+	// Binding, when set, ties each token to a per-request identity (typically
+	// the authenticated principal). The returned value is mixed into the token
+	// signature, so a token minted for one principal is rejected once the
+	// request resolves to a different principal. This upgrades the plain signed
+	// double-submit cookie to a session-bound token, the OWASP-recommended
+	// hardening. Returning nil binds the token to the anonymous context, which
+	// still yields a valid signed double-submit token (backwards compatible).
+	Binding func(*http.Request) []byte
 }
 
 // CSRF validates signed double-submit CSRF tokens for generated actions.
@@ -49,6 +57,7 @@ type CSRF struct {
 	headerName string
 	secure     bool
 	sameSite   http.SameSite
+	binding    func(*http.Request) []byte
 }
 
 // NewCSRF creates a validator with secure cookie defaults.
@@ -85,7 +94,18 @@ func NewCSRF(options CSRFOptions) (*CSRF, error) {
 		headerName: headerName,
 		secure:     !options.Insecure,
 		sameSite:   sameSite,
+		binding:    options.Binding,
 	}, nil
+}
+
+// bindingFor returns the per-request binding value, or nil when no binding is
+// configured. A token is signed and validated against this value so it is only
+// accepted for the identity it was minted for.
+func (csrf *CSRF) bindingFor(request *http.Request) []byte {
+	if csrf.binding == nil || request == nil {
+		return nil
+	}
+	return csrf.binding(request)
 }
 
 func secureCookiePrefix(name string) bool {
@@ -97,8 +117,9 @@ func secureCookiePrefix(name string) bool {
 // working, and only mints and stores a new token when the cookie is absent or
 // invalid.
 func (csrf *CSRF) Token(response http.ResponseWriter, request *http.Request) (string, error) {
+	binding := csrf.bindingFor(request)
 	if request != nil {
-		if cookie, err := request.Cookie(csrf.cookieName); err == nil && csrf.valid(cookie.Value) {
+		if cookie, err := request.Cookie(csrf.cookieName); err == nil && csrf.valid(cookie.Value, binding) {
 			return cookie.Value, nil
 		}
 	}
@@ -106,7 +127,7 @@ func (csrf *CSRF) Token(response http.ResponseWriter, request *http.Request) (st
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return "", fmt.Errorf("generate csrf token: %w", err)
 	}
-	token := csrf.sign(nonce[:])
+	token := csrf.sign(nonce[:], binding)
 	http.SetCookie(response, &http.Cookie{
 		Name:     csrf.cookieName,
 		Value:    token,
@@ -152,20 +173,24 @@ func (csrf *CSRF) Validate(request *http.Request) error {
 	if subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(submitted)) != 1 {
 		return fmt.Errorf("csrf token mismatch")
 	}
-	if !csrf.valid(submitted) {
+	if !csrf.valid(submitted, csrf.bindingFor(request)) {
 		return fmt.Errorf("csrf token signature is invalid")
 	}
 	return nil
 }
 
-func (csrf *CSRF) sign(nonce []byte) string {
+// sign returns base64(nonce || HMAC(secret, nonce || binding)). The nonce is a
+// fixed length, so writing it before the binding is an unambiguous encoding of
+// the (nonce, binding) pair.
+func (csrf *CSRF) sign(nonce, binding []byte) string {
 	mac := hmac.New(sha256.New, csrf.secret)
 	mac.Write(nonce)
+	mac.Write(binding)
 	raw := append(append([]byte(nil), nonce...), mac.Sum(nil)...)
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
-func (csrf *CSRF) valid(token string) bool {
+func (csrf *CSRF) valid(token string, binding []byte) bool {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil || len(raw) != csrfNonceBytes+csrfMACBytes {
 		return false
@@ -174,6 +199,7 @@ func (csrf *CSRF) valid(token string) bool {
 	signature := raw[csrfNonceBytes:]
 	mac := hmac.New(sha256.New, csrf.secret)
 	mac.Write(nonce)
+	mac.Write(binding)
 	expected := mac.Sum(nil)
 	return subtle.ConstantTimeCompare(signature, expected) == 1
 }

@@ -99,6 +99,50 @@ view {
 	}
 }
 
+func TestCheckSourceWithOptionsReportsContractReferenceBinding(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "patients.page.gwdk")
+	source := []byte(`package app
+
+page patients
+route "/patients"
+guard public
+
+view {
+  <main>
+    <form method="post" action="/patients" g:command="patients.CreatePatient">
+      <input name="name" />
+    </form>
+  </main>
+}
+`)
+	writeGWDK(t, filepath.Join(root, "gowdk.config.go"), "package app\n")
+
+	_, diagnostics := CheckSourceWithOptions(gowdk.Config{}, path, source, CheckOptions{ProjectRoot: root})
+	if !diagnostics.HasErrors() {
+		t.Fatal("expected missing contract reference diagnostic")
+	}
+	if len(diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic, got %#v", diagnostics)
+	}
+	diagnostic := diagnostics[0]
+	if diagnostic.Code != "contract_reference_missing" {
+		t.Fatalf("expected contract_reference_missing, got %#v", diagnostic)
+	}
+	if diagnostic.File != path || diagnostic.Range == nil {
+		t.Fatalf("expected source range on current document, got %#v", diagnostic)
+	}
+	if diagnostic.Range.Start.Line != 9 || diagnostic.Range.Start.Column == 0 {
+		t.Fatalf("expected g:command source range, got %#v", diagnostic.Range)
+	}
+	if !strings.Contains(diagnostic.Message, "command patients.CreatePatient has no scanned Go registration") {
+		t.Fatalf("unexpected diagnostic message: %#v", diagnostic)
+	}
+	if !strings.Contains(diagnostic.Suggestion, "gowdk contracts list") {
+		t.Fatalf("expected contract list suggestion, got %#v", diagnostic)
+	}
+}
+
 func TestCheckSourceValidatesUnsavedLayoutSlots(t *testing.T) {
 	_, diagnostics := CheckSource(gowdk.Config{}, "root.layout.gwdk", []byte(`package app
 

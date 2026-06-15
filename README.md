@@ -240,9 +240,10 @@ This table describes the current demoable 0.x slice. Status levels:
 | One-binary output | Works, contract unstable | `gowdk build --app --bin` can generate and compile an embedded Go server for supported SPA/backend/SSR slices, `--docker` emits a minimal non-root Docker context beside the binary, and CI starts the embed example binary to verify health plus embedded page serving. | Runtime operations, richer Docker target config, and split/backend-only deploys are still expanding. | [Deployment](docs/reference/deployment.md) | [Embed](examples/embed/site.page.gwdk) |
 | Generated app WASM | Early | `gowdk build --app --wasm` compiles the generated app into a Go `js/wasm` deploy artifact, and CI verifies the emitted module header. | Host runtime/loader integration is deploy-platform owned; this is separate from component-level WASM islands. | [Deployment](docs/reference/deployment.md) | [Embed](examples/embed/site.page.gwdk) |
 | Contracts | Works, contract unstable | Runtime contracts support typed queries, commands, events, jobs, role filtering, local dispatch, file outbox, broker/fanout adapters, contract graph/trace/list commands, and generated `g:command`/`g:query` web adapters. | Split worker/cron generation, retry policy, managed deployment recipes, and editor-first contract visualization remain planned. | [Contracts](docs/reference/contracts.md) | [Runtime contracts](runtime/contracts) |
+| Realtime | Works, contract unstable | `FeatureRealtime` and `addons/realtime` provide opt-in presentation-event fanout packaging, dependency-free SSE helpers, nested WebSocket transport docs, compiler-validated `g:subscribe` metadata, generated subscription-filtered guarded SSE fanout, bounded SSE retry/drop behavior, a bounded generated client patch loop for query-owned regions, and a live contracts example. | Custom retry/backoff/replay, active session-change stream revocation, richer patch shapes, and richer examples remain M14 work. | [Realtime](docs/reference/realtime.md) | [SSE](runtime/contracts/sse) |
 | Security audit | Early | `gowdk audit` derives an IR-backed posture for routes, endpoints, contracts, and frontend surface risks; evaluates the built-in baseline plus declared `*.audit.gwdk` policies; exits non-zero on error findings; can emit/run generated audit tests; and `gowdk build` writes the posture to a non-served report path. | The audit DSL and generated tests cover the M8 slice; broader auth/session ownership, richer role fixtures, and deeper browser/data-flow analysis remain app-owned or planned. | [Security](docs/engineering/security.md) | [Spec](docs/product/security-audit-spec.md) |
-| Dev server | Works | `gowdk dev` polls inputs, skips no-op rebuilds, serves or runs generated output, live-reloads browsers, shows a browser overlay for rebuild failures, and keeps serving the last successful output. | Overlay diagnostics need codes, source spans, changed-file context, and better generated-app runtime attribution. Component HMR is intentionally deferred. | [Dev](docs/reference/dev.md) | [Getting started](docs/getting-started.md) |
-| Editor/LSP | Works | The VS Code extension and dependency-free LSP provide diagnostics, formatting, completions, hover, outline, semantic tokens, definitions, references, site-map visualization, and project-aware navigation for supported paths. | Exact source ranges, richer quick fixes, route/endpoint/contract maps, and `g:command`/`g:query` status in the editor are planned. | [Language server](docs/product/language-server.md) | [VS Code](editors/vscode) |
+| Dev server | Works | `gowdk dev` polls inputs, skips no-op rebuilds, serves or runs generated output, live-reloads browsers, shows a browser overlay with diagnostic codes/source spans/changed-file context, and keeps serving the last successful output. | Generated-app runtime browser overlay delivery and component HMR are intentionally deferred. | [Dev](docs/reference/dev.md) | [Getting started](docs/getting-started.md) |
+| Editor/LSP | Works | The VS Code extension and dependency-free LSP provide diagnostics, formatting, completions, hover, outline, semantic tokens, definitions, references, site-map visualization, project-aware navigation, and editor-visible `g:command`/`g:query` binding diagnostics for supported paths. | Richer quick fixes and route/endpoint/contract map polish are planned. | [Language server](docs/product/language-server.md) | [VS Code](editors/vscode) |
 
 Security note: request-time features are still 0.x, but the core request-time
 hardening is now in place. Generated handlers apply body-size limits (actions
@@ -280,10 +281,15 @@ wire in with `gowdk add <addon>` (see `gowdk add --list`):
 | `partial` | Fragment/partial responses |
 | `ratelimit` | Request-time rate limiting |
 | `seo` | Build-time sitemap.xml and robots.txt output |
+| `realtime` | Browser presentation-event fanout over SSE or WebSocket |
 | `ssr` | Server-side rendering |
+| `static` | Build-time static page output |
 
-Heavier integrations (Tailwind, Redis, NATS, WebSocket fanout) live in nested
-optional modules so the root module's dependency graph stays small.
+SSE fanout stays dependency-free in the root module. Heavier integrations
+(Tailwind, Redis, NATS, WebSocket fanout) live in nested optional modules so
+the root module's dependency graph stays small.
+Addon discovery beyond built-ins remains docs/registry-first; the current
+policy is in [Addons](docs/reference/addons.md#discovery-policy).
 
 ## Development
 
@@ -320,6 +326,8 @@ reviewable test diff rather than a silent behavior change.
 ## Docs
 
 - [Getting started](docs/getting-started.md)
+- [Native learning path](docs/learning/native.md)
+- [Playground onboarding and sandboxing](docs/product/playground.md)
 - [Changelog](CHANGELOG.md)
 - [0.x improvement checklist](docs/engineering/release-plan.md)
 - [v0.2 release checklist](docs/engineering/v0.2-release-checklist.md)

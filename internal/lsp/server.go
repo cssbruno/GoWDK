@@ -41,10 +41,12 @@ var (
 
 // Server handles one LSP session.
 type Server struct {
-	config    gowdk.Config
-	documents map[string]document
-	shutdown  bool
-	log       io.Writer
+	config                  gowdk.Config
+	documents               map[string]document
+	projectCache            projectIRCache
+	workspaceComponentCache workspaceComponentDefinitionCache
+	shutdown                bool
+	log                     io.Writer
 }
 
 type document struct {

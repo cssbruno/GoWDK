@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"math"
 	"os"
 	"path"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 	"github.com/cssbruno/gowdk/addons/embed"
 	"github.com/cssbruno/gowdk/addons/partial"
 	"github.com/cssbruno/gowdk/addons/ratelimit"
+	"github.com/cssbruno/gowdk/addons/realtime"
 	"github.com/cssbruno/gowdk/addons/seo"
 	"github.com/cssbruno/gowdk/addons/spa"
 	"github.com/cssbruno/gowdk/addons/ssr"
@@ -467,6 +469,8 @@ func parseSecretEnv(expression ast.Expr) (gowdk.SecretEnv, bool, error) {
 			secret.Name = parseString(keyValue.Value)
 		case "Required":
 			secret.Required = parseBool(keyValue.Value)
+		case "MinBytes":
+			secret.MinBytes = parseInt(keyValue.Value)
 		case "Default", "Value":
 			return gowdk.SecretEnv{}, false, fmt.Errorf("Env.Secrets entries cannot declare %s; secret values must come from the runtime environment", key.Name)
 		}
@@ -938,6 +942,8 @@ func parseBuiltInAddon(expression ast.Expr, imports map[string]string) (gowdk.Ad
 		return partial.Addon(), true
 	case ratelimit.ImportPath:
 		return ratelimit.Addon(), true
+	case realtime.ImportPath:
+		return realtime.Addon(), true
 	case seo.ImportPath:
 		return seo.Addon(), true
 	case spa.ImportPath:
@@ -1184,6 +1190,21 @@ func parseString(expression ast.Expr) string {
 func parseBool(expression ast.Expr) bool {
 	identifier, ok := expression.(*ast.Ident)
 	return ok && identifier.Name == "true"
+}
+
+// parseInt narrows a parsed integer literal to int, clamping values that fall
+// outside the platform int range so a malformed config value cannot wrap into a
+// small or negative length on 32-bit platforms.
+func parseInt(expression ast.Expr) int {
+	value := parseInt64(expression)
+	switch {
+	case value > math.MaxInt:
+		return math.MaxInt
+	case value < math.MinInt:
+		return math.MinInt
+	default:
+		return int(value)
+	}
 }
 
 func parseInt64(expression ast.Expr) int64 {

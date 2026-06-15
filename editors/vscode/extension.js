@@ -32,6 +32,10 @@ function activate(context) {
     siteMapTree.refresh();
     directoryOutline.refresh();
   };
+  const refreshProjectState = () => {
+    refreshProjectViews();
+    revalidateOpenGWDKDocuments(diagnostics, pending);
+  };
 
   context.subscriptions.push(diagnostics);
   context.subscriptions.push(vscode.window.registerTreeDataProvider('gowdk.siteMapTree', siteMapTree));
@@ -59,6 +63,12 @@ function activate(context) {
   context.subscriptions.push(cssWatcher.onDidCreate(refreshProjectViews));
   context.subscriptions.push(cssWatcher.onDidDelete(refreshProjectViews));
   context.subscriptions.push(cssWatcher.onDidChange(refreshProjectViews));
+
+  const configWatcher = vscode.workspace.createFileSystemWatcher('**/gowdk.config.go');
+  context.subscriptions.push(configWatcher);
+  context.subscriptions.push(configWatcher.onDidCreate(refreshProjectState));
+  context.subscriptions.push(configWatcher.onDidDelete(refreshProjectState));
+  context.subscriptions.push(configWatcher.onDidChange(refreshProjectState));
 
   context.subscriptions.push(vscode.languages.registerDocumentFormattingEditProvider(LANGUAGE_ID, {
     provideDocumentFormattingEdits(document) {
@@ -199,6 +209,14 @@ function activate(context) {
     }
   }));
 
+  context.subscriptions.push(vscode.languages.registerCodeActionsProvider(LANGUAGE_ID, {
+    provideCodeActions(document, _range, codeActionContext) {
+      return codeActionsForDiagnostics(document, codeActionContext.diagnostics || []);
+    }
+  }, {
+    providedCodeActionKinds: [vscode.CodeActionKind.QuickFix]
+  }));
+
   context.subscriptions.push(vscode.commands.registerCommand('gowdk.checkCurrentFile', async () => {
     const document = activeGWDKDocument();
     if (document) {
@@ -262,6 +280,33 @@ function activate(context) {
     }
   }));
 
+  context.subscriptions.push(vscode.commands.registerCommand('gowdk.openCliPathSetting', () => {
+    vscode.commands.executeCommand('workbench.action.openSettings', 'gowdk.cliPath');
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('gowdk.openInstallDocs', () => {
+    openDocs('README.md');
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('gowdk.openConfigDocs', () => {
+    openDocs('docs/reference/config.md');
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('gowdk.openSsrDocs', () => {
+    openDocs('docs/language/ssr.md');
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('gowdk.enableSsrAddon', async () => {
+    await config().update('enableSsrAddon', true, vscode.ConfigurationTarget.Workspace);
+    vscode.window.showInformationMessage('GOWDK SSR validation is enabled for this workspace. Add ssr.Addon() in app config before relying on SSR builds.');
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('gowdk.createConfig', async (uri) => {
+    if (await createConfig(uri)) {
+      refreshProjectState();
+    }
+  }));
+
   for (const document of vscode.workspace.textDocuments) {
     validateSoon(document, diagnostics, pending);
   }
@@ -283,6 +328,12 @@ function validateSoon(document, diagnostics, pending) {
   }, 300));
 }
 
+function revalidateOpenGWDKDocuments(diagnostics, pending) {
+  for (const document of vscode.workspace.textDocuments) {
+    validateSoon(document, diagnostics, pending);
+  }
+}
+
 async function validateNow(document, diagnostics) {
   if (document.languageId !== LANGUAGE_ID || !config().get('enableDiagnostics')) {
     return;
@@ -298,6 +349,7 @@ async function validateNow(document, diagnostics) {
       vscode.DiagnosticSeverity.Error
     );
     diagnostic.source = 'gowdk';
+    diagnostic.code = 'missing_gowdk_config';
     diagnostics.set(document.uri, [diagnostic]);
     return;
   }
@@ -332,6 +384,10 @@ async function validateNow(document, diagnostics) {
     }
     const diagnostic = new vscode.Diagnostic(new vscode.Range(0, 0, 0, 1), error.message, vscode.DiagnosticSeverity.Error);
     diagnostic.source = 'gowdk';
+    const code = core.diagnosticCodeForMessage(error.message);
+    if (code) {
+      diagnostic.code = code;
+    }
     diagnostics.set(document.uri, [diagnostic]);
   }
 }
@@ -384,6 +440,38 @@ function toVSCodeDiagnostic(item) {
     diagnostic.code = item.code;
   }
   return diagnostic;
+}
+
+function codeActionsForDiagnostics(document, diagnostics) {
+  const actions = [];
+  for (const diagnostic of diagnostics) {
+    const fixes = core.quickFixesForDiagnostic({
+      code: diagnosticCode(diagnostic),
+      message: diagnostic.message
+    });
+    for (const fix of fixes) {
+      const action = new vscode.CodeAction(fix.title, vscode.CodeActionKind.QuickFix);
+      action.diagnostics = [diagnostic];
+      action.isPreferred = Boolean(fix.preferred);
+      action.command = {
+        command: fix.command,
+        title: fix.title,
+        arguments: [document.uri]
+      };
+      actions.push(action);
+    }
+  }
+  return actions;
+}
+
+function diagnosticCode(diagnostic) {
+  if (!diagnostic || diagnostic.code === undefined || diagnostic.code === null) {
+    return '';
+  }
+  if (typeof diagnostic.code === 'object' && diagnostic.code.value) {
+    return String(diagnostic.code.value);
+  }
+  return String(diagnostic.code);
 }
 
 async function withDocumentFile(document, callback) {
@@ -472,6 +560,9 @@ async function showSiteMap(context) {
     panel.webview.onDidReceiveMessage(async (message) => {
       if (message.type === 'open') {
         await openFile(message.file);
+      }
+      if (message.type === 'definition') {
+        await openSourceTarget(message);
       }
       if (message.type === 'move') {
         await moveFile(message.file);
@@ -584,6 +675,59 @@ async function loadCSSFiles(document) {
 async function openFile(file) {
   const document = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
   await vscode.window.showTextDocument(document, { preview: false });
+}
+
+async function openSourceTarget(target = {}) {
+  if (!target.file) {
+    return;
+  }
+  const document = await vscode.workspace.openTextDocument(vscode.Uri.file(target.file));
+  const editor = await vscode.window.showTextDocument(document, { preview: false });
+  const line = Math.max(Number(target.line) || 0, 0);
+  const column = Math.max(Number(target.column) || 0, 0);
+  const safeLine = Math.min(line, Math.max(document.lineCount - 1, 0));
+  const safeColumn = Math.min(column, document.lineAt(safeLine).text.length);
+  const position = new vscode.Position(safeLine, safeColumn);
+  editor.selection = new vscode.Selection(position, position);
+  editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+}
+
+function openDocs(file) {
+  return vscode.env.openExternal(vscode.Uri.parse(`https://github.com/cssbruno/GoWDK/blob/main/${file}`));
+}
+
+async function createConfig(uri) {
+  const root = commandProjectRoot(uri);
+  if (!root) {
+    vscode.window.showWarningMessage('Open a workspace folder before creating gowdk.config.go.');
+    return false;
+  }
+  const configPath = path.join(root, 'gowdk.config.go');
+  if (!fs.existsSync(configPath)) {
+    await vscode.workspace.fs.writeFile(vscode.Uri.file(configPath), Buffer.from(defaultConfigSource(), 'utf8'));
+  }
+  await openFile(configPath);
+  return true;
+}
+
+function commandProjectRoot(uri) {
+  if (uri && uri.scheme === 'file') {
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    const workspace = folder ? folder.uri.fsPath : workspaceRoot();
+    return core.nearestProjectRoot(path.dirname(uri.fsPath), workspace);
+  }
+  return projectRoot();
+}
+
+function defaultConfigSource() {
+  return [
+    'package app',
+    '',
+    'import "github.com/cssbruno/gowdk"',
+    '',
+    'var Config = gowdk.Config{}',
+    ''
+  ].join('\n');
 }
 
 async function moveFile(file) {

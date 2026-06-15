@@ -8,13 +8,15 @@ Language support for `.gwdk` files.
 - Language configuration for comments, brackets, and folding.
 - Diagnostics through `gowdk check --json`.
 - Formatting through `gowdk fmt`.
-- Standard Language Server Protocol support is available through `gowdk lsp` for editors that prefer LSP integration.
+- Standard Language Server Protocol support is available through `gowdk lsp` for editors that prefer LSP integration, including dirty-buffer `g:command`/`g:query` binding diagnostics when a project root is available.
 - Keyword completions for metadata declarations, render modes, blocks, client-island
   constructs, and `g:`/class/style directives, plus project-aware route,
   layout, component, and CSS completions in route strings, `layout` values,
   component tag positions, and `css` selections.
-- Hover information for page IDs, layout IDs, component names, CSS input names,
-  component event names, action names, and API names from project metadata.
+- Hover information for page IDs, routes, layout IDs, component names, CSS input
+  names, component event names, action names, API names, and Go contract
+  symbols from project metadata, including implemented/partial/planned/
+  unsupported status labels, docs links, and current limits where useful.
 - Go-to-definition for current project metadata symbols. Definitions open the
   owning source file. CSS inputs discovered from workspace `.css` files open the
   matching CSS file. Exact source ranges are planned with compiler spans.
@@ -27,8 +29,11 @@ Language support for `.gwdk` files.
 - Commands to show token output and manifest JSON for the active file.
 - Dedicated GOWDK Activity Bar page hierarchy for movable `.gwdk` page files.
 - Source Outline view that groups pages by their actual workspace directories.
-- Larger site-map visualizer webview for scanning route flow, CSS selections,
-  component usage, assets, and file layout.
+- Larger site-map visualizer webview for scanning route flow, route render
+  status, action/API/fragment endpoints, contract command/query references, CSS
+  selections, component usage, assets, and file layout. Route, endpoint, and
+  contract nodes open the best available source location, falling back to the
+  owning file until exact compiler spans are available.
 - Move-file action from the site map so a page can be reorganized without changing its declared route.
 
 The page hierarchy is generated from `gowdk sitemap` route metadata. It follows
@@ -46,7 +51,12 @@ Saved-file diagnostics, dirty-buffer diagnostics, manifest metadata, and the
 site map require `gowdk.config.go` in the workspace, matching the CLI. The
 extension passes `--config <workspace>/gowdk.config.go` so source
 include/exclude globs and module-aware discovery stay consistent. Without
-config, diagnostics report that the project must be initialized first.
+config, diagnostics report that the project must be initialized first and offer
+quick fixes to create `gowdk.config.go` or open the config reference. Setup
+diagnostics also offer quick fixes for `gowdk.cliPath` and SSR validation
+settings. The extension does not edit an existing user config unless the user
+explicitly runs the create-config action, and SSR addon guidance opens docs or
+updates the editor validation setting only.
 
 ## Development
 

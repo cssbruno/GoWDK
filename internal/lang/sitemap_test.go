@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
+	contractsaddon "github.com/cssbruno/gowdk/addons/contracts"
+	"github.com/cssbruno/gowdk/addons/realtime"
 	"github.com/cssbruno/gowdk/addons/ssr"
 )
 
@@ -71,6 +73,9 @@ guard public
 
 act Submit POST "/contact"
 api Health GET "/api/health"
+fragment Summary GET "/contact/summary" "#summary" {
+  <section>Summary</section>
+}
 
 view {
   <main>Contact</main>
@@ -86,9 +91,49 @@ view {
 		`"endpoints": [`,
 		`"kind": "action"`,
 		`"kind": "api"`,
+		`"kind": "fragment"`,
 		`"symbol": "Submit"`,
 		`"symbol": "Health"`,
+		`"symbol": "Summary"`,
+		`"source": "` + page + `"`,
+		`"sourceSpan": {`,
+		`"handler": "fragments.ContactSummary"`,
 		`"bindingStatus": "missing"`,
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected %q in sitemap JSON:\n%s", expected, output)
+		}
+	}
+}
+
+func TestSiteMapJSONIncludesContractReferenceEndpoints(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := filepath.Join(repoRoot, "examples", "contracts", "patients.page.gwdk")
+
+	payload, diagnostics := SiteMapJSONWithOptions(
+		gowdk.Config{Addons: []gowdk.Addon{contractsaddon.Addon(), realtime.Addon()}},
+		[]string{page},
+		CheckOptions{ProjectRoot: repoRoot},
+	)
+	if diagnostics.HasErrors() {
+		t.Fatal(diagnostics)
+	}
+	output := string(payload)
+	for _, expected := range []string{
+		`"kind": "command"`,
+		`"kind": "query"`,
+		`"endpointSource": "contract"`,
+		`"symbol": "patients.CreatePatient"`,
+		`"symbol": "patients.GetPatientPage"`,
+		`"source": "` + page + `"`,
+		`"sourceSpan": {`,
+		`"handler": "contracts.command.patients.CreatePatient"`,
+		`"handler": "contracts.query.patients.GetPatientPage"`,
+		`"contract": {`,
+		`"status": "unknown"`,
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected %q in sitemap JSON:\n%s", expected, output)

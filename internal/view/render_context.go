@@ -13,13 +13,14 @@ type renderContext struct {
 }
 
 type renderComponentContext struct {
-	components   map[string]Component
-	ownerPackage string
-	uses         map[string]string
-	stack        map[string]bool
-	slotHTML     string
-	slots        map[string]slotContent
-	scopeIDs     []string
+	components             map[string]Component
+	ownerPackage           string
+	uses                   map[string]string
+	realtimeEventTypeNames map[string]string
+	stack                  map[string]bool
+	slotHTML               string
+	slots                  map[string]slotContent
+	scopeIDs               []string
 }
 
 type renderDataContext struct {

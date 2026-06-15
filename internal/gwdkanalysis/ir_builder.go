@@ -195,16 +195,18 @@ func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 	}
 	for _, api := range page.Blocks.APIs {
 		path := endpointPath(api.Route, page.Route)
+		method := endpointMethod(api.Method, "GET")
 		builder.program.Endpoints = append(builder.program.Endpoints, gwdkir.Endpoint{
 			Kind:          gwdkir.EndpointAPI,
 			Source:        gwdkir.EndpointSourceGOWDK,
 			Package:       page.Package,
 			PageID:        page.ID,
 			Symbol:        api.Name,
-			Method:        endpointMethod(api.Method, "GET"),
+			Method:        method,
 			Path:          path,
 			Cache:         endpointNoStoreCache,
 			Guards:        append([]string(nil), page.Guards...),
+			CSRF:          builder.config.Build.CSRF.EnabledForGeneratedEndpoints() && gwdkir.HTTPMethodRequiresCSRF(method),
 			ErrorPage:     api.ErrorPage,
 			DynamicParams: routeParams(path),
 			RouteParams:   copyRouteParams(gwdkir.RouteParamsFromPath(path)),
@@ -357,16 +359,17 @@ func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.GoEndpoint) {
 	if kind == gwdkir.EndpointAction {
 		defaultMethod = "POST"
 	}
+	method := endpointMethod(endpoint.Method, defaultMethod)
 	builder.program.Endpoints = append(builder.program.Endpoints, gwdkir.Endpoint{
 		Kind:          kind,
 		Source:        endpoint.SourceKind,
 		Package:       endpoint.Package,
 		PageID:        standaloneEndpointPageID(endpoint),
 		Symbol:        endpoint.Name,
-		Method:        endpointMethod(endpoint.Method, defaultMethod),
+		Method:        method,
 		Path:          endpoint.Route,
 		Cache:         endpointNoStoreCache,
-		CSRF:          builder.config.Build.CSRF.EnabledForGeneratedEndpoints() && kind == gwdkir.EndpointAction,
+		CSRF:          builder.config.Build.CSRF.EnabledForGeneratedEndpoints() && (kind == gwdkir.EndpointAction || kind == gwdkir.EndpointAPI && gwdkir.HTTPMethodRequiresCSRF(method)),
 		DynamicParams: routeParams(endpoint.Route),
 		RouteParams:   copyRouteParams(gwdkir.RouteParamsFromPath(endpoint.Route)),
 		SourceFile:    endpoint.Source,
@@ -397,6 +400,7 @@ func AddStandaloneEndpoints(config gowdk.Config, program *gwdkir.Program, endpoi
 func (builder *irBuilder) addTemplate(template gwdkir.Template) {
 	builder.program.Templates = append(builder.program.Templates, template)
 	appendContractReferences(&builder.program, template)
+	appendRealtimeSubscriptions(&builder.program, template)
 }
 
 func (builder *irBuilder) finishPackages() {

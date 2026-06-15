@@ -19,7 +19,10 @@ even when explicit `.gwdk` files are passed.
 | `pages/layout-stack.page.gwdk` | Page that demonstrates ordered layout metadata. | `go run ./cmd/gowdk check examples/pages/layout-stack.page.gwdk` |
 | `actions/signup.page.gwdk` | Buildable action page with the first POST redirect action subset. | `go run ./cmd/gowdk build --out /tmp/gowdk-action-build --app /tmp/gowdk-action-app --bin /tmp/gowdk-action-site examples/actions/signup.page.gwdk` |
 | `actions/newsletter.page.gwdk` | Action-form syntax example with `g:post` and imported component markup. | `go run ./cmd/gowdk check examples/actions/newsletter.page.gwdk examples/components/base/button.cmp.gwdk examples/components/base/text-field.cmp.gwdk` |
+| `auth-guard/` | Auth addon guard example with public login, session-backed RBAC, protected SSR dashboard, and logout action. | `cd examples/auth-guard && make build` |
 | `login/` | Integrated auth-feature GWDK login with generated frontend binary plus feature-owned Go backend binary. | `cd examples/login && make serve` |
+| `flagship/` | Full-stack native GOWDK vertical slice with static output, endpoints, fragments, SSR load, contracts, islands, CSS/assets, guards, rate limiting, and one generated binary. | `cd examples/flagship && make build` |
+| `endpoints/` | Endpoint cookbook with action redirects, validation fragments, partial responses, APIs, JSON CRUD, webhooks, and standalone fragments. | `cd examples/endpoints && make build` |
 | `partials/patients-fragment.page.gwdk` | Partial/server fragment metadata example with `fragment`, `g:target`, and `g:swap`. | `go run ./cmd/gowdk manifest examples/partials/patients-fragment.page.gwdk` |
 | `api/status.page.gwdk` | API route metadata example with a named `GET` endpoint. | `go run ./cmd/gowdk routes examples/api/status.page.gwdk` |
 | `ssr/simple-ssr.page.gwdk` | Simple generated SSR page without `load {}`. | `go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/ssr/simple-ssr.page.gwdk` |
@@ -27,7 +30,7 @@ even when explicit `.gwdk` files are passed.
 | `ssr/dynamic-ssr.page.gwdk` | Validation example for dynamic SSR route metadata. | `go run ./cmd/gowdk check --ssr examples/ssr/dynamic-ssr.page.gwdk` |
 | `ssr/dashboard.page.gwdk` | SSR page with `load` and guard metadata. | `go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk` |
 | `go-interop/imported-build.page.gwdk` | Buildable `.gwdk` import example that calls Go code from `build {}`. | `go run ./cmd/gowdk build --out /tmp/gowdk-go-interop examples/go-interop/imported-build.page.gwdk` |
-| `contracts/patients.page.gwdk` | Local command/query contract web adapter example backed by normal Go registrations. | `go run ./cmd/gowdk build --config examples/contracts/gowdk.config.go --out /tmp/gowdk-contracts-build --app /tmp/gowdk-contracts-app --bin /tmp/gowdk-contracts-site examples/contracts/patients.page.gwdk` |
+| `contracts/patients.page.gwdk` | Local command/query contract web adapter plus realtime `g:subscribe` live-region example backed by normal Go registrations. | `go run ./cmd/gowdk build --config examples/contracts/gowdk.config.go --out /tmp/gowdk-contracts-build --app /tmp/gowdk-contracts-app --bin /tmp/gowdk-contracts-site examples/contracts/patients.page.gwdk` |
 | `security/security.audit.gwdk` | Declared audit policy example that extends the frontend baseline and includes a generated header expectation. | `go run ./cmd/gowdk check examples/security/security.audit.gwdk` |
 | `embed/site.page.gwdk` | Standalone one-binary generated app example. | `go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk` |
 | `seo/` | SEO addon example that emits `sitemap.xml` and `robots.txt`. | `go run ./cmd/gowdk build --config examples/seo/gowdk.config.go --out /tmp/gowdk-seo-build examples/seo/*.gwdk` |
@@ -79,6 +82,36 @@ cd examples/login
 make serve
 ```
 
+Build the auth guard addon example:
+
+```sh
+cd examples/auth-guard
+make check
+make routes
+make build
+test -x bin/auth-guard
+```
+
+Build the flagship full-stack generated binary:
+
+```sh
+cd examples/flagship
+make check
+make routes
+make build
+test -x bin/flagship
+```
+
+Build the endpoint examples cookbook:
+
+```sh
+cd examples/endpoints
+make check
+make routes
+make build
+test -x bin/endpoints
+```
+
 Build the current simple generated SSR page:
 
 ```sh
@@ -110,12 +143,17 @@ Build the local command/query contract web adapter example:
 ```sh
 go run ./cmd/gowdk build --config examples/contracts/gowdk.config.go --out /tmp/gowdk-contracts-build --app /tmp/gowdk-contracts-app --bin /tmp/gowdk-contracts-site examples/contracts/patients.page.gwdk
 test -x /tmp/gowdk-contracts-site
+test -f /tmp/gowdk-contracts-build/assets/gowdk/gowdk.js
 grep -F '"name": "patients.CreatePatient"' /tmp/gowdk-contracts-build/gowdk-build-report.json
 grep -F '"kind": "command"' /tmp/gowdk-contracts-build/gowdk-build-report.json
 grep -F '"path": "/contracts/patients"' /tmp/gowdk-contracts-build/gowdk-build-report.json
 grep -F '"guards": "public"' /tmp/gowdk-contracts-build/gowdk-build-report.json
 grep -F '"name": "patients.GetPatientPage"' /tmp/gowdk-contracts-build/gowdk-build-report.json
 grep -F '"kind": "query"' /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F '"event": "patients.PatientNotice"' /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F '"kind": "realtime_subscription"' /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F 'data-gowdk-subscribe-type=' /tmp/gowdk-contracts-build/contracts/patients/index.html
+go test ./examples/contracts/patients
 ```
 
 Build the one-binary generated app example:

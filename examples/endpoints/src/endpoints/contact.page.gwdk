@@ -1,0 +1,31 @@
+package endpoints
+
+page endpoints.contact
+route "/endpoints/contact"
+guard public
+
+act Contact POST "/endpoints/contact"
+act ValidateContact POST "/endpoints/contact/validate"
+
+view {
+  <main>
+    <h1>Contact actions</h1>
+    <p>The normal submit redirects after Go validation. The validation form returns a fragment.</p>
+
+    <form g:post={Contact}>
+      <label>Email <input name="email" type="email" required /></label>
+      <label>Message <textarea name="message" required minlength="12"></textarea></label>
+      <button>Send contact request</button>
+    </form>
+
+    <form g:post={ValidateContact} g:target="#contact-result" g:swap="innerHTML">
+      <label>Email <input name="email" type="email" required /></label>
+      <label>Message <textarea name="message" required minlength="12"></textarea></label>
+      <button>Validate inline</button>
+    </form>
+
+    <section id="contact-result">
+      <p>No contact request has been validated yet.</p>
+    </section>
+  </main>
+}

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cssbruno/gowdk/internal/appgen"
@@ -20,30 +21,37 @@ func dev(args []string) error {
 	if err != nil {
 		return err
 	}
-	buildArgs, outputDir, err := devBuildArgs(options.BuildArgs)
+	rawBuildArgs := append([]string(nil), options.BuildArgs...)
+	state, err := newDevBuildState(rawBuildArgs)
 	if err != nil {
 		return err
 	}
-	options.BuildArgs = buildArgs
-	runtime, buildArgs, err := devRuntimePlan(buildArgs, outputDir)
-	if err != nil {
-		return err
-	}
-	options.BuildArgs = buildArgs
-	absDir, err := filepath.Abs(outputDir)
+	options.BuildArgs = state.buildArgs
+	absDir, err := filepath.Abs(state.outputDir)
 	if err != nil {
 		return err
 	}
 	if err := os.MkdirAll(absDir, 0o755); err != nil {
 		return err
 	}
-	previous, err := buildInputSnapshot(options.BuildArgs)
+	previous, err := state.snapshot()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
-	if runtime.Enabled || previous == nil || !devInputCacheFresh(absDir, previous) {
-		if err := build(options.BuildArgs); err != nil {
+	lastSuccessfulBuild := time.Now()
+	if state.runtime.Enabled || previous == nil || !devInputCacheFresh(absDir, previous) {
+		if err := buildLoaded(state.plan, 0); err != nil {
 			return err
+		}
+		lastSuccessfulBuild = time.Now()
+		if tracker, err := newDevInputTracker(state.plan); err == nil {
+			state.tracker = tracker
+			previous, err = state.snapshot()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		} else {
+			fmt.Fprintln(os.Stderr, err)
 		}
 		if previous != nil {
 			if err := writeDevInputCache(absDir, previous); err != nil {
@@ -52,84 +60,103 @@ func dev(args []string) error {
 		}
 	} else {
 		fmt.Printf("Dev cache hit: inputs unchanged for %s\n", absDir)
+		lastSuccessfulBuild = devLastSuccessfulBuildTime(absDir, lastSuccessfulBuild)
 	}
 
-	var reload *liveReloadBroker
-	var server *http.Server
-	var process *devRuntimeProcess
-	if runtime.Enabled {
-		fmt.Println("Live reload is not available for app targets; reload the browser manually after each rebuild.")
-		if _, err := appgen.BuildBinary(runtime.AppDir, runtime.BinaryPath); err != nil {
-			return err
-		}
-		process = &devRuntimeProcess{plan: runtime, addr: options.Addr}
-		if err := process.restart(); err != nil {
-			return err
-		}
-		defer process.stop()
-	} else {
-		reload = newLiveReloadBroker()
-		server = &http.Server{
-			Addr:              options.Addr,
-			Handler:           liveReloadFileHandler(absDir, reload),
-			ReadHeaderTimeout: 5 * time.Second,
-			ReadTimeout:       10 * time.Second,
-			WriteTimeout:      30 * time.Second,
-			IdleTimeout:       60 * time.Second,
-			MaxHeaderBytes:    1 << 20,
-		}
-		go func() {
-			if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				fmt.Fprintln(os.Stderr, err)
-			}
-		}()
+	serve := newDevServeState(options.Addr)
+	if err := serve.apply(state, absDir); err != nil {
+		return err
 	}
+	defer serve.close()
 
 	fmt.Printf("Dev server polling GOWDK inputs every %s\n", options.Interval)
-	if runtime.Enabled {
-		fmt.Printf("Running generated app %s at http://%s\n", runtime.BinaryPath, options.Addr)
+	if state.runtime.Enabled {
+		fmt.Printf("Running generated app %s at http://%s\n", state.runtime.BinaryPath, options.Addr)
 	} else {
 		fmt.Printf("Serving %s at http://%s\n", absDir, options.Addr)
 	}
+	notifyBuildError := func(err error, change inputChange) {
+		serve.notifyBuildError(err, change, lastSuccessfulBuild)
+	}
 	for {
 		time.Sleep(options.Interval)
-		current, err := buildInputSnapshot(options.BuildArgs)
+		buildAbsDir, err := filepath.Abs(state.outputDir)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			reload.notifyData("build-error", err.Error())
+			notifyBuildError(err, inputChange{})
+			continue
+		}
+		current, err := state.snapshot()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			notifyBuildError(err, inputChange{})
 			continue
 		}
 		if current.same(previous) {
 			continue
 		}
 		change := current.diff(previous)
+		if state.configChanged(change) {
+			next, err := newDevBuildState(rawBuildArgs)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				notifyBuildError(err, change)
+				continue
+			}
+			nextAbsDir, err := filepath.Abs(next.outputDir)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				notifyBuildError(err, change)
+				continue
+			}
+			if err := os.MkdirAll(nextAbsDir, 0o755); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				notifyBuildError(err, change)
+				continue
+			}
+			state = next
+			options.BuildArgs = state.buildArgs
+			buildAbsDir = nextAbsDir
+			current, err = state.snapshot()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				notifyBuildError(err, change)
+				continue
+			}
+			change = current.diff(previous)
+		}
 		previous = current
 		fmt.Printf("Change detected at %s: %s\n", time.Now().Format(time.RFC3339), change.summary())
 		for _, detail := range change.details() {
 			fmt.Printf("  %s\n", detail)
 		}
-		_, err = buildDevChange(options.BuildArgs, change, true)
+		_, err = buildDevChangeLoaded(state.plan, change, true)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			reload.notifyData("build-error", err.Error())
+			notifyBuildError(err, change)
 			continue
 		}
-		if process != nil {
-			if _, err := appgen.BuildBinary(runtime.AppDir, runtime.BinaryPath); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				reload.notifyData("build-error", err.Error())
-				continue
-			}
-			if err := process.restart(); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				reload.notifyData("build-error", err.Error())
-				continue
-			}
+		if err := serve.apply(state, buildAbsDir); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			notifyBuildError(err, change)
+			continue
 		}
-		if err := writeDevInputCache(absDir, current); err != nil {
+		absDir = buildAbsDir
+		lastSuccessfulBuild = time.Now()
+		if tracker, err := newDevInputTracker(state.plan); err == nil {
+			state.tracker = tracker
+			if refreshed, err := state.snapshot(); err == nil {
+				previous = refreshed
+			} else {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		} else {
 			fmt.Fprintln(os.Stderr, err)
 		}
-		reload.notify("reload")
+		if err := writeDevInputCache(absDir, previous); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		serve.notifyReload()
 	}
 }
 
@@ -145,10 +172,173 @@ type devRuntime struct {
 	BinaryPath string
 }
 
+type devBuildState struct {
+	buildArgs []string
+	plan      buildOptions
+	outputDir string
+	runtime   devRuntime
+	tracker   devInputTracker
+}
+
+func newDevBuildState(args []string) (devBuildState, error) {
+	state, err := newDevBuildPlan(args)
+	if err != nil {
+		return devBuildState{}, err
+	}
+	tracker, err := newDevInputTracker(state.plan)
+	if err != nil {
+		return devBuildState{}, err
+	}
+	state.tracker = tracker
+	return state, nil
+}
+
+func newDevBuildPlan(args []string) (devBuildState, error) {
+	plan, err := loadBuildOptions(args)
+	if err != nil {
+		return devBuildState{}, err
+	}
+	outputDir, err := devOutputDirLoaded(plan)
+	if err != nil {
+		return devBuildState{}, err
+	}
+	buildArgs := append([]string(nil), args...)
+	if !devArgsHaveOutput(args) && !devArgsHaveTarget(args) {
+		buildArgs = append(buildArgs, "--out", outputDir)
+		plan.OutputDir = outputDir
+	}
+	runtime, err := devRuntimePlanLoaded(plan, outputDir)
+	if err != nil {
+		return devBuildState{}, err
+	}
+	return devBuildState{
+		buildArgs: buildArgs,
+		plan:      plan,
+		outputDir: outputDir,
+		runtime:   runtime,
+	}, nil
+}
+
+func (state devBuildState) snapshot() (inputSnapshot, error) {
+	return state.tracker.snapshot()
+}
+
+func (state devBuildState) configChanged(change inputChange) bool {
+	return inputChangeTouchesConfig(change, state.plan.ConfigPath)
+}
+
+type devServeState struct {
+	addr      string
+	reload    *liveReloadBroker
+	server    *http.Server
+	staticDir string
+	process   *devRuntimeProcess
+}
+
+func newDevServeState(addr string) *devServeState {
+	return &devServeState{
+		addr:   addr,
+		reload: newLiveReloadBroker(),
+	}
+}
+
+func (serve *devServeState) apply(state devBuildState, absDir string) error {
+	if state.runtime.Enabled {
+		return serve.useRuntime(state.runtime)
+	}
+	serve.useStatic(absDir)
+	return nil
+}
+
+func (serve *devServeState) useStatic(absDir string) {
+	if serve.process != nil {
+		serve.process.stop()
+		serve.process = nil
+	}
+	if serve.server != nil && serve.staticDir == absDir {
+		return
+	}
+	if serve.server != nil {
+		stopDevStaticServer(serve.server)
+	}
+	serve.server = startDevStaticServer(serve.addr, absDir, serve.reload)
+	serve.staticDir = absDir
+}
+
+func (serve *devServeState) useRuntime(runtime devRuntime) error {
+	startingRuntime := serve.process == nil || serve.server != nil
+	if startingRuntime {
+		fmt.Println("Live reload is not available for app targets; reload the browser manually after each rebuild.")
+	}
+	if _, err := appgen.BuildBinary(runtime.AppDir, runtime.BinaryPath); err != nil {
+		return err
+	}
+	if serve.server != nil {
+		stopDevStaticServer(serve.server)
+		serve.server = nil
+		serve.staticDir = ""
+	}
+	if serve.process == nil {
+		serve.process = &devRuntimeProcess{plan: runtime, addr: serve.addr}
+	} else if serve.process.plan != runtime {
+		serve.process.stop()
+		serve.process.plan = runtime
+	}
+	return serve.process.restart()
+}
+
+func (serve *devServeState) notifyBuildError(err error, change inputChange, lastSuccessfulBuild time.Time) {
+	serve.reload.notifyData("build-error", devOverlayErrorEventData(err, change, lastSuccessfulBuild))
+}
+
+func (serve *devServeState) notifyReload() {
+	if serve.server != nil {
+		serve.reload.notify("reload")
+	}
+}
+
+func (serve *devServeState) close() {
+	if serve.process != nil {
+		serve.process.stop()
+		serve.process = nil
+	}
+	if serve.server != nil {
+		stopDevStaticServer(serve.server)
+		serve.server = nil
+		serve.staticDir = ""
+	}
+}
+
+func startDevStaticServer(addr, absDir string, reload *liveReloadBroker) *http.Server {
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           liveReloadFileHandler(absDir, reload),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
+	go func() {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			fmt.Fprintln(os.Stderr, err)
+		}
+	}()
+	return server
+}
+
+func stopDevStaticServer(server *http.Server) {
+	if err := server.Close(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		fmt.Fprintln(os.Stderr, err)
+	}
+}
+
 type devRuntimeProcess struct {
-	plan devRuntime
-	addr string
-	cmd  *exec.Cmd
+	plan     devRuntime
+	addr     string
+	mu       sync.Mutex
+	cmd      *exec.Cmd
+	waitDone chan error
 }
 
 func (process *devRuntimeProcess) restart() error {
@@ -160,23 +350,53 @@ func (process *devRuntimeProcess) restart() error {
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("start generated app: %w", err)
 	}
+	waitDone := make(chan error, 1)
+	process.mu.Lock()
 	process.cmd = command
-	go func() {
-		if err := command.Wait(); err != nil && process.cmd == command {
-			fmt.Fprintln(os.Stderr, err)
-		}
-	}()
+	process.waitDone = waitDone
+	process.mu.Unlock()
+	go process.wait(command, waitDone)
 	return nil
 }
 
 func (process *devRuntimeProcess) stop() {
-	if process.cmd == nil || process.cmd.Process == nil {
+	command, waitDone := process.activeCommand()
+	if command == nil || command.Process == nil {
 		return
 	}
-	if err := process.cmd.Process.Kill(); err != nil {
+	if err := command.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		fmt.Fprintln(os.Stderr, err)
 	}
+	if waitDone != nil {
+		<-waitDone
+	}
+}
+
+func (process *devRuntimeProcess) activeCommand() (*exec.Cmd, <-chan error) {
+	process.mu.Lock()
+	defer process.mu.Unlock()
+	command := process.cmd
+	waitDone := process.waitDone
 	process.cmd = nil
+	process.waitDone = nil
+	return command, waitDone
+}
+
+func (process *devRuntimeProcess) wait(command *exec.Cmd, waitDone chan<- error) {
+	err := command.Wait()
+	waitDone <- err
+
+	process.mu.Lock()
+	active := process.cmd == command
+	if active {
+		process.cmd = nil
+		process.waitDone = nil
+	}
+	process.mu.Unlock()
+
+	if err != nil && active {
+		fmt.Fprintln(os.Stderr, err)
+	}
 }
 
 func parseDevOptions(args []string) (devOptions, error) {
@@ -226,18 +446,27 @@ func devUsage() string {
 }
 
 func devRuntimePlan(args []string, outputDir string) (devRuntime, []string, error) {
-	appDir, binaryPath, err := devAppAndBinary(args, outputDir)
-	if err != nil || strings.TrimSpace(appDir) == "" {
+	plan, err := loadBuildOptions(args)
+	if err != nil {
 		return devRuntime{}, args, err
 	}
+	runtime, err := devRuntimePlanLoaded(plan, outputDir)
+	return runtime, args, err
+}
+
+func devRuntimePlanLoaded(plan buildOptions, outputDir string) (devRuntime, error) {
+	appDir, binaryPath, err := devAppAndBinaryLoaded(plan)
+	if err != nil || strings.TrimSpace(appDir) == "" {
+		return devRuntime{}, err
+	}
 	if strings.TrimSpace(binaryPath) != "" {
-		return devRuntime{Enabled: true, AppDir: appDir, BinaryPath: binaryPath}, args, nil
+		return devRuntime{Enabled: true, AppDir: appDir, BinaryPath: binaryPath}, nil
 	}
 	binaryPath = filepath.Join(outputDir, ".gowdk", "dev", "app")
 	if os.PathSeparator == '\\' {
 		binaryPath += ".exe"
 	}
-	return devRuntime{Enabled: true, AppDir: appDir, BinaryPath: binaryPath}, args, nil
+	return devRuntime{Enabled: true, AppDir: appDir, BinaryPath: binaryPath}, nil
 }
 
 func devAppAndBinary(args []string, _ string) (string, string, error) {
@@ -245,6 +474,10 @@ func devAppAndBinary(args []string, _ string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
+	return devAppAndBinaryLoaded(plan)
+}
+
+func devAppAndBinaryLoaded(plan buildOptions) (string, string, error) {
 	if len(plan.TargetNames) > 0 {
 		targets, err := selectBuildTargets(plan.Options.Config.Build.Targets, plan.TargetNames)
 		if err != nil {
@@ -263,6 +496,10 @@ func devOutputDir(args []string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return devOutputDirLoaded(plan)
+}
+
+func devOutputDirLoaded(plan buildOptions) (string, error) {
 	if strings.TrimSpace(plan.OutputDir) != "" {
 		return plan.OutputDir, nil
 	}
@@ -283,16 +520,11 @@ func devOutputDir(args []string) (string, error) {
 }
 
 func devBuildArgs(args []string) ([]string, string, error) {
-	outputDir, err := devOutputDir(args)
+	state, err := newDevBuildPlan(args)
 	if err != nil {
 		return nil, "", err
 	}
-	if devArgsHaveOutput(args) || devArgsHaveTarget(args) {
-		return append([]string(nil), args...), outputDir, nil
-	}
-	next := append([]string(nil), args...)
-	next = append(next, "--out", outputDir)
-	return next, outputDir, nil
+	return state.buildArgs, state.outputDir, nil
 }
 
 func devArgsHaveOutput(args []string) bool {

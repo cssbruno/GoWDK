@@ -357,14 +357,44 @@ func validateContractReferences(config gowdk.Config, ir gwdkir.Program, projectR
 		return Diagnostics{{Severity: "error", Message: fmt.Sprintf("scan Go contracts: %v", err)}}
 	}
 	diagnostics := contractScanDiagnostics(report.Diagnostics)
-	if len(ir.ContractRefs) == 0 {
+	if len(ir.ContractRefs) == 0 && len(ir.RealtimeSubscriptions) == 0 {
 		return diagnostics
 	}
-	ir.ContractRefs = contractscan.LinkReferences(ir.ContractRefs, report)
-	if err := compiler.ValidateContractReferences(ir.ContractRefs); err != nil {
-		diagnostics = append(diagnostics, compilerDiagnostics(err, ir)...)
-	}
+	diagnostics = append(diagnostics, validateLinkedContractReferences(ir, report)...)
 	return diagnostics
+}
+
+func validateContractReferenceBindings(ir gwdkir.Program, projectRoot string) Diagnostics {
+	if len(ir.ContractRefs) == 0 && len(ir.RealtimeSubscriptions) == 0 {
+		return nil
+	}
+	if strings.TrimSpace(projectRoot) == "" {
+		projectRoot = "."
+	}
+	report, err := contractscan.Scan(projectRoot)
+	if err != nil {
+		return Diagnostics{{Severity: "error", Message: fmt.Sprintf("scan Go contracts: %v", err)}}
+	}
+	return validateLinkedContractReferences(ir, report)
+}
+
+func validateLinkedContractReferences(ir gwdkir.Program, report contractscan.Report) Diagnostics {
+	if len(ir.ContractRefs) == 0 && len(ir.RealtimeSubscriptions) == 0 {
+		return nil
+	}
+	ir.ContractRefs = contractscan.LinkReferences(ir.ContractRefs, report)
+	ir.RealtimeSubscriptions = contractscan.LinkRealtimeSubscriptions(ir.RealtimeSubscriptions, report)
+	if err := compiler.ValidateContractReferences(ir.ContractRefs); err != nil {
+		diagnostics := compilerDiagnostics(err, ir)
+		if subscriptionErr := compiler.ValidateRealtimeSubscriptionBindings(ir.RealtimeSubscriptions); subscriptionErr != nil {
+			diagnostics = append(diagnostics, compilerDiagnostics(subscriptionErr, ir)...)
+		}
+		return diagnostics
+	}
+	if err := compiler.ValidateRealtimeSubscriptionBindings(ir.RealtimeSubscriptions); err != nil {
+		return compilerDiagnostics(err, ir)
+	}
+	return nil
 }
 
 func contractScanDiagnostics(scanDiagnostics []contractscan.Diagnostic) Diagnostics {
@@ -383,6 +413,12 @@ func contractScanDiagnostics(scanDiagnostics []contractscan.Diagnostic) Diagnost
 
 // CheckSource parses and validates one in-memory .gwdk source buffer.
 func CheckSource(config gowdk.Config, path string, source []byte) (gwdkir.Page, Diagnostics) {
+	return CheckSourceWithOptions(config, path, source, CheckOptions{})
+}
+
+// CheckSourceWithOptions parses and validates one in-memory .gwdk source buffer
+// with project context for checks that need sibling Go metadata.
+func CheckSourceWithOptions(config gowdk.Config, path string, source []byte, options CheckOptions) (gwdkir.Page, Diagnostics) {
 	switch ClassifySource(path, source) {
 	case FileKindAudit:
 		audit, diagnostics := ParseAuditSource(path, source)
@@ -399,6 +435,9 @@ func CheckSource(config gowdk.Config, path string, source []byte) (gwdkir.Page, 
 		ir := gwdkanalysis.BuildProgram(config, gwdkanalysis.Sources{Components: []gwdkir.Component{component}})
 		diagnostics = append(diagnostics, compilerDiagnostics(compiler.ValidateSourceProgramReport(config, ir), ir)...)
 		diagnostics = append(diagnostics, accessibilityDiagnostics(ir)...)
+		if !diagnostics.HasErrors() && strings.TrimSpace(options.ProjectRoot) != "" {
+			diagnostics = append(diagnostics, validateContractReferenceBindings(ir, options.ProjectRoot)...)
+		}
 		return gwdkir.Page{}, diagnostics
 	case FileKindLayout:
 		layout, diagnostics := ParseLayoutSource(path, source)
@@ -410,6 +449,9 @@ func CheckSource(config gowdk.Config, path string, source []byte) (gwdkir.Page, 
 			diagnostics = append(diagnostics, compilerDiagnostics(err, ir)...)
 		}
 		diagnostics = append(diagnostics, accessibilityDiagnostics(ir)...)
+		if !diagnostics.HasErrors() && strings.TrimSpace(options.ProjectRoot) != "" {
+			diagnostics = append(diagnostics, validateContractReferenceBindings(ir, options.ProjectRoot)...)
+		}
 		return gwdkir.Page{}, diagnostics
 	case FileKindAsset:
 		_, diagnostics := Lex(string(source))
@@ -426,6 +468,9 @@ func CheckSource(config gowdk.Config, path string, source []byte) (gwdkir.Page, 
 	ir := gwdkanalysis.BuildProgram(config, gwdkanalysis.Sources{Pages: []gwdkir.Page{page}})
 	diagnostics = append(diagnostics, compilerDiagnostics(compiler.ValidateSourceProgramReport(config, ir), ir)...)
 	diagnostics = append(diagnostics, accessibilityDiagnostics(ir)...)
+	if !diagnostics.HasErrors() && strings.TrimSpace(options.ProjectRoot) != "" {
+		diagnostics = append(diagnostics, validateContractReferenceBindings(ir, options.ProjectRoot)...)
+	}
 	return page, diagnostics
 }
 
@@ -535,6 +580,8 @@ func diagnosticSuggestion(validation compiler.ValidationError) string {
 		return "Move this use declaration to the page or component that uses the imported GOWDK package."
 	case "missing_ssr_addon":
 		return "Enable ssr.Addon() in gowdk.config.go or remove request-time page behavior."
+	case "missing_realtime_addon":
+		return "Enable realtime.Addon() in gowdk.config.go or remove g:subscribe."
 	case "spa_dynamic_route_missing_paths":
 		return "Add paths { ... } for the dynamic spa route or declare request-time page behavior with load { ... } or go ssr { ... }."
 	case "load_requires_request_render":
@@ -547,6 +594,12 @@ func diagnosticSuggestion(validation compiler.ValidationError) string {
 		return "Give each page route, action, API, or Go endpoint comment a unique method/path pair."
 	case "unsupported_action_method":
 		return "Use POST for action endpoints, or declare an API endpoint for other HTTP methods."
+	case "contract_reference_missing":
+		return "Run gowdk contracts list to inspect scanned registrations, then register the command/query or fix the g:command/g:query reference."
+	case "contract_reference_invalid":
+		return "Run gowdk contracts list or gowdk contracts graph to inspect the scanned registration diagnostics and duplicate owners."
+	case "contract_reference_role_not_allowed":
+		return "Register the command/query for the web role or inspect available roles with gowdk contracts list."
 	case "invalid_backend_handler_name":
 		return "Use the exact exported Go function name in the endpoint declaration."
 	case "component_client_error":

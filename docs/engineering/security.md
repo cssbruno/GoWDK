@@ -4,7 +4,7 @@
 
 The initial implementation is a compiler/runtime scaffold. Security-critical behavior appears incrementally in the actions, partial, API, embed, and SSR addons.
 
-Do not treat current `act`, `api`, `partial`, `guard`, or SSR scaffolding as complete production enforcement. Current validation records and checks metadata; generated request decoding and opt-in CSRF enforcement exist, while authorization and broader request-time policy are still planned.
+Do not treat current `act`, `api`, `partial`, `guard`, or SSR scaffolding as complete production enforcement. Current validation records and checks metadata; generated request decoding and default CSRF enforcement for browser-reachable state-changing endpoints exist, while authorization and broader request-time policy are still planned.
 
 ## Baseline Rules
 
@@ -18,9 +18,10 @@ Do not treat current `act`, `api`, `partial`, `guard`, or SSR scaffolding as com
 
 ## GOWDK-Specific Security Rules
 
-- Generated actions and command endpoints enable CSRF by default. Production
-  configs must not set `Build.CSRF.Disabled`, and every runtime environment must
-  provide a stable CSRF secret.
+- Generated actions, command endpoints, and state-changing API endpoints enable
+  CSRF by default. Production configs must not set `Build.CSRF.Disabled` unless
+  another cross-site request strategy is enforced, and every runtime environment
+  must provide a stable CSRF secret.
 - Generated form decoders must validate expected fields and avoid mass assignment.
 - Generated action forms must reject direct file inputs and multipart posts.
   Uploads are user-owned API/server behavior with explicit size, storage,
@@ -38,8 +39,8 @@ Do not treat current `act`, `api`, `partial`, `guard`, or SSR scaffolding as com
 
 Before generated app output is considered production-ready:
 
-- Generated action and command CSRF must be enabled and configured with a
-  runtime secret.
+- Generated action, command, and state-changing API CSRF must be enabled and
+  configured with a runtime secret.
 - Redirects must reject unsafe external destinations unless explicitly allowed.
 - Generated decoders must define how unknown, missing, repeated, and file fields are handled.
 - Guards must have a documented execution contract, failure behavior, and test coverage.
@@ -57,9 +58,10 @@ posture from validated IR. `gowdk build` writes the posture as
 `gowdk-security.json` in a non-served sibling report path under
 `.gowdk/reports/<output-name>/`, and `gowdk audit --json` includes the same
 posture inline. The built-in policy encodes the production-readiness gates
-above — for example, actions and commands must enforce CSRF and APIs must not
-be public by omission. Findings carry a stable diagnostic code, a `file:line`,
-and remediation; run `gowdk explain <code>` for details.
+above — for example, actions, commands, and state-changing APIs must enforce
+CSRF, and APIs must not be public by omission. Findings carry a stable
+diagnostic code, a `file:line`, and remediation; run `gowdk explain <code>` for
+details.
 
 `gowdk audit` is a standalone command. `gowdk build` never runs it, so it cannot
 fail a build implicitly; run it on demand or in CI, where its non-zero exit on

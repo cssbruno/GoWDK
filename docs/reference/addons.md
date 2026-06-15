@@ -25,6 +25,7 @@ Current feature IDs:
 - `css`
 - `ratelimit`
 - `contracts`
+- `realtime`
 - `auth`
 - `db`
 - `seo`
@@ -42,6 +43,7 @@ Current packages:
 - `addons/tailwind`
 - `addons/ratelimit`
 - `addons/contracts`
+- `addons/realtime`
 - `addons/auth`
 - `addons/db`
 - `addons/seo`
@@ -55,13 +57,37 @@ Use `gowdk add --list` to print the built-in names the CLI can wire into
 
 ```sh
 gowdk add --list
-gowdk add ssr actions partial
+gowdk add ssr actions partial realtime
 ```
 
 `gowdk add <name>` inserts the canonical addon import and appends
 `<name>.Addon()` to a literal `Config.Addons` list. It skips constructors that
 are already present, including aliased imports. It does not install external Go
 modules or discover third-party addons.
+
+## Discovery Policy
+
+Current addon discovery is intentionally narrow:
+
+- `gowdk add --list` prints only built-in addons that the CLI can wire safely.
+- Repository docs are the source of truth for documented external addons.
+- External addons are resolved by normal Go module tooling after the app imports
+  and configures them explicitly.
+- Website or registry metadata may list addons, but it must not install,
+  execute, or trust addon code.
+
+Do not add remote CLI discovery until registry metadata can describe the addon
+name, Go module path, package path, owner, source repository, license,
+experimental/deprecated status, supported GOWDK versions or feature contracts,
+implemented public interfaces, required external tools, network or process
+behavior, and security notes.
+
+Until that metadata, trust policy, and compatibility check exist, GOWDK must not
+scan GitHub or module proxies for addons, execute unknown constructors to build
+a list, download hidden dependencies, auto-add external modules, or enable an
+external addon that is not already present in project Go code. The follow-up for
+registry-backed website and CLI discovery is
+[#422](https://github.com/cssbruno/GoWDK/issues/422).
 
 `gowdk.NewAddon(name, features...)` creates a marker addon for feature checks.
 It does not by itself make the compiler, app generator, or runtime call
@@ -85,11 +111,14 @@ Addons: []gowdk.Addon{
 	partial.Addon(),
 	ssr.Addon(),
 	api.Addon(),
+	auth.Addon(),
 	embed.Addon(),
 	css.Addon(),
+	db.Addon(),
 	ratelimit.Addon(),
 	contracts.Addon(),
 	seo.Addon(seo.Options{}),
+	realtime.Addon(),
 }
 ```
 
@@ -101,6 +130,108 @@ integration and generated route plumbing; apps still choose their sink in Go
 with `RegisterContractEventSink`. See `docs/reference/contracts.md` for Redis,
 NATS, SSE, WebSocket, outbox, and composite sink examples. Split runtime
 binaries and retry backoff policy remain planned.
+
+`addons/realtime` registers the browser presentation-event fanout feature. It
+does not import the optional WebSocket transport dependency or patch the DOM.
+Use dependency-free `runtime/contracts/sse` through `realtime.NewSSE` for
+one-way browser notifications, or opt into the nested
+`runtime/contracts/websocketfanout` module when the app needs WebSocket
+sessions. See `docs/reference/realtime.md`.
+
+## Auth Addon
+
+`addons/auth` is experimental 0.x authentication plumbing. It enables the
+`auth` feature and provides:
+
+- `PasswordHasher`, with `PBKDF2Hasher` as the default.
+- `HashPassword`, `HashPasswordWithIterations`, and `VerifyPassword` helpers
+  backed by Go standard-library PBKDF2-HMAC-SHA256.
+- Signed-cookie `Sessions` that implement `runtime/auth.Provider` for native
+  `role:` and `permission:` guards.
+
+The cryptography and dependency stance is recorded in
+[ADR 0011](../engineering/decisions/0011-auth-addon-cryptography.md).
+
+Use the default hasher:
+
+```go
+encoded, err := auth.HashPassword(password)
+if err != nil {
+	return err
+}
+if !auth.VerifyPassword(password, encoded) {
+	return errors.New("invalid credentials")
+}
+```
+
+`HashPasswordWithIterations` and `PBKDF2Hasher{Iterations: ...}` reject values
+below `MinIterations`; leave `Iterations` unset to use `DefaultIterations`.
+Verification also rejects malformed PBKDF2 encodings that do not match the
+canonical salt, key, and iteration policy emitted by `HashPassword`.
+
+Or replace it behind the small interface:
+
+```go
+type PasswordStore struct {
+	Hasher auth.PasswordHasher
+}
+```
+
+Session secrets fail closed. Pass a direct `Secret` or read from a runtime
+environment variable with `SecretEnv`; do not set both. Either value must be at
+least 32 bytes. Environment secret values are used as exact bytes. Errors name
+the setting, never the secret value.
+
+```go
+sessions, err := auth.New(auth.Options{
+	SecretEnv:  auth.DefaultSessionSecretEnv,
+	CookieName: "myapp_session",
+	TTL:        12 * time.Hour,
+})
+if err != nil {
+	return err
+}
+```
+
+`CookieName` must be a valid HTTP cookie name. A zero `TTL` uses
+`DefaultSessionTTL`; explicit positive values must be at least one second, and
+negative values are rejected. Issued sessions require a non-empty
+`Principal.ID`.
+
+Register the session provider from generated app hook code when using native
+RBAC guard IDs:
+
+```go
+func GOWDKAuthProvider() gowdkauth.Provider {
+	return sessions.Provider()
+}
+```
+
+GOWDK owns generated guard dispatch, CSRF validation, signed session cookie
+helpers, and native RBAC checks. Application Go owns user lookup, credential
+policy, MFA, OAuth, account recovery, durable storage, session lifetime,
+custom guard decisions, and backend resource authorization.
+
+For generated actions, ordering matters:
+
+- A public login action has no guard, so generated CSRF validation runs before
+  form decoding and before the login handler.
+- A protected action, such as logout, runs rate limiting and guards first. A
+  missing or invalid session fails at the guard step before CSRF validation.
+- If the guard succeeds but the CSRF token is missing or invalid, generated
+  code returns HTTP 403 `invalid csrf token` with `Cache-Control: no-store`.
+
+See `examples/auth-guard` for a small public-login and protected-dashboard
+flow.
+
+## DB Addon
+
+`addons/db` registers the database helper feature and provides thin
+`database/sql` plumbing: `Open`, readiness checks, `WithTx`, and ordered
+user-authored SQL migration application. It imports no SQL driver and owns no
+schema, query generation, repository abstraction, or domain logic. See
+`docs/reference/db.md` for the migration tracking contract and sqlc
+walkthrough.
 
 External addons use normal Go imports:
 

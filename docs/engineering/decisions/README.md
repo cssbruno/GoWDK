@@ -26,3 +26,7 @@ Recommended naming:
 - `0010-tokenizer-recursive-descent-parser.md`: accepted shared tokenizer and
   recursive-descent parser with error recovery, migrated behind the stable
   `gwdkast` AST seam.
+- `0011-auth-addon-cryptography.md`: accepted auth addon cryptography and
+  dependency stance for PBKDF2 defaults, custom hashers, and session secrets.
+- `0012-realtime-subscribe-surface.md`: accepted explicit `g:subscribe` on
+  query-owned elements as the first realtime reactivity source contract.

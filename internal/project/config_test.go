@@ -273,6 +273,35 @@ var Config = gowdk.Config{
 	}
 }
 
+func TestLoadConfigFileEnforcesSecretMinBytes(t *testing.T) {
+	const name = "GOWDK_TEST_SESSION_SECRET"
+	t.Setenv(name, "too-short")
+
+	root := t.TempDir()
+	path := filepath.Join(root, DefaultConfigFile)
+	if err := os.WriteFile(path, []byte(`package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Env: gowdk.EnvConfig{
+		Secrets: []gowdk.SecretEnv{
+			{Name: "GOWDK_TEST_SESSION_SECRET", Required: true, MinBytes: 32},
+		},
+	},
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// The AST config path must carry MinBytes through to validation; without it
+	// a non-empty short secret would pass the contract and only fail at runtime.
+	_, err := LoadConfigFile(path)
+	if err == nil || !strings.Contains(err.Error(), "GOWDK_TEST_SESSION_SECRET must be at least 32 bytes") {
+		t.Fatalf("expected short-secret validation error, got %v", err)
+	}
+}
+
 func TestLoadConfigFileRejectsSecretEnvMisuse(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, DefaultConfigFile)
@@ -455,6 +484,7 @@ import (
 	embedaddon "github.com/cssbruno/gowdk/addons/embed"
 	partialaddon "github.com/cssbruno/gowdk/addons/partial"
 	rl "github.com/cssbruno/gowdk/addons/ratelimit"
+	realtimeaddon "github.com/cssbruno/gowdk/addons/realtime"
 	seoaddon "github.com/cssbruno/gowdk/addons/seo"
 	spaaddon "github.com/cssbruno/gowdk/addons/spa"
 	ssraddon "github.com/cssbruno/gowdk/addons/ssr"
@@ -470,6 +500,7 @@ var Config = gowdk.Config{
 		embedaddon.Addon(),
 		partialaddon.Addon(),
 		rl.Addon(),
+		realtimeaddon.Addon(),
 		seoaddon.Addon(),
 		spaaddon.Addon(),
 		ssraddon.Addon(),
@@ -484,11 +515,11 @@ var Config = gowdk.Config{
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(config.Addons) != 11 {
+	if len(config.Addons) != 12 {
 		t.Fatalf("unexpected addons: %#v", config.Addons)
 	}
-	if config.Addons[10].Name() != "static" {
-		t.Fatalf("expected static addon, got %#v", config.Addons[10])
+	if config.Addons[11].Name() != "static" {
+		t.Fatalf("expected static addon, got %#v", config.Addons[11])
 	}
 	for _, feature := range []gowdk.Feature{
 		gowdk.FeatureActions,
@@ -498,6 +529,7 @@ var Config = gowdk.Config{
 		gowdk.FeatureEmbed,
 		gowdk.FeaturePartial,
 		gowdk.FeatureRateLimit,
+		gowdk.FeatureRealtime,
 		gowdk.FeatureSEO,
 		gowdk.FeatureSPA,
 		gowdk.FeatureSSR,

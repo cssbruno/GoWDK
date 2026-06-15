@@ -1,6 +1,7 @@
 package appgen
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 
@@ -14,7 +15,7 @@ func envRuntimeValidationRequired(config gowdk.EnvConfig) bool {
 		}
 	}
 	for _, secret := range config.Secrets {
-		if secret.Required {
+		if secret.Required || secret.MinBytes > 0 {
 			return true
 		}
 	}
@@ -35,10 +36,9 @@ func validateEnvContractDecl(config gowdk.EnvConfig) []ast.Decl {
 		stmts = append(stmts, appendMissingEnvStmt(variable.Name))
 	}
 	for _, secret := range config.Secrets {
-		if !secret.Required {
-			continue
+		if stmt := appendSecretEnvStmt(secret); stmt != nil {
+			stmts = append(stmts, stmt)
 		}
-		stmts = append(stmts, appendMissingEnvStmt(secret.Name))
 	}
 	stmts = append(stmts,
 		&ast.IfStmt{
@@ -61,6 +61,43 @@ func appendMissingEnvStmt(name string) ast.Stmt {
 			Y:  stringLit(""),
 		},
 		Body: block(assign([]ast.Expr{id("missing")}, call(id("append"), id("missing"), stringLit(name+" is required but is not set")))),
+	}
+}
+
+// appendSecretEnvStmt validates one secret env var. A required secret with no
+// minimum keeps the existing empty-only check. A secret with MinBytes also
+// rejects a present-but-too-short value, so a weak signing key fails the env
+// contract at startup instead of deferring to the first request.
+func appendSecretEnvStmt(secret gowdk.SecretEnv) ast.Stmt {
+	if secret.MinBytes <= 0 {
+		if secret.Required {
+			return appendMissingEnvStmt(secret.Name)
+		}
+		return nil
+	}
+	appendMissing := func(message string) ast.Stmt {
+		return assign([]ast.Expr{id("missing")}, call(id("append"), id("missing"), stringLit(message)))
+	}
+	getenv := define([]ast.Expr{id("value")}, call(sel("strings", "TrimSpace"), call(sel("os", "Getenv"), stringLit(secret.Name))))
+	tooShort := &ast.BinaryExpr{X: call(id("len"), id("value")), Op: token.LSS, Y: intLit(secret.MinBytes)}
+	shortStmt := block(appendMissing(fmt.Sprintf("%s must be at least %d bytes", secret.Name, secret.MinBytes)))
+	if !secret.Required {
+		// Optional secret: only enforce the minimum when a value is present.
+		return &ast.IfStmt{
+			Init: getenv,
+			Cond: &ast.BinaryExpr{
+				X:  &ast.BinaryExpr{X: id("value"), Op: token.NEQ, Y: stringLit("")},
+				Op: token.LAND,
+				Y:  tooShort,
+			},
+			Body: shortStmt,
+		}
+	}
+	return &ast.IfStmt{
+		Init: getenv,
+		Cond: &ast.BinaryExpr{X: id("value"), Op: token.EQL, Y: stringLit("")},
+		Body: block(appendMissing(secret.Name + " is required but is not set")),
+		Else: &ast.IfStmt{Cond: tooShort, Body: shortStmt},
 	}
 }
 

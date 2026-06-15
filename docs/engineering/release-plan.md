@@ -220,8 +220,9 @@ Every 0.x minor release must have:
 - [x] Replace outdated "planned but not complete" wording with precise
   "first slice exists, not production enforcement" wording.
 - [x] List implemented first slices: generated action decoding, unexpected
-  field rejection, direct literal request-shape validation, opt-in CSRF,
-  configurable action/API body caps, generated `http.Server` timeout defaults,
+  field rejection, direct literal request-shape validation, default generated
+  CSRF for state-changing endpoints, configurable action/API body caps,
+  generated `http.Server` timeout defaults,
   `MaxHeaderBytes`, safe local redirect slice, guard execution slice, SSR panic
   boundaries, and no-store request-time responses.
 - [x] List incomplete production areas: auth/session policy, full guard
@@ -611,16 +612,20 @@ Every 0.x minor release must have:
 - [ ] Improve JSON output for `check`, `routes`, `manifest`, and `sitemap`.
 - [ ] Add build timing, binary size, generated file, stale cleanup, strict mode,
   stub mode, debug mode, and machine-readable build report schema docs.
-- [ ] Add browser error overlay to `gowdk dev`.
-- [ ] Show compiler errors, generated Go build errors, and dev-only runtime
-  panics in the browser.
-- [ ] Keep last successful build clearly visible.
-- [ ] Log restart reason, changed files, rebuild timing, generated files
-  changed, and generated binary rebuilds.
+- [x] Add browser error overlay to `gowdk dev`.
+- [x] Show compiler errors and generated Go build errors in the browser.
+- [ ] Show dev-only runtime panics in the browser after the generated-app
+  runtime bridge exists.
+- [x] Keep last successful build clearly visible.
+- [x] Log changed files for failed dev rebuilds.
+- [ ] Log restart reason, rebuild timing, generated files changed, and
+  generated binary rebuilds.
 - [ ] Document backend proxy mode, `--app`, `preview`, and `--hot`.
-- [ ] Add dev tests for no-op rebuilds, component changes, layout changes, CSS
-  changes, config changes, backend process restarts, failed rebuild recovery,
-  and generated app dev flow.
+- [x] Add dev tests for no-op rebuilds, component changes, layout changes, CSS
+  changes, config changes, backend process restarts, and generated app dev
+  planning.
+- [ ] Add dev tests for failed rebuild recovery and generated app dev flow
+  smoke.
 - [ ] Add LSP exact source-range diagnostics once spans are complete.
 - [ ] Add go-to-definition for components, layouts, Go handlers, Go build
   functions, CSS inputs, and assets.
@@ -668,12 +673,14 @@ Every 0.x minor release must have:
 - [ ] Add docs link check, Markdown lint, generated output determinism check,
   release dry run, release artifact smoke workflow, nightly extended examples,
   nightly fuzz/benchmark where practical, and branch protection once stable.
-- [ ] Expand operations docs for static-only deploy, one-binary deploy, split
+- [x] Expand operations docs for static-only deploy, one-binary deploy, split
   frontend/backend deploy, backend-only deploy, Docker, systemd, Caddy, Nginx,
   environment variables, secrets, CSRF secrets, logs, metrics, health,
   readiness, graceful shutdown, cache/CDN, binary rollback, artifact layout,
   backup/restore as user responsibility, incident response as user
   responsibility, dependency update policy, and observability TODOs.
+- [ ] Add optional deployment recipe generators for Docker, systemd, reverse
+  proxy, static-host, and split frontend/backend starting points.
 - [ ] Add performance benchmarks for cold build, incremental build, dev rebuild,
   generated binary startup, static route latency, SSR latency, action latency,
   API latency, fragment latency, memory, binary size, generated JS size,
@@ -683,6 +690,9 @@ Every 0.x minor release must have:
 - [ ] Add build timing to build reports and `gowdk benchmark`.
 - [ ] Update website install docs to match release assets and sync website docs
   from the repo automatically.
+- [x] Define the docs-first playground onboarding path, sandbox rules, and
+  export contract.
+- [x] Document addon discovery policy before registry-backed CLI discovery.
 - [ ] Add website current release badge, experimental warning, what works today,
   known gaps, cookbook, examples index, runnable snippets, generated output
   preview, route manifest preview, build report preview, and website link
@@ -696,26 +706,32 @@ Every 0.x minor release must have:
 
 ## Native Learning Path
 
-- [ ] Lesson 1: install GOWDK.
-- [ ] Lesson 2: create a page.
-- [ ] Lesson 3: add build-time Go data.
-- [ ] Lesson 4: add a component.
-- [ ] Lesson 5: add CSS/assets.
-- [ ] Lesson 6: add an action.
-- [ ] Lesson 7: add validation.
-- [ ] Lesson 8: add CSRF.
-- [ ] Lesson 9: add an API.
-- [ ] Lesson 10: add a fragment.
-- [ ] Lesson 11: add SSR.
-- [ ] Lesson 12: add a guard.
-- [ ] Lesson 13: use a database from Go.
-- [ ] Lesson 14: build one binary.
-- [ ] Lesson 15: deploy behind Caddy.
-- [ ] Lesson 16: inspect generated Go.
-- [ ] Lesson 17: troubleshoot diagnostics.
-- [ ] Lesson 18: add tests.
-- [ ] Lesson 19: add optional Tailwind.
-- [ ] Lesson 20: add optional WASM island.
+- [x] Lesson 1: install GOWDK.
+- [x] Lesson 2: create a page.
+- [x] Lesson 3: add build-time Go data.
+- [x] Lesson 4: add a component.
+- [x] Lesson 5: add CSS/assets.
+- [x] Lesson 6: add an action.
+- [x] Lesson 7: add validation.
+- [x] Lesson 8: add CSRF.
+- [x] Lesson 9: add an API.
+- [x] Lesson 10: add a fragment.
+- [x] Lesson 11: add SSR.
+- [x] Lesson 12: add a guard.
+- [x] Lesson 13: use a database from Go.
+- [x] Lesson 14: build one binary.
+- [x] Lesson 15: deploy behind Caddy.
+- [x] Lesson 16: inspect generated Go.
+- [x] Lesson 17: troubleshoot diagnostics.
+- [x] Lesson 18: add tests.
+- [x] Lesson 19: add optional Tailwind.
+- [x] Lesson 20: add optional WASM island.
+
+The current lesson index lives in `docs/learning/native.md`. Polished WASM ABI
+examples remain tracked in
+[#31](https://github.com/cssbruno/GOWDK/issues/31), broader Go/database interop
+examples in [#329](https://github.com/cssbruno/GOWDK/issues/329), and migration
+helpers in [#122](https://github.com/cssbruno/GOWDK/issues/122).
 
 ## Priority Queue
 
@@ -748,7 +764,7 @@ Start with these in order:
 - [ ] Build flagship full-stack native GOWDK example.
 - [ ] Build deployment-shaped example.
 - [ ] Add native cookbook.
-- [ ] Add browser dev error overlay.
+- [x] Add browser dev error overlay.
 - [ ] Add VS Code quick fix for creating a missing Go handler.
 - [ ] Add performance/build timing report.
 

@@ -56,6 +56,7 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 	reporter.info("validate", "ir_valid", "compiler IR validation completed", BuildEvent{})
 	reportBackendBindings(reporter, backendBindings)
 	reportContractReferences(reporter, ir.ContractRefs)
+	reportRealtimeSubscriptions(reporter, ir.RealtimeSubscriptions)
 	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
 		return Result{}, reporter.fail("bind", err)
 	}
@@ -249,6 +250,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 	reporter.info("validate", "ir_valid", "compiler IR validation completed", BuildEvent{})
 	reportBackendBindings(reporter, backendBindings)
 	reportContractReferences(reporter, ir.ContractRefs)
+	reportRealtimeSubscriptions(reporter, ir.RealtimeSubscriptions)
 	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
 		return MemoryResult{}, reporter.fail("bind", err)
 	}
@@ -472,6 +474,70 @@ func reportContractReferences(reporter *buildReporter, refs []gwdkir.ContractRef
 	}
 }
 
+func reportRealtimeSubscriptions(reporter *buildReporter, subscriptions []gwdkir.RealtimeSubscription) {
+	for _, subscription := range subscriptions {
+		status := subscription.Status
+		if status == "" {
+			status = gwdkir.ContractBindingUnknown
+		}
+		data := map[string]string{
+			"query":     subscription.Query,
+			"event":     subscription.Event,
+			"status":    string(status),
+			"ownerKind": string(subscription.OwnerKind),
+			"owner":     subscription.OwnerID,
+		}
+		if subscription.Span.Start.Line > 0 {
+			data["line"] = fmt.Sprint(subscription.Span.Start.Line)
+			data["column"] = fmt.Sprint(subscription.Span.Start.Column)
+		}
+		if subscription.QueryImportAlias != "" {
+			data["queryImportAlias"] = subscription.QueryImportAlias
+		}
+		if subscription.QueryImportPath != "" {
+			data["queryImportPath"] = subscription.QueryImportPath
+		}
+		if subscription.QueryType != "" {
+			data["queryType"] = subscription.QueryType
+		}
+		if subscription.EventImportAlias != "" {
+			data["eventImportAlias"] = subscription.EventImportAlias
+		}
+		if subscription.EventImportPath != "" {
+			data["eventImportPath"] = subscription.EventImportPath
+		}
+		if subscription.EventType != "" {
+			data["eventType"] = subscription.EventType
+		}
+		if subscription.EventCategory != "" {
+			data["eventCategory"] = subscription.EventCategory
+		}
+		if subscription.Handler != "" {
+			data["handler"] = subscription.Handler
+		}
+		if subscription.Register != "" {
+			data["register"] = subscription.Register
+		}
+		if len(subscription.Roles) > 0 {
+			data["roles"] = strings.Join(subscription.Roles, ",")
+		}
+		if len(subscription.Guards) > 0 {
+			data["guards"] = strings.Join(subscription.Guards, ",")
+		}
+		if subscription.Message != "" {
+			data["message"] = subscription.Message
+		}
+		if subscription.Package != "" {
+			data["package"] = subscription.Package
+		}
+		reporter.info("bind", "realtime_subscription", "realtime subscription discovered", BuildEvent{
+			PageID: subscription.OwnerID,
+			Path:   subscription.Source,
+			Data:   data,
+		})
+	}
+}
+
 func BuildIncremental(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string, changedPageSources []string) (Result, error) {
 	return buildIncrementalFromIR(config, gwdkanalysis.BuildProgram(config, sources), outputDir, changedPageSources)
 }
@@ -498,6 +564,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	}
 	reporter.info("validate", "ir_valid", "compiler IR validation completed", BuildEvent{})
 	reportContractReferences(reporter, ir.ContractRefs)
+	reportRealtimeSubscriptions(reporter, ir.RealtimeSubscriptions)
 	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
 		return Result{}, reporter.fail("bind", err)
 	}
@@ -511,6 +578,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
 	baseStylesheets = append(baseStylesheets, css.stylesheets...)
 	actionFields := pageActionInputFields(ir)
+	realtimeEventTypeNames := realtimeSubscriptionEventTypeNames(ir.RealtimeSubscriptions)
 
 	var failures []string
 	failures = append(failures, componentFailures...)
@@ -603,7 +671,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir st
 		changedPageIDs[page.ID] = true
 		stylesheets := append([]gowdk.Stylesheet{}, baseStylesheets...)
 		stylesheets = append(stylesheets, css.pageStylesheets[page.ID]...)
-		pageArtifacts, err := pageOutputArtifacts(config, outputDir, page, components, layouts, stylesheets, actionFields[page.ID])
+		pageArtifacts, err := pageOutputArtifacts(config, outputDir, page, components, layouts, stylesheets, actionFields[page.ID], realtimeEventTypeNames)
 		if err != nil {
 			failures = append(failures, err.Error())
 			continue
@@ -850,6 +918,7 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
 	baseStylesheets = append(baseStylesheets, css.stylesheets...)
 	actionFields := pageActionInputFields(ir)
+	realtimeEventTypeNames := realtimeSubscriptionEventTypeNames(ir.RealtimeSubscriptions)
 	var planned []plannedArtifact
 	var failures []string
 	seenOutputPaths := map[string]string{}
@@ -864,7 +933,7 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 		}
 		stylesheets := append([]gowdk.Stylesheet{}, baseStylesheets...)
 		stylesheets = append(stylesheets, css.pageStylesheets[page.ID]...)
-		pageArtifacts, err := pageOutputArtifacts(config, outputDir, page, components, layouts, stylesheets, actionFields[page.ID])
+		pageArtifacts, err := pageOutputArtifacts(config, outputDir, page, components, layouts, stylesheets, actionFields[page.ID], realtimeEventTypeNames)
 		if err != nil {
 			failures = append(failures, err.Error())
 			continue

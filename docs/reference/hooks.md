@@ -197,6 +197,12 @@ Current generated request-time order:
 7. Call user Go handler, fragment hook, or SSR load/render path.
 8. Write the returned `runtime/response.Response` or generated HTML.
 
+For auth-backed generated actions, this means a public login action validates
+CSRF before calling the login handler, while a guarded logout action checks the
+session guard first and only validates CSRF after the guard allows the request.
+Guard failures use the guard response contract; CSRF failures return HTTP 403
+`invalid csrf token` with `Cache-Control: no-store`.
+
 ## Non-Goals
 
 - No generated route rewriting hook.

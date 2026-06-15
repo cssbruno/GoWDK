@@ -1,6 +1,7 @@
 package appgen
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"go/format"
@@ -226,6 +227,7 @@ func TestGenerateWritesAuditIntegrationTest(t *testing.T) {
 			},
 		},
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "home",
 			ActionName: "Submit",
 			Route:      "/submit",
@@ -547,6 +549,7 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+		Guards:           []string{"public"},
 		PageID:           "newsletter",
 		ActionName:       "Subscribe",
 		Route:            "/newsletter",
@@ -724,6 +727,116 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 	}
 }
 
+func TestGenerateWritesRealtimeFanoutForSubscriptions(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
+
+	program := &gwdkir.Program{
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			ImportPath:  "example.com/app/contracts/patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			Method:      http.MethodPost,
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		}},
+		RealtimeSubscriptions: []gwdkir.RealtimeSubscription{{
+			Query:           "patients.GetPatientPage",
+			Event:           "patients.PatientNotice",
+			EventImportPath: "example.com/app/contracts/patients",
+			EventType:       "PatientNotice",
+			Status:          gwdkir.ContractBindingBound,
+			OwnerKind:       gwdkir.SourcePage,
+			OwnerID:         "patients",
+		}},
+	}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkrealtime "github.com/cssbruno/gowdk/addons/realtime"`,
+		`const RealtimeEventsPath = "/_gowdk/realtime/events"`,
+		`mux.Handle(RealtimeEventsPath, realtimeEventsHandler())`,
+		`var realtimeFanout gowdkrealtime.PresentationFanout = gowdkrealtime.NewSSE()`,
+		`func RegisterRealtimeFanout(fanout gowdkrealtime.PresentationFanout)`,
+		`"example.com/app/contracts/patients.PatientNotice": true`,
+		`event.Category == gowdkcontracts.PresentationEvent`,
+		`gowdkcontracts.PresentationFanoutCommandEventSink(realtimeSubscriptionFanout{inner: fanout})`,
+		`gowdkcontracts.CompositeCommandEventSink(gowdkcontracts.InProcessCommandEventSink(), fanoutSink)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated realtime app source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateGuardsRealtimeStreamForSubscribedPages(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "dashboard", "index.html"), "<main>Dashboard</main>")
+
+	program := &gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			ID:     "dashboard",
+			Route:  "/dashboard",
+			Guards: []string{"auth.required"},
+		}},
+		RealtimeSubscriptions: []gwdkir.RealtimeSubscription{{
+			Query:           "patients.GetPatientPage",
+			Event:           "patients.PatientNotice",
+			EventImportPath: "example.com/app/contracts/patients",
+			EventType:       "PatientNotice",
+			Guards:          []string{"auth.required"},
+			Status:          gwdkir.ContractBindingBound,
+			OwnerKind:       gwdkir.SourcePage,
+			OwnerID:         "dashboard",
+		}},
+	}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`neturl "net/url"`,
+		`gowdkroute "github.com/cssbruno/gowdk/runtime/route"`,
+		`func realtimeStreamGuards(request *http.Request) []string`,
+		`request.URL.Query().Get("path")`,
+		`referer := request.Referer()`,
+		`neturl.Parse(referer)`,
+		`gowdkroute.Match("/dashboard", requestPath)`,
+		`return []string{"auth.required"}`,
+		`if !runGuards(response, request, realtimeStreamGuards(request))`,
+		`RegisterGuards(GOWDKGuardRegistry())`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated guarded realtime source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
 func TestBoundActionFieldDecodePanicsOnUnsupportedFieldType(t *testing.T) {
 	defer func() {
 		recovered := recover()
@@ -828,6 +941,7 @@ func TestGeneratedGoMatchesGoldenFixture(t *testing.T) {
 		},
 	}
 	actions := []ActionEndpoint{{
+		Guards:      []string{"public"},
 		PageID:      "newsletter",
 		ActionName:  "Subscribe",
 		Method:      "POST",
@@ -884,12 +998,14 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 			},
 		}},
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
 			Route:      "/newsletter",
 			Redirect:   "/newsletter?ok=1",
 		}},
 		Fragments: []FragmentEndpoint{{
+			Guards:       []string{"public"},
 			PageID:       "patients",
 			FragmentName: "List",
 			Method:       "GET",
@@ -948,6 +1064,7 @@ func TestGenerateRenamesBackendAliasReservedByGeneratedRuntime(t *testing.T) {
 		ActionName: "Subscribe",
 		Method:     "POST",
 		Route:      "/newsletter",
+		Guards:     []string{"public"},
 		Binding: source.BackendBinding{
 			Status:       source.BackendBindingBound,
 			ImportPath:   "example.com/app/sync",
@@ -983,6 +1100,7 @@ func TestGenerateRenamesBackendAliasReservedByGeneratedRuntime(t *testing.T) {
 		APIName: "Health",
 		Method:  "GET",
 		Route:   "/api/health",
+		Guards:  []string{"public"},
 		Binding: source.BackendBinding{
 			Status:       source.BackendBindingBound,
 			ImportPath:   "example.com/app/sync",
@@ -1025,6 +1143,7 @@ func TestGenerateBackendAppWiresSecurityHeaders(t *testing.T) {
 			},
 		}},
 		APIs: []APIEndpoint{{
+			Guards:  []string{"public"},
 			PageID:  "status",
 			APIName: "Health",
 			Method:  "GET",
@@ -1065,18 +1184,21 @@ func TestGenerateSplitFrontendProxyMatchesAdapterRoutes(t *testing.T) {
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
 		ProxyBackend: true,
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
 			Method:     "POST",
 			Route:      "/newsletter",
 		}},
 		APIs: []APIEndpoint{{
+			Guards:  []string{"public"},
 			PageID:  "status",
 			APIName: "Health",
 			Method:  "GET",
 			Route:   "/api/health",
 		}},
 		Fragments: []FragmentEndpoint{{
+			Guards:       []string{"public"},
 			PageID:       "patients",
 			FragmentName: "List",
 			Method:       "GET",
@@ -1143,6 +1265,7 @@ func TestGenerateSplitFrontendProxyKeepsBackendAdaptersRemote(t *testing.T) {
 			Insecure:  true,
 		}}},
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
 			Method:     http.MethodPost,
@@ -1201,6 +1324,7 @@ func TestGenerateWiresCSRFByDefault(t *testing.T) {
 			Insecure:   true,
 		}}},
 		Actions: []ActionEndpoint{{
+			Guards:      []string{"public"},
 			PageID:      "newsletter",
 			ActionName:  "Subscribe",
 			Route:       "/newsletter",
@@ -1240,6 +1364,70 @@ func TestGenerateWiresCSRFByDefault(t *testing.T) {
 			t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
 		}
 	}
+}
+
+func TestGenerateWiresCSRFForStateChangingAPIs(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "status", "index.html"), "<main>Status</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
+			SecretEnv:  "GOWDK_TEST_CSRF_SECRET",
+			CookieName: "csrf",
+			FieldName:  "_csrf",
+			HeaderName: "X-CSRF",
+			Insecure:   true,
+		}}},
+		APIs: []APIEndpoint{{
+			Guards:  []string{"public"},
+			PageID:  "status",
+			APIName: "Update",
+			Method:  http.MethodPost,
+			Route:   "/api/status",
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
+				ImportPath:   "example.com/app/status",
+				PackageName:  "status",
+				FunctionName: "Update",
+				Signature:    source.BackendSignatureAPI,
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkactions "github.com/cssbruno/gowdk/addons/actions"`,
+		`CSRF: csrfTokenSource,`,
+		`var csrfTokenSource *gowdkactions.CSRF`,
+		`var csrfValidator gowdkactions.CSRFValidator`,
+		`case request.Method == "POST" && requestPath == "/api/status":`,
+		`if csrfValidator != nil {`,
+		`err := csrfValidator.Validate(request)`,
+		`gowdkresponse.WriteNoStoreJSONError(response, http.StatusForbidden, "invalid csrf token")`,
+		`request.Body = http.MaxBytesReader(response, request.Body, maxAPIBodyBytes)`,
+		`result, err := status.Update(ctx, request)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated state-changing API CSRF source to contain %q:\n%s", expected, source)
+		}
+	}
+	apiIndex := strings.Index(source, `case request.Method == "POST" && requestPath == "/api/status":`)
+	if apiIndex < 0 {
+		t.Fatalf("expected generated source to contain API case:\n%s", source)
+	}
+	assertSourceOrder(t, source[apiIndex:],
+		`err := csrfValidator.Validate(request)`,
+		`request.Body = http.MaxBytesReader(response, request.Body, maxAPIBodyBytes)`,
+		`result, err := status.Update(ctx, request)`,
+	)
 }
 
 func TestGenerateSkipsCSRFWhenDisabled(t *testing.T) {
@@ -1405,6 +1593,39 @@ func TestGenerateWiresEnvContractValidation(t *testing.T) {
 	}
 }
 
+func TestGenerateEnvContractEnforcesSecretMinBytes(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Env: gowdk.EnvConfig{
+			Secrets: []gowdk.SecretEnv{
+				{Name: "GOWDK_TEST_SESSION_SECRET", Required: true, MinBytes: 32},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`value := strings.TrimSpace(os.Getenv("GOWDK_TEST_SESSION_SECRET"))`,
+		`missing = append(missing, "GOWDK_TEST_SESSION_SECRET is required but is not set")`,
+		`} else if len(value) < 32 {`,
+		`missing = append(missing, "GOWDK_TEST_SESSION_SECRET must be at least 32 bytes")`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated env contract to enforce the secret minimum %q:\n%s", expected, source)
+		}
+	}
+}
+
 func TestGenerateRunsRateLimitAndGuardsBeforeContractExecution(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -1511,6 +1732,7 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{
 		{
+			Guards:      []string{"public"},
 			PageID:      "Login",
 			ActionName:  "Login",
 			Route:       "/Login",
@@ -1535,6 +1757,7 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 			},
 		},
 		{
+			Guards:      []string{"public"},
 			PageID:      "Login",
 			ActionName:  "save",
 			Route:       "/Login/save",
@@ -1553,6 +1776,7 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 			},
 		},
 		{
+			Guards:     []string{"public"},
 			PageID:     "Login",
 			ActionName: "Ping",
 			Route:      "/Login/Ping",
@@ -1640,6 +1864,7 @@ func TestGenerateDoesNotImportMissingOrUnsupportedBackendPackages(t *testing.T) 
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "home",
 			ActionName: "Submit",
 			Route:      "/",
@@ -1653,6 +1878,7 @@ func TestGenerateDoesNotImportMissingOrUnsupportedBackendPackages(t *testing.T) 
 			},
 		}},
 		APIs: []APIEndpoint{{
+			Guards:  []string{"public"},
 			PageID:  "home",
 			APIName: "Status",
 			Method:  "GET",
@@ -1705,6 +1931,7 @@ func TestGenerateSortsImportsAndBackendDispatchDeterministically(t *testing.T) {
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
 		Actions: []ActionEndpoint{
 			{
+				Guards:     []string{"public"},
 				PageID:     "z",
 				ActionName: "Zed",
 				Route:      "/z",
@@ -1717,6 +1944,7 @@ func TestGenerateSortsImportsAndBackendDispatchDeterministically(t *testing.T) {
 				},
 			},
 			{
+				Guards:     []string{"public"},
 				PageID:     "a",
 				ActionName: "Alpha",
 				Route:      "/a",
@@ -1731,6 +1959,7 @@ func TestGenerateSortsImportsAndBackendDispatchDeterministically(t *testing.T) {
 		},
 		APIs: []APIEndpoint{
 			{
+				Guards:  []string{"public"},
 				PageID:  "z",
 				APIName: "ZedAPI",
 				Method:  http.MethodGet,
@@ -1744,6 +1973,7 @@ func TestGenerateSortsImportsAndBackendDispatchDeterministically(t *testing.T) {
 				},
 			},
 			{
+				Guards:  []string{"public"},
 				PageID:  "a",
 				APIName: "AlphaAPI",
 				Method:  http.MethodGet,
@@ -1955,6 +2185,7 @@ func TestGeneratedPackageSourceIsGoFormatted(t *testing.T) {
 
 func TestGeneratedDeclarationSnippetIsGoFormatted(t *testing.T) {
 	source, err := actionHandlerSource([]ActionEndpoint{{
+		Guards:      []string{"public"},
 		PageID:      "newsletter",
 		ActionName:  "Subscribe",
 		Method:      http.MethodPost,
@@ -1983,6 +2214,7 @@ func TestGenerateWritesBoundAPIHandler(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "status", "index.html"), "<main>Status</main>")
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{APIs: []APIEndpoint{{
+		Guards:  []string{"public"},
 		PageID:  "status",
 		APIName: "Health",
 		Method:  http.MethodGet,
@@ -2022,6 +2254,15 @@ func TestGenerateWritesBoundAPIHandler(t *testing.T) {
 	if strings.Contains(source, `github.com/cssbruno/gowdk/addons/ssr`) || strings.Contains(source, `github.com/cssbruno/gowdk/runtime/render`) {
 		t.Fatalf("API output should not import SSR or render helpers:\n%s", source)
 	}
+	for _, unexpected := range []string{
+		`func newCSRF() (*gowdkactions.CSRF, error)`,
+		`err := csrfValidator.Validate(request)`,
+		`gowdkresponse.WriteNoStoreJSONError(response, http.StatusForbidden, "invalid csrf token")`,
+	} {
+		if strings.Contains(source, unexpected) {
+			t.Fatalf("safe API output should not emit CSRF validation %q:\n%s", unexpected, source)
+		}
+	}
 }
 
 func TestGenerateUsesConfiguredBodyLimits(t *testing.T) {
@@ -2036,11 +2277,13 @@ func TestGenerateUsesConfiguredBodyLimits(t *testing.T) {
 			APIBytes:    4096,
 		}}},
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
 			Route:      "/newsletter",
 		}},
 		APIs: []APIEndpoint{{
+			Guards:  []string{"public"},
 			PageID:  "newsletter",
 			APIName: "Health",
 			Method:  http.MethodPost,
@@ -2084,12 +2327,14 @@ func TestGenerateWritesEndpointErrorPages(t *testing.T) {
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
 			Route:      "/newsletter",
 			ErrorPage:  "/errors/subscribe.html",
 		}},
 		APIs: []APIEndpoint{{
+			Guards:    []string{"public"},
 			PageID:    "status",
 			APIName:   "Health",
 			Method:    http.MethodGet,
@@ -2133,6 +2378,7 @@ func TestGenerateWritesActionFragmentHandler(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+		Guards:      []string{"public"},
 		PageID:      "patients",
 		ActionName:  "Refresh",
 		Route:       "/patients",
@@ -2230,6 +2476,7 @@ func TestGenerateInjectsCSRFIntoSSRForms(t *testing.T) {
 			PageID:      "newsletter",
 			ActionName:  "Subscribe",
 			Route:       "/newsletter",
+			Guards:      []string{"public"},
 			InputFields: []string{"email"},
 			Redirect:    "/newsletter?ok=1",
 		}},
@@ -2379,6 +2626,7 @@ func TestGenerateKeepsActionHandlersIndependentFromSSRLoad(t *testing.T) {
 			}},
 		}},
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "dashboard",
 			ActionName: "Save",
 			Method:     http.MethodPost,
@@ -2573,6 +2821,7 @@ func TestGenerateWritesDynamicFragmentRouteParamBindings(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{Fragments: []FragmentEndpoint{{
+		Guards:       []string{"public"},
 		PageID:       "patients",
 		FragmentName: "Vitals",
 		Method:       "GET",
@@ -3138,6 +3387,7 @@ func TestGenerateRejectsUnsafeActionRedirect(t *testing.T) {
 			writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
 			_, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+				Guards:     []string{"public"},
 				PageID:     "newsletter",
 				ActionName: "Subscribe",
 				Route:      "/newsletter",
@@ -3160,6 +3410,7 @@ func TestGenerateRejectsEmptyActionValidationRule(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
 	_, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+		Guards:          []string{"public"},
 		PageID:          "newsletter",
 		ActionName:      "Subscribe",
 		Route:           "/newsletter",
@@ -3183,6 +3434,7 @@ func TestGenerateRejectsDynamicActionEndpoint(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "blog", "hello", "index.html"), "<main>Post</main>")
 
 	_, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+		Guards:     []string{"public"},
 		PageID:     "blog.post",
 		ActionName: "save",
 		Route:      "/blog/{slug}",
@@ -4300,6 +4552,7 @@ func TestGeneratedBinaryUsesCustomAPIErrorPage(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "errors", "health.html"), "<main>Health Error</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{APIs: []APIEndpoint{{
+		Guards:    []string{"public"},
 		PageID:    "status",
 		APIName:   "Health",
 		Method:    http.MethodGet,
@@ -4378,6 +4631,7 @@ func TestGeneratedBinaryHandlesEndpointErrorsAndMissingErrorPage(t *testing.T) {
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{
 		Config: csrfDisabledConfig(),
 		Actions: []ActionEndpoint{{
+			Guards:     []string{"public"},
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
 			Method:     http.MethodPost,
@@ -4390,6 +4644,7 @@ func TestGeneratedBinaryHandlesEndpointErrorsAndMissingErrorPage(t *testing.T) {
 				Signature:    source.BackendSignatureAction0,
 			},
 		}, {
+			Guards:     []string{"public"},
 			PageID:     "newsletter",
 			ActionName: "Explode",
 			Method:     http.MethodPost,
@@ -4404,6 +4659,7 @@ func TestGeneratedBinaryHandlesEndpointErrorsAndMissingErrorPage(t *testing.T) {
 			},
 		}},
 		APIs: []APIEndpoint{{
+			Guards:  []string{"public"},
 			PageID:  "session",
 			APIName: "Session",
 			Method:  http.MethodGet,
@@ -4848,6 +5104,257 @@ func init() {
 		if !strings.Contains(string(eventPayload), expected) {
 			t.Fatalf("expected event sink output to contain %q, got %s", expected, eventPayload)
 		}
+	}
+}
+
+func TestGeneratedBinaryRealtimeFanoutStreamsSubscribedPresentationEvents(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients page</main>")
+
+	program := &gwdkir.Program{
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			ImportPath:  "gowdk-generated-app/patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			InputFields: []source.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
+			Method:      http.MethodPost,
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		}},
+		RealtimeSubscriptions: []gwdkir.RealtimeSubscription{{
+			Query:           "patients.GetPatientPage",
+			Event:           "patients.PatientNotice",
+			EventImportPath: "gowdk-generated-app/patients",
+			EventType:       "PatientNotice",
+			Status:          gwdkir.ContractBindingBound,
+			OwnerKind:       gwdkir.SourcePage,
+			OwnerID:         "patients",
+		}},
+	}
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "patients", "patients.go"), `package patients
+
+import (
+	"context"
+
+	"github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct {
+	Name string
+}
+
+type CreatePatientResult struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+type PatientNotice struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+type OtherNotice struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+type PatientCreated struct {
+	ID string
+}
+
+func Register(registry *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	if err := contracts.EmitPresentation(ctx, PatientNotice{ID: "patient-1"}); err != nil {
+		return CreatePatientResult{}, err
+	}
+	if err := contracts.EmitPresentation(ctx, OtherNotice{ID: "other-1"}); err != nil {
+		return CreatePatientResult{}, err
+	}
+	if err := contracts.EmitDomain(ctx, PatientCreated{ID: "domain-1"}); err != nil {
+		return CreatePatientResult{}, err
+	}
+	return CreatePatientResult{ID: "patient-1"}, nil
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+	if _, err := waitForHTTPStatus("http://"+addr+"/_gowdk/health", http.MethodGet, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	streamCtx, cancelStream := context.WithCancel(context.Background())
+	defer cancelStream()
+	streamRequest, err := http.NewRequestWithContext(streamCtx, http.MethodGet, "http://"+addr+"/_gowdk/realtime/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	streamResponse, err := http.DefaultClient.Do(streamRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer streamResponse.Body.Close()
+	if streamResponse.StatusCode != http.StatusOK {
+		t.Fatalf("expected realtime stream status 200, got %d", streamResponse.StatusCode)
+	}
+	lines := make(chan string, 8)
+	readErrs := make(chan error, 1)
+	go func() {
+		reader := bufio.NewReader(streamResponse.Body)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				readErrs <- err
+				return
+			}
+			lines <- line
+		}
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/patients", http.MethodPost, "name=Ada")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected command response status 200, got %d: %s", response.StatusCode, payload)
+	}
+
+	deadline := time.After(5 * time.Second)
+	var dataLine string
+	for dataLine == "" {
+		select {
+		case line := <-lines:
+			if strings.HasPrefix(line, "data: ") {
+				dataLine = line
+			}
+		case err := <-readErrs:
+			t.Fatalf("read realtime stream: %v", err)
+		case <-deadline:
+			t.Fatal("timed out waiting for realtime event")
+		}
+	}
+	if !strings.Contains(dataLine, `"Category":"presentation"`) ||
+		!strings.Contains(dataLine, `"Type":"gowdk-generated-app/patients.PatientNotice"`) ||
+		!strings.Contains(dataLine, `"id":"patient-1"`) {
+		t.Fatalf("expected subscribed presentation event, got %s", dataLine)
+	}
+	for _, unexpected := range []string{"OtherNotice", "PatientCreated", "domain-1"} {
+		if strings.Contains(dataLine, unexpected) {
+			t.Fatalf("realtime stream included unsubscribed event %q in %s", unexpected, dataLine)
+		}
+	}
+}
+
+func TestGeneratedBinaryRealtimeStreamGuardDenialClosesStream(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "dashboard", "index.html"), "<main>Dashboard</main>")
+
+	program := &gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			ID:     "dashboard",
+			Route:  "/dashboard",
+			Guards: []string{"auth.required"},
+		}},
+		RealtimeSubscriptions: []gwdkir.RealtimeSubscription{{
+			Query:           "patients.GetPatientPage",
+			Event:           "patients.PatientNotice",
+			EventImportPath: "gowdk-generated-app/patients",
+			EventType:       "PatientNotice",
+			Guards:          []string{"auth.required"},
+			Status:          gwdkir.ContractBindingBound,
+			OwnerKind:       gwdkir.SourcePage,
+			OwnerID:         "dashboard",
+		}},
+	}
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, appPackageDirName, "guards_register.go"), `package gowdkapp
+
+import (
+	"errors"
+
+	gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
+)
+
+func GOWDKGuardRegistry() gowdkguard.Registry {
+	return gowdkguard.Registry{
+		"auth.required": func(ctx gowdkguard.Context) error {
+			return errors.New("denied")
+		},
+	}
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+	if _, err := waitForHTTPStatus("http://"+addr+"/_gowdk/health", http.MethodGet, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	response, err := waitForHTTPStatus("http://"+addr+"/_gowdk/realtime/events?path=/dashboard", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected realtime stream guard denial to return 403, got %d: %s", response.StatusCode, payload)
+	}
+	if response.Header.Get("Content-Type") == "text/event-stream" {
+		t.Fatalf("guard-denied realtime stream must not open SSE response: headers=%v body=%s", response.Header, payload)
+	}
+	if cache := response.Header.Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected guard-denied realtime stream to be no-store, got %q", cache)
+	}
+	if !strings.Contains(string(payload), "guard") {
+		t.Fatalf("expected guard denial response, got %s", payload)
 	}
 }
 
@@ -5395,6 +5902,7 @@ func TestGeneratedBinaryAppliesRegisteredRateLimiter(t *testing.T) {
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{
 		Config: withCSRFDisabled(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ratelimit", gowdk.FeatureRateLimit)}}),
 		Actions: []ActionEndpoint{{
+			Guards:      []string{"public"},
 			PageID:      "newsletter",
 			ActionName:  "Subscribe",
 			Method:      "POST",
@@ -5656,6 +6164,7 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), Actions: []ActionEndpoint{{
+		Guards:           []string{"public"},
 		PageID:           "newsletter",
 		ActionName:       "Subscribe",
 		Route:            "/newsletter",
@@ -5674,6 +6183,7 @@ func TestGeneratedBinaryRedirectsActionPOST(t *testing.T) {
 		ValidatesInput: true,
 		Redirect:       "/newsletter?ok=1",
 	}, {
+		Guards:     []string{"public"},
 		PageID:     "newsletter",
 		ActionName: "Ping",
 		Route:      "/newsletter/ping",
@@ -5829,6 +6339,7 @@ func TestGeneratedBinaryValidatesCSRFByDefault(t *testing.T) {
 			Insecure:  true,
 		}}},
 		Actions: []ActionEndpoint{{
+			Guards:      []string{"public"},
 			PageID:      "newsletter",
 			ActionName:  "Subscribe",
 			Route:       "/newsletter",
@@ -5920,6 +6431,7 @@ func TestGeneratedBinaryInjectsCSRFIntoSSRForms(t *testing.T) {
 			PageID:      "newsletter",
 			ActionName:  "Subscribe",
 			Route:       "/newsletter",
+			Guards:      []string{"public"},
 			InputFields: []string{"email"},
 			Redirect:    "/newsletter?ok=1",
 		}},
@@ -6000,6 +6512,7 @@ func TestGeneratedBinaryServesPartialActionFragment(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), Actions: []ActionEndpoint{{
+		Guards:      []string{"public"},
 		PageID:      "patients",
 		ActionName:  "Refresh",
 		Route:       "/patients",
@@ -6073,6 +6586,7 @@ func TestGeneratedBinaryServesStandaloneFragmentRoute(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Fragments: []FragmentEndpoint{{
+		Guards:       []string{"public"},
 		PageID:       "patients",
 		FragmentName: "List",
 		Method:       "GET",
@@ -6134,6 +6648,7 @@ func TestGeneratedBinaryExecutesFragmentUserHook(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Fragments: []FragmentEndpoint{{
+		Guards:       []string{"public"},
 		PageID:       "patients",
 		FragmentName: "List",
 		Method:       "GET",
@@ -6213,6 +6728,7 @@ func TestGeneratedBinaryExecutesDynamicFragmentUserHook(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Fragments: []FragmentEndpoint{{
+		Guards:       []string{"public"},
 		PageID:       "patients",
 		FragmentName: "Vitals",
 		Method:       "GET",
@@ -6389,6 +6905,7 @@ func TestGeneratedBinaryDoesNotValidateRequiredFieldsWithoutValidMetadata(t *tes
 	writeTestFile(t, filepath.Join(outputDir, "newsletter", "index.html"), "<main>Newsletter</main>")
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), Actions: []ActionEndpoint{{
+		Guards:         []string{"public"},
 		PageID:         "newsletter",
 		ActionName:     "Subscribe",
 		Route:          "/newsletter",
@@ -6619,5 +7136,35 @@ func TestDeniedPageRoutePatternsSelectsGuardlessDynamicPages(t *testing.T) {
 	// Dynamic routes must not leak into the exact deny set.
 	if denied := deniedPageRoutes(options); len(denied) != 1 || denied[0] != "/" {
 		t.Fatalf("expected only the static route / in exact deny set, got %#v", denied)
+	}
+}
+
+func TestGuardlessActionAndAPIAreDeniedByOmission(t *testing.T) {
+	const deny = `gowdkresponse.WriteNoStoreError(response, http.StatusForbidden, "403 forbidden")`
+
+	actionSrc, err := actionHandlerSource([]ActionEndpoint{{PageID: "p", ActionName: "Sub", Route: "/sub"}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(actionSrc, deny) {
+		t.Fatalf("guardless action must be denied by omission:\n%s", actionSrc)
+	}
+
+	apiSrc, err := apiHandlerSource([]APIEndpoint{{PageID: "p", APIName: "Show", Method: "GET", Route: "/show"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(apiSrc, deny) {
+		t.Fatalf("guardless api must be denied by omission:\n%s", apiSrc)
+	}
+
+	// An endpoint that declares `guard public` is intentionally reachable and
+	// must NOT be denied by omission.
+	publicSrc, err := actionHandlerSource([]ActionEndpoint{{PageID: "p", ActionName: "Sub", Route: "/sub", Guards: []string{"public"}}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(publicSrc, deny) {
+		t.Fatalf("public action must not be denied by omission:\n%s", publicSrc)
 	}
 }

@@ -67,6 +67,11 @@ type EnvVar struct {
 type SecretEnv struct {
 	Name     string
 	Required bool
+	// MinBytes rejects a present-but-too-short secret at build time and at
+	// generated-app startup. Zero means no minimum. This lets the env contract
+	// fail fast on a weak signing key instead of deferring the failure to the
+	// first request that constructs the signer.
+	MinBytes int
 }
 
 // EnvValidationError describes one invalid or missing env contract entry.
@@ -123,9 +128,14 @@ func (config EnvConfig) Validate(lookup func(string) (string, bool)) error {
 			continue
 		}
 		diagnostics = append(diagnostics, validateEnvDuplicate(seen, name, "Secrets")...)
-		if lookup != nil && secret.Required {
-			if value, ok := lookup(name); !ok || strings.TrimSpace(value) == "" {
+		if lookup != nil {
+			value, ok := lookup(name)
+			trimmed := strings.TrimSpace(value)
+			switch {
+			case secret.Required && (!ok || trimmed == ""):
 				diagnostics = append(diagnostics, EnvValidationError{Code: "missing_required_secret", Name: name, Message: fmt.Sprintf("%s is required but is not set", name)})
+			case secret.MinBytes > 0 && trimmed != "" && len(trimmed) < secret.MinBytes:
+				diagnostics = append(diagnostics, EnvValidationError{Code: "short_secret", Name: name, Message: fmt.Sprintf("%s must be at least %d bytes", name, secret.MinBytes)})
 			}
 		}
 	}
@@ -191,7 +201,8 @@ type SecurityHeadersConfig struct {
 
 const DefaultCSRFSecretEnv = "GOWDK_CSRF_SECRET"
 
-// CSRFConfig controls generated action and command CSRF token wiring.
+// CSRFConfig controls generated CSRF token wiring for browser-reachable
+// state-changing endpoints.
 type CSRFConfig struct {
 	Enabled    bool
 	Disabled   bool
@@ -353,6 +364,7 @@ const (
 	FeatureCSS       Feature = "css"
 	FeatureRateLimit Feature = "ratelimit"
 	FeatureContracts Feature = "contracts"
+	FeatureRealtime  Feature = "realtime"
 	FeatureAuth      Feature = "auth"
 	FeatureDB        Feature = "db"
 	FeatureSEO       Feature = "seo"

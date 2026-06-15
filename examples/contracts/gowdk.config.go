@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/cssbruno/gowdk"
 	contractsaddon "github.com/cssbruno/gowdk/addons/contracts"
+	"github.com/cssbruno/gowdk/addons/realtime"
 )
 
 var Config = gowdk.Config{
@@ -14,5 +15,6 @@ var Config = gowdk.Config{
 	},
 	Addons: []gowdk.Addon{
 		contractsaddon.Addon(),
+		realtime.Addon(),
 	},
 }

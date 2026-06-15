@@ -104,6 +104,7 @@ func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) Val
 	diagnostics = append(diagnostics, validateRouteMethodConflicts(ir.Pages, ir.GoEndpoints, ir.ContractRefs)...)
 	diagnostics = append(diagnostics, validateStandaloneEndpoints(ir.GoEndpoints)...)
 	diagnostics = append(diagnostics, validateContractReferenceRoutes(ir.ContractRefs)...)
+	diagnostics = append(diagnostics, validateRealtimeSubscriptions(config, ir.RealtimeSubscriptions)...)
 	for _, page := range ir.Pages {
 		diagnostics = append(diagnostics, ValidatePage(config, page)...)
 	}

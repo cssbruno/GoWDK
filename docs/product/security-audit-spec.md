@@ -2,8 +2,8 @@
 
 ## Problem
 
-GOWDK enforces security in scattered places — default-deny guards, opt-in CSRF,
-body caps, panic boundaries, secret redaction, and the diagnostic registry — but
+GOWDK enforces security in scattered places — default-deny guards, generated
+CSRF, body caps, panic boundaries, secret redaction, and the diagnostic registry — but
 there is no single, declarative, auditable view of an app's whole security
 posture, no way to declare the intended posture and have it checked, and no
 integration-test framework that proves the runtime behaves as declared. The

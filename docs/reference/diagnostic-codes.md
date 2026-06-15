@@ -149,6 +149,9 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `contract_route_invalid`, `contract_reference_missing`,
   `contract_reference_invalid`,
   `contract_reference_role_not_allowed`.
+- Realtime: `missing_realtime_addon`, `realtime_subscription_parse_error`,
+  `realtime_subscription_missing`, `realtime_subscription_invalid`,
+  `realtime_subscription_role_not_allowed`.
 - WASM and browser Go: `unsupported_wasm_import`,
   `wasm_package_build_error`, `wasm_package_entrypoint_error`,
   `wasm_package_export_error`, `client_go_block_wasm_source_error`,
@@ -157,7 +160,8 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `client_go_block_wasm_import_error`,
   `client_go_block_wasm_export_error`.
 - Security audit (`gowdk audit`): `audit_action_missing_csrf`,
-  `audit_api_public_by_omission`, `audit_command_missing_csrf`,
+  `audit_api_missing_csrf`, `audit_api_public_by_omission`,
+  `audit_command_missing_csrf`,
   `audit_guardless_endpoint_page`, `audit_bundle_secret`,
   `audit_client_route_unguarded`,
   `audit_headers_missing`, `audit_headers_runtime_missing`,

@@ -88,18 +88,18 @@ func NewSink(ctx context.Context, options ...Option) (*Sink, error) {
 	}
 	provider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
-		sdktrace.WithIDGenerator(snapshotIDGenerator{}),
+		sdktrace.WithIDGenerator(SnapshotIDGenerator{}),
 	)
 	return NewSinkWithProvider(provider), nil
 }
 
 // NewSinkWithProvider creates a sink backed by an existing provider. It is
 // useful when applications already own OpenTelemetry lifecycle and resources.
-// Providers should be configured with snapshotIDGenerator when exact GOWDK
+// Providers should be configured with SnapshotIDGenerator when exact GOWDK
 // trace/span identity preservation is required.
 func NewSinkWithProvider(provider *sdktrace.TracerProvider) *Sink {
 	if provider == nil {
-		provider = sdktrace.NewTracerProvider(sdktrace.WithIDGenerator(snapshotIDGenerator{}))
+		provider = sdktrace.NewTracerProvider(sdktrace.WithIDGenerator(SnapshotIDGenerator{}))
 	}
 	return &Sink{provider: provider, tracer: provider.Tracer("github.com/cssbruno/gowdk/runtime/trace")}
 }
@@ -183,16 +183,18 @@ func parentContext(ctx context.Context, span gowdktrace.Snapshot) (context.Conte
 	return oteltrace.ContextWithRemoteSpanContext(ctx, spanContext), nil
 }
 
-type snapshotIDGenerator struct{}
+// SnapshotIDGenerator preserves GOWDK trace and span IDs when OpenTelemetry SDK
+// spans are created from GOWDK trace snapshots.
+type SnapshotIDGenerator struct{}
 
-func (snapshotIDGenerator) NewIDs(ctx context.Context) (oteltrace.TraceID, oteltrace.SpanID) {
+func (SnapshotIDGenerator) NewIDs(ctx context.Context) (oteltrace.TraceID, oteltrace.SpanID) {
 	if ids, ok := ctx.Value(snapshotIDContextKey{}).(snapshotIDs); ok {
 		return ids.traceID, ids.spanID
 	}
 	return randomTraceID(), randomSpanID()
 }
 
-func (snapshotIDGenerator) NewSpanID(ctx context.Context, traceID oteltrace.TraceID) oteltrace.SpanID {
+func (SnapshotIDGenerator) NewSpanID(ctx context.Context, traceID oteltrace.TraceID) oteltrace.SpanID {
 	if ids, ok := ctx.Value(snapshotIDContextKey{}).(snapshotIDs); ok && ids.traceID == traceID {
 		return ids.spanID
 	}

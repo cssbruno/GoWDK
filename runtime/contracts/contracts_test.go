@@ -38,6 +38,8 @@ type syncPatientsJob struct {
 	Limit int
 }
 
+type commandDispatchContextKey struct{}
+
 type recordingOutbox struct {
 	events []EventEnvelope
 	err    error
@@ -117,8 +119,10 @@ func TestCommandDispatchesDomainEventsAfterSuccess(t *testing.T) {
 func TestCommandDispatchUsesTraceContextWithoutRecorder(t *testing.T) {
 	registry := NewRegistry()
 	parentTrace := gowdktrace.TraceContext{TraceID: "4bf92f3577b34da6a3ce929d0e0e4736", SpanID: "00f067aa0ba902b7", Sampled: true}
-	ctx := gowdktrace.ContextWithTraceContext(context.Background(), parentTrace)
+	ctx := context.WithValue(context.Background(), commandDispatchContextKey{}, "tenant-1")
+	ctx = gowdktrace.ContextWithTraceContext(ctx, parentTrace)
 	var subscriberTrace gowdktrace.TraceContext
+	var subscriberContextValue string
 	var subscriberEmitErr error
 
 	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
@@ -127,6 +131,7 @@ func TestCommandDispatchUsesTraceContextWithoutRecorder(t *testing.T) {
 		if !ok {
 			return errors.New("subscriber context lost trace context")
 		}
+		subscriberContextValue, _ = ctx.Value(commandDispatchContextKey{}).(string)
 		subscriberEmitErr = EmitDomain(ctx, patientCreated{ID: "subscriber-event"})
 		return subscriberEmitErr
 	}))
@@ -143,6 +148,9 @@ func TestCommandDispatchUsesTraceContextWithoutRecorder(t *testing.T) {
 	}
 	if !Is(subscriberEmitErr, ErrNoEventRecorder) {
 		t.Fatalf("subscriber emit error = %v, want %s", subscriberEmitErr, ErrNoEventRecorder)
+	}
+	if subscriberContextValue != "tenant-1" {
+		t.Fatalf("subscriber context value = %q, want tenant-1", subscriberContextValue)
 	}
 	if subscriberTrace.TraceID != parentTrace.TraceID || subscriberTrace.SpanID != parentTrace.SpanID {
 		t.Fatalf("subscriber trace = %#v, want %#v", subscriberTrace, parentTrace)

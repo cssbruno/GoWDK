@@ -28,12 +28,12 @@ func ExecuteCommandForRole[C, R any](ctx context.Context, registry *Registry, ro
 }
 
 func executeCommand[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, error) {
-	result, recorder, commandCtx, err := runCommand[C, R](ctx, registry, command, role)
+	result, recorder, dispatchCtx, err := runCommand[C, R](ctx, registry, command, role)
 	if err != nil {
 		var zero R
 		return zero, err
 	}
-	if err := recorder.dispatchForRole(traceOnlyContext(commandCtx), registry, role); err != nil {
+	if err := recorder.dispatchForRole(dispatchCtx, registry, role); err != nil {
 		var zero R
 		return zero, err
 	}
@@ -53,12 +53,12 @@ func CaptureCommandEventsForRole[C, R any](ctx context.Context, registry *Regist
 }
 
 func captureCommandEvents[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, []EventEnvelope, error) {
-	result, recorder, commandCtx, err := runCommand[C, R](ctx, registry, command, role)
+	result, recorder, dispatchCtx, err := runCommand[C, R](ctx, registry, command, role)
 	if err != nil {
 		var zero R
 		return zero, nil, err
 	}
-	return result, recorder.envelopes(commandCtx), nil
+	return result, recorder.envelopes(dispatchCtx), nil
 }
 
 // ExecuteCommandToOutbox runs a command and stores emitted events in outbox
@@ -174,7 +174,7 @@ func runCommand[C, R any](ctx context.Context, registry *Registry, command C, ro
 		spanErr = err
 		return zero, nil, commandCtx, err
 	}
-	return result, recorder, commandCtx, nil
+	return result, recorder, ctx, nil
 }
 
 func (registry *Registry) registerCommand(command, result string, handler any, roles []Role) error {

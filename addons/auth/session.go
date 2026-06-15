@@ -41,8 +41,8 @@ type Options struct {
 	// Secret signs session payloads with HMAC-SHA256. It must be non-empty and
 	// should be high-entropy and stable across instances.
 	Secret []byte
-	// SecretEnv names the environment variable to read when Secret is empty.
-	// Error messages include this name, never the secret value.
+	// SecretEnv names the environment variable to read instead of Secret. Error
+	// messages include this name, never the secret value.
 	SecretEnv string
 	// CookieName overrides DefaultSessionCookie.
 	CookieName string
@@ -83,9 +83,20 @@ func New(options Options) (*Sessions, error) {
 	cookie := options.CookieName
 	if cookie == "" {
 		cookie = DefaultSessionCookie
+	} else {
+		probe := http.Cookie{Name: cookie, Value: "session"}
+		if err := probe.Valid(); err != nil {
+			return nil, fmt.Errorf("gowdk auth: invalid session cookie name %q: %w", cookie, err)
+		}
 	}
 	ttl := options.TTL
-	if ttl <= 0 {
+	if ttl < 0 {
+		return nil, fmt.Errorf("gowdk auth: session ttl must be non-negative")
+	}
+	if ttl > 0 && ttl < time.Second {
+		return nil, fmt.Errorf("gowdk auth: session ttl must be at least 1s")
+	}
+	if ttl == 0 {
 		ttl = DefaultSessionTTL
 	}
 	now := options.Now
@@ -102,6 +113,10 @@ func New(options Options) (*Sessions, error) {
 }
 
 func sessionSecret(options Options) ([]byte, error) {
+	envName := strings.TrimSpace(options.SecretEnv)
+	if len(options.Secret) > 0 && envName != "" {
+		return nil, fmt.Errorf("gowdk auth: set Secret or SecretEnv, not both")
+	}
 	if len(options.Secret) > 0 {
 		if len(options.Secret) < MinSessionSecretBytes {
 			return nil, fmt.Errorf("gowdk auth: session secret must be at least %d bytes", MinSessionSecretBytes)
@@ -110,11 +125,10 @@ func sessionSecret(options Options) ([]byte, error) {
 		copy(secret, options.Secret)
 		return secret, nil
 	}
-	envName := strings.TrimSpace(options.SecretEnv)
 	if envName == "" {
 		return nil, fmt.Errorf("gowdk auth: session secret is required")
 	}
-	value := strings.TrimSpace(os.Getenv(envName))
+	value := os.Getenv(envName)
 	if value == "" {
 		return nil, fmt.Errorf("gowdk auth: %s is required for session signing", envName)
 	}
@@ -139,7 +153,10 @@ func (sessions *Sessions) Issue(writer http.ResponseWriter, principal Principal)
 
 // Cookie creates a signed session cookie for principal.
 func (sessions *Sessions) Cookie(principal Principal) (http.Cookie, error) {
-	expires := sessions.now().Add(sessions.ttl)
+	if strings.TrimSpace(principal.ID) == "" {
+		return http.Cookie{}, fmt.Errorf("gowdk auth: principal id is required")
+	}
+	expires := sessionExpiry(sessions.now(), sessions.ttl)
 	payload := sessionPayload{
 		ID:          principal.ID,
 		Roles:       principal.Roles,
@@ -160,6 +177,14 @@ func (sessions *Sessions) Cookie(principal Principal) (http.Cookie, error) {
 		Secure:   !sessions.insecure,
 		SameSite: http.SameSiteLaxMode,
 	}, nil
+}
+
+func sessionExpiry(now time.Time, ttl time.Duration) time.Time {
+	expires := now.Add(ttl)
+	if expires.Nanosecond() == 0 {
+		return expires
+	}
+	return expires.Truncate(time.Second).Add(time.Second)
 }
 
 // Clear writes an immediately-expired session cookie, logging the request out.
@@ -201,6 +226,9 @@ func (sessions *Sessions) Principal(request *http.Request) (*Principal, error) {
 		return nil, nil
 	}
 	if sessions.now().Unix() >= payload.Expires {
+		return nil, nil
+	}
+	if strings.TrimSpace(payload.ID) == "" {
 		return nil, nil
 	}
 	return &Principal{

@@ -159,6 +159,11 @@ if !auth.VerifyPassword(password, encoded) {
 }
 ```
 
+`HashPasswordWithIterations` and `PBKDF2Hasher{Iterations: ...}` reject values
+below `MinIterations`; leave `Iterations` unset to use `DefaultIterations`.
+Verification also rejects malformed PBKDF2 encodings that do not match the
+canonical salt, key, and iteration policy emitted by `HashPassword`.
+
 Or replace it behind the small interface:
 
 ```go
@@ -168,8 +173,9 @@ type PasswordStore struct {
 ```
 
 Session secrets fail closed. Pass a direct `Secret` or read from a runtime
-environment variable with `SecretEnv`; either value must be at least 32 bytes.
-Errors name the setting, never the secret value.
+environment variable with `SecretEnv`; do not set both. Either value must be at
+least 32 bytes. Environment secret values are used as exact bytes. Errors name
+the setting, never the secret value.
 
 ```go
 sessions, err := auth.New(auth.Options{
@@ -181,6 +187,11 @@ if err != nil {
 	return err
 }
 ```
+
+`CookieName` must be a valid HTTP cookie name. A zero `TTL` uses
+`DefaultSessionTTL`; explicit positive values must be at least one second, and
+negative values are rejected. Issued sessions require a non-empty
+`Principal.ID`.
 
 Register the session provider from generated app hook code when using native
 RBAC guard IDs:

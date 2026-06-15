@@ -14,6 +14,9 @@ GOWDK_AUTH_SESSION_SECRET=development-auth-session-secret-32bytes GOWDK_CSRF_SEC
 
 Open `http://127.0.0.1:8094/`.
 
+The example leaves the session cookie `Secure` flag off by default so localhost
+HTTP works. Set `GOWDK_COOKIE_SECURE=true` when serving it behind HTTPS.
+
 Use:
 
 ```text

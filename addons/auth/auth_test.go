@@ -1,9 +1,11 @@
 package auth
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -36,16 +38,25 @@ func TestHashPasswordRoundTrip(t *testing.T) {
 }
 
 func TestPBKDF2HasherWithCustomIterations(t *testing.T) {
-	hasher := PBKDF2Hasher{Iterations: 2}
+	iterations := DefaultIterations + 1
+	hasher := PBKDF2Hasher{Iterations: iterations}
 	encoded, err := hasher.HashPassword("same")
 	if err != nil {
 		t.Fatalf("HashPassword: %v", err)
 	}
-	if !strings.HasPrefix(encoded, "pbkdf2-sha256$2$") {
+	if !strings.HasPrefix(encoded, "pbkdf2-sha256$"+strconv.Itoa(iterations)+"$") {
 		t.Fatalf("expected encoded iterations, got %q", encoded)
 	}
 	if !hasher.VerifyPassword("same", encoded) {
 		t.Fatal("VerifyPassword rejected the correct password")
+	}
+}
+
+func TestHashPasswordWithIterationsRejectsInvalidIterations(t *testing.T) {
+	for _, iterations := range []int{0, -1, MinIterations - 1} {
+		if _, err := HashPasswordWithIterations("same", iterations); err == nil {
+			t.Fatalf("HashPasswordWithIterations accepted iterations=%d", iterations)
+		}
 	}
 }
 
@@ -97,12 +108,19 @@ func TestHashPasswordUsesFreshSalt(t *testing.T) {
 }
 
 func TestVerifyPasswordRejectsMalformedHash(t *testing.T) {
+	canonicalSalt := base64.RawStdEncoding.EncodeToString([]byte(strings.Repeat("s", pbkdf2SaltLength)))
+	canonicalKey := base64.RawStdEncoding.EncodeToString([]byte(strings.Repeat("k", pbkdf2KeyLength)))
+	shortSalt := base64.RawStdEncoding.EncodeToString([]byte("s"))
+	shortKey := base64.RawStdEncoding.EncodeToString([]byte("k"))
 	for _, encoded := range []string{
 		"",
 		"plain",
 		"pbkdf2-sha256$notanumber$c2FsdA$a2V5",
 		"bcrypt$10$salt$key",
 		"pbkdf2-sha256$600000$$a2V5",
+		"pbkdf2-sha256$1$" + canonicalSalt + "$" + canonicalKey,
+		"pbkdf2-sha256$600000$" + shortSalt + "$" + canonicalKey,
+		"pbkdf2-sha256$600000$" + canonicalSalt + "$" + shortKey,
 	} {
 		if VerifyPassword("anything", encoded) {
 			t.Fatalf("VerifyPassword accepted malformed hash %q", encoded)
@@ -219,8 +237,15 @@ func TestSessionRejectsForeignSecret(t *testing.T) {
 
 func TestSessionExpires(t *testing.T) {
 	issuedAt := time.Unix(1_700_000_000, 0)
-	sessions := newTestSessions(t, issuedAt)
-	sessions.ttl = time.Hour
+	sessions, err := New(Options{
+		Secret:   []byte(strings.Repeat("s", MinSessionSecretBytes)),
+		TTL:      time.Hour,
+		Insecure: true,
+		Now:      fixedClock(issuedAt),
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
 
 	recorder := httptest.NewRecorder()
 	if err := sessions.Issue(recorder, Principal{ID: "user-1"}); err != nil {
@@ -242,6 +267,36 @@ func TestSessionExpires(t *testing.T) {
 	}
 }
 
+func TestSessionOneSecondTTLDoesNotExpireEarlyFromSubsecondIssueTime(t *testing.T) {
+	issuedAt := time.Unix(1_700_000_000, int64(900*time.Millisecond))
+	sessions, err := New(Options{
+		Secret:   []byte(strings.Repeat("s", MinSessionSecretBytes)),
+		TTL:      time.Second,
+		Insecure: true,
+		Now:      fixedClock(issuedAt),
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	if err := sessions.Issue(recorder, Principal{ID: "user-1"}); err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	for _, cookie := range recorder.Result().Cookies() {
+		request.AddCookie(cookie)
+	}
+
+	sessions.now = fixedClock(issuedAt.Add(200 * time.Millisecond))
+	principal, err := sessions.Principal(request)
+	if err != nil {
+		t.Fatalf("Principal: %v", err)
+	}
+	if principal == nil {
+		t.Fatal("expected one-second session to remain valid after 200ms")
+	}
+}
+
 func TestSessionClearLogsOut(t *testing.T) {
 	sessions := newTestSessions(t, time.Unix(1_700_000_000, 0))
 	recorder := httptest.NewRecorder()
@@ -252,6 +307,42 @@ func TestSessionClearLogsOut(t *testing.T) {
 	}
 	if cookies[0].MaxAge >= 0 {
 		t.Fatalf("expected a negative MaxAge to clear the cookie, got %d", cookies[0].MaxAge)
+	}
+}
+
+func TestSessionCookieDefaultsToSecureAttributes(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	sessions, err := New(Options{
+		Secret: []byte(strings.Repeat("s", MinSessionSecretBytes)),
+		Now:    fixedClock(now),
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	cookie, err := sessions.Cookie(Principal{ID: "user-1"})
+	if err != nil {
+		t.Fatalf("Cookie: %v", err)
+	}
+	if cookie.Name != DefaultSessionCookie || cookie.Path != "/" || !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("unexpected default cookie attributes: %#v", cookie)
+	}
+	if !cookie.Expires.Equal(now.Add(DefaultSessionTTL)) {
+		t.Fatalf("cookie expires at %v, want %v", cookie.Expires, now.Add(DefaultSessionTTL))
+	}
+	clear := sessions.ClearCookie()
+	if clear.Name != DefaultSessionCookie || clear.Path != "/" || !clear.HttpOnly || !clear.Secure || clear.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("unexpected default clear-cookie attributes: %#v", clear)
+	}
+}
+
+func TestSessionCookieAllowsLocalInsecure(t *testing.T) {
+	sessions := newTestSessions(t, time.Unix(1_700_000_000, 0))
+	cookie, err := sessions.Cookie(Principal{ID: "user-1"})
+	if err != nil {
+		t.Fatalf("Cookie: %v", err)
+	}
+	if cookie.Secure {
+		t.Fatal("expected Insecure option to disable the Secure cookie flag")
 	}
 }
 
@@ -270,9 +361,90 @@ func TestSessionCookieHelpers(t *testing.T) {
 	}
 }
 
+func TestSessionCustomCookieNameRoundTrip(t *testing.T) {
+	sessions, err := New(Options{
+		Secret:     []byte(strings.Repeat("s", MinSessionSecretBytes)),
+		CookieName: "custom_session",
+		Insecure:   true,
+		Now:        fixedClock(time.Unix(1_700_000_000, 0)),
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	cookie, err := sessions.Cookie(Principal{ID: "user-1"})
+	if err != nil {
+		t.Fatalf("Cookie: %v", err)
+	}
+	if cookie.Name != "custom_session" {
+		t.Fatalf("cookie.Name = %q, want custom_session", cookie.Name)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.AddCookie(&cookie)
+	principal, err := sessions.Principal(request)
+	if err != nil {
+		t.Fatalf("Principal: %v", err)
+	}
+	if principal == nil || principal.ID != "user-1" {
+		t.Fatalf("resolved principal = %+v", principal)
+	}
+}
+
+func TestSessionCookieRejectsEmptyPrincipalID(t *testing.T) {
+	sessions := newTestSessions(t, time.Unix(1_700_000_000, 0))
+	for _, principal := range []Principal{
+		{},
+		{ID: " ", Roles: []string{"admin"}},
+	} {
+		if _, err := sessions.Cookie(principal); err == nil {
+			t.Fatalf("Cookie accepted principal with ID %q", principal.ID)
+		}
+	}
+}
+
 func TestNewRequiresSecret(t *testing.T) {
 	if _, err := New(Options{}); err == nil {
 		t.Fatal("expected New to fail without a secret")
+	}
+}
+
+func TestNewRejectsBothSecretAndSecretEnv(t *testing.T) {
+	t.Setenv("GOWDK_TEST_AUTH_SECRET", strings.Repeat("e", MinSessionSecretBytes))
+	_, err := New(Options{
+		Secret:    []byte(strings.Repeat("s", MinSessionSecretBytes)),
+		SecretEnv: "GOWDK_TEST_AUTH_SECRET",
+	})
+	if err == nil || !strings.Contains(err.Error(), "Secret or SecretEnv") {
+		t.Fatalf("expected mutually exclusive secret error, got %v", err)
+	}
+}
+
+func TestNewRejectsInvalidSessionTTL(t *testing.T) {
+	_, err := New(Options{
+		Secret: []byte(strings.Repeat("s", MinSessionSecretBytes)),
+		TTL:    -time.Second,
+	})
+	if err == nil || !strings.Contains(err.Error(), "ttl must be non-negative") {
+		t.Fatalf("expected negative TTL error, got %v", err)
+	}
+}
+
+func TestNewRejectsSubsecondSessionTTL(t *testing.T) {
+	_, err := New(Options{
+		Secret: []byte(strings.Repeat("s", MinSessionSecretBytes)),
+		TTL:    time.Nanosecond,
+	})
+	if err == nil || !strings.Contains(err.Error(), "ttl must be at least 1s") {
+		t.Fatalf("expected subsecond TTL error, got %v", err)
+	}
+}
+
+func TestNewRejectsInvalidCookieName(t *testing.T) {
+	_, err := New(Options{
+		Secret:     []byte(strings.Repeat("s", MinSessionSecretBytes)),
+		CookieName: "bad cookie",
+	})
+	if err == nil || !strings.Contains(err.Error(), "cookie name") {
+		t.Fatalf("expected invalid cookie name error, got %v", err)
 	}
 }
 
@@ -290,6 +462,38 @@ func TestNewReadsSecretFromEnv(t *testing.T) {
 	}
 	if sessions == nil {
 		t.Fatal("expected sessions")
+	}
+}
+
+func TestNewPreservesEnvSecretBytes(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	envSecret := " " + strings.Repeat("s", MinSessionSecretBytes) + " "
+	t.Setenv("GOWDK_TEST_AUTH_SECRET", envSecret)
+	issuer, err := New(Options{SecretEnv: "GOWDK_TEST_AUTH_SECRET", Insecure: true, Now: fixedClock(now)})
+	if err != nil {
+		t.Fatalf("New env issuer: %v", err)
+	}
+	cookie, err := issuer.Cookie(Principal{ID: "user-1"})
+	if err != nil {
+		t.Fatalf("Cookie: %v", err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.AddCookie(&cookie)
+
+	exact, err := New(Options{Secret: []byte(envSecret), Insecure: true, Now: fixedClock(now)})
+	if err != nil {
+		t.Fatalf("New exact verifier: %v", err)
+	}
+	if principal, err := exact.Principal(request); err != nil || principal == nil {
+		t.Fatalf("exact secret did not verify env-issued cookie: principal=%+v err=%v", principal, err)
+	}
+
+	trimmed, err := New(Options{Secret: []byte(strings.TrimSpace(envSecret)), Insecure: true, Now: fixedClock(now)})
+	if err != nil {
+		t.Fatalf("New trimmed verifier: %v", err)
+	}
+	if principal, err := trimmed.Principal(request); err != nil || principal != nil {
+		t.Fatalf("trimmed secret verified env-issued cookie: principal=%+v err=%v", principal, err)
 	}
 }
 

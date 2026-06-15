@@ -131,7 +131,7 @@ func Sessions() (*gowdkauth.Sessions, error) {
 		SecretEnv:  sessionSecretEnv,
 		CookieName: sessionCookie,
 		TTL:        12 * time.Hour,
-		Insecure:   env("GOWDK_COOKIE_SECURE", "false") != "true",
+		Insecure:   !secureCookie(),
 	})
 	return sessionState.manager, sessionState.err
 }
@@ -148,6 +148,10 @@ func demoPasswordHash() (string, error) {
 
 func constantEqual(left, right string) bool {
 	return subtle.ConstantTimeCompare([]byte(left), []byte(right)) == 1
+}
+
+func secureCookie() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("GOWDK_COOKIE_SECURE")), "true")
 }
 
 func env(name, fallback string) string {

@@ -31,6 +31,25 @@ func TestLoginIssuesSessionCookie(t *testing.T) {
 	if len(result.Cookies) != 1 || result.Cookies[0].Name != sessionCookie {
 		t.Fatalf("expected session cookie, got %#v", result.Cookies)
 	}
+	if result.Cookies[0].Secure {
+		t.Fatal("expected local example cookie to be insecure by default")
+	}
+}
+
+func TestLoginIssuesSecureSessionCookieWhenConfigured(t *testing.T) {
+	resetTestState()
+	t.Setenv("GOWDK_AUTH_SESSION_SECRET", strings.Repeat("s", 32))
+	t.Setenv("GOWDK_COOKIE_SECURE", "TRUE")
+	result, err := Login(context.Background(), form.Values{"email": {"demo@example.com"}, "password": {"demo-password"}})
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if len(result.Cookies) != 1 {
+		t.Fatalf("expected session cookie, got %#v", result.Cookies)
+	}
+	if !result.Cookies[0].Secure {
+		t.Fatal("expected secure cookie when GOWDK_COOKIE_SECURE=true")
+	}
 }
 
 func resetTestState() {

@@ -18,6 +18,10 @@ const (
 	// It is encoded into each hash so stored credentials remain verifiable if
 	// this default later increases.
 	DefaultIterations = 600000
+	// MinIterations is the minimum accepted PBKDF2 iteration count for new and
+	// stored hashes. Keep this separate from DefaultIterations so existing
+	// stored hashes remain verifiable if the default later increases.
+	MinIterations = 600000
 
 	pbkdf2SaltLength = 16
 	pbkdf2KeyLength  = 32
@@ -48,6 +52,9 @@ func HashPassword(password string) (string, error) {
 
 // HashPasswordWithIterations is HashPassword with an explicit work factor.
 func HashPasswordWithIterations(password string, iterations int) (string, error) {
+	if err := validateIterations(iterations); err != nil {
+		return "", err
+	}
 	return PBKDF2Hasher{Iterations: iterations}.HashPassword(password)
 }
 
@@ -55,8 +62,8 @@ func HashPasswordWithIterations(password string, iterations int) (string, error)
 // random salt.
 func (hasher PBKDF2Hasher) HashPassword(password string) (string, error) {
 	iterations := hasher.iterations()
-	if iterations < 1 {
-		return "", fmt.Errorf("gowdk auth: iterations must be at least 1")
+	if err := validateIterations(iterations); err != nil {
+		return "", err
 	}
 	salt := make([]byte, pbkdf2SaltLength)
 	if _, err := rand.Read(salt); err != nil {
@@ -102,21 +109,28 @@ func (hasher PBKDF2Hasher) iterations() int {
 	return hasher.Iterations
 }
 
+func validateIterations(iterations int) error {
+	if iterations < MinIterations {
+		return fmt.Errorf("gowdk auth: iterations must be at least %d", MinIterations)
+	}
+	return nil
+}
+
 func decodeHash(encoded string) (iterations int, salt, key []byte, err error) {
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 4 || parts[0] != pbkdf2Prefix {
 		return 0, nil, nil, ErrInvalidHash
 	}
 	iterations, err = strconv.Atoi(parts[1])
-	if err != nil || iterations < 1 {
+	if err != nil || validateIterations(iterations) != nil {
 		return 0, nil, nil, ErrInvalidHash
 	}
 	salt, err = base64.RawStdEncoding.DecodeString(parts[2])
-	if err != nil || len(salt) == 0 {
+	if err != nil || len(salt) != pbkdf2SaltLength {
 		return 0, nil, nil, ErrInvalidHash
 	}
 	key, err = base64.RawStdEncoding.DecodeString(parts[3])
-	if err != nil || len(key) == 0 {
+	if err != nil || len(key) != pbkdf2KeyLength {
 		return 0, nil, nil, ErrInvalidHash
 	}
 	return iterations, salt, key, nil

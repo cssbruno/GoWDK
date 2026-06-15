@@ -29,6 +29,7 @@ gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
 gowdk list commands|queries|events|jobs [--json] [dir]
 gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
+gowdk clean [--config <file>] [--target <name>] [--out <dir>] [--dry-run] [--json]
 gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
 gowdk preview [--addr <addr>] [--hot] [build flags...]
 gowdk serve --dir <dir> [--addr <addr>]
@@ -51,7 +52,7 @@ gowdk lsp [--ssr]
 - `--base-url`: supported by `add seo`; writes the required
   `seo.Options.BaseURL` value. The value must be an absolute `http` or
   `https` URL.
-- `--json`: supported by `check`, `doctor`, `audit`, `explain`, `inspect`, `contracts`, `graph`, `trace`, `list`, `playground policy`, and `playground export`; prints
+- `--json`: supported by `check`, `doctor`, `audit`, `explain`, `inspect`, `contracts`, `graph`, `trace`, `list`, `clean`, `playground policy`, and `playground export`; prints
   editor/tooling-friendly JSON. Contract JSON includes same-file handler
   signature diagnostics when available. `gowdk check --json` uses diagnostic
   schema version `1`. `gowdk inspect` emits JSON by default; `--json` is
@@ -76,8 +77,9 @@ gowdk lsp [--ssr]
   posture alone to a non-served `.gowdk/reports/<output-name>/gowdk-security.json`
   path outside the selected output directory.
 - `--write`: supported by `fmt`; overwrites formatted files.
-- `--dry-run`: supported by `fix`; prints files with available registered fixes
-  without writing changes.
+- `--dry-run`: supported by `fix` and `clean`; for `fix` it prints files with
+  available registered fixes without writing changes, and for `clean` it lists
+  the build outputs that would be removed without deleting anything.
 - `--code`: supported by `fix`; limits rewrites to one diagnostic code that has
   a registered fix.
 - `--config`: supported by `add`, `check`, `doctor`, `audit`, `manifest`, `sitemap`,
@@ -103,12 +105,12 @@ gowdk lsp [--ssr]
   that build, records transformed assets in `gowdk-assets.json`, and writes
   `asset_obfuscation` / `asset_obfuscated` build-report events. This is an
   optimization/hardening option, not a security boundary.
-- `--target`: supported by `build`; may be repeated or comma-separated, and runs selected `Build.Targets` entries.
+- `--target`: supported by `build` and `clean`; may be repeated or comma-separated. For `build` it runs the selected `Build.Targets` entries; for `clean` it restricts removal to the selected targets' outputs.
 - `--module`: supported by `check`, `doctor`, `audit`, `manifest`, `sitemap`, `routes`,
   `endpoints`, `inspect`, `generate stubs`, and `build`; may be repeated or
   comma-separated, and limits discovery to selected configured modules when no
   explicit file list is passed.
-- `--out`: supported by `build`; selects the output directory and overrides `Build.Output`. `playground export` uses `--out` as the archive path. `playground run` uses `--out` as the generated output directory and never writes build output into the source project.
+- `--out`: supported by `build` and `clean`; for `build` it selects the output directory and overrides `Build.Output`, and for `clean` it adds an extra output directory to remove alongside the configured outputs. `playground export` uses `--out` as the archive path. `playground run` uses `--out` as the generated output directory and never writes build output into the source project.
 - `--app`: supported by `build`; writes generated Go app source that embeds the selected output directory.
 - `--bin`: supported by `build`; requires `--app` and compiles the generated app with `go build -o <file>`.
 - `--docker`: supported by `build`; requires `--bin` and emits `Dockerfile`
@@ -261,6 +263,25 @@ module, app, binary, or explicit file arguments are passed; `gowdk build
 --target <name>` runs selected targets. `--target` cannot be combined with
 `--module`, `--out`, `--app`, `--bin`, `--wasm`, or explicit files. The ad hoc
 flags remain useful for one-off builds.
+
+`clean` removes the generated build outputs declared by the project config: the
+top-level `Build.Output` directory and, when `Build.Targets` are configured,
+each target's `Output`, `App`, `Binary`, `WASM`, `BackendApp`, and
+`BackendBinary` paths. `--target` restricts removal to selected targets and
+`--out` adds an extra directory. It only ever deletes configured output paths
+inside the project root — it refuses to remove the project root itself or any
+path that resolves outside it, and it never touches the source tree. Use
+`--dry-run` to list what would be removed and `--json` for tooling. This is more
+than `rm -rf`: it reads `gowdk.config.go` so the right paths are removed even
+when outputs are customized or spread across targets.
+
+`env` and `benchmark` were considered and intentionally **not** added. `env`
+would duplicate `gowdk doctor` (which already reports the resolved Go toolchain,
+CLI version, config, and tool availability, with `--json`) and Go's own
+`go env`. `benchmark` would duplicate `gowdk build --timings`, which already
+writes per-phase compiler timings, and Go's native `go test -bench`; broader
+performance work is tracked in issue #414. Adding either would split one source
+of truth across redundant commands.
 
 `doctor` checks the local GOWDK environment and current project without writing
 files. It verifies the Go toolchain, CLI version, config loading, source

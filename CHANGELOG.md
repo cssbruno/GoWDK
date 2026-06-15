@@ -27,6 +27,17 @@ packages, and tooling contracts may change before a stable release.
     island changes a used store (guarded against write-back echo). Surfacing
     state from the Go `uint32` export contract remains the Go-side ABI follow-up.
 
+- **`gowdk clean` command (#417).** Removes the generated build outputs declared
+  by the project config — the top-level `Build.Output` and each configured
+  target's `Output`/`App`/`Binary`/`WASM`/`BackendApp`/`BackendBinary` — plus an
+  optional `--out` directory, scoped with `--target`. It reads `gowdk.config.go`
+  so customized or multi-target outputs are removed correctly, refuses to delete
+  the project root or any path outside it, never touches the source tree, and
+  supports `--dry-run` and `--json`. The `env` and `benchmark` commands were
+  evaluated and intentionally rejected as duplicative of `gowdk doctor`/`go env`
+  and `gowdk build --timings`/`go test -bench` respectively (see
+  `docs/reference/cli.md`).
+
 - Page stores can opt into browser persistence with a `persist "local"` or
   `persist "session"` modifier
   (`store cart ui.CartState = ui.NewCartState() persist "local"`). The generated

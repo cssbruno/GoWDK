@@ -147,7 +147,7 @@ func runCommand[C, R any](ctx context.Context, registry *Registry, command C, ro
 	if !ok {
 		return zero, nil, missingHandlerError(Command, typeName[C]())
 	}
-	if !rolesAllow(entry.roles, role) {
+	if !roleMayExecute(entry.roles, role) {
 		return zero, nil, roleNotAllowedError(Command, typeName[C](), role)
 	}
 	handler, ok := entry.handler.(CommandHandler[C, R])

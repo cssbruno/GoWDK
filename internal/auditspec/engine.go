@@ -50,6 +50,16 @@ func Evaluate(manifest securitymanifest.SecurityManifest, policies []Policy) []F
 		}
 	}
 
+	for _, contract := range manifest.Contracts {
+		for _, policy := range resolved {
+			if !policy.matchesContract(contract) {
+				continue
+			}
+			matchedAnything[policy.Name] = true
+			findings = append(findings, evalContract(contract, policy)...)
+		}
+	}
+
 	for _, policy := range resolved {
 		if !policy.hasFrontendSelector() {
 			continue
@@ -217,6 +227,19 @@ func (policy Policy) matchesRoute(route securitymanifest.RouteEntry) bool {
 	return false
 }
 
+func (policy Policy) matchesContract(contract securitymanifest.ContractEntry) bool {
+	for _, selector := range policy.Selectors {
+		if selector.Kind != SelectorContract {
+			continue
+		}
+		glob := contractSelectorGlob(selector.Raw)
+		if matchGlob(glob, contract.Name) || matchGlob(glob, contract.Kind) {
+			return true
+		}
+	}
+	return false
+}
+
 func (policy Policy) hasFrontendSelector() bool {
 	for _, selector := range policy.Selectors {
 		if selector.Kind == SelectorFrontend {
@@ -295,6 +318,21 @@ func evalRoute(route securitymanifest.RouteEntry, policy Policy) []Finding {
 					fmt.Sprintf("route %s is public but policy denies public access", route.Route),
 					"Replace guard public with a protective guard, or narrow the policy selector."))
 			}
+		}
+	}
+	return findings
+}
+
+func evalContract(contract securitymanifest.ContractEntry, policy Policy) []Finding {
+	var findings []Finding
+	for _, rule := range policy.Rules {
+		if rule.Kind != RuleDenyRolelessContract {
+			continue
+		}
+		if len(contract.Roles) == 0 {
+			findings = append(findings, finding(rule, policy, contractTarget(contract), "",
+				fmt.Sprintf("%s contract %s is web-exposed but declares no roles; the data-layer gate denies every web caller and the endpoint is unreachable", contract.Kind, contract.Name),
+				"Declare the roles permitted to execute the contract at registration, or RoleAny to expose it to every role intentionally."))
 		}
 	}
 	return findings
@@ -433,6 +471,10 @@ func routeTarget(route securitymanifest.RouteEntry) string {
 	return "route:" + route.Route
 }
 
+func contractTarget(contract securitymanifest.ContractEntry) string {
+	return "contract:" + contract.Name
+}
+
 func containsGuard(guards []string, want string) bool {
 	for _, guard := range guards {
 		if guard == want {
@@ -458,6 +500,8 @@ func ParseSelector(raw string) Selector {
 	switch {
 	case raw == "frontend":
 		return Selector{Raw: raw, Kind: SelectorFrontend}
+	case raw == "contract" || strings.HasPrefix(raw, "contract:"):
+		return Selector{Raw: raw, Kind: SelectorContract}
 	case strings.HasPrefix(raw, "/"):
 		return Selector{Raw: raw, Kind: SelectorRoute}
 	default:
@@ -466,6 +510,18 @@ func ParseSelector(raw string) Selector {
 		}
 		return Selector{Raw: raw, Kind: SelectorUnknown}
 	}
+}
+
+// contractSelectorGlob extracts the glob from a contract selector. "contract"
+// and "contract:" match every contract; "contract:<glob>" matches by contract
+// name or kind.
+func contractSelectorGlob(raw string) string {
+	glob := strings.TrimPrefix(raw, "contract")
+	glob = strings.TrimPrefix(glob, ":")
+	if glob == "" {
+		return "*"
+	}
+	return glob
 }
 
 func splitEndpointSelector(raw string) (kind, glob string, ok bool) {

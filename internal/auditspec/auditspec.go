@@ -17,6 +17,7 @@ type SelectorKind string
 const (
 	SelectorRoute    SelectorKind = "route"
 	SelectorEndpoint SelectorKind = "endpoint"
+	SelectorContract SelectorKind = "contract"
 	SelectorFrontend SelectorKind = "frontend"
 	SelectorUnknown  SelectorKind = "unknown"
 )
@@ -50,6 +51,11 @@ const (
 	// RuleAllowRawHTML allowlists one raw-HTML sink (source:field); every sink
 	// not allowlisted is reported.
 	RuleAllowRawHTML RuleKind = "allow_raw_html"
+	// RuleDenyRolelessContract reports a web-exposed command or query contract
+	// that declares no roles, so the data-layer authorization gate has no role to
+	// admit. The contract must declare at least one role (or RoleAny to be
+	// intentionally public).
+	RuleDenyRolelessContract RuleKind = "deny_roleless_contract"
 )
 
 // Selector targets a set of routes, endpoints, or the frontend surface.

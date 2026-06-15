@@ -272,6 +272,13 @@ guard public
 			"Override the built-in baseline.contract_commands policy in a *.audit.gwdk file if the endpoint is intentionally exempt.",
 		},
 	},
+	"audit_contract_roleless": {
+		Details: "A command or query contract is exposed to the web surface but declares no roles. The contract layer is the source of truth for authorization, so a roleless contract has no role to admit: the runtime data-layer gate fails closed and denies every web caller, which makes the endpoint unreachable, while a developer following the \"authz in contracts, guards as redundancy\" model may believe it is protected by the page guard alone.",
+		NextSteps: []string{
+			"Declare the roles permitted to execute the contract at registration (for example RoleWeb or RoleAdmin).",
+			"Declare RoleAny only when the contract is intentionally callable by every role, including unauthenticated web callers.",
+		},
+	},
 	"audit_guardless_endpoint_page": {
 		Details: "A page that declares backend endpoints has no guard. Actions, fragments, commands, queries, and APIs would be publicly callable even when the page GET route is denied, which contradicts default-deny.",
 		NextSteps: []string{

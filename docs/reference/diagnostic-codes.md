@@ -161,7 +161,7 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `client_go_block_wasm_export_error`.
 - Security audit (`gowdk audit`): `audit_action_missing_csrf`,
   `audit_api_missing_csrf`, `audit_api_public_by_omission`,
-  `audit_command_missing_csrf`,
+  `audit_command_missing_csrf`, `audit_contract_roleless`,
   `audit_guardless_endpoint_page`, `audit_bundle_secret`,
   `audit_client_route_unguarded`,
   `audit_headers_missing`, `audit_headers_runtime_missing`,

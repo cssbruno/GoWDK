@@ -62,6 +62,19 @@ func TestBaselinePassesWhenPostureIsSound(t *testing.T) {
 	}
 }
 
+func TestBaselineFlagsRolelessContract(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Contracts: []securitymanifest.ContractEntry{
+			{Name: "patients.CreatePatient", Kind: "command"},
+			{Name: "patients.GetPatientPage", Kind: "query", Roles: []string{"web"}},
+		},
+	}
+	got := codes(Evaluate(manifest, Baseline()))
+	if got["audit_contract_roleless"] != 1 {
+		t.Fatalf("expected exactly one roleless-contract finding, got %d (%#v)", got["audit_contract_roleless"], got)
+	}
+}
+
 func TestBaselineFlagsFrontendAuditFindings(t *testing.T) {
 	manifest := securitymanifest.SecurityManifest{
 		Frontend: securitymanifest.FrontendSurface{

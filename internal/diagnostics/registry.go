@@ -66,6 +66,7 @@ var Registry = []Code{
 	{Code: "audit_bundle_secret", Area: "audit", Stability: StabilityExperimental, Severity: SeverityError, Summary: "embedded build output or build-time data carries a secret-shaped value"},
 	{Code: "audit_client_route_unguarded", Area: "audit", Stability: StabilityExperimental, Severity: SeverityWarning, Summary: "a client or SPA route declares no guard and is protected only by the generated runtime default-deny gate, which is absent under static export"},
 	{Code: "audit_command_missing_csrf", Area: "audit", Stability: StabilityExperimental, Severity: SeverityError, Summary: "command endpoint does not enforce CSRF as required by the security baseline or policy"},
+	{Code: "audit_contract_roleless", Area: "audit", Stability: StabilityExperimental, Severity: SeverityError, Summary: "a web-exposed command or query contract declares no roles, so the data-layer authorization gate has no role to admit"},
 	{Code: "audit_guardless_endpoint_page", Area: "audit", Stability: StabilityExperimental, Severity: SeverityError, Summary: "a page exposing backend endpoints declares no guard"},
 	{Code: "audit_headers_missing", Area: "audit", Stability: StabilityExperimental, Severity: SeverityWarning, Summary: "generated app does not declare a security response header required by policy"},
 	{Code: "audit_headers_runtime_missing", Area: "audit", Stability: StabilityExperimental, Severity: SeverityError, Summary: "running app did not emit a security response header required by policy"},

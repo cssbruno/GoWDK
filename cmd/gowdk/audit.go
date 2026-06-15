@@ -59,9 +59,11 @@ func (err auditExitError) Error() string {
 func (auditExitError) SilentCLIError() {}
 
 // audit derives the security posture from validated IR, evaluates the baseline
-// policy against it, and reports findings. It is a standalone command: gowdk
-// build never runs it, so it can never fail a build implicitly. It exits
-// non-zero when any error-severity finding exists so it can gate CI.
+// policy against it, and reports findings. It is the full report surface
+// (posture JSON, declared policies, optional runtime tests) and exits non-zero
+// when any error-severity finding exists so it can gate CI. gowdk build runs the
+// same baseline as a production gate (see enforceBuildSecurityAudit); this
+// command stays available for explicit reports and non-production checks.
 func audit(args []string) error {
 	auditOptions, projectArgs, err := parseAuditCommandOptions(args)
 	if err != nil {

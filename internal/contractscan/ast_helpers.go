@@ -214,6 +214,8 @@ func roleName(expr ast.Expr) string {
 			return string(runtimecontracts.RoleAPI)
 		case "RoleAdmin":
 			return string(runtimecontracts.RoleAdmin)
+		case "RoleAny":
+			return string(runtimecontracts.RoleAny)
 		}
 	case *ast.BasicLit:
 		value, err := strconv.Unquote(typed.Value)

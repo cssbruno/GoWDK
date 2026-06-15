@@ -33,6 +33,12 @@ const (
 	RoleCron   Role = "cron"
 	RoleAPI    Role = "api"
 	RoleAdmin  Role = "admin"
+
+	// RoleAny marks a contract as executable by every caller role, including the
+	// untrusted web surface. It is the explicit, audited opt-in that a contract
+	// must declare to be reachable without naming concrete roles; an empty role
+	// set is treated as "no role may execute" rather than "any role may execute".
+	RoleAny Role = "any"
 )
 
 // Handler types accepted by the registry.

@@ -26,7 +26,7 @@ func executeQuery[Q, R any](ctx context.Context, registry *Registry, query Q, ro
 	if !ok {
 		return zero, missingHandlerError(Query, typeName[Q]())
 	}
-	if !rolesAllow(entry.roles, role) {
+	if !roleMayExecute(entry.roles, role) {
 		return zero, roleNotAllowedError(Query, typeName[Q](), role)
 	}
 	handler, ok := entry.handler.(QueryHandler[Q, R])

@@ -28,7 +28,7 @@ gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
 gowdk list commands|queries|events|jobs [--json] [dir]
-gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
+gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
 gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
 gowdk preview [--addr <addr>] [--hot] [build flags...]
 gowdk serve --dir <dir> [--addr <addr>]
@@ -90,6 +90,7 @@ gowdk lsp [--ssr]
   contract references, invalid contract handler signatures, and duplicate
   command owners.
 - `--allow-missing-backend`: supported by `build` and forwarded by `dev`; in production mode, allows missing or unsupported action/API handlers to generate HTTP 501 stubs instead of failing the build.
+- Security audit gate: `gowdk build` runs the same baseline as `gowdk audit` (see [security.md](../engineering/security.md)). A production build (`Build.Mode = gowdk.Production`) fails on any error-severity finding (missing CSRF, guardless or public-by-omission endpoints, roleless contracts, bundled secrets, raw-HTML sinks); non-production builds print a prominent summary without blocking. `--allow-insecure` downgrades the production gate to a warning for 0.x experimentation. Run `gowdk audit` for the full report and to gate CI explicitly.
 - `--obfuscate-assets`: supported by `build` and forwarded by `dev`; enables
   deterministic production obfuscation/minification for compiler-owned
   generated browser JavaScript, forces `Build.Mode` to `gowdk.Production` for

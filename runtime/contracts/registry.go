@@ -58,12 +58,15 @@ func (registry *Registry) contractsForRole(role Role) []Metadata {
 	defer registry.mu.RUnlock()
 	metadata := make([]Metadata, 0, len(registry.queries)+len(registry.commands)+len(registry.events)+len(registry.jobs))
 	for _, entry := range registry.queries {
-		if rolesAllow(entry.roles, role) {
+		// Match Execute*ForRole: command/query metadata is filtered by the
+		// fail-closed gate so a roleless contract is never advertised as callable
+		// by a concrete role that execution would then deny.
+		if roleMayExecute(entry.roles, role) {
 			metadata = append(metadata, Metadata{Kind: Query, Type: entry.query, Result: entry.result, Handlers: 1, Roles: copyRoles(entry.roles)})
 		}
 	}
 	for _, entry := range registry.commands {
-		if rolesAllow(entry.roles, role) {
+		if roleMayExecute(entry.roles, role) {
 			metadata = append(metadata, Metadata{Kind: Command, Type: entry.command, Result: entry.result, Handlers: 1, Roles: copyRoles(entry.roles)})
 		}
 	}

@@ -59,6 +59,43 @@ func TestProductionPolicyStillRejectsUnsupportedFragmentSignature(t *testing.T) 
 	}
 }
 
+func TestBackendBindingDiagnosticsCarryExactActionSpan(t *testing.T) {
+	actionSpan := source.SourceSpan{
+		Start: source.SourcePosition{Line: 6, Column: 1, Offset: 40},
+		End:   source.SourcePosition{Line: 6, Column: 20, Offset: 59},
+	}
+	ir := gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			ID:      "signup",
+			Package: "pages",
+			Source:  emptyPackageSource(t, "signup.page.gwdk"),
+			Route:   "/signup",
+			Blocks: gwdkir.Blocks{
+				Actions: []gwdkir.Action{{Name: "Submit", Method: "POST", Route: "/signup", Span: actionSpan}},
+				// Same-named inline handler with an unsupported signature.
+				GoBlocks: []gwdkir.GoBlock{{Body: "func Submit(x int) {}"}},
+			},
+		}},
+	}
+
+	bindings := BindBackendHandlers(&ir)
+	diagnostics := BackendBindingDiagnostics(bindings)
+
+	var found bool
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Code != "unsupported_backend_signature" {
+			continue
+		}
+		found = true
+		if diagnostic.Span != actionSpan {
+			t.Fatalf("expected the diagnostic to carry the exact action span %#v, got %#v", actionSpan, diagnostic.Span)
+		}
+	}
+	if !found {
+		t.Fatalf("expected an unsupported_backend_signature diagnostic, got %#v", diagnostics)
+	}
+}
+
 func findBindingByName(bindings []source.BackendBinding, kind, name string) (source.BackendBinding, bool) {
 	for _, binding := range bindings {
 		if binding.Kind == kind && binding.FunctionName == name {

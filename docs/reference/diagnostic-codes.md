@@ -161,7 +161,7 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `client_go_block_wasm_export_error`.
 - Security audit (`gowdk audit`): `audit_action_missing_csrf`,
   `audit_api_missing_csrf`, `audit_api_public_by_omission`,
-  `audit_command_missing_csrf`,
+  `audit_command_missing_csrf`, `audit_contract_roleless`,
   `audit_guardless_endpoint_page`, `audit_bundle_secret`,
   `audit_client_route_unguarded`,
   `audit_headers_missing`, `audit_headers_runtime_missing`,
@@ -172,6 +172,25 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `policy_unknown_selector`, `policy_selector_matched_nothing`. These are
   experimental and emitted by `gowdk audit`, declared audit policies, or the
   optional runtime audit test runner.
+
+## Source Ranges
+
+Diagnostics carry an exact source span (`internal/source.SourceSpan`) when one
+is available at the emit site; the LSP and dev overlay use it directly and fall
+back to a file/owner-level range only when no precise span exists.
+
+Exact ranges now cover the backend-binding family, which point at the declaring
+`act` / `api` / `fragment` block (or standalone `//gowdk:` endpoint):
+`ambiguous_backend_handler`, `unsupported_backend_signature`,
+`unexported_backend_handler`, and `backend_binding_required`. The
+`source.BackendBinding` produced by `compiler.BindBackendHandlers` captures the
+block span so both `gowdk check`/build diagnostics and the editor highlight the
+exact declaration.
+
+Known gaps (no precise span available, file/owner-level only): `go_package_error`
+for an unparseable sibling `.go` file or a missing package clause — these arise
+before a Go AST exists, so only the file path is known. Inline `go {}` block
+package errors already carry the block span.
 
 ## Adding A Code
 

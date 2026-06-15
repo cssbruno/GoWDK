@@ -4984,7 +4984,7 @@ type PatientPageData struct {
 }
 
 func Register(registry *contracts.Registry) {
-	contracts.RegisterQuery[GetPatientPage, PatientPageData](registry, LoadPatientPage)
+	contracts.RegisterQuery[GetPatientPage, PatientPageData](registry, LoadPatientPage, contracts.RoleWeb)
 }
 
 func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData, error) {
@@ -5089,7 +5089,7 @@ type PatientCreated struct {
 }
 
 func Register(registry *contracts.Registry) {
-	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient)
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient, contracts.RoleWeb)
 }
 
 func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
@@ -5230,7 +5230,7 @@ type PatientCreated struct {
 }
 
 func Register(registry *contracts.Registry) {
-	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient)
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient, contracts.RoleWeb)
 }
 
 func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
@@ -5491,8 +5491,8 @@ type PatientPageData struct {
 }
 
 func Register(registry *contracts.Registry) {
-	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient)
-	contracts.RegisterQuery[GetPatientPage, PatientPageData](registry, LoadPatientPage)
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient, contracts.RoleWeb)
+	contracts.RegisterQuery[GetPatientPage, PatientPageData](registry, LoadPatientPage, contracts.RoleWeb)
 }
 
 func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
@@ -5667,7 +5667,7 @@ type CreatePatientResult struct {
 }
 
 func Register(registry *contracts.Registry) {
-	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient)
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient, contracts.RoleWeb)
 }
 
 func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {

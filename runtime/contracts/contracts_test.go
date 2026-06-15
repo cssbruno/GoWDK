@@ -851,7 +851,7 @@ func TestContractsForRoleFiltersMetadata(t *testing.T) {
 	}, RoleWeb))
 	must(t, RegisterQuery[patientPageQuery, patientPage](registry, func(ctx context.Context, query patientPageQuery) (patientPage, error) {
 		return patientPage{}, nil
-	}))
+	}, RoleWeb))
 	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
 		return nil
 	}, RoleWorker))
@@ -875,6 +875,27 @@ func TestContractsForRoleFiltersMetadata(t *testing.T) {
 	}
 	if !slices.Equal(kinds, []Kind{Command, Event, Query}) {
 		t.Fatalf("web metadata kinds = %#v, want command, event, query", kinds)
+	}
+}
+
+func TestContractsForRoleExcludesRolelessCommandsAndQueries(t *testing.T) {
+	registry := NewRegistry()
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		return createPatientResult{}, nil
+	}))
+	must(t, RegisterQuery[patientPageQuery, patientPage](registry, func(ctx context.Context, query patientPageQuery) (patientPage, error) {
+		return patientPage{}, nil
+	}))
+
+	// A concrete role must not see roleless command/query metadata, mirroring the
+	// fail-closed Execute*ForRole gate: advertising them would contradict
+	// execution, which denies the same call.
+	if metadata := registry.ContractsForRole(RoleWeb); len(metadata) != 0 {
+		t.Fatalf("roleless command/query leaked into web metadata: %#v", metadata)
+	}
+	// Trusted in-process enumeration (no role) still sees everything.
+	if metadata := registry.Contracts(); len(metadata) != 2 {
+		t.Fatalf("roleless enumeration = %d, want 2: %#v", len(metadata), metadata)
 	}
 }
 
@@ -1022,6 +1043,52 @@ func TestMetadataIsDeterministic(t *testing.T) {
 	}
 	if metadata[2].EventCategory != PresentationEvent {
 		t.Fatalf("second event category = %q, want presentation", metadata[2].EventCategory)
+	}
+}
+
+func TestExecuteRolelessContractFailsClosedForConcreteRole(t *testing.T) {
+	registry := NewRegistry()
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		return createPatientResult{}, nil
+	}))
+	must(t, RegisterQuery[patientPageQuery, patientPage](registry, func(ctx context.Context, query patientPageQuery) (patientPage, error) {
+		return patientPage{}, nil
+	}))
+
+	// A contract that declares no roles must not be executable by the web
+	// surface (or any other concrete role): the data-layer gate fails closed.
+	if _, err := ExecuteCommandForRole[createPatient, createPatientResult](context.Background(), registry, RoleWeb, createPatient{}); !Is(err, ErrRoleNotAllowed) {
+		t.Fatalf("roleless command for web = %v, want %s", err, ErrRoleNotAllowed)
+	}
+	if _, err := ExecuteQueryForRole[patientPageQuery, patientPage](context.Background(), registry, RoleWeb, patientPageQuery{}); !Is(err, ErrRoleNotAllowed) {
+		t.Fatalf("roleless query for web = %v, want %s", err, ErrRoleNotAllowed)
+	}
+
+	// Trusted in-process callers (no role context) still execute.
+	if _, err := ExecuteCommand[createPatient, createPatientResult](context.Background(), registry, createPatient{}); err != nil {
+		t.Fatalf("roleless command in-process: %v", err)
+	}
+	if _, err := ExecuteQuery[patientPageQuery, patientPage](context.Background(), registry, patientPageQuery{}); err != nil {
+		t.Fatalf("roleless query in-process: %v", err)
+	}
+}
+
+func TestExecuteRoleAnyContractAllowsConcreteRole(t *testing.T) {
+	registry := NewRegistry()
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		return createPatientResult{}, nil
+	}, RoleAny))
+	must(t, RegisterQuery[patientPageQuery, patientPage](registry, func(ctx context.Context, query patientPageQuery) (patientPage, error) {
+		return patientPage{}, nil
+	}, RoleAny))
+
+	// RoleAny is the explicit opt-in that makes a contract executable by any
+	// caller role, including the untrusted web surface.
+	if _, err := ExecuteCommandForRole[createPatient, createPatientResult](context.Background(), registry, RoleWeb, createPatient{}); err != nil {
+		t.Fatalf("RoleAny command for web: %v", err)
+	}
+	if _, err := ExecuteQueryForRole[patientPageQuery, patientPage](context.Background(), registry, RoleWeb, patientPageQuery{}); err != nil {
+		t.Fatalf("RoleAny query for web: %v", err)
 	}
 }
 

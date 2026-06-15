@@ -18,7 +18,11 @@ func (server *Server) completionItems(params completionParams) []completionItem 
 			Detail: completion.Detail,
 		})
 	}
-	return appendProjectCompletionItems(items, server.projectCompletions(params.TextDocument.URI))
+	items = appendProjectCompletionItems(items, server.projectCompletions(params.TextDocument.URI))
+	if doc, ok := server.documents[params.TextDocument.URI]; ok {
+		items = append(items, storePersistCompletionItems(linePrefixAt(doc.Text, params.Position))...)
+	}
+	return items
 }
 
 func (server *Server) hover(params hoverParams) *hoverResult {
@@ -29,6 +33,9 @@ func (server *Server) hover(params hoverParams) *hoverResult {
 	token := tokenAtPosition(doc.Text, params.Position)
 	if token == "" {
 		return nil
+	}
+	if hover := storePersistHover(doc.Text, params.Position, token); hover != nil {
+		return hover
 	}
 	for _, item := range server.hoverItems(params.TextDocument.URI) {
 		if item.Label == token {
@@ -186,6 +193,9 @@ func (server *Server) semanticTokens(params semanticTokensParams) semanticTokens
 		length := utf16Length(token.Lexeme)
 		if length == 0 {
 			continue
+		}
+		if token.Kind == lang.TokenIdentifier && token.Lexeme == "persist" && isStorePersistKeyword(doc.Text, start.Line) {
+			tokenType = "decorator"
 		}
 
 		deltaLine := start.Line

@@ -64,6 +64,16 @@ func Baseline() []Policy {
 			},
 		},
 		{
+			Name:    "baseline.contracts",
+			Builtin: true,
+			Selectors: []Selector{
+				{Raw: "contract:*", Kind: SelectorContract},
+			},
+			Rules: []Rule{
+				{Kind: RuleDenyRolelessContract, Code: "audit_contract_roleless"},
+			},
+		},
+		{
 			Name:    "baseline.frontend",
 			Builtin: true,
 			Selectors: []Selector{

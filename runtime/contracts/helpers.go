@@ -33,7 +33,32 @@ func rolesAllow(roles []Role, role Role) bool {
 		return true
 	}
 	for _, candidate := range roles {
-		if candidate == role {
+		if candidate == role || candidate == RoleAny {
+			return true
+		}
+	}
+	return false
+}
+
+// roleMayExecute reports whether a concrete caller role is authorized to execute
+// a command or query guarded by roles. Unlike rolesAllow — which is permissive
+// so roleless event subscribers receive every role's events — this gate fails
+// CLOSED: a contract that declares no roles is callable only by trusted
+// in-process callers (role == ""), never by the web surface or any other
+// concrete role. A contract opts into universal execution by declaring RoleAny.
+//
+// This is the data-layer authorization boundary the architecture treats as the
+// source of truth, so a developer who forgets to declare roles gets a denied
+// contract rather than a publicly executable one.
+func roleMayExecute(roles []Role, role Role) bool {
+	if role == "" {
+		return true
+	}
+	if len(roles) == 0 {
+		return false
+	}
+	for _, candidate := range roles {
+		if candidate == role || candidate == RoleAny {
 			return true
 		}
 	}

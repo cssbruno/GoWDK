@@ -14,8 +14,15 @@ client {
   func Add() {
     Count++
   }
+
+  // `clear cart` resets the used store to its build-time init and drops the
+  // persisted copy, notifying every island that uses it.
+  func Clear() {
+    clear cart
+  }
 }
 
 view {
   <button g:on:click={Add()}>Add to cart</button>
+  <button g:on:click={Clear()}>Clear cart</button>
 }

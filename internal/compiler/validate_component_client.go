@@ -29,6 +29,10 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 	helperFuncs := helperExprFunctions(helpers)
 	emits := componentEmitMap(component)
 	refs := program.RefMap()
+	usedStores := map[string]bool{}
+	for name := range program.UseMap() {
+		usedStores[name] = true
+	}
 	usedRefs := map[string]source.SourceSpan{}
 	computedTypes := map[string]clientlang.ValueType{}
 	var diagnostics []ValidationError
@@ -151,7 +155,7 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 			readFields[param.Name] = clientlang.NormalizeType(param.Type)
 		}
 		recordClientRefSpans(usedRefs, component, function.Statements, function.StatementSpans)
-		_, err := clientlang.ValidateIslandClientStatementsTypedWithEvents(function.Statements, stateTypes, readFields, refs, helperFuncs, function.Async, emits)
+		_, err := clientlang.ValidateIslandClientStatementsTypedWithEvents(function.Statements, stateTypes, readFields, refs, helperFuncs, function.Async, emits, usedStores)
 		if err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "component_client_error",
@@ -163,7 +167,7 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 		}
 	}
 	recordClientRefSpans(usedRefs, component, program.Mount, program.MountSpans)
-	_, err = clientlang.ValidateIslandClientStatementsTypedWithEvents(program.Mount, stateTypes, readSymbols, refs, helperFuncs, false, emits)
+	_, err = clientlang.ValidateIslandClientStatementsTypedWithEvents(program.Mount, stateTypes, readSymbols, refs, helperFuncs, false, emits, usedStores)
 	if err != nil {
 		diagnostics = append(diagnostics, ValidationError{
 			Code:          "component_client_error",
@@ -174,7 +178,7 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 		})
 	}
 	recordClientRefSpans(usedRefs, component, program.Destroy, program.DestroySpans)
-	_, err = clientlang.ValidateIslandClientStatementsTypedWithEvents(program.Destroy, stateTypes, readSymbols, refs, helperFuncs, false, emits)
+	_, err = clientlang.ValidateIslandClientStatementsTypedWithEvents(program.Destroy, stateTypes, readSymbols, refs, helperFuncs, false, emits, usedStores)
 	if err != nil {
 		diagnostics = append(diagnostics, ValidationError{
 			Code:          "component_client_error",
@@ -195,7 +199,7 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 			})
 		}
 		recordClientRefSpans(usedRefs, component, effect.Statements, effect.StatementSpans)
-		_, err := clientlang.ValidateIslandClientStatementsTypedWithEvents(effect.Statements, stateTypes, readSymbols, refs, helperFuncs, false, emits)
+		_, err := clientlang.ValidateIslandClientStatementsTypedWithEvents(effect.Statements, stateTypes, readSymbols, refs, helperFuncs, false, emits, usedStores)
 		if err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "component_client_error",
@@ -206,7 +210,7 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 			})
 		}
 		recordClientRefSpans(usedRefs, component, effect.Cleanup, effect.CleanupSpans)
-		_, err = clientlang.ValidateIslandClientStatementsTypedWithEvents(effect.Cleanup, stateTypes, readSymbols, refs, helperFuncs, false, emits)
+		_, err = clientlang.ValidateIslandClientStatementsTypedWithEvents(effect.Cleanup, stateTypes, readSymbols, refs, helperFuncs, false, emits, usedStores)
 		if err != nil {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:          "component_client_error",

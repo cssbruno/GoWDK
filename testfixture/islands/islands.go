@@ -21,6 +21,13 @@ type TextState struct {
 	Query string
 }
 
+// StringCountState declares a Count field typed as string. It exists to exercise
+// the store/local-state field-type conflict diagnostic against CounterState's
+// int Count.
+type StringCountState struct {
+	Count string
+}
+
 type User struct {
 	Name string
 	Open bool
@@ -68,6 +75,10 @@ type ProfileState struct {
 
 func NewCounterState() CounterState {
 	return CounterState{Count: 1, Open: false}
+}
+
+func NewStringCountState() StringCountState {
+	return StringCountState{Count: ""}
 }
 
 func NewSessionState() SessionState {

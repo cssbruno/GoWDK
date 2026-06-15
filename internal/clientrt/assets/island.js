@@ -677,6 +677,16 @@
       emitComponentEvent(root, emitEvents, emit[1], splitArgs(emit[2]), state, scope, helpers);
       return;
     }
+    let clearStore = expr.match(/^clear\s+([A-Za-z_][A-Za-z0-9_.]*)$/);
+    if (clearStore) {
+      const registry = window.__gowdkStores;
+      // The store registry is keyed by the unqualified store name (the page
+      // store's own name); a `use alias.store` reference carries a package
+      // qualifier that is not part of the registry/storage key, so drop it.
+      const storeName = clearStore[1].slice(clearStore[1].lastIndexOf(".") + 1);
+      if (registry && typeof registry.clear === "function") registry.clear(storeName);
+      return;
+    }
     let refCall = expr.match(/^([A-Za-z_][A-Za-z0-9_]*)\.(Focus|Blur|ScrollIntoView)\(\)$/);
     if (refCall) {
       const node = refs && refs[refCall[1]];

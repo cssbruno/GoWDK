@@ -7,6 +7,26 @@ packages, and tooling contracts may change before a stable release.
 
 ### Implemented
 
+- Page-store follow-ups to the persistence work:
+  - **Declarative store clear (#356).** A bounded `clear <store>` statement is
+    now available in `client {}` function, mount, destroy, and effect blocks. It
+    lowers to `window.__gowdkStores.clear(name)` (drop the persisted copy and
+    reset the store to its build-time init, notifying islands). A component may
+    only clear a store it `use`s; clearing an unused store is a compile error.
+  - **Store fields without redeclaring state (#355).** A client `use` can carry
+    the store's Go type — `use cart ui.CartState` — to bind the store's fields
+    into the component's client scope without a matching `state` declaration. The
+    type is resolved against the component's imports; the island seeds those
+    fields with the type's zero values for SSR and adopts the store's value on
+    mount.
+  - **WASM islands participate in page stores (#354).** The WASM island host
+    loader now merges every used store's current (and persisted) value into the
+    mount/handle/destroy payload `state`, lists the used stores in
+    `payload.stores`, writes back store values an export returns via the extended
+    `{ patches, stores }` result shape, and re-invokes the island when another
+    island changes a used store (guarded against write-back echo). Surfacing
+    state from the Go `uint32` export contract remains the Go-side ABI follow-up.
+
 - Page stores can opt into browser persistence with a `persist "local"` or
   `persist "session"` modifier
   (`store cart ui.CartState = ui.NewCartState() persist "local"`). The generated
@@ -26,8 +46,7 @@ packages, and tooling contracts may change before a stable release.
   `page_store_persist_key_conflict` (warning), and
   `page_store_persist_scope_conflict` (warning, when the same store name is
   persisted under different `local`/`session` scopes across pages and would
-  otherwise let navigation order decide the backend). Persistence is a JS-island/store
-  runtime feature; WASM islands do not yet participate in page stores.
+  otherwise let navigation order decide the backend).
 - M4 Go interop is complete for the current 0.x surface: a user can see why a Go
   function or type did or did not bind. `gowdk inspect go-bindings` emits a
   versioned JSON report (schema version 1) covering actions, APIs, fragments,

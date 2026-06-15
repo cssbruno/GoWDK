@@ -32,3 +32,23 @@ The current ABI validates required exports and browser-safe imports, emits the
 host loader, and reports unsupported patch operations in the browser console.
 User Go patch-memory decoding beyond the current `uint32` return contract is
 still planned.
+
+## Page stores
+
+A WASM island that declares `use <store>` in its client block participates in
+page stores like a JS island. The host loader:
+
+- **reads** every used store and merges its current (and persisted) value into the
+  `state` field of the mount/handle/destroy payload, and passes the used store
+  names in `payload.stores`;
+- **writes back** when an export returns the extended result shape
+  `{ "patches": [...], "stores": { "<name>": <value> } }` — each returned store
+  value is written to `window.__gowdkStores`. The legacy bare patch array is still
+  accepted (no store write-back);
+- **syncs** on external changes: when another island updates a used store, the
+  loader re-invokes the mount export with the refreshed `state` and applies the
+  returned patches, without echoing the update back into the registry.
+
+Surfacing serialized state from the `uint32` export contract (so a Go island can
+return the `stores` map) is the remaining Go-side ABI work tracked alongside the
+patch-memory decoding above.

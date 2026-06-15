@@ -92,7 +92,7 @@ func ValidateIslandClientStatementTypedWithFunctions(expr string, writeSymbols m
 // that may mutate state, call a safe DOM ref method, read helper functions, or
 // dispatch declared component events.
 func ValidateIslandClientStatementTypedWithEvents(expr string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref, helpers map[string]clientlang.ExprFunction, emits map[string]clientlang.Emit) error {
-	return clientlang.ValidateIslandClientStatementTypedWithEvents(expr, writeSymbols, readSymbols, refs, helpers, emits)
+	return clientlang.ValidateIslandClientStatementTypedWithEvents(expr, writeSymbols, readSymbols, refs, helpers, emits, nil)
 }
 
 // ValidateIslandClientStatementsTyped validates an ordered client statement
@@ -120,7 +120,7 @@ func ValidateIslandClientStatementsTypedWithOptions(statements []string, writeSy
 // ValidateIslandClientStatementsTypedWithEvents validates an ordered client
 // statement block with optional component event dispatch support.
 func ValidateIslandClientStatementsTypedWithEvents(statements []string, writeSymbols map[string]clientlang.ValueType, readSymbols map[string]clientlang.ValueType, refs map[string]clientlang.Ref, helpers map[string]clientlang.ExprFunction, async bool, emits map[string]clientlang.Emit) (map[string]bool, error) {
-	return clientlang.ValidateIslandClientStatementsTypedWithEvents(statements, writeSymbols, readSymbols, refs, helpers, async, emits)
+	return clientlang.ValidateIslandClientStatementsTypedWithEvents(statements, writeSymbols, readSymbols, refs, helpers, async, emits, nil)
 }
 
 // StatementValidationError identifies the statement index that failed within a

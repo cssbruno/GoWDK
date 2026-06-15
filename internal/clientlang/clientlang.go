@@ -163,12 +163,18 @@ func parseRefDeclaration(line string) (Ref, bool) {
 	return Ref{Name: fields[1], Kind: fields[2]}, true
 }
 
-func parseUseDeclaration(line string) (string, bool) {
+func parseUseDeclaration(line string) (name string, typ string, ok bool) {
 	fields := strings.Fields(strings.TrimSpace(line))
-	if len(fields) != 2 || fields[0] != "use" || !isQualifiedIdentifier(fields[1]) {
-		return "", false
+	if len(fields) < 2 || len(fields) > 3 || fields[0] != "use" || !isQualifiedIdentifier(fields[1]) {
+		return "", "", false
 	}
-	return fields[1], true
+	if len(fields) == 3 {
+		if !isTypeLiteral(fields[2]) {
+			return "", "", false
+		}
+		return fields[1], fields[2], true
+	}
+	return fields[1], "", true
 }
 
 func parseComputedIfHeader(line string) (string, bool) {
@@ -338,11 +344,15 @@ type Ref struct {
 	Kind string
 }
 
-// Use declares one page-scoped store used by this component.
+// Use declares one page-scoped store used by this component. Type is the
+// optional Go type annotation (`use cart ui.CartState`) that binds the store's
+// shape into the component's client scope so its fields can be referenced
+// without redeclaring a matching state contract.
 type Use struct {
 	Name         string
 	PackageAlias string
 	StoreName    string
+	Type         string
 	Span         Span
 }
 
@@ -467,12 +477,12 @@ func Parse(source string) (Program, error) {
 				program.Refs = append(program.Refs, ref)
 				continue
 			}
-			if name, ok := parseUseDeclaration(line); ok {
+			if name, typ, ok := parseUseDeclaration(line); ok {
 				if seenUses[name] {
 					return Program{}, fmt.Errorf("client store %q is used more than once", name)
 				}
 				seenUses[name] = true
-				use := Use{Name: name, StoreName: name, Span: Span{StartLine: index + 1, EndLine: index + 1}}
+				use := Use{Name: name, StoreName: name, Type: typ, Span: Span{StartLine: index + 1, EndLine: index + 1}}
 				if alias, storeName, ok := strings.Cut(name, "."); ok {
 					use.PackageAlias = alias
 					use.StoreName = storeName
@@ -1045,6 +1055,22 @@ func ParseCall(expr string) (Call, bool) {
 	return Call{Name: name, Args: args}, true
 }
 
+// ParseClearStatement reports whether statement is a `clear <store>` builtin and
+// returns the referenced store name. The store name is the same identifier used
+// in the component's `use <store>` declaration (it may be package-qualified).
+func ParseClearStatement(statement string) (string, bool) {
+	statement = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(statement), ";"))
+	rest, ok := strings.CutPrefix(statement, "clear ")
+	if !ok {
+		return "", false
+	}
+	name := strings.TrimSpace(rest)
+	if !isQualifiedIdentifier(name) {
+		return "", false
+	}
+	return name, true
+}
+
 // ParseEmitCall reports whether expr is an emit event(args...) statement.
 func ParseEmitCall(expr string) (EmitCall, bool) {
 	expr = strings.TrimSpace(expr)
@@ -1137,7 +1163,7 @@ func isSupportedReturnType(value string) bool {
 
 func isReservedFunctionName(name string) bool {
 	switch name {
-	case "append", "remove", "move", "len", "lower", "upper", "contains", "string", "int", "float":
+	case "append", "remove", "move", "clear", "len", "lower", "upper", "contains", "string", "int", "float":
 		return true
 	default:
 		return false

@@ -31,7 +31,7 @@ func TestValidateIslandClientStatementsTypedWithEventsTracksLocalsRefsAndMutatio
 		`NameInput.Focus()`,
 	}
 
-	usedRefs, err := ValidateIslandClientStatementsTypedWithEvents(statements, writeSymbols, readSymbols, refs, helpers, false, nil)
+	usedRefs, err := ValidateIslandClientStatementsTypedWithEvents(statements, writeSymbols, readSymbols, refs, helpers, false, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestValidateIslandClientStatementsTypedWithEventsReportsStatementIndex(t *t
 	_, err := ValidateIslandClientStatementsTypedWithEvents([]string{
 		`Count++`,
 		`let Count int = 1`,
-	}, map[string]ValueType{"Count": TypeInt}, map[string]ValueType{"Count": TypeInt}, nil, nil, false, nil)
+	}, map[string]ValueType{"Count": TypeInt}, map[string]ValueType{"Count": TypeInt}, nil, nil, false, nil, nil)
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -84,5 +84,26 @@ func TestIslandExpressionFieldsIncludesMutationInputs(t *testing.T) {
 	fields := IslandExpressionFields(`append(Items, { ID: NextID, Name: lower(Name) })`)
 	if got, want := strings.Join(fields, ","), "Items,Name,NextID"; got != want {
 		t.Fatalf("unexpected fields: got %s want %s", got, want)
+	}
+}
+
+func TestValidateClearStatementChecksUsedStores(t *testing.T) {
+	state := map[string]ValueType{"Count": TypeInt}
+	stores := map[string]bool{"cart": true}
+	if _, err := ValidateIslandClientStatementsTypedWithEvents(
+		[]string{"clear cart"}, state, state, nil, nil, false, nil, stores,
+	); err != nil {
+		t.Fatalf("clear of a used store should validate, got %v", err)
+	}
+	_, err := ValidateIslandClientStatementsTypedWithEvents(
+		[]string{"clear prefs"}, state, state, nil, nil, false, nil, stores,
+	)
+	if err == nil || !strings.Contains(err.Error(), `store "prefs"`) {
+		t.Fatalf("expected unused-store error, got %v", err)
+	}
+	if _, err := ValidateIslandClientStatementsTypedWithEvents(
+		[]string{"clear cart"}, state, state, nil, nil, false, nil, nil,
+	); err == nil {
+		t.Fatal("expected error when the component uses no stores")
 	}
 }

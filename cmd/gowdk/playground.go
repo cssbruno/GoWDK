@@ -4,14 +4,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
-	"time"
 
 	"github.com/cssbruno/gowdk/internal/playground"
 )
 
 const playgroundUsage = "usage: gowdk playground policy [--json] | gowdk playground export --dir <project> --out <project.zip> [--json] | gowdk playground run --dir <project> --out <dir> --allow-hosted-execution"
+
+// sandboxBuildSubcommand is the hidden re-exec target. gowdk launches itself
+// with this argument inside the sandbox namespaces; it is intentionally absent
+// from usage and must not be run directly.
+const sandboxBuildSubcommand = "__sandbox-build"
 
 func playgroundCommand(args []string) error {
 	if len(args) == 0 {
@@ -24,6 +30,8 @@ func playgroundCommand(args []string) error {
 		return playgroundExport(args[1:])
 	case "run":
 		return playgroundRun(args[1:])
+	case sandboxBuildSubcommand:
+		return playgroundSandboxBuild(args[1:])
 	default:
 		return fmt.Errorf(playgroundUsage)
 	}
@@ -98,20 +106,19 @@ func playgroundRun(args []string) error {
 	if strings.TrimSpace(options.Output) == "" {
 		return fmt.Errorf(playgroundUsage)
 	}
+
+	// Fail closed: hosted execution only runs inside the OS-level sandbox. If
+	// the kernel cannot provide it, refuse rather than run the build unconfined.
+	if ok, reason := playground.SandboxSupported(); !ok {
+		return fmt.Errorf("hosted playground execution requires the OS-level sandbox, which is unavailable here: %s", reason)
+	}
+
 	workspace, cleanup, err := playground.StageWorkspace(options.Dir, playground.Options{})
 	if err != nil {
 		return err
 	}
 	defer cleanup()
-	cacheRoot, err := os.MkdirTemp("", "gowdk-playground-cache-*")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(cacheRoot)
-	env := playground.SanitizedEnvironment(cacheRoot)
-	if err := playground.RejectSecretEnvironment(env); err != nil {
-		return err
-	}
+
 	outputDir, err := filepath.Abs(options.Output)
 	if err != nil {
 		return err
@@ -119,29 +126,96 @@ func playgroundRun(args []string) error {
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return err
 	}
-	return withPlaygroundEnvironment(env, func() error {
-		return runPlaygroundBuildWithTimeout(playground.ExecutionTimeout(), func() error {
-			return build([]string{"--config", filepath.Join(workspace.Root, "gowdk.config.go"), "--out", outputDir})
-		})
+
+	goRoot, goModCache, err := resolveGoToolchainPaths()
+	if err != nil {
+		return err
+	}
+
+	spec := playground.SandboxSpec{
+		WorkspaceRoot:        workspace.Root,
+		OutputDir:            outputDir,
+		GoRoot:               goRoot,
+		GoModCache:           goModCache,
+		MaxAddressSpaceBytes: 2 << 30,   // 2 GiB
+		MaxCPUSeconds:        60,        // 60 CPU-seconds
+		MaxFileSizeBytes:     256 << 20, // 256 MiB per file
+		MaxOpenFiles:         4096,
+	}
+	encoded, err := playground.EncodeSandboxSpec(spec)
+	if err != nil {
+		return err
+	}
+
+	// Re-execute this binary inside the sandbox namespaces. The synthesized
+	// environment carries no host variables, so no secrets leak in.
+	return playground.LaunchSandbox(
+		spec,
+		"/proc/self/exe",
+		[]string{"playground", sandboxBuildSubcommand, encoded},
+		playground.SandboxEnvironment(),
+		os.Stdout,
+		os.Stderr,
+		playground.ExecutionTimeout(),
+	)
+}
+
+// playgroundSandboxBuild runs inside the sandbox namespaces. It confines itself
+// (no network, no host filesystem, dropped privileges, resource limits) and then
+// builds the staged workspace against the fixed in-sandbox paths.
+func playgroundSandboxBuild(args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("internal: %s requires one encoded sandbox spec", sandboxBuildSubcommand)
+	}
+	spec, err := playground.DecodeSandboxSpec(args[0])
+	if err != nil {
+		return err
+	}
+	if err := playground.ConfineToSandbox(spec); err != nil {
+		return fmt.Errorf("sandbox confinement failed: %w", err)
+	}
+
+	os.Clearenv()
+	for _, item := range playground.SandboxEnvironment() {
+		name, value, ok := strings.Cut(item, "=")
+		if ok {
+			_ = os.Setenv(name, value)
+		}
+	}
+
+	// Root the build at the workspace so source/CSS/asset discovery stays inside
+	// the project and never walks the toolchain or module-cache mounts.
+	if err := os.Chdir(playground.SandboxWorkspacePath); err != nil {
+		return fmt.Errorf("enter sandbox workspace: %w", err)
+	}
+
+	return build([]string{
+		"--config", "gowdk.config.go",
+		"--out", playground.SandboxOutputPath,
 	})
 }
 
-func runPlaygroundBuildWithTimeout(timeout time.Duration, fn func() error) error {
-	if timeout <= 0 {
-		return fn()
+// resolveGoToolchainPaths returns the host GOROOT and module cache to expose
+// (read-only / overlay) inside the sandbox so the toolchain can run offline.
+func resolveGoToolchainPaths() (string, string, error) {
+	goRoot := runtime.GOROOT()
+	if strings.TrimSpace(goRoot) == "" {
+		if out, err := exec.Command("go", "env", "GOROOT").Output(); err == nil {
+			goRoot = strings.TrimSpace(string(out))
+		}
 	}
-	done := make(chan error, 1)
-	go func() {
-		done <- fn()
-	}()
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	select {
-	case err := <-done:
-		return err
-	case <-timer.C:
-		return fmt.Errorf("playground execution exceeded %s wall-clock limit", timeout)
+	if strings.TrimSpace(goRoot) == "" {
+		return "", "", fmt.Errorf("could not resolve GOROOT for the sandbox toolchain")
 	}
+	out, err := exec.Command("go", "env", "GOMODCACHE").Output()
+	if err != nil {
+		return "", "", fmt.Errorf("could not resolve GOMODCACHE for the sandbox: %w", err)
+	}
+	goModCache := strings.TrimSpace(string(out))
+	if goModCache == "" {
+		return "", "", fmt.Errorf("GOMODCACHE is empty; the sandbox needs a module cache to build offline")
+	}
+	return goRoot, goModCache, nil
 }
 
 type playgroundFileOptions struct {
@@ -184,32 +258,4 @@ func parsePlaygroundFileOptions(args []string) (playgroundFileOptions, error) {
 		return playgroundFileOptions{}, fmt.Errorf("playground source directory is required")
 	}
 	return options, nil
-}
-
-func withPlaygroundEnvironment(env []string, fn func() error) error {
-	previous := os.Environ()
-	os.Clearenv()
-	for _, item := range env {
-		name, value, ok := strings.Cut(item, "=")
-		if !ok {
-			continue
-		}
-		if err := os.Setenv(name, value); err != nil {
-			restoreEnvironment(previous)
-			return err
-		}
-	}
-	defer restoreEnvironment(previous)
-	return fn()
-}
-
-func restoreEnvironment(env []string) {
-	os.Clearenv()
-	for _, item := range env {
-		name, value, ok := strings.Cut(item, "=")
-		if !ok {
-			continue
-		}
-		_ = os.Setenv(name, value)
-	}
 }

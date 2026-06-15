@@ -5,7 +5,18 @@ packages, and tooling contracts may change before 1.0.
 
 ## Unreleased
 
-No changes yet.
+### Implemented
+
+- **Addon lifecycle contract and version handshake (#416).**
+  `docs/reference/addons.md` now documents the four-phase addon lifecycle
+  (config loading → compiler validation → generated output → runtime hook
+  registration), the addon category taxonomy (marker, compiler, CSS processor,
+  build-time provider, runtime), the feature and version handshake, and the
+  failure modes for unsupported/stale addons. The registry gains a computed
+  version handshake — `addonregistry.Entry.SupportsVersion` and
+  `Registry.UnsupportedFor` check a CLI version against an entry's
+  `minGOWDK`/`maxGOWDK` bounds (supported/unsupported/unknown) — with tests.
+  Build-time auto-enforcement of the bound remains a deliberate follow-up.
 
 ## v0.5.0 - 2026-06-15
 

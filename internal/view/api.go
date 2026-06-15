@@ -128,6 +128,7 @@ type Options struct {
 	// past HTML-text escaping.
 	Tainted                map[string]bool
 	RealtimeEventTypeNames map[string]string
+	QueryTypeNames         map[string]string
 }
 
 // ActionInputField describes Go action input metadata available while rendering
@@ -241,6 +242,7 @@ func RenderNodesWithOptions(nodes []Node, components map[string]Component, data 
 			ownerPackage:           options.Package,
 			uses:                   cloneValues(options.Uses),
 			realtimeEventTypeNames: cloneValues(options.RealtimeEventTypeNames),
+			queryTypeNames:         cloneValues(options.QueryTypeNames),
 			stack:                  map[string]bool{},
 		},
 		renderDataContext: renderDataContext{

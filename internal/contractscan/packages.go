@@ -16,8 +16,9 @@ import (
 )
 
 type fileScan struct {
-	Contracts   []Contract
-	Diagnostics []Diagnostic
+	Contracts     []Contract
+	Invalidations []Invalidation
+	Diagnostics   []Diagnostic
 }
 
 type inputStruct struct {
@@ -99,6 +100,7 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile, inspectionCache *pac
 	}
 	typedPackage := inspectTypedPackage(fset, packageDir, astFiles, inspectionCache)
 	var contracts []Contract
+	var invalidations []Invalidation
 	var diagnostics []Diagnostic
 	emitsByHandler := map[string][]EventRef{}
 	for _, file := range files {
@@ -110,6 +112,7 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile, inspectionCache *pac
 		}
 		discovered := scanContractRegistrations(fset, file.File, file.Aliases, file.Imports, file.Rel)
 		contracts = append(contracts, discovered...)
+		invalidations = append(invalidations, scanInvalidationRegistrations(fset, file.File, file.Aliases, file.Imports, file.Rel)...)
 		for handler, emits := range emittedEventsByHandler(fset, file.File, file.Aliases, file.Imports) {
 			emitsByHandler[handler] = append(emitsByHandler[handler], emits...)
 		}
@@ -122,8 +125,9 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile, inspectionCache *pac
 	diagnostics = append(diagnostics, validateContractInputStructs(contracts, inputStructs)...)
 	attachCommandEmits(contracts, emitsByHandler)
 	return fileScan{
-		Contracts:   contracts,
-		Diagnostics: diagnostics,
+		Contracts:     contracts,
+		Invalidations: invalidations,
+		Diagnostics:   diagnostics,
 	}
 }
 

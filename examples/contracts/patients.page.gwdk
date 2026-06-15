@@ -17,5 +17,8 @@ view {
       <p>Patient query data is available through the generated JSON adapter.</p>
       <p role="status">Create a patient to receive a live presentation patch.</p>
     </section>
+    <aside g:query="patients.GetPatientPage">
+      <p>Patient summary is refreshed through the generated query invalidation event.</p>
+    </aside>
   </main>
 }

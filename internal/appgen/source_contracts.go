@@ -279,7 +279,7 @@ func contractExposuresParseForm(exposures []BackendContractExposure) bool {
 	return false
 }
 
-func contractEventSinkDecls(exposures []BackendContractExposure, realtime bool) []ast.Decl {
+func contractEventSinkDecls(exposures []BackendContractExposure, realtime bool, queryInvalidations bool) []ast.Decl {
 	if len(executableCommandContractExposures(exposures)) == 0 && !realtime {
 		return nil
 	}
@@ -287,7 +287,7 @@ func contractEventSinkDecls(exposures []BackendContractExposure, realtime bool) 
 		contractEventSinkMutexVarDecl(),
 		contractEventSinkVarDecl(),
 		registerContractEventSinkDecl(),
-		currentContractEventSinkDecl(realtime),
+		currentContractEventSinkDecl(realtime, queryInvalidations),
 	}
 }
 
@@ -404,7 +404,7 @@ func registerContractEventSinkDecl() ast.Decl {
 	})
 }
 
-func currentContractEventSinkDecl(realtime bool) ast.Decl {
+func currentContractEventSinkDecl(realtime bool, queryInvalidations bool) ast.Decl {
 	if !realtime {
 		return funcDecl("currentContractEventSink", nil, []*ast.Field{
 			{Type: sel("gowdkcontracts", "CommandEventSink")},
@@ -430,9 +430,9 @@ func currentContractEventSinkDecl(realtime bool) ast.Decl {
 				})),
 				&ast.IfStmt{
 					Cond: &ast.BinaryExpr{X: id("sink"), Op: token.NEQ, Y: id("nil")},
-					Body: block(&ast.ReturnStmt{Results: []ast.Expr{call(sel("gowdkcontracts", "CompositeCommandEventSink"), id("sink"), id("fanoutSink"))}}),
+					Body: block(&ast.ReturnStmt{Results: []ast.Expr{realtimeCompositeSinkExpr(queryInvalidations, id("sink"), id("fanoutSink"), id("fanout"))}}),
 				},
-				&ast.ReturnStmt{Results: []ast.Expr{call(sel("gowdkcontracts", "CompositeCommandEventSink"), call(sel("gowdkcontracts", "InProcessCommandEventSink")), id("fanoutSink"))}},
+				&ast.ReturnStmt{Results: []ast.Expr{realtimeCompositeSinkExpr(queryInvalidations, call(sel("gowdkcontracts", "InProcessCommandEventSink")), id("fanoutSink"), id("fanout"))}},
 			),
 		},
 	)
@@ -440,6 +440,15 @@ func currentContractEventSinkDecl(realtime bool) ast.Decl {
 	return funcDecl("currentContractEventSink", nil, []*ast.Field{
 		{Type: sel("gowdkcontracts", "CommandEventSink")},
 	}, stmts)
+}
+
+func realtimeCompositeSinkExpr(queryInvalidations bool, base ast.Expr, fanoutSink ast.Expr, fanout ast.Expr) ast.Expr {
+	args := []ast.Expr{base}
+	if queryInvalidations {
+		args = append(args, call(sel("gowdkcontracts", "QueryInvalidationCommandEventSink"), fanout, id("realtimeQueryInvalidations")))
+	}
+	args = append(args, fanoutSink)
+	return call(sel("gowdkcontracts", "CompositeCommandEventSink"), args...)
 }
 
 type contractRegisterCall struct {

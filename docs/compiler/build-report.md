@@ -73,6 +73,9 @@ Current report events include:
 - `realtime_subscription`: one event per `g:subscribe` reference, including
   query, presentation event, owner, source, status, roles, and handler/register
   metadata when known.
+- `query_invalidation`: one event per validated domain-event to query
+  invalidation edge used by bound `g:query` regions, including query, event,
+  owner, source, status, and guard metadata when known.
 - `sitemap_written` / `robots_written`: emitted when `addons/seo` writes
   `sitemap.xml` and `robots.txt`.
 - `seo_route_excluded`: emitted when `addons/seo` excludes a page from the

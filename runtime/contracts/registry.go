@@ -8,11 +8,12 @@ import (
 
 // Registry stores typed contract handlers for one runtime.
 type Registry struct {
-	mu       sync.RWMutex
-	queries  map[string]queryEntry
-	commands map[string]commandEntry
-	events   map[eventKey][]eventEntry
-	jobs     map[string]jobEntry
+	mu            sync.RWMutex
+	queries       map[string]queryEntry
+	commands      map[string]commandEntry
+	events        map[eventKey][]eventEntry
+	jobs          map[string]jobEntry
+	invalidations []QueryInvalidation
 }
 
 // NewRegistry creates an empty contract registry.
@@ -33,6 +34,23 @@ func (registry *Registry) Contracts() []Metadata {
 // ContractsForRole returns deterministic metadata for contracts available to role.
 func (registry *Registry) ContractsForRole(role Role) []Metadata {
 	return registry.contractsForRole(role)
+}
+
+// Invalidations returns deterministic event-to-query invalidation metadata.
+func (registry *Registry) Invalidations() []QueryInvalidation {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+	out := append([]QueryInvalidation(nil), registry.invalidations...)
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].EventCategory != out[j].EventCategory {
+			return out[i].EventCategory < out[j].EventCategory
+		}
+		if out[i].EventType != out[j].EventType {
+			return out[i].EventType < out[j].EventType
+		}
+		return out[i].QueryType < out[j].QueryType
+	})
+	return out
 }
 
 func (registry *Registry) contractsForRole(role Role) []Metadata {

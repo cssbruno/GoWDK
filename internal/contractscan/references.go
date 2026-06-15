@@ -131,6 +131,70 @@ func LinkRealtimeSubscriptions(subscriptions []gwdkir.RealtimeSubscription, repo
 	return linked
 }
 
+// LinkQueryInvalidations joins query references from GOWDK IR with scanned
+// event-to-query invalidation registrations.
+func LinkQueryInvalidations(refs []gwdkir.ContractReference, report Report) []gwdkir.QueryInvalidation {
+	if len(refs) == 0 || len(report.Invalidations) == 0 {
+		return nil
+	}
+	byQuery := map[string][]Invalidation{}
+	for _, invalidation := range report.Invalidations {
+		for _, key := range invalidationQueryKeys(invalidation) {
+			byQuery[key] = append(byQuery[key], invalidation)
+		}
+	}
+	var linked []gwdkir.QueryInvalidation
+	seen := map[string]bool{}
+	for _, ref := range refs {
+		if ref.Kind != gwdkir.ContractQuery || ref.Status != gwdkir.ContractBindingBound {
+			continue
+		}
+		for _, key := range contractReferenceLookupKeys(ref) {
+			for _, invalidation := range byQuery[key] {
+				eventType := runtimeTypeName(invalidation.EventTypeImportPath, invalidation.EventType)
+				queryType := runtimeTypeName(ref.ImportPath, ref.Type)
+				if queryType == "" {
+					queryType = runtimeTypeName(invalidation.QueryTypeImportPath, invalidation.QueryType)
+				}
+				identity := ref.Name + "\x00" + eventType + "\x00" + ref.OwnerID + "\x00" + ref.Source
+				if seen[identity] {
+					continue
+				}
+				seen[identity] = true
+				linked = append(linked, gwdkir.QueryInvalidation{
+					Query:            ref.Name,
+					QueryImportAlias: ref.ImportAlias,
+					QueryImportPath:  ref.ImportPath,
+					QueryType:        queryType,
+					Event:            invalidation.EventType,
+					EventImportPath:  invalidation.EventTypeImportPath,
+					EventType:        eventType,
+					EventCategory:    string(invalidation.EventCategory),
+					Guards:           append([]string(nil), ref.Guards...),
+					Status:           gwdkir.ContractBindingBound,
+					OwnerKind:        ref.OwnerKind,
+					OwnerID:          ref.OwnerID,
+					Package:          ref.Package,
+					Source:           ref.Source,
+					Span:             ref.Span,
+				})
+			}
+		}
+	}
+	return linked
+}
+
+func runtimeTypeName(importPath string, typ string) string {
+	typ = strings.TrimSpace(typ)
+	if typ == "" {
+		return ""
+	}
+	if importPath == "" {
+		return typ
+	}
+	return strings.TrimSpace(importPath) + "." + localContractName(typ)
+}
+
 func lookupContractReference(contracts map[string]Contract, ref gwdkir.ContractReference) (Contract, bool) {
 	for _, key := range contractReferenceLookupKeys(ref) {
 		if contract, ok := contracts[key]; ok {

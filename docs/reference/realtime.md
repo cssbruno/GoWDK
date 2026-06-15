@@ -4,7 +4,8 @@
 event fanout. Current support covers delivery of
 `contracts.PresentationEvent` envelopes to browser clients, compiler metadata
 for `g:subscribe` query regions, generated SSE fanout for bound subscriptions,
-and bounded generated client patches for query-owned regions.
+bounded generated client patches for query-owned regions, and explicit
+domain-event to query invalidation refresh.
 
 Use it with contract web adapters when commands emit presentation events:
 
@@ -68,15 +69,54 @@ Current behavior:
 
 Current limits:
 
-- `g:subscribe` does not implicitly derive domain-event invalidation. Domain
-  and integration events stay backend-owned.
 - Subscriptions must be query-bounded; `g:subscribe` without `g:query` is
   rejected.
 - Only explicit `replaceHTML` patches are supported in the generated client
-  runtime; richer patch shapes and query refetch policy are deferred.
+  runtime; richer patch shapes are deferred.
 - Custom retry/backoff/replay, active server-side session-change stream
-  revocation, richer patch shapes, and query refetch policy remain follow-up
-  work.
+  revocation, richer patch shapes, and route-specific refresh endpoints remain
+  follow-up work.
+
+## Query Invalidations
+
+Use `contracts.RegisterInvalidation[event, query]` in Go when a backend-owned
+domain event should refresh query-owned regions:
+
+```go
+func Register(registry *contracts.Registry) {
+  contracts.RegisterQuery[GetPatientPage, PatientPageData](registry, LoadPatientPage, contracts.RoleWeb)
+  contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient, contracts.RoleWeb)
+  contracts.RegisterDomainEvent[PatientCreated](registry, SendWelcomeEmail, contracts.RoleWorker)
+  contracts.RegisterInvalidation[PatientCreated, GetPatientPage](registry)
+}
+```
+
+Current behavior:
+
+- Requires `realtime.Addon()` when the invalidated query is bound by `.gwdk`.
+- Scans invalidation edges beside normal contract registrations.
+- Rejects edges that name an unknown query, an unknown domain event, or a
+  domain event no scanned command emits.
+- Joins edges with bound `g:query` references into
+  `Program.QueryInvalidations`.
+- Adds `query_invalidation` events to `gowdk-build-report.json`.
+- Prints invalidation edges in `gowdk graph`.
+- Renders validated `data-gowdk-query-type` markers.
+- Generated command adapters send a `gowdk.query.invalidate` presentation event
+  after successful command event dispatch when captured domain events invalidate
+  bound queries.
+- Generated `gowdk.js` refetches the current document and replaces matching
+  non-subscribed query regions. Regions with `g:subscribe` are left to explicit
+  presentation patches so a document refetch does not overwrite a patch.
+
+The generated invalidation event value is:
+
+```json
+{
+  "queries": ["github.com/acme/clinic/patients.GetPatientPage"],
+  "events": ["domain:github.com/acme/clinic/patients.PatientCreated"]
+}
+```
 
 ## Live Example
 
@@ -84,13 +124,16 @@ Current limits:
 contract:
 
 - `.gwdk` owns `g:query="patients.GetPatientPage"` and
-  `g:subscribe="patients.PatientNotice"` on the same region.
+  `g:subscribe="patients.PatientNotice"` on the live region, plus a
+  non-subscribed query region refreshed through invalidation.
 - User Go owns the command, query, presentation-event registration, and the
-  server-generated `replaceHTML` patch payload.
+  server-generated `replaceHTML` patch payload. It also registers
+  `RegisterInvalidation[PatientCreated, GetPatientPage]`.
 - Generated Go owns the command/query web adapters, subscription-filtered SSE
-  stream, inherited guard checks, and command event sink composition.
+  stream, invalidation presentation events, inherited guard checks, and command
+  event sink composition.
 - Generated `gowdk.js` owns the EventSource connection and applies the patch to
-  the subscribed query region.
+  the subscribed query region or refetches invalidated query regions.
 
 Build and run it:
 
@@ -102,17 +145,20 @@ go run ./cmd/gowdk build --config examples/contracts/gowdk.config.go --out /tmp/
 Open `http://127.0.0.1:8080/contracts/patients`. With JavaScript enabled, the
 generated runtime opens `/_gowdk/realtime/events`; submitting the form runs the
 Go command, emits `patients.PatientNotice`, and replaces the subscribed status
-region with the patch HTML from user Go. Without JavaScript, the page still
-renders the static query region and the form posts to the generated command
-endpoint.
+region with the patch HTML from user Go. The same command emits
+`patients.PatientCreated`, which triggers a generated query invalidation event
+for the non-subscribed query region. Without JavaScript, the page still renders
+the static query regions and the form posts to the generated command endpoint.
 
 Useful smoke checks:
 
 ```sh
 test -f /tmp/gowdk-contracts-build/assets/gowdk/gowdk.js
 grep -F '"kind": "realtime_subscription"' /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F '"kind": "query_invalidation"' /tmp/gowdk-contracts-build/gowdk-build-report.json
 grep -F '"event": "patients.PatientNotice"' /tmp/gowdk-contracts-build/gowdk-build-report.json
 grep -F 'data-gowdk-subscribe-type=' /tmp/gowdk-contracts-build/contracts/patients/index.html
+grep -F 'data-gowdk-query-type=' /tmp/gowdk-contracts-build/contracts/patients/index.html
 go test ./examples/contracts/patients
 ```
 

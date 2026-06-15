@@ -218,7 +218,10 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		if err := compiler.ValidateContractReferences(ir.ContractRefs); err != nil {
 			return err
 		}
-		return compiler.ValidateRealtimeSubscriptionBindings(ir.RealtimeSubscriptions)
+		if err := compiler.ValidateRealtimeSubscriptionBindings(ir.RealtimeSubscriptions); err != nil {
+			return err
+		}
+		return compiler.ValidateQueryInvalidations(options.Config, ir.QueryInvalidations)
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		var report compiler.ValidationErrors

@@ -123,3 +123,29 @@ func TestValidateRealtimeSubscriptionBindings(t *testing.T) {
 		t.Fatalf("unexpected invalid diagnostic: %#v", diagnostics[2])
 	}
 }
+
+func TestValidateQueryInvalidationsRequireRealtimeAddon(t *testing.T) {
+	err := ValidateQueryInvalidations(gowdk.Config{}, []gwdkir.QueryInvalidation{{
+		Query:     "patients.GetPatientPage",
+		Event:     "patients.PatientCreated",
+		Status:    gwdkir.ContractBindingBound,
+		OwnerKind: gwdkir.SourcePage,
+		OwnerID:   "patients",
+		Source:    "patients.page.gwdk",
+	}})
+	if err == nil || !strings.Contains(err.Error(), "requires realtime.Addon()") {
+		t.Fatalf("expected missing realtime addon diagnostic, got %v", err)
+	}
+
+	err = ValidateQueryInvalidations(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("realtime", gowdk.FeatureRealtime)}}, []gwdkir.QueryInvalidation{{
+		Query:     "patients.GetPatientPage",
+		Event:     "patients.PatientCreated",
+		Status:    gwdkir.ContractBindingBound,
+		OwnerKind: gwdkir.SourcePage,
+		OwnerID:   "patients",
+		Source:    "patients.page.gwdk",
+	}})
+	if err != nil {
+		t.Fatalf("expected realtime addon to satisfy query invalidation, got %v", err)
+	}
+}

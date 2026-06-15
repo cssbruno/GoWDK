@@ -360,11 +360,11 @@ func validateContractReferences(config gowdk.Config, ir gwdkir.Program, projectR
 	if len(ir.ContractRefs) == 0 && len(ir.RealtimeSubscriptions) == 0 {
 		return diagnostics
 	}
-	diagnostics = append(diagnostics, validateLinkedContractReferences(ir, report)...)
+	diagnostics = append(diagnostics, validateLinkedContractReferences(config, ir, report)...)
 	return diagnostics
 }
 
-func validateContractReferenceBindings(ir gwdkir.Program, projectRoot string) Diagnostics {
+func validateContractReferenceBindings(config gowdk.Config, ir gwdkir.Program, projectRoot string) Diagnostics {
 	if len(ir.ContractRefs) == 0 && len(ir.RealtimeSubscriptions) == 0 {
 		return nil
 	}
@@ -375,23 +375,34 @@ func validateContractReferenceBindings(ir gwdkir.Program, projectRoot string) Di
 	if err != nil {
 		return Diagnostics{{Severity: "error", Message: fmt.Sprintf("scan Go contracts: %v", err)}}
 	}
-	return validateLinkedContractReferences(ir, report)
+	return validateLinkedContractReferences(config, ir, report)
 }
 
-func validateLinkedContractReferences(ir gwdkir.Program, report contractscan.Report) Diagnostics {
+func validateLinkedContractReferences(config gowdk.Config, ir gwdkir.Program, report contractscan.Report) Diagnostics {
 	if len(ir.ContractRefs) == 0 && len(ir.RealtimeSubscriptions) == 0 {
 		return nil
 	}
 	ir.ContractRefs = contractscan.LinkReferences(ir.ContractRefs, report)
 	ir.RealtimeSubscriptions = contractscan.LinkRealtimeSubscriptions(ir.RealtimeSubscriptions, report)
+	ir.QueryInvalidations = contractscan.LinkQueryInvalidations(ir.ContractRefs, report)
 	if err := compiler.ValidateContractReferences(ir.ContractRefs); err != nil {
 		diagnostics := compilerDiagnostics(err, ir)
 		if subscriptionErr := compiler.ValidateRealtimeSubscriptionBindings(ir.RealtimeSubscriptions); subscriptionErr != nil {
 			diagnostics = append(diagnostics, compilerDiagnostics(subscriptionErr, ir)...)
 		}
+		if invalidationErr := compiler.ValidateQueryInvalidations(config, ir.QueryInvalidations); invalidationErr != nil {
+			diagnostics = append(diagnostics, compilerDiagnostics(invalidationErr, ir)...)
+		}
 		return diagnostics
 	}
 	if err := compiler.ValidateRealtimeSubscriptionBindings(ir.RealtimeSubscriptions); err != nil {
+		diagnostics := compilerDiagnostics(err, ir)
+		if invalidationErr := compiler.ValidateQueryInvalidations(config, ir.QueryInvalidations); invalidationErr != nil {
+			diagnostics = append(diagnostics, compilerDiagnostics(invalidationErr, ir)...)
+		}
+		return diagnostics
+	}
+	if err := compiler.ValidateQueryInvalidations(config, ir.QueryInvalidations); err != nil {
 		return compilerDiagnostics(err, ir)
 	}
 	return nil
@@ -436,7 +447,7 @@ func CheckSourceWithOptions(config gowdk.Config, path string, source []byte, opt
 		diagnostics = append(diagnostics, compilerDiagnostics(compiler.ValidateSourceProgramReport(config, ir), ir)...)
 		diagnostics = append(diagnostics, accessibilityDiagnostics(ir)...)
 		if !diagnostics.HasErrors() && strings.TrimSpace(options.ProjectRoot) != "" {
-			diagnostics = append(diagnostics, validateContractReferenceBindings(ir, options.ProjectRoot)...)
+			diagnostics = append(diagnostics, validateContractReferenceBindings(config, ir, options.ProjectRoot)...)
 		}
 		return gwdkir.Page{}, diagnostics
 	case FileKindLayout:
@@ -450,7 +461,7 @@ func CheckSourceWithOptions(config gowdk.Config, path string, source []byte, opt
 		}
 		diagnostics = append(diagnostics, accessibilityDiagnostics(ir)...)
 		if !diagnostics.HasErrors() && strings.TrimSpace(options.ProjectRoot) != "" {
-			diagnostics = append(diagnostics, validateContractReferenceBindings(ir, options.ProjectRoot)...)
+			diagnostics = append(diagnostics, validateContractReferenceBindings(config, ir, options.ProjectRoot)...)
 		}
 		return gwdkir.Page{}, diagnostics
 	case FileKindAsset:
@@ -469,7 +480,7 @@ func CheckSourceWithOptions(config gowdk.Config, path string, source []byte, opt
 	diagnostics = append(diagnostics, compilerDiagnostics(compiler.ValidateSourceProgramReport(config, ir), ir)...)
 	diagnostics = append(diagnostics, accessibilityDiagnostics(ir)...)
 	if !diagnostics.HasErrors() && strings.TrimSpace(options.ProjectRoot) != "" {
-		diagnostics = append(diagnostics, validateContractReferenceBindings(ir, options.ProjectRoot)...)
+		diagnostics = append(diagnostics, validateContractReferenceBindings(config, ir, options.ProjectRoot)...)
 	}
 	return page, diagnostics
 }

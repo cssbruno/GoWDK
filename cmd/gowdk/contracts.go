@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/contractscan"
@@ -53,6 +54,9 @@ func linkIRContractReferencesFromReport(ir *gwdkir.Program, report contractscan.
 	}
 	if ir != nil && len(ir.RealtimeSubscriptions) > 0 {
 		ir.RealtimeSubscriptions = contractscan.LinkRealtimeSubscriptions(ir.RealtimeSubscriptions, report)
+	}
+	if ir != nil && len(ir.ContractRefs) > 0 {
+		ir.QueryInvalidations = contractscan.LinkQueryInvalidations(ir.ContractRefs, report)
 	}
 }
 
@@ -283,14 +287,58 @@ func printContractGraph(report contractscan.Report) error {
 		subscribers := eventSubscribers(events, event)
 		if len(subscribers) == 0 {
 			fmt.Println("  subscribers: none")
+		} else {
+			fmt.Println("  subscribers:")
+			for _, subscriber := range subscribers {
+				fmt.Printf("    - %s\n", subscriber)
+			}
+		}
+		invalidated := invalidatedQueries(report.Invalidations, event)
+		if len(invalidated) == 0 {
 			continue
 		}
-		fmt.Println("  subscribers:")
-		for _, subscriber := range subscribers {
-			fmt.Printf("    - %s\n", subscriber)
+		fmt.Println("  invalidates:")
+		for _, query := range invalidated {
+			fmt.Printf("    - QUERY %s\n", query)
 		}
 	}
 	return nil
+}
+
+func invalidatedQueries(invalidations []contractscan.Invalidation, event contractscan.Contract) []string {
+	seen := map[string]bool{}
+	var queries []string
+	for _, invalidation := range invalidations {
+		if invalidation.EventCategory != event.EventCategory || !sameContractType(invalidation.EventTypeImportPath, invalidation.EventType, event.TypeImportPath, event.Type) {
+			continue
+		}
+		query := invalidation.QueryType
+		if invalidation.QueryTypeImportPath != "" {
+			query = invalidation.QueryTypeImportPath + "." + localContractName(query)
+		}
+		if query == "" || seen[query] {
+			continue
+		}
+		seen[query] = true
+		queries = append(queries, query)
+	}
+	sort.Strings(queries)
+	return queries
+}
+
+func sameContractType(leftImportPath, leftType, rightImportPath, rightType string) bool {
+	if leftType == rightType && (leftImportPath == "" || rightImportPath == "" || leftImportPath == rightImportPath) {
+		return true
+	}
+	return leftImportPath != "" && rightImportPath != "" && leftImportPath == rightImportPath && localContractName(leftType) == localContractName(rightType)
+}
+
+func localContractName(name string) string {
+	name = strings.TrimSpace(name)
+	if index := strings.LastIndex(name, "."); index >= 0 {
+		return name[index+1:]
+	}
+	return name
 }
 
 func eventSubscribers(events []contractscan.Contract, event contractscan.Contract) []string {

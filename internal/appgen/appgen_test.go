@@ -788,6 +788,61 @@ func TestGenerateWritesRealtimeFanoutForSubscriptions(t *testing.T) {
 	}
 }
 
+func TestGenerateWritesRealtimeQueryInvalidationFanout(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
+
+	program := &gwdkir.Program{
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			ImportPath:  "example.com/app/contracts/patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			Method:      http.MethodPost,
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		}},
+		QueryInvalidations: []gwdkir.QueryInvalidation{{
+			Query:         "patients.GetPatientPage",
+			QueryType:     "example.com/app/contracts/patients.GetPatientPage",
+			Event:         "example.com/app/contracts/patients.PatientCreated",
+			EventType:     "example.com/app/contracts/patients.PatientCreated",
+			EventCategory: "domain",
+			Status:        gwdkir.ContractBindingBound,
+			OwnerKind:     gwdkir.SourcePage,
+			OwnerID:       "patients",
+		}},
+	}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkcontracts.QueryInvalidationPresentationEventType: true`,
+		`var realtimeQueryInvalidations []gowdkcontracts.QueryInvalidation = []gowdkcontracts.QueryInvalidation{gowdkcontracts.QueryInvalidation{EventCategory: gowdkcontracts.DomainEvent, EventType: "example.com/app/contracts/patients.PatientCreated", QueryType: "example.com/app/contracts/patients.GetPatientPage"}}`,
+		`gowdkcontracts.QueryInvalidationCommandEventSink(fanout, realtimeQueryInvalidations)`,
+		`gowdkcontracts.CompositeCommandEventSink(gowdkcontracts.InProcessCommandEventSink(), gowdkcontracts.QueryInvalidationCommandEventSink(fanout, realtimeQueryInvalidations), fanoutSink)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated invalidation source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
 func TestGenerateGuardsRealtimeStreamForSubscribedPages(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

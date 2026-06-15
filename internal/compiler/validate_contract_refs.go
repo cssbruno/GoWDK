@@ -53,6 +53,39 @@ func ValidateRealtimeSubscriptionBindings(subscriptions []gwdkir.RealtimeSubscri
 	return normalizeValidationErrors(diagnostics)
 }
 
+// ValidateQueryInvalidations converts linked query-invalidation metadata into
+// compiler diagnostics for CLI validation paths.
+func ValidateQueryInvalidations(config gowdk.Config, invalidations []gwdkir.QueryInvalidation) error {
+	if len(invalidations) == 0 {
+		return nil
+	}
+	var diagnostics []ValidationError
+	if !config.HasFeature(gowdk.FeatureRealtime) {
+		for _, invalidation := range invalidations {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:          "missing_realtime_addon",
+				PageID:        queryInvalidationPageID(invalidation),
+				ComponentName: queryInvalidationComponentName(invalidation),
+				Source:        invalidation.Source,
+				Span:          invalidation.Span,
+				Message:       fmt.Sprintf("query invalidation for %s requires realtime.Addon() in gowdk.config.go", invalidation.Query),
+			})
+		}
+	}
+	for _, invalidation := range invalidations {
+		switch invalidation.Status {
+		case gwdkir.ContractBindingMissing:
+			diagnostics = append(diagnostics, queryInvalidationDiagnostic(invalidation, "query_invalidation_missing"))
+		case gwdkir.ContractBindingInvalid:
+			diagnostics = append(diagnostics, queryInvalidationDiagnostic(invalidation, "query_invalidation_invalid"))
+		}
+	}
+	if len(diagnostics) == 0 {
+		return nil
+	}
+	return normalizeValidationErrors(diagnostics)
+}
+
 func contractReferenceAllowsWeb(ref gwdkir.ContractReference) bool {
 	if len(ref.Roles) == 0 {
 		return true
@@ -176,6 +209,21 @@ func realtimeSubscriptionDiagnostic(subscription gwdkir.RealtimeSubscription, co
 	}
 }
 
+func queryInvalidationDiagnostic(invalidation gwdkir.QueryInvalidation, code string) ValidationError {
+	message := invalidation.Message
+	if message == "" {
+		message = fmt.Sprintf("query invalidation %s from %s is not bound to valid Go registrations", invalidation.Query, invalidation.Event)
+	}
+	return ValidationError{
+		Code:          code,
+		PageID:        queryInvalidationPageID(invalidation),
+		ComponentName: queryInvalidationComponentName(invalidation),
+		Source:        invalidation.Source,
+		Span:          invalidation.Span,
+		Message:       message,
+	}
+}
+
 func contractReferencePageID(ref gwdkir.ContractReference) string {
 	if ref.OwnerKind == gwdkir.SourcePage {
 		return ref.OwnerID
@@ -190,6 +238,13 @@ func contractSubscriptionPageID(subscription gwdkir.RealtimeSubscription) string
 	return ""
 }
 
+func queryInvalidationPageID(invalidation gwdkir.QueryInvalidation) string {
+	if invalidation.OwnerKind == gwdkir.SourcePage {
+		return invalidation.OwnerID
+	}
+	return ""
+}
+
 func contractReferenceComponentName(ref gwdkir.ContractReference) string {
 	if ref.OwnerKind == gwdkir.SourceComponent {
 		return ref.OwnerID
@@ -200,6 +255,13 @@ func contractReferenceComponentName(ref gwdkir.ContractReference) string {
 func contractSubscriptionComponentName(subscription gwdkir.RealtimeSubscription) string {
 	if subscription.OwnerKind == gwdkir.SourceComponent {
 		return subscription.OwnerID
+	}
+	return ""
+}
+
+func queryInvalidationComponentName(invalidation gwdkir.QueryInvalidation) string {
+	if invalidation.OwnerKind == gwdkir.SourceComponent {
+		return invalidation.OwnerID
 	}
 	return ""
 }

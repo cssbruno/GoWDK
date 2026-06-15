@@ -889,8 +889,48 @@ Only explicit `replaceHTML` client patches are supported today. The
 dependency-free SSE adapter sends a `retry: 1000` directive for browser
 EventSource reconnects and uses bounded per-client buffers; events are dropped
 for clients whose buffers are full rather than blocking command execution.
-Custom retry/backoff/replay, active session-change stream revocation, derived
-invalidation, and richer patch shapes remain separate follow-up pieces.
+Custom retry/backoff/replay, active session-change stream revocation, and
+richer patch shapes remain separate follow-up pieces.
+
+## Query Invalidations
+
+Use `contracts.RegisterInvalidation[event, query]` in Go when a domain event
+should refresh query-owned regions:
+
+```go
+func Register(registry *contracts.Registry) {
+	contracts.RegisterQuery[GetPatientPage, PatientPageData](registry, LoadPatientPage, contracts.RoleWeb)
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient, contracts.RoleWeb)
+	contracts.RegisterDomainEvent[PatientCreated](registry, SendWelcomeEmail, contracts.RoleWorker)
+	contracts.RegisterInvalidation[PatientCreated, GetPatientPage](registry)
+}
+```
+
+Current behavior:
+
+- Scans invalidation edges beside normal contract registrations.
+- Rejects edges that name an unknown query, an unknown domain event, or a
+  domain event no scanned command emits.
+- Joins validated edges with bound `g:query` references into
+  `internal/gwdkir.Program.QueryInvalidations`.
+- Requires `realtime.Addon()` when a bound query uses generated invalidation
+  refresh.
+- `gowdk build` adds `query_invalidation` events with status and source
+  line/column to `gowdk-build-report.json`.
+- `gowdk graph` prints `invalidates` edges from domain events to queries.
+- Generated HTML renders validated `data-gowdk-query-type` markers for
+  invalidated query regions.
+- Generated command adapters emit a `gowdk.query.invalidate` presentation event
+  after successful command event dispatch when captured domain events
+  invalidate bound queries.
+- Generated `gowdk.js` refetches the current document and replaces matching
+  non-subscribed query regions. Regions with `g:subscribe` are left to explicit
+  presentation patches.
+
+Invalidations are explicit Go metadata, not compiler inference from handler
+bodies. The first slice refreshes matching regions from the current document;
+fragment/API-specific query execution and richer refresh policies remain
+future work.
 
 Templates must not declare backend facts:
 

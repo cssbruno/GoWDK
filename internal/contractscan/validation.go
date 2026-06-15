@@ -101,6 +101,113 @@ func emittedEventCategoryDiagnostics(contracts []Contract) []Diagnostic {
 	return diagnostics
 }
 
+func invalidationDiagnostics(invalidations []Invalidation, contracts []Contract) []Diagnostic {
+	if len(invalidations) == 0 {
+		return nil
+	}
+	queries := map[string]bool{}
+	events := map[runtimecontracts.EventCategory]map[string]bool{}
+	emitted := map[runtimecontracts.EventCategory]map[string]bool{}
+	for _, contract := range contracts {
+		switch contract.Kind {
+		case runtimecontracts.Query:
+			for _, key := range contractReferenceKeys(contract) {
+				queries[key] = true
+			}
+		case runtimecontracts.Event:
+			if events[contract.EventCategory] == nil {
+				events[contract.EventCategory] = map[string]bool{}
+			}
+			for _, key := range contractReferenceKeys(contract) {
+				events[contract.EventCategory][key] = true
+			}
+		case runtimecontracts.Command:
+			for _, event := range contract.Emits {
+				if emitted[event.Category] == nil {
+					emitted[event.Category] = map[string]bool{}
+				}
+				for _, key := range eventRefKeys(event) {
+					emitted[event.Category][key] = true
+				}
+			}
+		}
+	}
+	var diagnostics []Diagnostic
+	for _, invalidation := range invalidations {
+		queryKeys := invalidationQueryKeys(invalidation)
+		if !anyKey(queryKeys, queries) {
+			diagnostics = append(diagnostics, invalidationDiagnostic(invalidation, fmt.Sprintf("invalidation query %s has no scanned Go query registration", invalidation.QueryType)))
+			continue
+		}
+		eventKeys := invalidationEventKeys(invalidation)
+		if !anyKey(eventKeys, events[invalidation.EventCategory]) {
+			diagnostics = append(diagnostics, invalidationDiagnostic(invalidation, fmt.Sprintf("invalidation event %s has no scanned %s event registration", invalidation.EventType, invalidation.EventCategory)))
+			continue
+		}
+		if !anyKey(eventKeys, emitted[invalidation.EventCategory]) {
+			diagnostics = append(diagnostics, invalidationDiagnostic(invalidation, fmt.Sprintf("invalidation event %s is not emitted by any scanned command", invalidation.EventType)))
+		}
+	}
+	return diagnostics
+}
+
+func invalidationDiagnostic(invalidation Invalidation, message string) Diagnostic {
+	return Diagnostic{
+		Severity:       "error",
+		Code:           "contract_invalidation_invalid",
+		Kind:           runtimecontracts.Query,
+		Type:           invalidation.QueryType,
+		TypeImportPath: invalidation.QueryTypeImportPath,
+		Source:         invalidation.Source,
+		Line:           invalidation.Line,
+		Column:         invalidation.Column,
+		Message:        message,
+	}
+}
+
+func invalidationQueryKeys(invalidation Invalidation) []string {
+	return typedReferenceKeys(invalidation.QueryTypeImportPath, invalidation.QueryType)
+}
+
+func invalidationEventKeys(invalidation Invalidation) []string {
+	return typedReferenceKeys(invalidation.EventTypeImportPath, invalidation.EventType)
+}
+
+func eventRefKeys(ref EventRef) []string {
+	return typedReferenceKeys(ref.TypeImportPath, ref.Type)
+}
+
+func typedReferenceKeys(importPath string, typeName string) []string {
+	var keys []string
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		for _, key := range keys {
+			if key == value {
+				return
+			}
+		}
+		keys = append(keys, value)
+	}
+	add(typeName)
+	local := localContractName(typeName)
+	if importPath != "" && local != "" {
+		add(contractImportTypeKey(importPath, local))
+	}
+	return keys
+}
+
+func anyKey(keys []string, values map[string]bool) bool {
+	for _, key := range keys {
+		if values[key] {
+			return true
+		}
+	}
+	return false
+}
+
 func eventIdentity(importPath string, typeName string) string {
 	typeName = strings.TrimSpace(localContractName(typeName))
 	if typeName == "" {

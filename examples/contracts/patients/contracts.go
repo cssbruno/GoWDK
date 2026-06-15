@@ -43,6 +43,7 @@ func Register(registry *contracts.Registry) {
 	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient, contracts.RoleWeb)
 	contracts.RegisterPresentationEvent[PatientNotice](registry, PublishPatientNotice, contracts.RoleWeb)
 	contracts.RegisterDomainEvent[PatientCreated](registry, SendWelcomeEmail, contracts.RoleWorker)
+	contracts.RegisterInvalidation[PatientCreated, GetPatientPage](registry)
 }
 
 func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData, error) {

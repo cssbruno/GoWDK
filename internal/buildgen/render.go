@@ -23,7 +23,7 @@ const (
 	renderModeRequestTime renderModePolicy = "request-time"
 )
 
-func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, data map[string]string, realtimeEventTypeNames map[string]string, policy renderModePolicy) (string, error) {
+func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, data map[string]string, realtimeEventTypeNames map[string]string, queryTypeNames map[string]string, policy renderModePolicy) (string, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
 	if policy == renderModeSPA && mode != gowdk.SPA && mode != gowdk.Action {
 		return "", fmt.Errorf("%s: SPA build cannot emit request-time %s pages yet", page.ID, mode)
@@ -53,6 +53,7 @@ func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]vie
 		Package:                page.Package,
 		Tainted:                requestTimeTaintedFields(page, policy),
 		RealtimeEventTypeNames: realtimeEventTypeNames,
+		QueryTypeNames:         queryTypeNames,
 	})
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
@@ -61,7 +62,7 @@ func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]vie
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
 	}
-	scripts, err := pageScripts(config, page, viewSource, viewNodes, pageComponents, policy)
+	scripts, err := pageScripts(config, page, viewSource, viewNodes, pageComponents, queryTypeNames, policy)
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", page.ID, err)
 	}
@@ -232,7 +233,7 @@ func actionRoutes(page gwdkir.Page, data map[string]string) map[string]string {
 	return routes
 }
 
-func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component, policy renderModePolicy) ([]gowdk.Script, error) {
+func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component, queryTypeNames map[string]string, policy renderModePolicy) ([]gowdk.Script, error) {
 	scripts := append([]gowdk.Script{}, nonEmptyScripts(config.Build.Scripts)...)
 	hrefs, err := scopedScriptHrefs(page, viewSource, viewNodes, components)
 	if err != nil {
@@ -248,7 +249,7 @@ func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, viewN
 	if err != nil {
 		return nil, err
 	}
-	usesRealtime, err := pageUsesRealtimeRuntime(page, viewSource, viewNodes, components)
+	usesRealtime, err := pageUsesRealtimeRuntime(page, viewSource, viewNodes, components, queryTypeNames)
 	if err != nil {
 		return nil, err
 	}
@@ -278,8 +279,11 @@ func pageUsesPartialRuntime(page gwdkir.Page, viewSource string) bool {
 	return len(page.Blocks.Actions) > 0
 }
 
-func pageUsesRealtimeRuntime(page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component) (bool, error) {
+func pageUsesRealtimeRuntime(page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component, queryTypeNames map[string]string) (bool, error) {
 	if viewHasRealtimeSubscription(viewSource, viewNodes) {
+		return true, nil
+	}
+	if viewHasInvalidatedQuery(viewSource, viewNodes, queryTypeNames) {
 		return true, nil
 	}
 	usages, err := recursiveViewComponentCallUsagesForView(viewSource, viewNodes, components, page.Package, componentUses(page.Uses))
@@ -288,6 +292,9 @@ func pageUsesRealtimeRuntime(page gwdkir.Page, viewSource string, viewNodes []vi
 	}
 	for _, usage := range usages {
 		if viewHasRealtimeSubscription(usage.component.Body, usage.component.Nodes) {
+			return true, nil
+		}
+		if viewHasInvalidatedQuery(usage.component.Body, usage.component.Nodes, queryTypeNames) {
 			return true, nil
 		}
 	}
@@ -304,6 +311,31 @@ func viewHasRealtimeSubscription(source string, nodes []view.Node) bool {
 	}
 	refs, err := view.SubscriptionReferences(source)
 	return err == nil && len(refs) > 0
+}
+
+func viewHasInvalidatedQuery(source string, nodes []view.Node, queryTypeNames map[string]string) bool {
+	if len(queryTypeNames) == 0 {
+		return false
+	}
+	if !strings.Contains(source, "g:query") && len(nodes) == 0 {
+		return false
+	}
+	var refs []view.QueryReference
+	var err error
+	if len(nodes) > 0 {
+		refs, err = view.QueryReferencesFromNodes(nodes)
+	} else {
+		refs, err = view.QueryReferences(source)
+	}
+	if err != nil {
+		return false
+	}
+	for _, ref := range refs {
+		if queryTypeNames[ref.Query] != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func pageUsesSPANavigationRuntime(config gowdk.Config, page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component) (bool, error) {

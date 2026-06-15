@@ -12,7 +12,11 @@ import (
 const generatedRealtimeEventsPath = "/_gowdk/realtime/events"
 
 func generatedRealtimeEnabled(options Options) bool {
-	return !options.ProxyBackend && len(boundRealtimeSubscriptions(options)) > 0
+	return !options.ProxyBackend && (len(boundRealtimeSubscriptions(options)) > 0 || len(boundQueryInvalidations(options)) > 0)
+}
+
+func generatedRealtimeQueryInvalidationsEnabled(options Options) bool {
+	return !options.ProxyBackend && len(boundQueryInvalidations(options)) > 0
 }
 
 func boundRealtimeSubscriptions(options Options) []gwdkir.RealtimeSubscription {
@@ -41,6 +45,35 @@ func boundRealtimeSubscriptions(options Options) []gwdkir.RealtimeSubscription {
 		return subscriptions[i].Query < subscriptions[j].Query
 	})
 	return subscriptions
+}
+
+func boundQueryInvalidations(options Options) []gwdkir.QueryInvalidation {
+	if options.IR == nil || len(options.IR.QueryInvalidations) == 0 {
+		return nil
+	}
+	invalidations := make([]gwdkir.QueryInvalidation, 0, len(options.IR.QueryInvalidations))
+	for _, invalidation := range options.IR.QueryInvalidations {
+		if invalidation.Status != gwdkir.ContractBindingBound {
+			continue
+		}
+		if strings.TrimSpace(invalidation.EventType) == "" || strings.TrimSpace(invalidation.QueryType) == "" {
+			continue
+		}
+		invalidations = append(invalidations, invalidation)
+	}
+	sort.Slice(invalidations, func(i, j int) bool {
+		if invalidations[i].EventType != invalidations[j].EventType {
+			return invalidations[i].EventType < invalidations[j].EventType
+		}
+		if invalidations[i].QueryType != invalidations[j].QueryType {
+			return invalidations[i].QueryType < invalidations[j].QueryType
+		}
+		if invalidations[i].OwnerID != invalidations[j].OwnerID {
+			return invalidations[i].OwnerID < invalidations[j].OwnerID
+		}
+		return invalidations[i].Query < invalidations[j].Query
+	})
+	return invalidations
 }
 
 type realtimeStreamRoute struct {
@@ -86,6 +119,22 @@ func realtimeStreamRoutes(options Options) []realtimeStreamRoute {
 		seen[key] = true
 		routes = append(routes, realtimeStreamRoute{Route: route, Guards: guards})
 	}
+	for _, invalidation := range boundQueryInvalidations(options) {
+		if invalidation.OwnerKind != gwdkir.SourcePage {
+			continue
+		}
+		route := routesByPage[invalidation.OwnerID]
+		if route == "" {
+			continue
+		}
+		guards := runtimeGuardNames(invalidation.Guards)
+		key := route + "\x00" + strings.Join(guards, "\x00")
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		routes = append(routes, realtimeStreamRoute{Route: route, Guards: guards})
+	}
 	sort.Slice(routes, func(i, j int) bool {
 		if routes[i].Route != routes[j].Route {
 			return routes[i].Route < routes[j].Route
@@ -107,6 +156,15 @@ func realtimeStreamFallbackGuards(options Options) []string {
 			guards = append(guards, guard)
 		}
 	}
+	for _, invalidation := range boundQueryInvalidations(options) {
+		for _, guard := range runtimeGuardNames(invalidation.Guards) {
+			if seen[guard] {
+				continue
+			}
+			seen[guard] = true
+			guards = append(guards, guard)
+		}
+	}
 	sort.Strings(guards)
 	return guards
 }
@@ -120,6 +178,7 @@ func realtimeDecls(options Options) []ast.Decl {
 		realtimeFanoutMutexDecl(),
 		realtimeFanoutVarDecl(),
 		realtimeSubscriptionEventTypesDecl(options),
+		realtimeQueryInvalidationsDecl(options),
 		registerRealtimeFanoutDecl(),
 		currentRealtimeFanoutDecl(),
 		realtimeEventsHandlerDecl(options),
@@ -170,6 +229,9 @@ func realtimeSubscriptionEventTypesDecl(options Options) ast.Decl {
 	for _, eventType := range eventTypes {
 		elts = append(elts, &ast.KeyValueExpr{Key: stringLit(eventType), Value: id("true")})
 	}
+	if generatedRealtimeQueryInvalidationsEnabled(options) {
+		elts = append(elts, &ast.KeyValueExpr{Key: sel("gowdkcontracts", "QueryInvalidationPresentationEventType"), Value: id("true")})
+	}
 	return &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
 		Names: []*ast.Ident{id("realtimeSubscriptionEventTypes")},
 		Type:  &ast.MapType{Key: id("string"), Value: id("bool")},
@@ -178,6 +240,40 @@ func realtimeSubscriptionEventTypesDecl(options Options) ast.Decl {
 			Elts: elts,
 		}},
 	}}}
+}
+
+func realtimeQueryInvalidationsDecl(options Options) ast.Decl {
+	invalidations := boundQueryInvalidations(options)
+	elts := make([]ast.Expr, 0, len(invalidations))
+	for _, invalidation := range invalidations {
+		elts = append(elts, &ast.CompositeLit{
+			Type: sel("gowdkcontracts", "QueryInvalidation"),
+			Elts: []ast.Expr{
+				keyValue("EventCategory", realtimeEventCategoryExpr(invalidation.EventCategory)),
+				keyValue("EventType", stringLit(invalidation.EventType)),
+				keyValue("QueryType", stringLit(invalidation.QueryType)),
+			},
+		})
+	}
+	return &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
+		Names: []*ast.Ident{id("realtimeQueryInvalidations")},
+		Type:  &ast.ArrayType{Elt: sel("gowdkcontracts", "QueryInvalidation")},
+		Values: []ast.Expr{&ast.CompositeLit{
+			Type: &ast.ArrayType{Elt: sel("gowdkcontracts", "QueryInvalidation")},
+			Elts: elts,
+		}},
+	}}}
+}
+
+func realtimeEventCategoryExpr(category string) ast.Expr {
+	switch category {
+	case "domain":
+		return sel("gowdkcontracts", "DomainEvent")
+	case "integration":
+		return sel("gowdkcontracts", "IntegrationEvent")
+	default:
+		return sel("gowdkcontracts", "DomainEvent")
+	}
 }
 
 func realtimeEventEnvelopeType(subscription gwdkir.RealtimeSubscription) string {

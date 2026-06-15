@@ -33,6 +33,9 @@ func validProgram() Program {
 		RealtimeSubscriptions: []RealtimeSubscription{
 			{Query: "shop.ListProducts", Event: "shop.ProductNotice", Status: ContractBindingBound, OwnerKind: SourcePage, OwnerID: "home"},
 		},
+		QueryInvalidations: []QueryInvalidation{
+			{Query: "shop.ListProducts", Event: "shop.ProductCreated", Status: ContractBindingBound, OwnerKind: SourcePage, OwnerID: "home"},
+		},
 		ClientBehaviors: []ClientBehavior{{Component: "ProductCard"}},
 		Assets: []Asset{
 			{Kind: AssetCSS, OwnerID: "home", Path: "home.css"},
@@ -186,6 +189,26 @@ func TestCheckInvariantsReportsViolations(t *testing.T) {
 			name:    "realtime subscription to missing owner",
 			corrupt: func(p *Program) { p.RealtimeSubscriptions[0].OwnerID = "ghost" },
 			want:    `realtime subscription references unknown page "ghost"`,
+		},
+		{
+			name:    "unknown query invalidation status",
+			corrupt: func(p *Program) { p.QueryInvalidations[0].Status = "maybe" },
+			want:    `query invalidation "shop.ListProducts" has unknown binding status "maybe"`,
+		},
+		{
+			name:    "query invalidation without query",
+			corrupt: func(p *Program) { p.QueryInvalidations[0].Query = "" },
+			want:    `query invalidation for event "shop.ProductCreated" has no query boundary`,
+		},
+		{
+			name:    "query invalidation without event",
+			corrupt: func(p *Program) { p.QueryInvalidations[0].Event = "" },
+			want:    `query invalidation has no event reference`,
+		},
+		{
+			name:    "query invalidation to missing owner",
+			corrupt: func(p *Program) { p.QueryInvalidations[0].OwnerID = "ghost" },
+			want:    `query invalidation references unknown page "ghost"`,
 		},
 	}
 	for _, test := range tests {

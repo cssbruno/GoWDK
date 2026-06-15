@@ -22,11 +22,9 @@ Existing constraints:
 - Query references already define bounded, compiler-owned data regions through
   `g:query`.
 
-Issue #147 proposed compiler-derived event-to-query invalidation. That remains
-useful future design input, but it requires a broader invalidation graph and
-server/client refresh policy. M14 needs an explicit first contract that can
-validate source spans and event categories before derived refresh behavior
-exists.
+Issue #147 proposed compiler-derived event-to-query invalidation. M14 keeps the
+template contract explicit and adds a Go-owned invalidation graph instead of
+letting templates name domain events directly.
 
 ## Decision
 
@@ -51,6 +49,29 @@ Rules:
 - The registration must be available to the generated web role, or unrestricted.
 - The project must enable `realtime.Addon()` before subscriptions are accepted.
 
+GOWDK also accepts explicit Go invalidation registrations:
+
+```go
+contracts.RegisterInvalidation[PatientCreated, GetPatientPage](registry)
+```
+
+Rules:
+
+- `RegisterInvalidation[event, query]` says a domain event type invalidates a
+  query type.
+- The compiler scans invalidation registrations beside normal contract
+  registrations.
+- The scanner rejects edges that name an unknown query, an unknown domain event,
+  or a domain event no scanned command emits.
+- The compiler joins invalidation edges to `g:query` references and records the
+  joined graph in `Program.QueryInvalidations`, `gowdk-build-report.json`, and
+  `gowdk graph`.
+- Generated apps send a `gowdk.query.invalidate` presentation event after
+  command event dispatch for affected domain events.
+- Generated `gowdk.js` refetches the current document and swaps only matching
+  non-subscribed `data-gowdk-query-type` regions. Regions with `g:subscribe`
+  remain owned by explicit presentation patches.
+
 This ADR does not make `client {}` a subscription language and does not let
 templates reference domain or integration events directly.
 
@@ -65,26 +86,24 @@ templates reference domain or integration events directly.
 
 ### Negative
 
-- Authors must name each presentation event explicitly in the first slice.
-- Derived event-to-query invalidation is deferred.
-- Live updates require query-region wiring even when a future patch could be
-  smaller than a query refresh.
+- Authors must name each presentation event or invalidation edge explicitly.
+- Query invalidation performs a document refetch instead of payload diffing.
+- Subscribed regions and invalidated regions have separate update ownership.
 
 ### Neutral
 
 - Generated HTML may expose compiler-owned `data-gowdk-*` markers for later
   runtime binding.
-- #147 remains a possible future layer after explicit subscriptions and
-  generated refresh semantics are proven.
+- Generated HTML may expose validated `data-gowdk-query-type` markers for exact
+  invalidation matching.
 
 ## Alternatives Considered
 
 - Extend `client {}` with subscription statements. Rejected for M14 because it
   would mix server-state invalidation with local UI behavior and expand the
   bounded client language before the server/client ownership contract is ready.
-- Derive invalidation from domain events and query bindings first. Deferred
-  because it requires explicit invalidation declarations, generated fanout, and
-  fragment refresh policy that are larger than #130.
+- Infer invalidation from handler bodies. Rejected because it would make
+  backend data policy implicit and brittle.
 - Allow templates to subscribe to domain or integration events directly.
   Rejected because those categories are backend-owned facts and must not become
   browser-facing input.
@@ -104,3 +123,7 @@ templates reference domain or integration events directly.
   remains follow-up work.
 - #134: add live-updating examples and docs. Implemented in
   `examples/contracts`.
+- #147: compiler-derived event-to-query invalidation. Implemented through
+  explicit `RegisterInvalidation[event, query]` scan metadata, build-report and
+  graph output, generated `gowdk.query.invalidate` presentation events, and
+  query-region document refetch.

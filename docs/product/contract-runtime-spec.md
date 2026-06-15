@@ -13,6 +13,8 @@ worker processes without turning browser UI events into trusted backend facts.
 - Capture domain, integration, and presentation events only after command
   success.
 - Let generated `g:command` and `g:query` adapters execute web-role contracts.
+- Let domain events explicitly invalidate bound queries for generated realtime
+  refresh without inferring backend behavior from handler bodies.
 - Let worker and cron roles run the same registrations from user-owned Go
   commands or generated helper APIs.
 - Provide CLI list, trace, and graph views over scanned contract metadata.
@@ -39,10 +41,12 @@ worker processes without turning browser UI events into trusted backend facts.
 1. Register contracts in normal Go with `runtime/contracts`.
 2. Reference routable commands or queries from `.gwdk` with `g:command` or
    `g:query`.
-3. Build a generated app and optionally register a command event sink.
-4. Run subscribers locally, through an outbox/broker worker, or through cron
+3. Optionally register `RegisterInvalidation[event, query]` when a domain event
+   should refresh query-owned UI regions.
+4. Build a generated app and optionally register a command event sink.
+5. Run subscribers locally, through an outbox/broker worker, or through cron
    role job execution from user-owned Go.
-5. Inspect registrations with `gowdk contracts`, `gowdk list`, `gowdk graph`,
+6. Inspect registrations with `gowdk contracts`, `gowdk list`, `gowdk graph`,
    and `gowdk trace`.
 
 ## Requirements
@@ -60,6 +64,9 @@ worker processes without turning browser UI events into trusted backend facts.
   `NewContractRegistry`, and worker replay helpers for event sources.
 - CLI contract reports scan registrations, roles, command emissions, event
   subscribers, jobs, diagnostics, graph, and trace output.
+- Contract scanning records explicit domain-event to query invalidation edges,
+  rejects unknown queries/events and events no scanned command emits, and
+  exposes validated edges to generated realtime output.
 
 ### Non-Functional
 
@@ -76,12 +83,15 @@ worker processes without turning browser UI events into trusted backend facts.
 
 - [x] `go test ./runtime/contracts`
 - [x] `go test ./internal/appgen`
+- [x] `go test ./internal/contractscan ./internal/buildgen ./internal/clientrt`
 - [x] `go run ./cmd/gowdk build --config examples/contracts/gowdk.config.go --out /tmp/gowdk-contracts-build --app /tmp/gowdk-contracts-app --bin /tmp/gowdk-contracts-site examples/contracts/patients.page.gwdk`
 
 ## Edge Cases
 
 - Duplicate command owners fail scanning/check/build.
 - Non-web contract references fail before generated routes run.
+- Invalidations fail when they name unknown queries/events or a domain event no
+  scanned command emits.
 - Subscriber failures nack batches when the source supports nack.
 - Duplicate event IDs can be skipped only after dispatch and ack succeed.
 - Nil sinks default to in-process dispatch.

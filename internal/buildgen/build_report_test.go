@@ -626,6 +626,46 @@ func TestBuildReportIncludesRealtimeSubscriptions(t *testing.T) {
 	}
 }
 
+func TestBuildReportIncludesQueryInvalidations(t *testing.T) {
+	outputDir := t.TempDir()
+	result, err := BuildFromIR(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("realtime", gowdk.FeatureRealtime)}}, gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			Source: "pages/patients.page.gwdk",
+			ID:     "patients",
+			Route:  "/patients",
+			Render: gowdk.SPA,
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main>Patients</main>`,
+			},
+		}},
+		QueryInvalidations: []gwdkir.QueryInvalidation{{
+			Query:         "patients.GetPatientPage",
+			QueryType:     "github.com/acme/clinic/patients.GetPatientPage",
+			Event:         "github.com/acme/clinic/patients.PatientCreated",
+			EventType:     "github.com/acme/clinic/patients.PatientCreated",
+			EventCategory: "domain",
+			Status:        gwdkir.ContractBindingBound,
+			OwnerKind:     gwdkir.SourcePage,
+			OwnerID:       "patients",
+			Source:        "pages/patients.page.gwdk",
+		}},
+	}, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := findBuildReportEvent(result.Report, "bind", "query_invalidation")
+	if event == nil {
+		t.Fatalf("missing query_invalidation event in %#v", result.Report.Events)
+	}
+	if event.Data["query"] != "patients.GetPatientPage" ||
+		event.Data["queryType"] != "github.com/acme/clinic/patients.GetPatientPage" ||
+		event.Data["eventType"] != "github.com/acme/clinic/patients.PatientCreated" ||
+		event.Data["eventCategory"] != "domain" {
+		t.Fatalf("unexpected query invalidation data: %#v", event.Data)
+	}
+}
+
 func TestBuildEmitsRealtimeRuntimeForSubscribedRegions(t *testing.T) {
 	outputDir := t.TempDir()
 	result, err := BuildFromValidatedIR(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("realtime", gowdk.FeatureRealtime)}}, gwdkir.Program{
@@ -666,6 +706,49 @@ func TestBuildEmitsRealtimeRuntimeForSubscribedRegions(t *testing.T) {
 	} {
 		if !strings.Contains(html, expected) {
 			t.Fatalf("expected %q in realtime page:\n%s", expected, html)
+		}
+	}
+}
+
+func TestBuildEmitsRealtimeRuntimeForInvalidatedQueryRegions(t *testing.T) {
+	outputDir := t.TempDir()
+	result, err := BuildFromValidatedIR(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("realtime", gowdk.FeatureRealtime)}}, gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			Source: "pages/patients.page.gwdk",
+			ID:     "patients",
+			Route:  "/patients",
+			Render: gowdk.SPA,
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><section g:query="patients.GetPatientPage">Patients</section></main>`,
+			},
+		}},
+		QueryInvalidations: []gwdkir.QueryInvalidation{{
+			Query:         "patients.GetPatientPage",
+			QueryType:     "github.com/acme/clinic/patients.GetPatientPage",
+			Event:         "github.com/acme/clinic/patients.PatientCreated",
+			EventType:     "github.com/acme/clinic/patients.PatientCreated",
+			EventCategory: "domain",
+			Status:        gwdkir.ContractBindingBound,
+			OwnerKind:     gwdkir.SourcePage,
+			OwnerID:       "patients",
+			Source:        "pages/patients.page.gwdk",
+		}},
+	}, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.AssetArtifacts) != 1 || result.AssetArtifacts[0].Path != filepath.Join(outputDir, filepath.FromSlash(clientRuntimeAssetPath)) {
+		t.Fatalf("expected realtime client runtime asset, got %#v", result.AssetArtifacts)
+	}
+	html := readFile(t, filepath.Join(outputDir, "patients", "index.html"))
+	for _, expected := range []string{
+		`data-gowdk-query="patients.GetPatientPage"`,
+		`data-gowdk-query-type="github.com/acme/clinic/patients.GetPatientPage"`,
+		`<script src="` + clientRuntimeHref + `" defer></script>`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("expected %q in invalidated query page:\n%s", expected, html)
 		}
 	}
 }

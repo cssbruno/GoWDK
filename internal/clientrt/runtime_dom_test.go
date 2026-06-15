@@ -73,6 +73,7 @@ class Element extends EventTarget {
     this.method = '';
     this.action = '';
     this.replacedWith = '';
+    this.outerHTMLValue = '';
     this.valid = true;
     this.reported = false;
   }
@@ -106,9 +107,10 @@ class Element extends EventTarget {
   }
   set outerHTML(value) {
     this.replacedWith = value;
+    this.outerHTMLValue = value;
   }
   get outerHTML() {
-    return this.replacedWith;
+    return this.outerHTMLValue || this.replacedWith;
   }
 }
 
@@ -120,13 +122,20 @@ class Document extends EventTarget {
     this.bySelector = {};
     this.byID = {};
     this.realtimeRegions = [];
+    this.queryRegions = [];
   }
   querySelector(selector) {
+    if (selector === '[data-gowdk-subscribe], [data-gowdk-query-type]') {
+      return this.realtimeRegions[0] || this.queryRegions[0] || null;
+    }
     return this.bySelector[selector] || null;
   }
   querySelectorAll(selector) {
     if (selector === '[data-gowdk-subscribe]') {
       return this.realtimeRegions.slice();
+    }
+    if (selector === '[data-gowdk-query]') {
+      return this.queryRegions.slice();
     }
     return [];
   }
@@ -146,6 +155,19 @@ class Headers {
 
 global.CustomEvent = CustomEvent;
 global.document = new Document();
+global.DOMParser = class {
+  parseFromString(html, type) {
+    const next = new Document();
+    const refreshed = new Element('section');
+    refreshed.id = 'invalidated-patients';
+    refreshed.innerHTML = '<p>Refetched</p>';
+    refreshed.setAttribute('data-gowdk-query', 'patients.GetPatientPage');
+    refreshed.setAttribute('data-gowdk-query-type', 'gowdk-generated-app/patients.GetPatientPage');
+    refreshed.outerHTMLValue = '<section id="invalidated-patients" data-gowdk-query="patients.GetPatientPage" data-gowdk-query-type="gowdk-generated-app/patients.GetPatientPage"><p>Refetched</p></section>';
+    next.queryRegions = [refreshed];
+    return next;
+  }
+};
 const islandLifecycle = [];
 const eventSources = [];
 class EventSourceStub extends EventTarget {
@@ -200,16 +222,24 @@ const liveRegion = new Element('section');
 liveRegion.id = 'live-patients';
 liveRegion.innerHTML = '<p>Waiting</p>';
 liveRegion.setAttribute('data-gowdk-query', 'patients.GetPatientPage');
+liveRegion.setAttribute('data-gowdk-query-type', 'gowdk-generated-app/patients.GetPatientPage');
 liveRegion.setAttribute('data-gowdk-subscribe', 'patients.PatientNotice');
 liveRegion.setAttribute('data-gowdk-subscribe-type', 'gowdk-generated-app/patients.PatientNotice');
+const invalidatedRegion = new Element('section');
+invalidatedRegion.id = 'invalidated-patients';
+invalidatedRegion.innerHTML = '<p>Stale</p>';
+invalidatedRegion.setAttribute('data-gowdk-query', 'patients.GetPatientPage');
+invalidatedRegion.setAttribute('data-gowdk-query-type', 'gowdk-generated-app/patients.GetPatientPage');
 const input = new Element('input');
 input.id = 'email';
 
 document.bySelector['#newsletter'] = target;
 document.bySelector['[data-gowdk-subscribe]'] = liveRegion;
 document.realtimeRegions = [liveRegion];
+document.queryRegions = [liveRegion, invalidatedRegion];
 document.byID.newsletter = target;
 document.byID['live-patients'] = liveRegion;
+document.byID['invalidated-patients'] = invalidatedRegion;
 document.byID.email = input;
 document.activeElement = input;
 
@@ -298,6 +328,27 @@ async function submit() {
   assert.equal(liveRegion.innerHTML, '<p>Live</p>');
   assert.match(realtimeError.error.message, /unsupported realtime patch operation/);
 
+  let queryRefresh;
+  document.addEventListener('gowdk:query-refresh', event => {
+    queryRefresh = event.detail;
+  });
+  eventSources[0].emit('gowdk-presentation', {
+    Category: 'presentation',
+    Type: 'gowdk.query.invalidate',
+    Value: {
+      queries: ['gowdk-generated-app/patients.GetPatientPage']
+    }
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(request.url, 'http://example.test/newsletter');
+  assert.equal(liveRegion.replacedWith, '');
+  assert.equal(invalidatedRegion.replacedWith, '<section id="invalidated-patients" data-gowdk-query="patients.GetPatientPage" data-gowdk-query-type="gowdk-generated-app/patients.GetPatientPage"><p>Refetched</p></section>');
+  assert.deepEqual(islandLifecycle.shift(), ['destroy', 'invalidated-patients', true]);
+  assert.deepEqual(islandLifecycle.shift(), ['mount']);
+  assert.deepEqual(queryRefresh.queries, ['gowdk-generated-app/patients.GetPatientPage']);
+  request = null;
+  requestCount = 0;
+
   let afterSwap;
   form.addEventListener('gowdk:after-swap', event => {
     afterSwap = event.detail;
@@ -367,6 +418,7 @@ async function submit() {
   assert.equal(form.attributes['aria-busy'], undefined);
 
   document.realtimeRegions = [];
+  document.queryRegions = [];
   document.bySelector['[data-gowdk-subscribe]'] = null;
   reload = false;
   await submit();

@@ -2,12 +2,8 @@ package validation
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
-	"strings"
 )
-
-const maxGoRepeatCount = 1000
 
 // ValidatePattern reports whether pattern uses the generated action validation
 // syntax supported by MatchPattern.
@@ -22,18 +18,10 @@ func MatchPattern(pattern string, value string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return compiled.MatchString(value), nil
+	return compiled.match([]rune(value)), nil
 }
 
-func compilePattern(pattern string) (*regexp.Regexp, error) {
-	normalized, err := normalizePattern(pattern)
-	if err != nil {
-		return nil, err
-	}
-	return regexp.Compile(`^(?:` + normalized + `)$`)
-}
-
-func normalizePattern(pattern string) (string, error) {
+func compilePattern(pattern string) (*compiledPattern, error) {
 	source := []rune(pattern)
 	if len(source) > 0 && source[0] == '^' {
 		source = source[1:]
@@ -41,270 +29,468 @@ func normalizePattern(pattern string) (string, error) {
 	if len(source) > 0 && source[len(source)-1] == '$' && !patternRuneEscaped(source, len(source)-1) {
 		source = source[:len(source)-1]
 	}
-	if err := validatePatternSubset(source); err != nil {
-		return "", err
-	}
-	rewritten, err := rewriteLargeRepeatQuantifiers(source)
+	parser := patternParser{source: source}
+	root, err := parser.parseExpression(0)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	source = rewritten
-	var builder strings.Builder
-	inClass := false
-	escaped := false
-	for _, r := range source {
-		if escaped {
-			builder.WriteRune('\\')
-			builder.WriteRune(r)
-			escaped = false
-			continue
-		}
-		switch r {
-		case '\\':
-			escaped = true
-		case '[':
-			inClass = true
-			builder.WriteRune(r)
-		case ']':
-			inClass = false
-			builder.WriteRune(r)
-		case '^', '$':
-			if inClass {
-				builder.WriteRune(r)
-				continue
-			}
-			builder.WriteRune('\\')
-			builder.WriteRune(r)
-		default:
-			builder.WriteRune(r)
-		}
+	if parser.index != len(source) {
+		return nil, fmt.Errorf("unexpected pattern token %q", source[parser.index])
 	}
-	if escaped {
-		builder.WriteRune('\\')
-	}
-	return builder.String(), nil
+	return &compiledPattern{root: root}, nil
 }
 
-func validatePatternSubset(source []rune) error {
-	inClass := false
-	escaped := false
-	for index, r := range source {
-		if escaped {
-			if inClass && (r == 'D' || r == 'W' || r == 'S') {
-				return fmt.Errorf("negated shorthand escapes are not supported inside character classes")
-			}
-			escaped = false
-			continue
+type compiledPattern struct {
+	root patternNode
+}
+
+func (pattern *compiledPattern) match(value []rune) bool {
+	for _, position := range pattern.root.match(value, 0) {
+		if position == len(value) {
+			return true
 		}
-		switch r {
-		case '\\':
-			escaped = true
-		case '[':
-			inClass = true
-		case ']':
-			inClass = false
-		case '(':
-			if index+1 < len(source) && source[index+1] == '?' {
-				if index+2 >= len(source) || source[index+2] != ':' {
-					return fmt.Errorf("unsupported group operator")
-				}
-			}
-		case '*', '+', '?':
-			if index+1 < len(source) && source[index+1] == '?' {
-				return fmt.Errorf("quantifier %q has no target", source[index+1])
-			}
-		case '}':
-			if index+1 < len(source) && source[index+1] == '?' {
-				return fmt.Errorf("quantifier %q has no target", source[index+1])
-			}
-		}
+	}
+	return false
+}
+
+type patternNode interface {
+	match(value []rune, position int) []int
+}
+
+type emptyNode struct{}
+
+func (emptyNode) match(_ []rune, position int) []int {
+	return []int{position}
+}
+
+type literalNode rune
+
+func (node literalNode) match(value []rune, position int) []int {
+	if position < len(value) && value[position] == rune(node) {
+		return []int{position + 1}
 	}
 	return nil
 }
 
-func rewriteLargeRepeatQuantifiers(source []rune) ([]rune, error) {
-	var rewritten []rune
-	inClass := false
-	escaped := false
-	for index := 0; index < len(source); index++ {
-		r := source[index]
-		if escaped {
-			rewritten = append(rewritten, r)
-			escaped = false
-			continue
+type anyNode struct{}
+
+func (anyNode) match(value []rune, position int) []int {
+	if position < len(value) {
+		return []int{position + 1}
+	}
+	return nil
+}
+
+type shorthandNode rune
+
+func (node shorthandNode) match(value []rune, position int) []int {
+	if position >= len(value) {
+		return nil
+	}
+	matched := matchShorthand(rune(node), value[position])
+	if matched {
+		return []int{position + 1}
+	}
+	return nil
+}
+
+type sequenceNode []patternNode
+
+func (node sequenceNode) match(value []rune, position int) []int {
+	positions := []int{position}
+	for _, child := range node {
+		var next []int
+		for _, current := range positions {
+			next = append(next, child.match(value, current)...)
 		}
-		switch r {
-		case '\\':
-			rewritten = append(rewritten, r)
-			escaped = true
-		case '[':
-			rewritten = append(rewritten, r)
-			inClass = true
-		case ']':
-			rewritten = append(rewritten, r)
-			inClass = false
-		case '{':
-			if inClass {
-				rewritten = append(rewritten, r)
-				continue
+		positions = uniquePositions(next)
+		if len(positions) == 0 {
+			return nil
+		}
+	}
+	return positions
+}
+
+type alternationNode []patternNode
+
+func (node alternationNode) match(value []rune, position int) []int {
+	var positions []int
+	for _, child := range node {
+		positions = append(positions, child.match(value, position)...)
+	}
+	return uniquePositions(positions)
+}
+
+type repeatNode struct {
+	child patternNode
+	min   int
+	max   int
+}
+
+func (node repeatNode) match(value []rune, position int) []int {
+	limit := node.max
+	if limit < 0 || limit > len(value)-position+node.min {
+		limit = len(value) - position + node.min
+	}
+	positionsByCount := [][]int{{position}}
+	var accepted []int
+	for count := 0; count <= limit; count++ {
+		current := positionsByCount[count]
+		if count >= node.min {
+			accepted = append(accepted, current...)
+		}
+		if count == limit {
+			break
+		}
+		var next []int
+		for _, currentPosition := range current {
+			for _, nextPosition := range node.child.match(value, currentPosition) {
+				if nextPosition != currentPosition {
+					next = append(next, nextPosition)
+				}
 			}
-			quantifier, ok, err := parseRepeatQuantifier(source, index)
+		}
+		next = uniquePositions(next)
+		if len(next) == 0 {
+			break
+		}
+		positionsByCount = append(positionsByCount, next)
+	}
+	return uniquePositions(accepted)
+}
+
+type classNode struct {
+	negated bool
+	parts   []classPart
+}
+
+func (node classNode) match(value []rune, position int) []int {
+	if position >= len(value) {
+		return nil
+	}
+	matched := false
+	for _, part := range node.parts {
+		if part.match(value[position]) {
+			matched = true
+			break
+		}
+	}
+	if node.negated {
+		matched = !matched
+	}
+	if matched {
+		return []int{position + 1}
+	}
+	return nil
+}
+
+type classPart interface {
+	match(r rune) bool
+}
+
+type literalClassPart rune
+
+func (part literalClassPart) match(r rune) bool {
+	return r == rune(part)
+}
+
+type rangeClassPart struct {
+	first rune
+	last  rune
+}
+
+func (part rangeClassPart) match(r rune) bool {
+	return r >= part.first && r <= part.last
+}
+
+type shorthandClassPart rune
+
+func (part shorthandClassPart) match(r rune) bool {
+	return matchShorthand(rune(part), r)
+}
+
+type patternParser struct {
+	source []rune
+	index  int
+}
+
+func (parser *patternParser) parseExpression(stop rune) (patternNode, error) {
+	var alternatives []patternNode
+	for {
+		sequence, err := parser.parseSequence(stop)
+		if err != nil {
+			return nil, err
+		}
+		alternatives = append(alternatives, sequence)
+		if parser.index >= len(parser.source) || parser.source[parser.index] != '|' {
+			break
+		}
+		parser.index++
+	}
+	if len(alternatives) == 1 {
+		return alternatives[0], nil
+	}
+	return alternationNode(alternatives), nil
+}
+
+func (parser *patternParser) parseSequence(stop rune) (patternNode, error) {
+	var nodes []patternNode
+	for parser.index < len(parser.source) {
+		current := parser.source[parser.index]
+		if current == '|' || (stop != 0 && current == stop) {
+			break
+		}
+		if current == ')' && stop == 0 {
+			return nil, fmt.Errorf("unexpected group terminator")
+		}
+		if current == '*' || current == '+' || current == '?' || current == '}' {
+			return nil, fmt.Errorf("quantifier %q has no target", current)
+		}
+		atom, err := parser.parseAtom()
+		if err != nil {
+			return nil, err
+		}
+		atom, err = parser.parseQuantifier(atom)
+		if err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, atom)
+	}
+	if len(nodes) == 0 {
+		return emptyNode{}, nil
+	}
+	if len(nodes) == 1 {
+		return nodes[0], nil
+	}
+	return sequenceNode(nodes), nil
+}
+
+func (parser *patternParser) parseAtom() (patternNode, error) {
+	if parser.index >= len(parser.source) {
+		return nil, fmt.Errorf("unexpected end of pattern")
+	}
+	current := parser.source[parser.index]
+	parser.index++
+	switch current {
+	case '\\':
+		return parser.parseEscape()
+	case '.':
+		return anyNode{}, nil
+	case '[':
+		return parser.parseClass()
+	case '(':
+		return parser.parseGroup()
+	case '^', '$':
+		return literalNode(current), nil
+	default:
+		return literalNode(current), nil
+	}
+}
+
+func (parser *patternParser) parseEscape() (patternNode, error) {
+	if parser.index >= len(parser.source) {
+		return literalNode('\\'), nil
+	}
+	current := parser.source[parser.index]
+	parser.index++
+	switch current {
+	case 'd', 'D', 'w', 'W', 's', 'S':
+		return shorthandNode(current), nil
+	default:
+		return literalNode(current), nil
+	}
+}
+
+func (parser *patternParser) parseClass() (patternNode, error) {
+	class := classNode{}
+	if parser.index < len(parser.source) && parser.source[parser.index] == '^' {
+		class.negated = true
+		parser.index++
+	}
+	for parser.index < len(parser.source) {
+		if parser.source[parser.index] == ']' && len(class.parts) > 0 {
+			parser.index++
+			return class, nil
+		}
+		first, firstLiteral, err := parser.parseClassPart()
+		if err != nil {
+			return nil, err
+		}
+		if firstLiteral && parser.index+1 < len(parser.source) && parser.source[parser.index] == '-' && parser.source[parser.index+1] != ']' {
+			parser.index++
+			second, secondLiteral, err := parser.parseClassPart()
 			if err != nil {
 				return nil, err
 			}
-			if !ok {
-				rewritten = append(rewritten, r)
-				continue
+			if !secondLiteral {
+				return nil, fmt.Errorf("character class range must use literal endpoints")
 			}
-			if !quantifier.large() {
-				rewritten = append(rewritten, source[index:quantifier.end+1]...)
-				index = quantifier.end
-				continue
+			firstRune := rune(first.(literalClassPart))
+			secondRune := rune(second.(literalClassPart))
+			if secondRune < firstRune {
+				return nil, fmt.Errorf("invalid character class range")
 			}
-			atomStart, ok := repeatAtomStart(rewritten)
-			if !ok {
-				return nil, fmt.Errorf("repeat quantifier has no target")
-			}
-			atom := append([]rune(nil), rewritten[atomStart:]...)
-			rewritten = rewritten[:atomStart]
-			rewritten = appendExpandedRepeat(rewritten, atom, quantifier)
-			index = quantifier.end
-		default:
-			rewritten = append(rewritten, r)
+			class.parts = append(class.parts, rangeClassPart{first: firstRune, last: secondRune})
+			continue
 		}
+		class.parts = append(class.parts, first)
 	}
-	return rewritten, nil
+	return nil, fmt.Errorf("unterminated character class")
 }
 
-type repeatQuantifier struct {
-	min    int
-	max    int
-	maxSet bool
-	end    int
+func (parser *patternParser) parseClassPart() (classPart, bool, error) {
+	if parser.index >= len(parser.source) {
+		return nil, false, fmt.Errorf("unterminated character class")
+	}
+	current := parser.source[parser.index]
+	parser.index++
+	if current != '\\' {
+		return literalClassPart(current), true, nil
+	}
+	if parser.index >= len(parser.source) {
+		return literalClassPart('\\'), true, nil
+	}
+	escaped := parser.source[parser.index]
+	parser.index++
+	switch escaped {
+	case 'D', 'W', 'S':
+		return nil, false, fmt.Errorf("negated shorthand escapes are not supported inside character classes")
+	case 'd', 'w', 's':
+		return shorthandClassPart(escaped), false, nil
+	default:
+		return literalClassPart(escaped), true, nil
+	}
 }
 
-func (quantifier repeatQuantifier) large() bool {
-	return quantifier.min > maxGoRepeatCount || (quantifier.maxSet && quantifier.max > maxGoRepeatCount)
+func (parser *patternParser) parseGroup() (patternNode, error) {
+	if parser.index < len(parser.source) && parser.source[parser.index] == '?' {
+		parser.index++
+		if parser.index >= len(parser.source) || parser.source[parser.index] != ':' {
+			return nil, fmt.Errorf("unsupported group operator")
+		}
+		parser.index++
+	}
+	group, err := parser.parseExpression(')')
+	if err != nil {
+		return nil, err
+	}
+	if parser.index >= len(parser.source) || parser.source[parser.index] != ')' {
+		return nil, fmt.Errorf("unterminated group")
+	}
+	parser.index++
+	return group, nil
 }
 
-func parseRepeatQuantifier(source []rune, start int) (repeatQuantifier, bool, error) {
-	index := start + 1
+func (parser *patternParser) parseQuantifier(atom patternNode) (patternNode, error) {
+	if parser.index >= len(parser.source) {
+		return atom, nil
+	}
+	min, max, ok, err := parser.readQuantifier()
+	if err != nil || !ok {
+		return atom, err
+	}
+	if parser.index < len(parser.source) && parser.source[parser.index] == '?' {
+		return nil, fmt.Errorf("quantifier %q has no target", parser.source[parser.index])
+	}
+	return repeatNode{child: atom, min: min, max: max}, nil
+}
+
+func (parser *patternParser) readQuantifier() (int, int, bool, error) {
+	switch parser.source[parser.index] {
+	case '*':
+		parser.index++
+		return 0, -1, true, nil
+	case '+':
+		parser.index++
+		return 1, -1, true, nil
+	case '?':
+		parser.index++
+		return 0, 1, true, nil
+	case '{':
+		return parser.readBraceQuantifier()
+	default:
+		return 0, 0, false, nil
+	}
+}
+
+func (parser *patternParser) readBraceQuantifier() (int, int, bool, error) {
+	start := parser.index
+	index := parser.index + 1
 	minStart := index
-	for index < len(source) && source[index] >= '0' && source[index] <= '9' {
+	for index < len(parser.source) && isASCIIDigit(parser.source[index]) {
 		index++
 	}
 	if index == minStart {
-		return repeatQuantifier{}, false, nil
+		return 0, 0, false, nil
 	}
-	min, err := strconv.Atoi(string(source[minStart:index]))
+	min, err := strconv.Atoi(string(parser.source[minStart:index]))
 	if err != nil {
-		return repeatQuantifier{}, false, err
+		return 0, 0, false, err
 	}
-	quantifier := repeatQuantifier{min: min, max: min, maxSet: true}
-	if index < len(source) && source[index] == ',' {
+	max := min
+	if index < len(parser.source) && parser.source[index] == ',' {
 		index++
 		maxStart := index
-		for index < len(source) && source[index] >= '0' && source[index] <= '9' {
+		for index < len(parser.source) && isASCIIDigit(parser.source[index]) {
 			index++
 		}
-		quantifier.maxSet = index > maxStart
-		if quantifier.maxSet {
-			max, err := strconv.Atoi(string(source[maxStart:index]))
+		if index == maxStart {
+			max = -1
+		} else {
+			max, err = strconv.Atoi(string(parser.source[maxStart:index]))
 			if err != nil {
-				return repeatQuantifier{}, false, err
+				return 0, 0, false, err
 			}
-			quantifier.max = max
 		}
 	}
-	if index >= len(source) || source[index] != '}' {
-		return repeatQuantifier{}, false, nil
+	if index >= len(parser.source) || parser.source[index] != '}' {
+		parser.index = start
+		return 0, 0, false, nil
 	}
-	if quantifier.maxSet && quantifier.max < quantifier.min {
-		return repeatQuantifier{}, false, fmt.Errorf("invalid repeat count")
+	if max >= 0 && max < min {
+		return 0, 0, false, fmt.Errorf("invalid repeat count")
 	}
-	quantifier.end = index
-	return quantifier, true, nil
+	parser.index = index + 1
+	return min, max, true, nil
 }
 
-func repeatAtomStart(source []rune) (int, bool) {
-	if len(source) == 0 {
-		return 0, false
-	}
-	last := len(source) - 1
-	switch source[last] {
-	case ']':
-		for index := last - 1; index >= 0; index-- {
-			if source[index] == '[' && !patternRuneEscaped(source, index) {
-				return index, true
-			}
-		}
-		return 0, false
-	case ')':
-		inClass := false
-		depth := 0
-		for index := last; index >= 0; index-- {
-			if patternRuneEscaped(source, index) {
-				continue
-			}
-			switch source[index] {
-			case ']':
-				inClass = true
-			case '[':
-				inClass = false
-			case ')':
-				if !inClass {
-					depth++
-				}
-			case '(':
-				if !inClass {
-					depth--
-					if depth == 0 {
-						return index, true
-					}
-				}
-			}
-		}
-		return 0, false
+func matchShorthand(kind rune, r rune) bool {
+	switch kind {
+	case 'd':
+		return r >= '0' && r <= '9'
+	case 'D':
+		return !(r >= '0' && r <= '9')
+	case 'w':
+		return r == '_' || (r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')
+	case 'W':
+		return !(r == '_' || (r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z'))
+	case 's':
+		return r == '\t' || r == '\n' || r == '\f' || r == '\r' || r == ' '
+	case 'S':
+		return !(r == '\t' || r == '\n' || r == '\f' || r == '\r' || r == ' ')
 	default:
-		if patternRuneEscaped(source, last) {
-			return last - 1, true
-		}
-		return last, true
+		return false
 	}
 }
 
-func appendExpandedRepeat(target []rune, atom []rune, quantifier repeatQuantifier) []rune {
-	target = appendExactRepeat(target, atom, quantifier.min)
-	if !quantifier.maxSet {
-		target = append(target, atom...)
-		target = append(target, '*')
-		return target
+func uniquePositions(positions []int) []int {
+	if len(positions) < 2 {
+		return positions
 	}
-	for remaining := quantifier.max - quantifier.min; remaining > 0; {
-		chunk := remaining
-		if chunk > maxGoRepeatCount {
-			chunk = maxGoRepeatCount
+	seen := map[int]bool{}
+	var unique []int
+	for _, position := range positions {
+		if seen[position] {
+			continue
 		}
-		target = append(target, atom...)
-		target = append(target, []rune(fmt.Sprintf("{0,%d}", chunk))...)
-		remaining -= chunk
+		seen[position] = true
+		unique = append(unique, position)
 	}
-	return target
+	return unique
 }
 
-func appendExactRepeat(target []rune, atom []rune, count int) []rune {
-	for remaining := count; remaining > 0; {
-		chunk := remaining
-		if chunk > maxGoRepeatCount {
-			chunk = maxGoRepeatCount
-		}
-		target = append(target, atom...)
-		if chunk > 1 {
-			target = append(target, []rune(fmt.Sprintf("{%d}", chunk))...)
-		}
-		remaining -= chunk
-	}
-	return target
+func isASCIIDigit(r rune) bool {
+	return r >= '0' && r <= '9'
 }
 
 func patternRuneEscaped(source []rune, index int) bool {

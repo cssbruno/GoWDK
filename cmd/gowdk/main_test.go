@@ -5227,8 +5227,12 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 		if err != nil {
 			t.Fatalf("%v\nstderr:\n%s", err, stderr)
 		}
-		if stderr != "" {
-			t.Fatalf("expected no inspect diagnostics on stderr, got:\n%s", stderr)
+		// The fixture declares g:command on a request-time (server {}) page,
+		// which ships no client to apply the JSON adapter response, so a
+		// ssr_command_no_client warning is expected. It must stay a warning and
+		// not block the bindings report.
+		if !strings.Contains(stderr, `g:command "patients.CreatePatient"`) {
+			t.Fatalf("expected ssr_command_no_client warning on stderr, got:\n%s", stderr)
 		}
 		output = stdout
 	})

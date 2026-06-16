@@ -178,6 +178,7 @@ var Registry = []Code{
 	{Code: "short_secret", Area: "config", Stability: StabilityStable, Severity: SeverityError, Summary: "secret environment variable is shorter than its required minimum length"},
 	{Code: "spa_disabled", Area: "routing", Stability: StabilityExperimental, Severity: SeverityInfo, Summary: "SPA route binding is disabled for this generated route lane"},
 	{Code: "spa_dynamic_route_missing_paths", Area: "routing", Stability: StabilityStable, Severity: SeverityError, Summary: "dynamic SPA route is missing paths declarations"},
+	{Code: "ssr_command_no_client", Area: "rendering", Stability: StabilityExperimental, Severity: SeverityWarning, Summary: "request-time page declares a g:command write form whose generated adapter returns raw JSON with no client to apply it"},
 	{Code: "ssr_disabled", Area: "routing", Stability: StabilityExperimental, Severity: SeverityInfo, Summary: "SSR route binding is disabled for this generated route lane"},
 	{Code: "unexported_backend_handler", Area: "backend", Stability: StabilityStable, Severity: SeverityWarning, Summary: "a declared backend handler is missing but a same-named unexported Go function exists"},
 	{Code: "unknown_addon_go_block_target", Area: "go-block", Stability: StabilityExperimental, Severity: SeverityError, Summary: "go addon block references an addon that is not enabled"},

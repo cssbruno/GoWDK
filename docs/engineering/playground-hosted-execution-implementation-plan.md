@@ -107,13 +107,21 @@ complete substitute for a hardened hosting boundary:
   A seccomp-bpf allowlist and Landlock rules are tracked as hardening follow-ups
   (see issue #459).
 - Resource enforcement is per-process rlimits, not cgroup-level memory/pids caps.
-- The module cache is exposed read-only, but its **lower layer is the whole host
-  `GOMODCACHE`**: submitted build code can read every module source cached there.
-  This is safe only when that cache holds nothing sensitive. A hosted runner
-  **must** point `GOMODCACHE` at a per-session/throwaway cache populated with just
-  the submitted project's dependencies, never a shared cache that may contain
-  other tenants' private modules. Populating that per-session cache automatically
-  is a tracked follow-up (see issue #459).
+- The module cache is exposed read-only, but its lower layer is readable by the
+  submitted build, so its contents must not be sensitive. `run` therefore fails
+  closed unless the caller chooses a cache explicitly: `--module-cache <dir>` for
+  a caller-scoped per-session cache, or `--allow-shared-module-cache` to expose
+  the host `GOMODCACHE`. Hosted/multi-tenant runners **must** pass
+  `--module-cache` with a cache holding only the submitted project's
+  dependencies, never a shared cache that may contain other tenants' private
+  modules. Populating that per-session cache automatically is a tracked follow-up
+  (see issue #459).
+- The build still runs as uid 0 inside the user namespace with that namespace's
+  effective capabilities. The capability bounding and ambient sets are emptied so
+  no process the build execs can hold privileges, but the init process's own
+  effective caps are not dropped (doing so reliably across the multithreaded Go
+  runtime is impractical here). The untrusted build runs as capless exec'd
+  children, and the outer boundary is the backstop.
 
 A hosted playground service must still run this sandboxed execution **inside an
 outer VM or container boundary** with its own network egress controls, cgroup

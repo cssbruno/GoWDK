@@ -35,7 +35,7 @@ gowdk preview [--addr <addr>] [--hot] [build flags...]
 gowdk serve --dir <dir> [--addr <addr>]
 gowdk playground policy [--json]
 gowdk playground export --dir <project> --out <project.zip> [--json]
-gowdk playground run --dir <project> --out <dir> --allow-hosted-execution
+gowdk playground run --dir <project> --out <dir> --allow-hosted-execution (--module-cache <dir> | --allow-shared-module-cache)
 gowdk lsp [--ssr]
 ```
 
@@ -131,6 +131,8 @@ gowdk lsp [--ssr]
 - `--hot`: supported by `preview`; runs the dev loop against the preview output instead of serving a one-shot build.
 - `--dir`: supported by `serve`; selects the generated build output directory. `playground export` and `playground run` use `--dir` as the source project directory and require a `gowdk.config.go` file there.
 - `--allow-hosted-execution`: supported by `playground run`; explicitly opts into the local sandbox build bridge. Without it, playground execution fails closed because hosted execution is disabled by default.
+- `--module-cache`: supported by `playground run`; mounts a caller-supplied per-session Go module cache as the (readable) lower layer inside the sandbox. Required on shared/multi-tenant runners so one session cannot read another's cached modules.
+- `--allow-shared-module-cache`: supported by `playground run`; deliberately exposes the host `GOMODCACHE` to the sandbox instead of a per-session cache. Intended for local single-user use; `playground run` fails closed if neither this nor `--module-cache` is given.
 
 ## Examples
 
@@ -387,9 +389,14 @@ hosted playground execution. `gowdk playground export` creates a normal source
 project archive and omits generated `.gowdk/`, `dist/`, `bin/`, `gowdk_cache/`,
 dependency vendor folders, local env files, private keys, temp files, and
 generated reports. `gowdk playground run` stages the same allowed files into a
-disposable workspace, uses isolated Go caches with `GOPROXY=off`,
-`GOSUMDB=off`, and `GOWORK=off`, and requires `--allow-hosted-execution` before
-running a build.
+disposable workspace and then re-executes the `gowdk` binary inside an OS-level
+Linux namespace sandbox (no network, `pivot_root` away from the host filesystem,
+resource limits, dropped capabilities, `no_new_privs`) with isolated Go caches
+and `GOPROXY=off`, `GOSUMDB=off`, `GOWORK=off`. It requires
+`--allow-hosted-execution` and a module-cache choice (`--module-cache <dir>` or
+`--allow-shared-module-cache`), needs a fresh empty `--out` directory, and fails
+closed where the sandbox is unavailable (non-Linux hosts or disabled
+unprivileged user namespaces).
 
 `gowdk generate stubs` writes missing action/API handler stubs to
 `gowdk_stubs.go` beside the owning source package. It refuses to overwrite an

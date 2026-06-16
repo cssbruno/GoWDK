@@ -13,7 +13,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/playground"
 )
 
-const playgroundUsage = "usage: gowdk playground policy [--json] | gowdk playground export --dir <project> --out <project.zip> [--json] | gowdk playground run --dir <project> --out <dir> --allow-hosted-execution"
+const playgroundUsage = "usage: gowdk playground policy [--json] | gowdk playground export --dir <project> --out <project.zip> [--json] | gowdk playground run --dir <project> --out <dir> --allow-hosted-execution (--module-cache <dir> | --allow-shared-module-cache)"
 
 // sandboxBuildSubcommand is the hidden re-exec target. gowdk launches itself
 // with this argument inside the sandbox namespaces; it is intentionally absent
@@ -124,11 +124,18 @@ func playgroundRun(args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := validateOutputDir(outputDir); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return err
 	}
 
-	goRoot, goModCache, err := resolveGoToolchainPaths()
+	goRoot, err := resolveGoRoot()
+	if err != nil {
+		return err
+	}
+	goModCache, err := resolveSandboxModuleCache(options, goRoot)
 	if err != nil {
 		return err
 	}
@@ -204,40 +211,91 @@ func playgroundSandboxBuild(args []string) error {
 	})
 }
 
-// resolveGoToolchainPaths returns the host GOROOT and module cache to expose
-// (read-only / overlay) inside the sandbox so the toolchain can run offline.
+// resolveGoRoot returns the GOROOT to expose read-only inside the sandbox.
 //
-// GOROOT comes from runtime.GOROOT(), which is baked into this binary at build
-// time and so cannot be redirected by an attacker-controlled PATH. The go binary
-// used to read GOMODCACHE is then resolved from that trusted GOROOT rather than
-// looked up on PATH: a hosted wrapper may start in the submitted project (or
-// otherwise have an attacker-writable directory on PATH), and this runs before
-// any namespace/pivot confinement, so a PATH lookup could execute a planted go.
-func resolveGoToolchainPaths() (string, string, error) {
+// It comes from runtime.GOROOT(), which is baked into this binary at build time
+// and so cannot be redirected by an attacker-controlled PATH; the toolchain is
+// then addressed by absolute path rather than a PATH lookup, since this runs
+// before any namespace/pivot confinement and a hosted wrapper may have an
+// attacker-writable directory on PATH.
+func resolveGoRoot() (string, error) {
 	goRoot := strings.TrimSpace(runtime.GOROOT())
 	if goRoot == "" {
-		return "", "", fmt.Errorf("could not resolve GOROOT for the sandbox toolchain")
+		return "", fmt.Errorf("could not resolve GOROOT for the sandbox toolchain")
 	}
-	goBin := filepath.Join(goRoot, "bin", "go")
-	if _, err := os.Stat(goBin); err != nil {
-		return "", "", fmt.Errorf("go toolchain not found at %s: %w", goBin, err)
+	if _, err := os.Stat(filepath.Join(goRoot, "bin", "go")); err != nil {
+		return "", fmt.Errorf("go toolchain not found at %s: %w", filepath.Join(goRoot, "bin", "go"), err)
 	}
-	out, err := exec.Command(goBin, "env", "GOMODCACHE").Output()
+	return goRoot, nil
+}
+
+// resolveSandboxModuleCache decides which module cache to expose. The sandbox
+// mounts the lower layer readable, so submitted build code can read every module
+// in it. On a hosted runner that reuses the shared host GOMODCACHE across
+// sessions, that would leak other tenants' cached (possibly private) modules.
+// We therefore require an explicit choice: --module-cache <dir> names a
+// per-session cache the caller has scoped, and --allow-shared-module-cache is the
+// opt-in for local use of the host cache. With neither, hosted execution fails
+// closed rather than silently exposing the shared cache.
+func resolveSandboxModuleCache(options playgroundFileOptions, goRoot string) (string, error) {
+	if dir := strings.TrimSpace(options.ModuleCache); dir != "" {
+		abs, err := filepath.Abs(dir)
+		if err != nil {
+			return "", err
+		}
+		info, err := os.Stat(abs)
+		if err != nil {
+			return "", fmt.Errorf("module cache %q is not accessible: %w", dir, err)
+		}
+		if !info.IsDir() {
+			return "", fmt.Errorf("module cache %q is not a directory", dir)
+		}
+		return abs, nil
+	}
+	if !options.AllowSharedModuleCache {
+		return "", fmt.Errorf("hosted playground execution will not mount the shared host module cache, because submitted build code could read every cached module: pass --module-cache <dir> with a per-session cache, or --allow-shared-module-cache to deliberately expose the host GOMODCACHE")
+	}
+	out, err := exec.Command(filepath.Join(goRoot, "bin", "go"), "env", "GOMODCACHE").Output()
 	if err != nil {
-		return "", "", fmt.Errorf("could not resolve GOMODCACHE for the sandbox: %w", err)
+		return "", fmt.Errorf("could not resolve GOMODCACHE for the sandbox: %w", err)
 	}
-	goModCache := strings.TrimSpace(string(out))
-	if goModCache == "" {
-		return "", "", fmt.Errorf("GOMODCACHE is empty; the sandbox needs a module cache to build offline")
+	cache := strings.TrimSpace(string(out))
+	if cache == "" {
+		return "", fmt.Errorf("GOMODCACHE is empty; the sandbox needs a module cache to build offline")
 	}
-	return goRoot, goModCache, nil
+	fmt.Fprintln(os.Stderr, "warning: exposing the shared host GOMODCACHE to the sandbox; submitted build code can read every cached module. Use --module-cache with a per-session cache on shared runners.")
+	return cache, nil
+}
+
+// validateOutputDir rejects output destinations broad enough to expose host data
+// through the writable /out bind: the filesystem root, or any directory that
+// already contains files (which could be the project root, /tmp, or a home
+// directory). Hosted runners should pass a fresh, empty, service-owned directory.
+func validateOutputDir(outputDir string) error {
+	clean := filepath.Clean(outputDir)
+	if clean == filepath.Dir(clean) {
+		return fmt.Errorf("refusing to use the filesystem root %q as the playground output directory; use a dedicated empty directory", clean)
+	}
+	entries, err := os.ReadDir(clean)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if len(entries) > 0 {
+		return fmt.Errorf("playground output directory %q must be empty (found %d existing entries); use a fresh per-run directory", clean, len(entries))
+	}
+	return nil
 }
 
 type playgroundFileOptions struct {
-	Dir            string
-	Output         string
-	JSON           bool
-	AllowExecution bool
+	Dir                    string
+	Output                 string
+	JSON                   bool
+	AllowExecution         bool
+	ModuleCache            string
+	AllowSharedModuleCache bool
 }
 
 func parsePlaygroundFileOptions(args []string) (playgroundFileOptions, error) {
@@ -265,6 +323,16 @@ func parsePlaygroundFileOptions(args []string) (playgroundFileOptions, error) {
 			options.JSON = true
 		case arg == "--allow-hosted-execution":
 			options.AllowExecution = true
+		case arg == "--module-cache":
+			index++
+			if index >= len(args) {
+				return playgroundFileOptions{}, fmt.Errorf(playgroundUsage)
+			}
+			options.ModuleCache = args[index]
+		case strings.HasPrefix(arg, "--module-cache="):
+			options.ModuleCache = strings.TrimPrefix(arg, "--module-cache=")
+		case arg == "--allow-shared-module-cache":
+			options.AllowSharedModuleCache = true
 		default:
 			return playgroundFileOptions{}, fmt.Errorf(playgroundUsage)
 		}

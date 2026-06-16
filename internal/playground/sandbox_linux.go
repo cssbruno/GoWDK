@@ -24,6 +24,24 @@ const prSetNoNewPrivs = 38
 // prGetNoNewPrivs reads back the no_new_privs bit.
 const prGetNoNewPrivs = 39
 
+// sandboxRootEnv carries the parent-created temp directory that becomes the
+// sandbox's new root. The parent owns it (creates and removes it) so confinement
+// failures and successful runs alike never leave the mountpoint directory behind
+// on the host.
+const sandboxRootEnv = "GOWDK_SANDBOX_ROOT"
+
+// prCapBSetDrop drops a capability from the bounding set; prCapAmbient with
+// prCapAmbientClearAll clears the ambient set. Neither is exported by the
+// standard syscall package.
+const (
+	prCapBSetDrop         = 24
+	prCapAmbient          = 47
+	prCapAmbientClearAll  = 4
+	capLastCapFallback    = 40 // CAP_CHECKPOINT_RESTORE on recent kernels
+	capLastCapProcPath    = "/proc/sys/kernel/cap_last_cap"
+	initialUserNSMaxCount = "4294967295"
+)
+
 // rlimitNProc is RLIMIT_NPROC. The standard syscall package does not export it
 // (it is not POSIX), so we define it here, matching the value used by Linux on
 // the architectures gowdk targets (amd64, arm64, 386, arm, ppc64, riscv64,
@@ -100,6 +118,11 @@ func sandboxSysProcAttr() *syscall.SysProcAttr {
 		UidMappings:                []syscall.SysProcIDMap{{ContainerID: 0, HostID: os.Getuid(), Size: 1}},
 		GidMappings:                []syscall.SysProcIDMap{{ContainerID: 0, HostID: os.Getgid(), Size: 1}},
 		GidMappingsEnableSetgroups: false,
+		// If the parent dies or is killed mid-build (the CommandContext timeout
+		// goes with it), the kernel sends SIGKILL to the child. Because the child
+		// is PID 1 of its PID namespace, killing it reaps the whole build tree, so
+		// aborting the parent cannot leave orphaned playground workloads behind.
+		Pdeathsig: syscall.SIGKILL,
 	}
 }
 
@@ -120,13 +143,23 @@ func LaunchSandbox(spec SandboxSpec, childPath string, childArgs []string, env [
 		defer cancel()
 	}
 
+	// Own the sandbox root dir here so it is removed whether confinement succeeds
+	// or fails; the child cannot remove it itself after pivot_root detaches the
+	// host filesystem. After the child's namespace exits, the tmpfs is gone and
+	// the directory is empty, so a plain Remove cleans it up.
+	rootDir, err := os.MkdirTemp("", "gowdk-sandbox-root-")
+	if err != nil {
+		return fmt.Errorf("create sandbox root dir: %w", err)
+	}
+	defer os.Remove(rootDir)
+
 	cmd := exec.CommandContext(ctx, childPath, childArgs...)
-	cmd.Env = env
+	cmd.Env = append(append([]string(nil), env...), sandboxRootEnv+"="+rootDir)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	cmd.SysProcAttr = sandboxSysProcAttr()
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if ctx.Err() == context.DeadlineExceeded {
 		return fmt.Errorf("playground sandbox exceeded %s wall-clock limit", timeout)
 	}
@@ -162,6 +195,14 @@ func LaunchSandbox(spec SandboxSpec, childPath string, childArgs []string, env [
 // broken, so it is reported as ErrSandboxUnsupported and the child exits with
 // SandboxUnsupportedExitCode so the parent fails closed cleanly.
 func ConfineToSandbox(spec SandboxSpec) error {
+	// Refuse to confine unless we are the init of the fresh namespaces
+	// LaunchSandbox created. This blocks a direct invocation of the hidden
+	// re-exec target from performing mounts/pivot_root in the caller's own
+	// namespace (e.g. inside a privileged container). This is a misuse/security
+	// condition, not an "unsupported" one, so it is never softened to a skip.
+	if err := verifyLaunchedBySandbox(); err != nil {
+		return err
+	}
 	if err := confine(spec); err != nil {
 		if isUnsupportedErrno(err) {
 			return fmt.Errorf("%w: %v", ErrSandboxUnsupported, err)
@@ -169,6 +210,33 @@ func ConfineToSandbox(spec SandboxSpec) error {
 		return err
 	}
 	return nil
+}
+
+// verifyLaunchedBySandbox checks unforgeable kernel state proving this process is
+// the init of a dedicated namespace set, not a hand-run of the re-exec target:
+// LaunchSandbox always makes the child PID 1 of a new PID namespace, and installs
+// a restricted single-uid user-namespace mapping rather than the initial
+// namespace's identity mapping.
+func verifyLaunchedBySandbox() error {
+	if pid := os.Getpid(); pid != 1 {
+		return fmt.Errorf("refusing to confine: not the init of a dedicated PID namespace (pid %d); the sandbox build target must be launched via the sandbox, not run directly", pid)
+	}
+	data, err := os.ReadFile("/proc/self/uid_map")
+	if err != nil {
+		return fmt.Errorf("refusing to confine: cannot read uid_map: %w", err)
+	}
+	if isInitialUserNS(string(data)) {
+		return fmt.Errorf("refusing to confine: not running in a dedicated user namespace")
+	}
+	return nil
+}
+
+// isInitialUserNS reports whether uid_map is the initial user namespace's
+// identity mapping ("0 0 4294967295"), i.e. no user-namespace isolation is in
+// effect for this process.
+func isInitialUserNS(uidMap string) bool {
+	fields := strings.Fields(strings.TrimSpace(uidMap))
+	return len(fields) == 3 && fields[0] == "0" && fields[1] == "0" && fields[2] == initialUserNSMaxCount
 }
 
 // isUnsupportedErrno reports whether a confinement error is the environment
@@ -190,10 +258,26 @@ func confine(spec SandboxSpec) error {
 	}
 
 	// 2. A fresh tmpfs becomes the new root. Mounting it makes it a mount point,
-	// which pivot_root requires.
-	newRoot, err := os.MkdirTemp("", "gowdk-sandbox-root-")
-	if err != nil {
-		return err
+	// which pivot_root requires. The directory comes from the parent (which
+	// removes it after the run) so neither a confinement failure nor a successful
+	// run leaves the mountpoint behind on the host. If the parent did not supply
+	// one, fall back to a self-created dir and clean it up on any pre-pivot error.
+	newRoot := os.Getenv(sandboxRootEnv)
+	createdRoot := false
+	if newRoot == "" {
+		dir, err := os.MkdirTemp("", "gowdk-sandbox-root-")
+		if err != nil {
+			return err
+		}
+		newRoot, createdRoot = dir, true
+	}
+	pivoted := false
+	if createdRoot {
+		defer func() {
+			if !pivoted {
+				_ = os.RemoveAll(newRoot)
+			}
+		}()
 	}
 	if err := syscall.Mount("tmpfs", newRoot, "tmpfs", syscall.MS_NOSUID|syscall.MS_NODEV, ""); err != nil {
 		return fmt.Errorf("mount sandbox root tmpfs: %w", err)
@@ -269,6 +353,9 @@ func confine(spec SandboxSpec) error {
 	if err := os.Remove("/oldroot"); err != nil {
 		return fmt.Errorf("remove old root mountpoint: %w", err)
 	}
+	// Past this point the host filesystem is detached; the fallback cleanup defer
+	// must not run (the old path no longer resolves to the temp dir).
+	pivoted = true
 
 	// 8. Resource limits and no-new-privileges.
 	if err := applyRlimits(spec); err != nil {
@@ -277,7 +364,53 @@ func confine(spec SandboxSpec) error {
 	if _, _, errno := syscall.Syscall(syscall.SYS_PRCTL, prSetNoNewPrivs, 1, 0); errno != 0 {
 		return fmt.Errorf("set no_new_privs: %v", errno)
 	}
+	if err := dropCapabilities(); err != nil {
+		return err
+	}
 	return nil
+}
+
+// dropCapabilities empties the capability bounding and ambient sets so that no
+// process the build execs can acquire privileges. In a user namespace the init
+// process starts with a full capability set over namespaced resources; the build
+// itself runs untrusted code as separate exec'd processes, and execve of a
+// normal file (the toolchain binaries carry no file capabilities) under
+// no_new_privs already reduces those children to an empty capability set.
+// Clearing the bounding set removes even that theoretical path and clearing the
+// ambient set guarantees nothing is raised across execve.
+//
+// This intentionally does not try to strip the init process's own *effective*
+// capabilities: doing so reliably across the multithreaded Go runtime is not
+// possible from here, and the untrusted build never runs in this process. That
+// residual is documented and covered by the outer VM/container boundary the
+// hosted-execution docs require.
+func dropCapabilities() error {
+	last := lastCapability()
+	for capability := 0; capability <= last; capability++ {
+		_, _, errno := syscall.Syscall(syscall.SYS_PRCTL, prCapBSetDrop, uintptr(capability), 0)
+		if errno != 0 && errno != syscall.EINVAL {
+			return fmt.Errorf("drop bounding capability %d: %v", capability, errno)
+		}
+	}
+	_, _, errno := syscall.Syscall6(syscall.SYS_PRCTL, prCapAmbient, prCapAmbientClearAll, 0, 0, 0, 0)
+	if errno != 0 && errno != syscall.EINVAL {
+		return fmt.Errorf("clear ambient capabilities: %v", errno)
+	}
+	return nil
+}
+
+// lastCapability returns the highest capability number the running kernel knows,
+// from /proc/sys/kernel/cap_last_cap, falling back to a recent-kernel default.
+func lastCapability() int {
+	data, err := os.ReadFile(capLastCapProcPath)
+	if err != nil {
+		return capLastCapFallback
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || n < 0 {
+		return capLastCapFallback
+	}
+	return n
 }
 
 func bindMount(source, target string, readOnly bool) error {
@@ -320,12 +453,16 @@ func mountModCacheOverlay(lower, target, scratchRoot string) error {
 }
 
 // mountMinimalDev provides only the character devices the Go toolchain needs.
-// No block devices, no host devices, nothing that exposes data.
+// No block devices, no host devices, nothing that exposes data. /dev/tty is
+// deliberately excluded: binding it would hand submitted build code the
+// operator's controlling terminal (it could read typed input or inject terminal
+// escape sequences); the toolchain only needs the standard streams plus the
+// null/zero/random pseudo-devices.
 func mountMinimalDev(target string) error {
 	if err := syscall.Mount("tmpfs", target, "tmpfs", syscall.MS_NOSUID, "mode=0755"); err != nil {
 		return err
 	}
-	for _, node := range []string{"null", "zero", "full", "random", "urandom", "tty"} {
+	for _, node := range []string{"null", "zero", "full", "random", "urandom"} {
 		hostNode := "/dev/" + node
 		if _, err := os.Stat(hostNode); err != nil {
 			continue

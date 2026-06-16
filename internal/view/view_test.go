@@ -1444,7 +1444,7 @@ func TestRenderRejectsTaintedLoadFieldInDangerousAttribute(t *testing.T) {
 	if _, err := RenderWithOptions(source, nil, map[string]string{"user.website": "/ok"}, Options{}); err != nil {
 		t.Fatalf("untainted value should render: %v", err)
 	}
-	// The same value marked tainted (an SSR load {} field) is rejected, so an
+	// The same value marked tainted (an SSR server {} field) is rejected, so an
 	// attacker-controlled value can never carry a javascript:/data: URL past
 	// HTML-text escaping.
 	_, err := RenderWithOptions(source, nil, map[string]string{"user.website": "/ok"}, Options{Tainted: map[string]bool{"user.website": true}})
@@ -2468,8 +2468,8 @@ func TestRawHTMLDirectiveRejectsLoadFieldWithLoadMessage(t *testing.T) {
 	if strings.Contains(err.Error(), "route param") {
 		t.Fatalf("load field must not be reported as a route param: %v", err)
 	}
-	if !strings.Contains(err.Error(), "load {}") {
-		t.Fatalf("expected load {} wording: %v", err)
+	if !strings.Contains(err.Error(), "server {}") {
+		t.Fatalf("expected server {} wording: %v", err)
 	}
 }
 

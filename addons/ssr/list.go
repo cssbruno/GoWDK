@@ -1,18 +1,20 @@
 package ssr
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 
+	"github.com/cssbruno/gowdk/internal/clientlang"
 	gowdkhtml "github.com/cssbruno/gowdk/runtime/html"
 )
 
-// ListSpec describes one server-rendered g:each list. It is generated at build
+// ListSpec describes one server-rendered g:for list. It is generated at build
 // time from a request-time page view and consumed by RenderRegions at request
-// time. A spec is a tree: Lists and Conds describe nested g:each lists and
-// g:when conditionals whose data is resolved relative to each parent row.
+// time. A spec is a tree: Lists and Conds describe nested g:for lists and
+// g:if conditionals whose data is resolved relative to each parent row.
 type ListSpec struct {
 	// Placeholder is the unique token embedded in the parent template that the
 	// rendered rows replace.
@@ -26,25 +28,31 @@ type ListSpec struct {
 	RowTemplate string
 	// Fields are the per-row scalar interpolations, each escaped at request time.
 	Fields []ListField
-	// Lists are nested g:each lists found inside RowTemplate.
+	// Lists are nested g:for lists found inside RowTemplate.
 	Lists []ListSpec
-	// Conds are g:when conditionals found inside RowTemplate.
+	// Conds are g:if conditionals found inside RowTemplate.
 	Conds []CondSpec
 }
 
-// CondSpec describes one server-rendered g:when conditional. Its branch is
+// CondSpec describes one server-rendered g:if conditional. Its branch is
 // rendered into the output only when SourcePath resolves to a truthy value
 // (negated when Negate is set). The branch shares the enclosing container scope,
 // so its fields and nested regions resolve against the same data as the
 // conditional itself.
 type CondSpec struct {
 	Placeholder string
-	SourcePath  string
-	Negate      bool
-	Template    string
-	Fields      []ListField
-	Lists       []ListSpec
-	Conds       []CondSpec
+	// SourcePath is the dotted field path for a simple field/!field condition,
+	// resolved against the enclosing container. Empty when Expr is set.
+	SourcePath string
+	Negate     bool
+	// Expr is a full bool expression (comparisons, logic, literals) evaluated
+	// against the enclosing container at request time. When set it takes
+	// precedence over SourcePath/Negate; used for top-level server g:if.
+	Expr     string
+	Template string
+	Fields   []ListField
+	Lists    []ListSpec
+	Conds    []CondSpec
 }
 
 // ListField is one per-row scalar substitution inside a region template.
@@ -58,7 +66,7 @@ type ListField struct {
 	Index bool
 }
 
-// RenderRegions expands every top-level g:each list and g:when conditional in
+// RenderRegions expands every top-level g:for list and g:if conditional in
 // html by resolving their data from the request-time load data. Field values
 // are always HTML-escaped, preserving GOWDK's escape-by-default contract for
 // request-time server data.
@@ -97,12 +105,55 @@ func renderListRows(list ListSpec, slice []any) string {
 }
 
 func condHolds(container any, cond CondSpec) bool {
+	if cond.Expr != "" {
+		// A compound condition is evaluated as a bool expression against the
+		// container's fields. Evaluation failure fails closed (branch hidden) so a
+		// malformed condition never renders attacker-influenceable markup.
+		result, err := clientlang.EvalBool(cond.Expr, flattenEvalValues(container))
+		return err == nil && result
+	}
 	value, ok := ElementPath(container, cond.SourcePath)
 	show := ok && truthy(value)
 	if cond.Negate {
 		return !show
 	}
 	return show
+}
+
+// flattenEvalValues converts a container (the request-time load data map or a
+// row element) into the scalar string map the expression evaluator consumes.
+// Scalars stringify directly; composite values are JSON-encoded so member and
+// index access resolve after the evaluator re-parses them.
+func flattenEvalValues(container any) map[string]string {
+	out := map[string]string{}
+	fields, ok := container.(map[string]any)
+	if !ok {
+		return out
+	}
+	for key, value := range fields {
+		out[key] = evalScalarString(value)
+	}
+	return out
+}
+
+func evalScalarString(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return typed
+	case bool:
+		return strconv.FormatBool(typed)
+	case json.Number:
+		return typed.String()
+	}
+	switch reflect.ValueOf(value).Kind() {
+	case reflect.Map, reflect.Slice, reflect.Array, reflect.Struct, reflect.Pointer:
+		if encoded, err := json.Marshal(value); err == nil {
+			return string(encoded)
+		}
+	}
+	return fmt.Sprint(value)
 }
 
 func listFieldValue(field ListField, container any, index int) string {
@@ -124,7 +175,7 @@ func elementSlice(container any, path string) ([]any, bool) {
 	return toAnySlice(value)
 }
 
-// truthy reports whether a request-time value should render its g:when branch.
+// truthy reports whether a request-time value should render its g:if branch.
 // It mirrors common template semantics: false, "", 0, nil, and empty
 // slices/maps are falsy; everything else is truthy.
 func truthy(value any) bool {

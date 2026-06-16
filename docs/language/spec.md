@@ -137,7 +137,7 @@ Current route rules:
 - Duplicate route patterns are invalid.
 
 Dynamic SPA routes require `paths {}` unless the page selects request-time
-rendering with `load {}` or `go ssr {}`.
+rendering with `server {}` or `go server {}`.
 
 ## Blocks
 
@@ -145,11 +145,11 @@ Implemented or partial top-level blocks:
 
 - `paths {}`: build-time dynamic SPA path declarations.
 - `build {}`: build-time page data.
-- `load {}`: request-time page data; requires the SSR addon.
+- `server {}`: request-time page data; requires the SSR addon.
 - `view {}`: page, component, or layout markup.
 - `style {}`: component/page-local CSS body capture.
 - `go {}`: optional same-package Go extraction.
-- `go ssr {}`: optional request-time load-handler extraction.
+- `go server {}`: optional request-time load-handler extraction.
 - `go client {}`: optional browser-side Go WASM mount extraction.
 - `go addon.<name> {}`: addon-owned Go block validation and emission.
 - `js "<relative-file.js|.mjs|.ts>"`: scoped browser module asset.
@@ -183,11 +183,11 @@ Arbitrary build-time Go statements are not stable source behavior.
 
 ## Request-Time Data
 
-`load {}` selects the request-time page lane and requires SSR to be enabled.
+`server {}` selects the request-time page lane and requires SSR to be enabled.
 Generated SSR supports declared field placeholders and same-package Go load
 functions through `ssr.LoadContext` for the current slice.
 
-`go ssr {}` can provide generated SSR load handlers when request-time rendering
+`go server {}` can provide generated SSR load handlers when request-time rendering
 is enabled.
 
 ## Endpoints

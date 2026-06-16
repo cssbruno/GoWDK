@@ -37,7 +37,7 @@ GOWDK has three execution lanes:
 - Build-time page lane: full pages default to static SPA/prerender output.
 - Backend endpoint lane: actions, APIs, and fragments run at request time
   without making the page itself request-rendered.
-- Request-time page lane: pages with `load {}` or `go ssr {}` are compiled into
+- Request-time page lane: pages with `server {}` or `go server {}` are compiled into
   generated SSR handlers and run through GOWDK Runtime. This lane is integrated
   into the codebase; it is not a separate product layer. It is selected per
   page and currently enabled through the SSR feature gate in config or `--ssr`.
@@ -84,7 +84,7 @@ These are the durable rules. Changing them should require an ADR.
 4. Dynamic SPA routes require `paths {}` unless the page uses request-time
    rendering.
 5. `build {}` is build-time page data.
-6. `load {}` is request-time page data and requires the SSR addon.
+6. `server {}` is request-time page data and requires the SSR addon.
 7. `act` and `api` declarations name exact exported Go symbols.
 8. Actions and APIs are endpoint metadata, not page route kinds.
 9. User behavior stays in Go code. Inline Go authoring is optional and must
@@ -138,7 +138,7 @@ level, the current baseline already includes:
   generated `501` fallback metadata;
 - first-slice action/API execution, partial fragment responses, dynamic
   standalone fragment routes, and concrete or dynamic request-time SSR pages
-  with declared `load {}` fields through buildgen, appgen, `runtime/app`, and
+  with declared `server {}` fields through buildgen, appgen, `runtime/app`, and
   `runtime/route`.
 - compiler-validated query-bounded `g:subscribe` metadata for presentation
   events and explicit `RegisterInvalidation[event, query]` metadata for
@@ -185,7 +185,7 @@ are stable.
 | 9 | Go AST generation cleanup | API handlers, backend route registration, app shells, embed wiring, split app code, and remaining generated Go move to `go/ast`/`go/printer` plus `go/format`. Hardcoded line writing and source snippets are banned except for documented temporary exceptions. |
 | 10 | Secure actions and forms | Generated action adapters wire CSRF token generation and validation, define token exposure, invalid-CSRF status/body shape, submit-button intent handling, validation fragment patterns, and production-safe action/API docs. |
 | 11 | Guards and runtime context | Generated guards work for SSR, actions, and APIs. The request context helper contract is documented around `context.Context`, `app.Request(ctx)`, `app.Params(ctx)`, `app.CSRF(ctx)`, and `app.Session(ctx)`, or the project deliberately switches to an explicit app context. |
-| 12 | Request-time page rendering | Generated SSR handlers execute `load {}`, enforce guards, decode typed route params, expose route-level metadata, support redirects and error pages, and run full request-time user logic through the integrated request-time page lane. |
+| 12 | Request-time page rendering | Generated SSR handlers execute `server {}`, enforce guards, decode typed route params, expose route-level metadata, support redirects and error pages, and run full request-time user logic through the integrated request-time page lane. |
 | 13 | Errors, cache, and hybrid | SSR/action/API error boundaries are defined. Static files, SPA routes, backend endpoints, partial responses, SSR routes, and hybrid pages get cache and revalidation policy. Hybrid pages use the explicit request-time lane while streaming, data refresh, and non-HTTP revalidation remain separate planned capabilities. |
 | 14 | Contract-driven runtime | Implemented. Queries, commands, domain events, integration events, presentation events, and jobs are typed Go contracts. Frontend UI events trigger commands or queries. Commands have one owner. Domain and integration events are backend-owned facts emitted after backend success. Presentation events notify realtime UI through explicit, query-bounded subscription metadata, generated subscription-filtered SSE fanout, and generated bounded client patches. Domain events can explicitly invalidate bound queries through `RegisterInvalidation[event, query]`, generated `gowdk.query.invalidate` events, and generated current-document refresh for matching non-subscribed query regions. Local in-process dispatch is default, optional worker/cron roles can run the same registrations through runtime and generated helper APIs, worker replay supports ack/nack, seen-store deduplication, and explicit backoff hooks, and CLI tooling can list, trace, or graph contracts including `invalidates` edges. |
 | 15 | Static-first SPA navigation | SPA routes remain real URLs that work on direct open and refresh. Generated JS may intercept internal links, fetch built page shells or fragments, swap page regions, preserve scroll/focus, prefetch static route assets, and show loading/error UI, but it must not own routing, auth, business rules, validation, backend behavior, global app state, loading policy, or cache policy. |

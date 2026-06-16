@@ -45,7 +45,7 @@ A page route may declare one rest (catch-all) param as its final segment:
 route "/docs/{path...}"
 guard public
 
-go ssr {}
+go server {}
 
 view {
   <main>
@@ -68,7 +68,7 @@ Rest param contract:
   rejected.
 - Rest params require request-time (SSR) rendering when used on page routes,
   because build-time SPA paths cannot enumerate and escape multi-segment
-  values. Declare `load {}` or `go ssr {}` on the page.
+  values. Declare `server {}` or `go server {}` on the page.
 - Rest params are supported on request-time fragment endpoint routes. Action,
   API, and Go comment endpoint paths reject rest params. An action or API that
   omits its path inherits the page route, so inline endpoints on a rest page
@@ -308,7 +308,7 @@ SSR is optional and must be enabled for validation:
 gowdk check --ssr examples/ssr/simple-ssr.page.gwdk
 ```
 
-First-slice concrete and dynamic request-time SSR pages with declared `load {}`
+First-slice concrete and dynamic request-time SSR pages with declared `server {}`
 fields can be
 generated into an embedded app and binary:
 
@@ -362,7 +362,7 @@ Endpoint user code can read generated endpoint metadata with
 fragment handler metadata today. Typed load-result and action-result data
 accessors are deferred until those result contracts are stable.
 
-`load { => { field, user.name } }` execution calls same-package Go
+`server { => { field, user.name } }` execution calls same-package Go
 `Load<PageID>` functions at request time through `ssr.LoadContext`. Returned
 declared identifiers and dotted paths are resolved from nested maps with string
 keys, structs, pointers, interfaces, exported Go field names, and `json` tag

@@ -322,9 +322,9 @@ Implemented today:
 - Component-level browser-side Go/WASM island packages with ABI export validation.
 - Feature-bound action/API handlers, action redirects, partial action
   fragments, standalone fragment routes, CSRF-wired actions, guards, and
-  concrete or dynamic SSR pages with declared `load {}` identifier or dotted
+  concrete or dynamic SSR pages with declared `server {}` identifier or dotted
   paths, plus concrete or dynamic hybrid request-time pages with or without
-  declared `load {}` data, in generated binaries.
+  declared `server {}` data, in generated binaries.
 - CLI tooling for tokens, formatting, validation, manifest, sitemap, routes,
   compiler IR inspection, dev, serve, and LSP.
 
@@ -343,6 +343,6 @@ Troubleshooting:
 - Unsupported Go handler signature: check the action/API docs and use a
   supported exported function signature.
 - Missing SSR feature: add the SSR addon in config or remove request-time page
-  behavior such as `load {}`.
+  behavior such as `server {}`.
 - Generated binary build failure: rerun `gowdk build` from the app root and
   inspect generated app errors under `.gowdk/`.

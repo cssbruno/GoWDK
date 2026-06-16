@@ -31,7 +31,7 @@ func computeBackendBindings(ir gwdkir.Program) []source.BackendBinding {
 	var bindings []source.BackendBinding
 	cache := map[string]featurePackage{}
 	for _, page := range ir.Pages {
-		if len(page.Blocks.Actions) == 0 && len(page.Blocks.APIs) == 0 && len(page.Blocks.Fragments) == 0 && !page.Blocks.Load {
+		if len(page.Blocks.Actions) == 0 && len(page.Blocks.APIs) == 0 && len(page.Blocks.Fragments) == 0 && !page.Blocks.Server {
 			continue
 		}
 		dir := sourceDir(page.Source)
@@ -49,7 +49,7 @@ func computeBackendBindings(ir gwdkir.Program) []source.BackendBinding {
 			}
 			return inlinePkg
 		}
-		if page.Blocks.Load {
+		if page.Blocks.Server {
 			bindings = append(bindings, bindLoad(page, pkg))
 		}
 		for _, action := range page.Blocks.Actions {
@@ -103,15 +103,15 @@ func computeBackendBindings(ir gwdkir.Program) []source.BackendBinding {
 func bindLoad(page gwdkir.Page, pkg featurePackage) source.BackendBinding {
 	functionName := loadFunctionName(page.ID)
 	// A broken same-package Go package cannot be inspected: surface that instead
-	// of falling back to an inline go ssr {} block and reporting a misleading
+	// of falling back to an inline go server {} block and reporting a misleading
 	// bound status. The broken package itself is reported by go_package_error.
 	if pkg.LoadError != "" {
-		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, page.Blocks.Spans.Load, pkg)
+		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, page.Blocks.Spans.Server, pkg)
 		binding.Status = source.BackendBindingMissing
 		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s could not be inspected: %s", bindingPackageLabel(binding, pkg), functionName, pkg.LoadError)
 		return binding
 	}
-	inlinePkg := inspectInlineScriptFeaturePackage(page, "ssr")
+	inlinePkg := inspectInlineScriptFeaturePackage(page, "server")
 	_, inSame := pkg.Functions[functionName]
 	_, inInline := inlinePkg.Functions[functionName]
 	switch {
@@ -125,7 +125,7 @@ func bindLoad(page gwdkir.Page, pkg featurePackage) source.BackendBinding {
 	case inInline:
 		return bindLoadFromPackage(page, functionName, inlinePkg)
 	default:
-		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, page.Blocks.Spans.Load, pkg)
+		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, page.Blocks.Spans.Server, pkg)
 		binding.Status = source.BackendBindingMissing
 		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s is not implemented", bindingPackageLabel(binding, pkg), functionName)
 		binding = markUnexportedCandidate(binding, pkg)
@@ -137,7 +137,7 @@ func bindLoad(page gwdkir.Page, pkg featurePackage) source.BackendBinding {
 }
 
 func bindLoadFromPackage(page gwdkir.Page, functionName string, pkg featurePackage) source.BackendBinding {
-	binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, page.Blocks.Spans.Load, pkg)
+	binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, page.Blocks.Spans.Server, pkg)
 	function := pkg.Functions[functionName]
 	if !function.Load() {
 		binding.Status = source.BackendBindingUnsupportedSignature
@@ -432,7 +432,7 @@ func loadFunctionName(pageID string) string {
 func BackendBindingsFromIR(ir gwdkir.Program) []source.BackendBinding {
 	out := make([]source.BackendBinding, 0, len(ir.Endpoints))
 	for _, page := range ir.Pages {
-		if !page.Blocks.Load {
+		if !page.Blocks.Server {
 			continue
 		}
 		binding := loadBindingFromIR(page)

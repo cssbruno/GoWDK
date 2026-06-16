@@ -27,8 +27,8 @@ the rest are opt-in extension points.
    logic through `Config.HasFeature`.
 2. **Compiler validation** — `gowdk.GoBlockConsumer.ValidateGoBlock` validates
    `go addon.<name> {}` blocks and may return addon-owned diagnostics. Built-in
-   feature gates also run here (for example, a page using `load {}` or
-   `go ssr {}` requires the `ssr` feature).
+   feature gates also run here (for example, a page using `server {}` or
+   `go server {}` requires the `ssr` feature).
 3. **Generated output** — build-time emitters run while writing output:
    `gowdk.CSSProcessor.ProcessCSS` (CSS), `gowdk.SEOProvider.SEOOptions`
    (`sitemap.xml`/`robots.txt`), and `gowdk.GoBlockConsumer.GeneratedGo` (files
@@ -211,7 +211,7 @@ third-party code; implement `CSSProcessor`, `SEOProvider`, or
 `GoBlockConsumer` when the addon needs behavior.
 
 The current compiler validator checks whether SSR is enabled when a page uses
-`load {}` or `go ssr {}`. SPA builds invoke addons that implement
+`server {}` or `go server {}`. SPA builds invoke addons that implement
 `gowdk.CSSProcessor` or `gowdk.SEOProvider`. Generated app builds invoke
 configured addons that implement `gowdk.GoBlockConsumer` for
 `go addon.<name> {}` blocks.

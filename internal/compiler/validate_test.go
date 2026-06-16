@@ -864,8 +864,8 @@ func TestValidatePageAllowsSSRWithAddon(t *testing.T) {
 		Route:  "/dashboard",
 		Render: gowdk.SSR,
 		Blocks: gwdkir.Blocks{
-			Load: true,
-			View: true,
+			Server: true,
+			View:   true,
 		},
 	}
 
@@ -4621,7 +4621,7 @@ func TestValidatePageAllowsRestRouteParamOnSSRPage(t *testing.T) {
 		ID:     "docs.page",
 		Route:  "/docs/{path...}",
 		Render: gowdk.SSR,
-		Blocks: gwdkir.Blocks{View: true, Load: true},
+		Blocks: gwdkir.Blocks{View: true, Server: true},
 	}
 
 	diagnostics := ValidatePage(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, irPage(page))
@@ -4715,8 +4715,8 @@ func TestValidatePageRejectsRestRouteParamOnSPAPage(t *testing.T) {
 func TestValidateManifestRejectsDuplicateRestRoutes(t *testing.T) {
 	app := appFixture{
 		Pages: []gwdkir.Page{
-			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
-			{ID: "docs.copy", Route: "/docs/{rest...}", Render: gowdk.SSR, Source: "pages/docs-copy.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Server: true}},
+			{ID: "docs.copy", Route: "/docs/{rest...}", Render: gowdk.SSR, Source: "pages/docs-copy.page.gwdk", Blocks: gwdkir.Blocks{View: true, Server: true}},
 		},
 	}
 
@@ -4744,8 +4744,8 @@ func TestValidateManifestRejectsAmbiguousRestRoutes(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			app := appFixture{
 				Pages: []gwdkir.Page{
-					{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
-					{ID: "docs.other", Route: test.other, Render: gowdk.SSR, Source: "pages/docs-other.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+					{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Server: true}},
+					{ID: "docs.other", Route: test.other, Render: gowdk.SSR, Source: "pages/docs-other.page.gwdk", Blocks: gwdkir.Blocks{View: true, Server: true}},
 				},
 			}
 
@@ -4764,9 +4764,9 @@ func TestValidateManifestRejectsAmbiguousRestRoutes(t *testing.T) {
 func TestValidateManifestAllowsRestRouteBesideShorterRoutes(t *testing.T) {
 	app := appFixture{
 		Pages: []gwdkir.Page{
-			{ID: "docs.index", Route: "/docs", Render: gowdk.SSR, Source: "pages/docs-index.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
-			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
-			{ID: "blog.post", Route: "/blog/{slug}", Render: gowdk.SSR, Source: "pages/blog-post.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+			{ID: "docs.index", Route: "/docs", Render: gowdk.SSR, Source: "pages/docs-index.page.gwdk", Blocks: gwdkir.Blocks{View: true, Server: true}},
+			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Server: true}},
+			{ID: "blog.post", Route: "/blog/{slug}", Render: gowdk.SSR, Source: "pages/blog-post.page.gwdk", Blocks: gwdkir.Blocks{View: true, Server: true}},
 		},
 	}
 
@@ -4808,9 +4808,9 @@ func TestValidatePageRejectsInheritedRestRouteOnAPIEndpoints(t *testing.T) {
 		Route:  "/docs/{path...}",
 		Render: gowdk.SSR,
 		Blocks: gwdkir.Blocks{
-			View: true,
-			Load: true,
-			APIs: []gwdkir.API{{Name: "Save", Method: "POST"}},
+			View:   true,
+			Server: true,
+			APIs:   []gwdkir.API{{Name: "Save", Method: "POST"}},
 		},
 	}
 
@@ -4827,13 +4827,13 @@ func TestValidatePageRejectsInheritedRestRouteOnAPIEndpoints(t *testing.T) {
 func TestValidateManifestRejectsEndpointInsideRestRouteNamespace(t *testing.T) {
 	app := appFixture{
 		Pages: []gwdkir.Page{
-			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Server: true}},
 			{
 				ID: "docs.lookup", Route: "/lookup", Render: gowdk.SSR, Source: "pages/docs-lookup.page.gwdk",
 				Blocks: gwdkir.Blocks{
-					View: true,
-					Load: true,
-					APIs: []gwdkir.API{{Name: "Lookup", Method: "GET", Route: "/docs/guides/intro"}},
+					View:   true,
+					Server: true,
+					APIs:   []gwdkir.API{{Name: "Lookup", Method: "GET", Route: "/docs/guides/intro"}},
 				},
 			},
 		},
@@ -4852,13 +4852,13 @@ func TestValidateManifestRejectsEndpointInsideRestRouteNamespace(t *testing.T) {
 func TestValidateManifestAllowsDifferentMethodEndpointBesideRestRoute(t *testing.T) {
 	app := appFixture{
 		Pages: []gwdkir.Page{
-			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Load: true}},
+			{ID: "docs.tree", Route: "/docs/{path...}", Render: gowdk.SSR, Source: "pages/docs-tree.page.gwdk", Blocks: gwdkir.Blocks{View: true, Server: true}},
 			{
 				ID: "docs.save", Route: "/save", Render: gowdk.SSR, Source: "pages/docs-save.page.gwdk",
 				Blocks: gwdkir.Blocks{
-					View: true,
-					Load: true,
-					APIs: []gwdkir.API{{Name: "Save", Method: "POST", Route: "/docs/guides/intro"}},
+					View:   true,
+					Server: true,
+					APIs:   []gwdkir.API{{Name: "Save", Method: "POST", Route: "/docs/guides/intro"}},
 				},
 			},
 		},
@@ -4916,8 +4916,8 @@ func TestValidatePageRejectsLoadOnSPAPage(t *testing.T) {
 		Route:  "/newsletter",
 		Render: gowdk.SPA,
 		Blocks: gwdkir.Blocks{
-			View: true,
-			Load: true,
+			View:   true,
+			Server: true,
 		},
 	}
 
@@ -4925,7 +4925,7 @@ func TestValidatePageRejectsLoadOnSPAPage(t *testing.T) {
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 diagnostic, got %d", len(diagnostics))
 	}
-	if diagnostics[0].Code != "load_requires_request_render" {
+	if diagnostics[0].Code != "server_requires_request_render" {
 		t.Fatalf("unexpected diagnostic code: %s", diagnostics[0].Code)
 	}
 }
@@ -4971,8 +4971,8 @@ func TestValidatePageAllowsHybridWithExplicitLoadAndSSRAddon(t *testing.T) {
 		Route:  "/dashboard",
 		Render: gowdk.Hybrid,
 		Blocks: gwdkir.Blocks{
-			Load: true,
-			View: true,
+			Server: true,
+			View:   true,
 		},
 	}
 
@@ -5026,7 +5026,7 @@ func TestValidateManifestRejectsSSRScriptWithoutAddon(t *testing.T) {
 			View:     true,
 			ViewBody: `<main>Home</main>`,
 			GoBlocks: []gwdkir.GoBlock{{
-				Target: "ssr",
+				Target: "server",
 				Body:   `func LoadHome() map[string]any { return nil }`,
 			}},
 		},

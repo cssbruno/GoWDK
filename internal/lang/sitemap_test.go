@@ -33,7 +33,7 @@ route "/dashboard"
 layout root, dashboard
 guard auth.required
 
-load {
+server {
 }
 
 view {
@@ -150,7 +150,7 @@ page dashboard
 route "/dashboard"
 guard public
 
-go ssr {
+go server {
 }
 
 view {

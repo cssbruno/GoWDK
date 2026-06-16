@@ -31,7 +31,7 @@ Do not treat current `act`, `api`, `partial`, `guard`, or SSR scaffolding as com
 - Generated server entrypoints must set conservative `http.Server` read,
   read-header, write, idle, and max-header defaults.
 - `partial` responses must render escaped HTML through the shared render core.
-- `ssr` pages with `load {}` must make auth/session access explicit through guards or request-aware APIs.
+- `ssr` pages with `server {}` must make auth/session access explicit through guards or request-aware APIs.
 - Embedded assets must not include local env files, source maps with secrets, or private files outside configured build output.
 - Compiler diagnostics must not print secret values from config or build-time data.
 

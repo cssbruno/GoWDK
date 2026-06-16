@@ -38,11 +38,11 @@ neither the table nor the registry can drift without failing a test.
 | `use` | Stable | Package-scoped component import. |
 | `paths {}` | Partial | Literal `=> { field: "value" }` records only. |
 | `build {}` | Partial | Literal records and no-argument Go calls. |
-| `load {}` | Partial | Request-time data; requires the SSR addon. |
+| `server {}` | Partial | Request-time server-lane data; requires the SSR addon. |
 | `view {}` | Stable | Markup; see directives below. |
 | `style {}` | Stable | Scoped CSS body. |
 | `client {}` | Partial | Bounded component client language. |
-| `go {}` / `go ssr {}` / `go client {}` / `go addon.* {}` | Partial | Colocated Go lanes. |
+| `go {}` / `go build {}` / `go server {}` / `go client {}` / `go addon.* {}` | Partial | Colocated Go lanes. |
 | `store` / `props` / `state` / `emits` | Partial | Component contracts. |
 | Unknown top-level block | Planned | Rejected with `unsupported_top_level_block`. |
 
@@ -78,10 +78,8 @@ Supported exact-name directives (the closed set in
 
 | Directive | Tier | Notes |
 | --- | --- | --- |
-| `g:if` / `g:else-if` / `g:else` | Stable | Conditional flow. |
-| `g:for` / `g:key` | Stable | Client/island list rendering. |
-| `g:each` | Stable | Server-side request-time list rendering over SSR `load {}` data. |
-| `g:when` | Stable | Server-side request-time conditional rendering over SSR `load {}` data. |
+| `g:if` | Stable | Conditional render. Server-side over a `server {}` field; a client island over state/store. `g:else-if`/`g:else` are client-only chains. |
+| `g:for` / `g:key` | Stable | List render. Server-side over a `server {}` field; a client island over state/store. The lane is inferred from the operand. |
 | `g:bind:value` / `g:bind:checked` | Partial | Two-way bindings. |
 | `g:on:*` | Partial | Event handlers with `.prevent`/`.stop`/`.once`/`.capture`/`.debounce`/`.throttle`. |
 | `g:post` / `g:target` / `g:swap` | Partial | Progressive form/fragment submission. |

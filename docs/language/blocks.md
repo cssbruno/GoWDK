@@ -15,7 +15,7 @@ The parser records whether these top-level blocks are present:
   function can return `T` or `(T, error)`. Other statement forms are rejected
   with a `parse_error` diagnostic; arbitrary build-time statements remain
   planned.
-- `load {}`: request-time data block. Presence and raw body text are recorded,
+- `server {}`: request-time data block. Presence and raw body text are recorded,
   then rejected on SPA/action pages.
 - `go {}` and `go target {}`: optional inline Go authoring blocks.
   Presence, target, raw body text, and source span are recorded. Default
@@ -24,7 +24,7 @@ The parser records whether these top-level blocks are present:
   Page-level `go client {}` can opt into client-side execution by exporting
   `GOWDKMount<PageID>` with
   `//go:wasmexport`; GOWDK compiles that Go block to browser Go WASM and emits a
-  page loader. `go ssr {}` can provide generated SSR load handlers.
+  page loader. `go server {}` can provide generated SSR load handlers.
   Configured addons that implement `gowdk.GoBlockConsumer` can validate
   `go addon.<name> {}` blocks and emit generated app Go files.
 - `view {}`: markup render block. Presence and body text are recorded.
@@ -48,7 +48,7 @@ api Health GET "/api/health"
   `interop.FeaturedCopyForBuild()` or a bare same-package function such as
   `FeaturedCopyForBuild()` when the page directory is a buildable Go package.
   Passing route params into Go build functions is not supported yet.
-- `load {}` is request-time behavior and must not make SPA pages implicitly SSR.
+- `server {}` is request-time behavior and must not make SPA pages implicitly SSR.
 - `go {}` is parsed as Go and can run static build-time helpers for
   `build {}`. Saved default `go {}` blocks are also type-checked with
   sibling Go files in the same package during validation. Generated apps can
@@ -57,10 +57,10 @@ api Health GET "/api/health"
   `go client {}` runs on the client only when it
   declares a `//go:wasmexport GOWDKMount<PageID>` function; that browser lane is
   compiled with `GOOS=js GOARCH=wasm` and mounted by the generated page loader.
-  `go ssr {}` is
+  `go server {}` is
   request-time and requires SSR or explicit hybrid request-time behavior;
-  current generated apps can bind `Load<PageID>` from `go ssr {}`.
-  Generated app source writes default `go {}` and `go ssr {}` blocks as
+  current generated apps can bind `Load<PageID>` from `go server {}`.
+  Generated app source writes default `go {}` and `go server {}` blocks as
   normal Go packages under `gowdk_go/`. `go addon.<name> {}`
   is reserved for addon-owned validation and generated app file emission.
 - `act` and `api` endpoint declarations describe request handlers that should
@@ -136,16 +136,16 @@ under `gowdk_go/<package>/go.go` so `go test ./...` in the generated app can
 type-check them as normal Go packages. GOWDK does not write extracted files
 beside the user's source files.
 
-Use `go ssr {}` for colocated SSR load handlers:
+Use `go server {}` for colocated SSR load handlers:
 
 ```gwdk
 import ssr "github.com/cssbruno/gowdk/addons/ssr"
 
-load {
+server {
   => { user.name }
 }
 
-go ssr {
+go server {
 func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	return map[string]any{
 		"user": map[string]any{"name": "Ada"},

@@ -2,12 +2,12 @@
 
 M7 hardens the current request-time page lane. GOWDK still defaults pages to
 build-time SPA output; request-time page behavior is selected explicitly with
-`load {}` or `go ssr {}` and requires the SSR addon.
+`server {}` or `go server {}` and requires the SSR addon.
 
 ## In Scope
 
 - Concrete and dynamic request-time SSR pages in generated binaries.
-- `load { => { field, nested.path } }` execution through same-package Go load
+- `server { => { field, nested.path } }` execution through same-package Go load
   functions.
 - Raw and typed route params through `runtime/app.Params(ctx)` and
   `runtime/app.TypedParams(ctx)`.
@@ -24,7 +24,7 @@ build-time SPA output; request-time page behavior is selected explicitly with
   successful SPA and SSR HTML.
 - Hybrid source contract decision: no separate `.gwdk` hybrid syntax yet.
   Hybrid remains internal/configured route metadata; source authors choose
-  request-time page behavior with `load {}` or `go ssr {}`.
+  request-time page behavior with `server {}` or `go server {}`.
 
 ## Out Of Scope
 

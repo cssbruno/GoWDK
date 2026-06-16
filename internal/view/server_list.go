@@ -5,13 +5,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/viewparse"
+	"github.com/cssbruno/gowdk/internal/clientlang"
 )
 
-// SSRListReplacement is a build-time description of one server-rendered g:each
+// SSRListReplacement is a build-time description of one server-rendered g:for
 // list. It is collected during a request-time page render and handed to the app
 // generator, which serializes it for the runtime region renderer. The tree
-// mirrors nesting: Lists and Conds describe g:each lists and g:when conditionals
+// mirrors nesting: Lists and Conds describe g:for lists and g:if conditionals
 // found inside RowTemplate.
 type SSRListReplacement struct {
 	Placeholder string
@@ -24,7 +24,7 @@ type SSRListReplacement struct {
 	Conds       []SSRCondReplacement
 }
 
-// SSRCondReplacement is a build-time description of one server-rendered g:when
+// SSRCondReplacement is a build-time description of one server-rendered g:if
 // conditional. Its branch renders only when SourcePath resolves to a truthy
 // value (negated when Negate is set). The branch shares the enclosing container
 // scope.
@@ -32,10 +32,13 @@ type SSRCondReplacement struct {
 	Placeholder string
 	SourcePath  string
 	Negate      bool
-	Template    string
-	Fields      []SSRListField
-	Lists       []SSRListReplacement
-	Conds       []SSRCondReplacement
+	// Expr is a full bool expression for a top-level server g:if; when set the
+	// runtime evaluates it against the load data instead of SourcePath/Negate.
+	Expr     string
+	Template string
+	Fields   []SSRListField
+	Lists    []SSRListReplacement
+	Conds    []SSRCondReplacement
 }
 
 // SSRListField is one per-render scalar substitution inside a region template.
@@ -45,19 +48,11 @@ type SSRListField struct {
 	Index       bool
 }
 
-// EachDirective is a parsed g:each declaration.
-type EachDirective = viewparse.EachDirective
-
-// ParseEachDirective parses a g:each value such as "item in Items".
-func ParseEachDirective(source string) (EachDirective, error) {
-	return viewparse.ParseEachDirective(source)
-}
-
-// serverScope tracks the active g:each row or g:when branch while rendering its
-// template. itemVar is set for a row scope (interpolations are item-relative);
-// when itemVar is empty the scope is a load scope (interpolations are load {}
-// field paths validated against tainted). It also carries the collectors for the
-// region currently being built.
+// serverScope tracks the active server-lane g:for row or g:if branch while
+// rendering its template. itemVar is set for a row scope (interpolations are
+// item-relative); when itemVar is empty the scope is a load scope
+// (interpolations are server {} field paths validated against tainted). It also
+// carries the collectors for the region currently being built.
 type serverScope struct {
 	itemVar   string
 	indexVar  string
@@ -69,12 +64,75 @@ type serverScope struct {
 	seenIndex string
 }
 
-func elementHasEach(node Element) bool {
-	return elementHasAttr(node, "g:each")
+// directiveLane is the resolved execution lane of a g:for/g:if directive.
+type directiveLane int
+
+const (
+	laneClient directiveLane = iota
+	laneServer
+)
+
+// resolveDirectiveLane decides whether a g:for/g:if whose operand has the given
+// root identifier renders server-side (request-time server {} data) or
+// client-side (state/store islands). Inside an active server region every nested
+// directive inherits the server lane.
+func (ctx *renderContext) resolveDirectiveLane(root string) (directiveLane, error) {
+	if ctx.serverScope != nil {
+		return laneServer, nil
+	}
+	server := ctx.tainted[root]
+	client := ctx.isClientDataRoot(root)
+	switch {
+	case server && client:
+		return laneClient, fmt.Errorf("%q is declared as both request-time server {} data and client state/store; rename one so the directive lane is unambiguous", root)
+	case server:
+		return laneServer, nil
+	default:
+		// Client lane covers both declared client state and unknown sources; the
+		// client validator (or check-time validation) reports an unknown source.
+		return laneClient, nil
+	}
 }
 
-func elementHasWhen(node Element) bool {
-	return elementHasAttr(node, "g:when")
+func (ctx *renderContext) isClientDataRoot(root string) bool {
+	if ctx.readFields[root] {
+		return true
+	}
+	if _, ok := ctx.stateTypes[root]; ok {
+		return true
+	}
+	return false
+}
+
+// forDirectiveLane resolves the lane of an element's g:for from its collection
+// source. A parse failure falls back to the client lane so the client validator
+// reports the precise syntax error.
+func (ctx *renderContext) forDirectiveLane(node Element) (directiveLane, error) {
+	for _, attr := range node.Attrs {
+		if attr.Name != "g:for" || attr.Boolean {
+			continue
+		}
+		loop, err := ParseForDirective(strings.TrimSpace(attr.Value))
+		if err != nil {
+			return laneClient, nil
+		}
+		return ctx.resolveDirectiveLane(exprRootName(loop.Collection))
+	}
+	return laneClient, nil
+}
+
+// ifDirectiveLane resolves the lane of an element's g:if from its condition's
+// root identifier (after stripping a leading server-style negation).
+func (ctx *renderContext) ifDirectiveLane(node Element) (directiveLane, error) {
+	for _, attr := range node.Attrs {
+		if attr.Name != "g:if" || attr.Boolean {
+			continue
+		}
+		expr := strings.TrimSpace(attr.Value)
+		expr = strings.TrimSpace(strings.TrimPrefix(expr, "!"))
+		return ctx.resolveDirectiveLane(exprRootName(expr))
+	}
+	return laneClient, nil
 }
 
 func elementHasAttr(node Element, name string) bool {
@@ -86,26 +144,26 @@ func elementHasAttr(node Element, name string) bool {
 	return false
 }
 
-// renderServerListElement renders a g:each element into a list placeholder plus
+// renderServerListElement renders a g:for element into a list placeholder plus
 // a collected SSRListReplacement. The element's subtree is rendered once as a
 // row template in which item interpolations become per-row field placeholders;
-// nested g:each and g:when recurse into child specs.
+// nested g:for and g:if recurse into child specs.
 func renderServerListElement(node Element, ctx *renderContext, out *renderOutput) error {
 	if ctx.serverScope == nil && ctx.lists == nil {
-		return fmt.Errorf("g:each is only supported in a request-time page view; it cannot be used inside a component, layout, or fragment. Move the load {} data and g:each onto the page")
+		return fmt.Errorf("server-lane g:for is only supported in a request-time page view; it cannot be used inside a component, layout, or fragment. Move the server {} data and g:for onto the page")
 	}
-	if elementHasWhen(node) {
-		return fmt.Errorf("element cannot combine g:each with g:when; place g:when on a child or wrapping element")
+	if elementHasAttr(node, "g:if") {
+		return fmt.Errorf("element cannot combine a server-lane g:for with g:if; place g:if on a child or wrapping element")
 	}
-	each, err := elementEachDirective(node)
+	each, err := elementServerForDirective(node)
 	if err != nil {
 		return err
 	}
-	sourcePath, err := serverSourcePath(each.Collection, ctx, "g:each")
+	sourcePath, err := serverSourcePath(each.Collection, ctx, "g:for")
 	if err != nil {
 		return err
 	}
-	templateNode := elementWithoutAttrs(node, "g:each", "g:key")
+	templateNode := elementWithoutAttrs(node, "g:for", "g:key")
 	if err := validateServerRegionSubtree([]Node{templateNode}); err != nil {
 		return err
 	}
@@ -144,22 +202,35 @@ func renderServerListElement(node Element, ctx *renderContext, out *renderOutput
 	return nil
 }
 
-// renderServerConditionalElement renders a g:when element into a conditional
+// renderServerConditionalElement renders a g:if element into a conditional
 // placeholder plus a collected SSRCondReplacement. The element's subtree is
 // rendered once into a branch template in the enclosing container scope.
 func renderServerConditionalElement(node Element, ctx *renderContext, out *renderOutput) error {
 	if ctx.serverScope == nil && ctx.conds == nil {
-		return fmt.Errorf("g:when is only supported in a request-time page view; it cannot be used inside a component, layout, or fragment. Move the load {} data and g:when onto the page")
+		return fmt.Errorf("server-lane g:if is only supported in a request-time page view; it cannot be used inside a component, layout, or fragment. Move the server {} data and g:if onto the page")
 	}
-	condition, negate, err := elementWhenDirective(node)
+	condition, negate, expr, err := elementServerIfDirective(node)
 	if err != nil {
 		return err
 	}
-	sourcePath, err := serverSourcePath(condition, ctx, "g:when")
-	if err != nil {
-		return err
+	var sourcePath string
+	if expr != "" {
+		// A compound expression is evaluated at request time against the load
+		// data; it is only supported at the top level (not inside a row), and its
+		// referenced roots must be declared server {} fields.
+		if parent := ctx.serverScope; parent != nil && parent.itemVar != "" {
+			return fmt.Errorf("a nested server-lane g:if supports a single row field, not a compound expression %q; compute compound conditions in Go and expose a bool server {} field", expr)
+		}
+		if err := validateServerCondExpr(expr, ctx); err != nil {
+			return err
+		}
+	} else {
+		sourcePath, err = serverSourcePath(condition, ctx, "g:if")
+		if err != nil {
+			return err
+		}
 	}
-	templateNode := elementWithoutAttrs(node, "g:when")
+	templateNode := elementWithoutAttrs(node, "g:if")
 	if err := validateServerRegionSubtree([]Node{templateNode}); err != nil {
 		return err
 	}
@@ -168,7 +239,7 @@ func renderServerConditionalElement(node Element, ctx *renderContext, out *rende
 	lists := []SSRListReplacement{}
 	conds := []SSRCondReplacement{}
 	// The branch renders in the enclosing container scope: a row scope keeps the
-	// parent item var; a top-level g:when renders against the load data map.
+	// parent item var; a top-level g:if renders against the load data map.
 	scope := &serverScope{
 		fields: &fields,
 		lists:  &lists,
@@ -194,6 +265,7 @@ func renderServerConditionalElement(node Element, ctx *renderContext, out *rende
 		Placeholder: "__GOWDK_SSR_COND_" + ctx.idAllocator().nextCondGroup() + "__",
 		SourcePath:  sourcePath,
 		Negate:      negate,
+		Expr:        expr,
 		Template:    branchOut.string(),
 		Fields:      fields,
 		Lists:       lists,
@@ -224,73 +296,107 @@ func appendServerCond(ctx *renderContext, replacement SSRCondReplacement) {
 	}
 }
 
-func elementEachDirective(node Element) (EachDirective, error) {
-	hasEach := false
-	var each EachDirective
+// elementServerForDirective parses the g:for collection on a server-lane list
+// element (its lane was already resolved from the collection's data source).
+func elementServerForDirective(node Element) (ForDirective, error) {
+	hasFor := false
+	var loop ForDirective
 	for _, attr := range node.Attrs {
-		if attr.Name != "g:each" {
+		if attr.Name != "g:for" {
 			continue
 		}
-		if hasEach {
-			return EachDirective{}, fmt.Errorf("element declares multiple g:each directives")
+		if hasFor {
+			return ForDirective{}, fmt.Errorf("element declares multiple g:for directives")
 		}
 		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
-			return EachDirective{}, fmt.Errorf("g:each requires an expression value such as g:each={item in Items}")
+			return ForDirective{}, fmt.Errorf("g:for requires an expression value such as g:for={item in Items}")
 		}
-		parsed, err := ParseEachDirective(attr.Value)
+		parsed, err := ParseForDirective(attr.Value)
 		if err != nil {
-			return EachDirective{}, err
+			return ForDirective{}, err
 		}
-		each = parsed
-		hasEach = true
+		loop = parsed
+		hasFor = true
 	}
-	for _, attr := range node.Attrs {
-		if attr.Name == "g:for" {
-			return EachDirective{}, fmt.Errorf("element cannot combine g:each with g:for; g:each renders request-time server data, g:for binds client/island state")
-		}
-	}
-	return each, nil
+	return loop, nil
 }
 
-// elementWhenDirective parses a g:when value such as "field" or "!field".
-func elementWhenDirective(node Element) (string, bool, error) {
-	hasWhen := false
+// elementServerIfDirective parses the g:if condition on a server-lane
+// conditional element. A simple field (optionally negated with a leading !) is
+// returned as (field, negate, ""); a compound bool expression (comparisons,
+// logic, literals) is returned as ("", false, expr) for request-time evaluation.
+func elementServerIfDirective(node Element) (field string, negate bool, expr string, err error) {
+	hasIf := false
 	var raw string
 	for _, attr := range node.Attrs {
-		if attr.Name != "g:when" {
+		if attr.Name != "g:if" {
 			continue
 		}
-		if hasWhen {
-			return "", false, fmt.Errorf("element declares multiple g:when directives")
+		if hasIf {
+			return "", false, "", fmt.Errorf("element declares multiple g:if directives")
 		}
 		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
-			return "", false, fmt.Errorf("g:when requires an expression value such as g:when={field} or g:when={!field}")
+			return "", false, "", fmt.Errorf("g:if requires an expression value such as g:if={field} or g:if={count > 0}")
 		}
 		raw = strings.TrimSpace(attr.Value)
-		hasWhen = true
+		hasIf = true
 	}
 	for _, attr := range node.Attrs {
-		if attr.Name == "g:if" || attr.Name == "g:else-if" || attr.Name == "g:else" {
-			return "", false, fmt.Errorf("element cannot combine g:when with %s; g:when renders request-time server data, %s binds client/island state", attr.Name, attr.Name)
+		if attr.Name == "g:else-if" || attr.Name == "g:else" {
+			return "", false, "", fmt.Errorf("%s is a client-lane directive and cannot follow a server-lane g:if; use a sibling g:if={!field} for the server empty branch", attr.Name)
 		}
 	}
-	negate := false
-	if strings.HasPrefix(raw, "!") {
+	if !isSimpleCondition(raw) {
+		return "", false, raw, nil
+	}
+	stripped := raw
+	if strings.HasPrefix(stripped, "!") {
 		negate = true
-		raw = strings.TrimSpace(raw[1:])
+		stripped = strings.TrimSpace(stripped[1:])
 	}
-	if raw == "" {
-		return "", false, fmt.Errorf("g:when requires a field after %q", "!")
+	if stripped == "" {
+		return "", false, "", fmt.Errorf("g:if requires a field after %q", "!")
 	}
-	if strings.ContainsAny(raw, "!&|=<>(){}") {
-		return "", false, fmt.Errorf("g:when condition %q must be a single load {} field, optionally negated with a leading !; compute compound conditions in Go and expose a bool load field", raw)
-	}
-	return raw, negate, nil
+	return stripped, negate, "", nil
 }
 
-// serverSourcePath resolves the load path for a g:each collection or g:when
+// validateServerCondExpr checks a top-level server g:if compound expression: it
+// must parse as a bool expression and every identifier it references must be a
+// declared server {} field (tracked in the load scope's taint set).
+func validateServerCondExpr(expr string, ctx *renderContext) error {
+	if _, err := clientlang.ParseExpr(expr); err != nil {
+		return fmt.Errorf("server-lane g:if condition %q is not a valid expression: %w", expr, err)
+	}
+	fields, err := clientlang.ExprFields(expr)
+	if err != nil {
+		return fmt.Errorf("server-lane g:if condition %q is invalid: %w", expr, err)
+	}
+	tainted := ctx.tainted
+	if ctx.serverScope != nil {
+		tainted = ctx.serverScope.tainted
+	}
+	for _, field := range fields {
+		if !tainted[exprRootName(field)] {
+			return fmt.Errorf("server-lane g:if condition %q references %q, which is not a declared server {} field", expr, field)
+		}
+	}
+	return nil
+}
+
+// isSimpleCondition reports whether a g:if value is a bare field path, optionally
+// negated with a single leading !. Anything with operators, comparisons,
+// parentheses, quotes, or whitespace is a compound expression.
+func isSimpleCondition(raw string) bool {
+	stripped := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(raw), "!"))
+	if stripped == "" {
+		return false
+	}
+	return !strings.ContainsAny(stripped, "!&|=<>(){}\"' \t")
+}
+
+// serverSourcePath resolves the load path for a g:for collection or g:if
 // condition. A top-level region (or a load-scope branch) must target a declared
-// SSR load {} field; a row-scope region must reference its enclosing item.
+// server {} field; a row-scope region must reference its enclosing item.
 func serverSourcePath(expr string, ctx *renderContext, directive string) (string, error) {
 	scope := ctx.serverScope
 	if scope == nil || scope.itemVar == "" {
@@ -299,7 +405,7 @@ func serverSourcePath(expr string, ctx *renderContext, directive string) (string
 			tainted = scope.tainted
 		}
 		if !tainted[exprRootName(expr)] {
-			return "", fmt.Errorf("%s collection/condition %q must be an SSR load {} field; %s renders request-time server data — use the client-state directive for client/island state", directive, expr, directive)
+			return "", fmt.Errorf("%s collection/condition %q must be a server {} field; %s renders request-time server data — use the client-state directive for client/island state", directive, expr, directive)
 		}
 		return expr, nil
 	}
@@ -315,8 +421,8 @@ func serverSourcePath(expr string, ctx *renderContext, directive string) (string
 }
 
 // validateServerRegionSubtree rejects constructs that cannot be rendered inside
-// a request-time g:each row or g:when branch. Regions support static markup,
-// scoped interpolation, nested g:each, and nested g:when only.
+// a request-time g:for row or g:if branch. Regions support static markup,
+// scoped interpolation, nested g:for, and nested g:if only.
 func validateServerRegionSubtree(nodes []Node) error {
 	for _, node := range nodes {
 		switch typed := node.(type) {
@@ -325,16 +431,16 @@ func validateServerRegionSubtree(nodes []Node) error {
 				if !strings.HasPrefix(attr.Name, "g:") {
 					continue
 				}
-				if attr.Name == "g:each" || attr.Name == "g:key" || attr.Name == "g:when" {
+				if attr.Name == "g:for" || attr.Name == "g:key" || attr.Name == "g:if" {
 					continue
 				}
-				return fmt.Errorf("g:each rows and g:when branches support only static markup, scoped interpolation, nested g:each, and nested g:when; %q is not allowed", attr.Name)
+				return fmt.Errorf("server-lane g:for rows and g:if branches support only static markup, scoped interpolation, nested g:for, and nested g:if; %q is not allowed", attr.Name)
 			}
 			if err := validateServerRegionSubtree(typed.Children); err != nil {
 				return err
 			}
 		case ComponentCall:
-			return fmt.Errorf("g:each rows and g:when branches cannot contain component calls; render request-time markup with static elements, g:each, and g:when")
+			return fmt.Errorf("g:for rows and g:if branches cannot contain component calls; render request-time markup with static elements, g:for, and g:if")
 		}
 	}
 	return nil
@@ -343,7 +449,7 @@ func validateServerRegionSubtree(nodes []Node) error {
 // serverScopeFieldPlaceholder resolves a region interpolation name to a stable
 // field placeholder, recording the resolved path on the active scope. In a row
 // scope only the row item (and index) are valid; in a load scope only declared
-// load {} fields are valid.
+// server {} fields are valid.
 func (scope *serverScope) serverScopeFieldPlaceholder(name string, ids *renderIDAllocator) (string, error) {
 	path, isIndex, ok := scope.resolvePath(name)
 	if !ok {
@@ -388,7 +494,7 @@ func (scope *serverScope) resolvePath(name string) (path string, isIndex bool, o
 
 func (scope *serverScope) scopeHint() string {
 	if scope.itemVar == "" {
-		return "declared load {} fields"
+		return "declared server {} fields"
 	}
 	hint := "the row item " + strconv.Quote(scope.itemVar)
 	if scope.indexVar != "" {

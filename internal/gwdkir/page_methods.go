@@ -32,7 +32,7 @@ func (page Page) RenderMode(defaultMode gowdk.RenderMode) gowdk.RenderMode {
 	if page.Render != "" {
 		return page.Render
 	}
-	if page.Blocks.Load || page.HasGoBlock("ssr") {
+	if page.Blocks.Server || page.HasGoBlock("server") {
 		return gowdk.SSR
 	}
 	if defaultMode == "" {

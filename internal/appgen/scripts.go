@@ -84,7 +84,7 @@ func inlineGoBlockGroups(ir gwdkir.Program) map[string]inlineGoBlockGroup {
 
 func isGeneratedInlineGoBlockTarget(target string) bool {
 	switch strings.TrimSpace(target) {
-	case "", "ssr":
+	case "", "server":
 		return true
 	default:
 		return false

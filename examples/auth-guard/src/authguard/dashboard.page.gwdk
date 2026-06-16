@@ -7,7 +7,7 @@ css authguard
 
 act Logout POST "/logout"
 
-load {
+server {
   => { dashboard.email, dashboard.role, dashboard.expiresAt }
 }
 

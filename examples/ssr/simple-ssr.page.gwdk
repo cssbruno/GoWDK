@@ -4,7 +4,7 @@ page simple.ssr
 route "/ssr"
 guard public
 
-go ssr {
+go server {
 }
 
 build {

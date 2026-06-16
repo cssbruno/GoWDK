@@ -18,7 +18,7 @@ hybrid-with-load request-time slices. SSR remains optional.
   fragment, guard, and SSR handlers.
 - Background workers: not part of initial MVP.
 - Datastores: user application choice; usable from imported build-time Go data
-  functions and from user-owned action, API, fragment, and `load {}` handlers.
+  functions and from user-owned action, API, fragment, and `server {}` handlers.
 - Queues: user application choice.
 - External services: user application choice.
 
@@ -31,8 +31,8 @@ hybrid-with-load request-time slices. SSR remains optional.
 - Staging: target flow verifies one-binary serving and addon behavior.
 - Production: not a supported readiness claim yet. Current generated binaries
   can serve embedded app assets, supported action/API/fragment handlers,
-  generated guards, SSR pages with declared `load {}` identifier or dotted
-  paths, and hybrid pages with or without declared `load {}` data. Hybrid
+  generated guards, SSR pages with declared `server {}` identifier or dotted
+  paths, and hybrid pages with or without declared `server {}` data. Hybrid
   streaming, data refresh, and non-HTTP revalidation remain planned.
 
 ## Observability
@@ -60,8 +60,8 @@ gowdk build --out dist --app .gowdk/app --wasm dist/<app>.wasm <files>
 The current generated binary serves embedded prerendered HTML, CSS, SPA
 assets, supported POST action handlers, partial action fragment responses,
 standalone fragment routes, API handlers, guarded request-time lanes, concrete
-or dynamic SSR pages with declared `load {}` paths, and hybrid pages that
-explicitly declare `load {}` from the selected output directory. `--wasm`
+or dynamic SSR pages with declared `server {}` paths, and hybrid pages that
+explicitly declare `server {}` from the selected output directory. `--wasm`
 compiles the same generated app with `GOOS=js GOARCH=wasm` for hosts that can
 run Go WebAssembly; it is not browser WASM islands. Future generated artifacts
 should improve production operations guidance, richer validation, broader

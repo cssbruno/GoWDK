@@ -133,7 +133,7 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 			Code:   "missing_ssr_addon",
 			PageID: page.ID,
 			Source: page.Source,
-			Span:   firstSpan(page.Blocks.Spans.Load, firstGoBlockSpan(page, "ssr"), page.Spans.Page),
+			Span:   firstSpan(page.Blocks.Spans.Server, firstGoBlockSpan(page, "server"), page.Spans.Page),
 			Message: fmt.Sprintf(
 				"%s.page.gwdk uses request-time page behavior, but the SSR addon is not enabled. Fix: enable ssr.Addon() in gowdk.config.go",
 				page.ID,
@@ -164,7 +164,7 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 			Source: page.Source,
 			Span:   firstNamedSpan(page.Spans.RouteParams, page.Spans.Route),
 			Message: fmt.Sprintf(
-				"%s declares rest route parameter {%s...}, but render mode is %s; rest parameters match request paths at request time and require SSR rendering. Fix: declare request-time page behavior with load {} or go ssr {}",
+				"%s declares rest route parameter {%s...}, but render mode is %s; rest parameters match request paths at request time and require SSR rendering. Fix: declare request-time page behavior with server {} or go server {}",
 				page.ID,
 				pageRoute.RestParam,
 				mode,
@@ -177,7 +177,7 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 			Source: page.Source,
 			Span:   firstNamedSpan(page.Spans.RouteParams, page.Spans.Route),
 			Message: fmt.Sprintf(
-				"%s has dynamic route params: {%s}, but render mode is %s and no paths block exists. Fix: add paths { ... } or declare request-time page behavior with load {} or go ssr {}",
+				"%s has dynamic route params: {%s}, but render mode is %s and no paths block exists. Fix: add paths { ... } or declare request-time page behavior with server {} or go server {}",
 				page.ID,
 				strings.Join(params, ", "),
 				mode,
@@ -185,15 +185,16 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 		})
 	}
 
-	if page.Blocks.Load && mode != gowdk.SSR && mode != gowdk.Hybrid {
+	if page.Blocks.Server && mode != gowdk.SSR && mode != gowdk.Hybrid {
 		diagnostics = append(diagnostics, ValidationError{
-			Code:   "load_requires_request_render",
+			Code:   "server_requires_request_render",
 			PageID: page.ID,
 			Source: page.Source,
-			Span:   firstSpan(page.Blocks.Spans.Load, page.Spans.Render, page.Spans.Page),
+			Span:   firstSpan(page.Blocks.Spans.Server, page.Spans.Render, page.Spans.Page),
 			Message: fmt.Sprintf(
-				"%s declares load {}, but load runs at request time and requires the SSR addon",
+				"%s declares server {} but render mode is %s; server {} is the server lane and renders the page per request. Drop the conflicting render mode (server {} alone implies request-time rendering), or remove server {} for a build-time page",
 				page.ID,
+				mode,
 			),
 		})
 	}
@@ -263,7 +264,7 @@ func validateProtectedPageGuardRender(page gwdkir.Page, mode gowdk.RenderMode) [
 		PageID:  page.ID,
 		Source:  page.Source,
 		Span:    firstNamedSpan(page.Spans.Guard, firstSpan(page.Spans.Page, page.Spans.Route)),
-		Message: fmt.Sprintf("%s declares protected guard IDs on a build-time page route. Add load {} or go ssr {} with the SSR addon so frontend page access is request-time guarded, or use guard public for an intentionally public page", page.ID),
+		Message: fmt.Sprintf("%s declares protected guard IDs on a build-time page route. Add server {} or go server {} with the SSR addon so frontend page access is request-time guarded, or use guard public for an intentionally public page", page.ID),
 	}}
 }
 

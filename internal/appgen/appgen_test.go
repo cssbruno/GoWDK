@@ -4058,12 +4058,12 @@ func TestGeneratedBinaryExecutesInlineSSRScriptLoad(t *testing.T) {
 			Path:  "github.com/cssbruno/gowdk/addons/ssr",
 		}},
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: `=> { user.name, request.path }`,
-			View:     true,
-			ViewBody: `<main><h1>{user.name}</h1><p>{request.path}</p></main>`,
+			Server:     true,
+			ServerBody: `=> { user.name, request.path }`,
+			View:       true,
+			ViewBody:   `<main><h1>{user.name}</h1><p>{request.path}</p></main>`,
 			GoBlocks: []gwdkir.GoBlock{{
-				Target: "ssr",
+				Target: "server",
 				Body: `func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	return map[string]any{
 		"user": map[string]any{"name": "Inline Ada"},

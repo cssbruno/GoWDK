@@ -19,8 +19,8 @@
         }
       },
       "severity": "error",
-      "message": "blog.post: blog.post has dynamic route params: {slug}, but render mode is spa and no paths block exists. Fix: add paths { ... } or declare request-time page behavior with load {} or go ssr {}",
-      "suggestion": "Add paths { ... } for the dynamic spa route or declare request-time page behavior with load { ... } or go ssr { ... }."
+      "message": "blog.post: blog.post has dynamic route params: {slug}, but render mode is spa and no paths block exists. Fix: add paths { ... } or declare request-time page behavior with server {} or go server {}",
+      "suggestion": "Add paths { ... } for the dynamic spa route or declare request-time page behavior with server { ... } or go server { ... }."
     }
   ]
 }

@@ -129,7 +129,7 @@ func siteMapPages(config gowdk.Config, ir gwdkir.Program) []SiteMapPage {
 			Blocks: SiteMapBlocks{
 				Paths:     page.Blocks.Paths,
 				Build:     page.Blocks.Build,
-				Load:      page.Blocks.Load,
+				Load:      page.Blocks.Server,
 				View:      page.Blocks.View,
 				Actions:   actionNames(page.Blocks.Actions),
 				APIs:      apiNames(page.Blocks.APIs),

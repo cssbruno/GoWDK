@@ -63,7 +63,7 @@ func buildGoBindingsReport(config gowdk.Config, ir gwdkir.Program) goBindingsRep
 		bindings = append(bindings, binding)
 	}
 	for _, page := range ir.Pages {
-		if page.Blocks.Load {
+		if page.Blocks.Server {
 			bindings = append(bindings, loadGoBinding(page))
 		}
 		bindings = append(bindings, buildDataGoBindings(page)...)
@@ -170,7 +170,7 @@ func loadGoBinding(page gwdkir.Page) goBindingJSON {
 	return goBindingJSON{
 		Kind:           "load",
 		Source:         page.Source,
-		SourceSpan:     endpointSourceSpanJSON(page.Blocks.Spans.Load),
+		SourceSpan:     endpointSourceSpanJSON(page.Blocks.Spans.Server),
 		Package:        page.Package,
 		PageID:         page.ID,
 		Symbol:         symbol,

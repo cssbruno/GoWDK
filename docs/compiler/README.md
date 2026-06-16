@@ -23,8 +23,8 @@ Implemented today:
 - Generated embedded app source and optional binary compilation through
   `internal/appgen`, including supported action/API/fragment handlers, form
   input decoder and required-field validation wrappers, CSRF wiring, guards,
-  concrete or dynamic SSR routes with declared `load {}` fields, and concrete
-  or dynamic hybrid request-time routes with or without declared `load {}`
+  concrete or dynamic SSR routes with declared `server {}` fields, and concrete
+  or dynamic hybrid request-time routes with or without declared `server {}`
   fields.
 - SPA `gowdk.config.go` loading for build source discovery, build targets,
   and output through `internal/project`.

@@ -7,7 +7,7 @@ css flagship
 
 act Logout POST "/logout"
 
-load {
+server {
   => { dashboard.title, dashboard.email, dashboard.expires, dashboard.queueDepth }
 }
 

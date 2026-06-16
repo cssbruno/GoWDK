@@ -231,10 +231,10 @@ func applyPageSyntaxBlock(page *gwdkir.Page, block gwdkast.Block) {
 		page.Blocks.BuildRecords = lowerSyntaxLiteralRecords(block.Records)
 		page.Blocks.BuildCall = lowerSyntaxBuildCall(block.Call)
 		page.Blocks.Spans.Build = block.Span
-	case "load":
-		page.Blocks.Load = true
-		page.Blocks.LoadBody = block.Body
-		page.Blocks.Spans.Load = block.Span
+	case "server":
+		page.Blocks.Server = true
+		page.Blocks.ServerBody = block.Body
+		page.Blocks.Spans.Server = block.Span
 	case "client":
 		page.Blocks.Client = true
 		page.Blocks.ClientBody = block.Body

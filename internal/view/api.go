@@ -44,7 +44,7 @@ type Options struct {
 	Package           string
 	Uses              map[string]string
 	// Tainted names interpolation values that carry request-time,
-	// attacker-influenceable data (e.g. SSR load {} fields). Tainted values are
+	// attacker-influenceable data (e.g. server {} fields). Tainted values are
 	// rejected in URL-bearing, event-handler, style, and srcdoc attributes the
 	// same way route params are, so they cannot smuggle a javascript:/data: URL
 	// past HTML-text escaping.
@@ -52,7 +52,7 @@ type Options struct {
 	RealtimeEventTypeNames map[string]string
 	QueryTypeNames         map[string]string
 	// ServerListSink and ServerCondSink, when non-nil, receive the top-level
-	// g:each lists and g:when conditionals discovered while rendering a
+	// g:for lists and g:if conditionals discovered while rendering a
 	// request-time page. The caller serializes them for the runtime region
 	// renderer.
 	ServerListSink *[]SSRListReplacement

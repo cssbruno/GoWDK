@@ -95,7 +95,7 @@ by `go_package_error`.
 
 ## Load Functions
 
-Request-time pages with `load {}` bind same-package functions named
+Request-time pages with `server {}` bind same-package functions named
 `Load<PageID>`:
 
 ```go

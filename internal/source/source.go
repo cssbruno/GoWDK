@@ -128,7 +128,7 @@ type SSRLoadReplacement struct {
 	Placeholder string
 }
 
-// SSRListSpec describes one server-rendered g:each list for a request-time
+// SSRListSpec describes one server-rendered g:for list for a request-time
 // page. The runtime list renderer resolves SourcePath against load data (or, for
 // nested lists, against a parent row element), then substitutes Fields and
 // Children into RowTemplate once per element. It mirrors view.SSRListReplacement
@@ -142,7 +142,7 @@ type SSRListSpec struct {
 	Conds       []SSRCondSpec
 }
 
-// SSRCondSpec describes one server-rendered g:when conditional for a
+// SSRCondSpec describes one server-rendered g:if conditional for a
 // request-time page. Its branch renders only when SourcePath resolves to a
 // truthy value (negated when Negate is set). It mirrors view.SSRCondReplacement
 // and ssr.CondSpec.
@@ -150,6 +150,7 @@ type SSRCondSpec struct {
 	Placeholder string
 	SourcePath  string
 	Negate      bool
+	Expr        string
 	Template    string
 	Fields      []SSRListField
 	Lists       []SSRListSpec

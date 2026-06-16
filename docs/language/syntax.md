@@ -71,7 +71,7 @@ as malformed legacy metadata.
 `guard public` must be the only guard on a page. Protected pages can declare
 multiple non-public guards; generated handlers enforce them in declaration
 order. Protected page guards require request-time page rendering for frontend
-page access; add `load {}` or `go ssr {}` with the SSR addon when the page is
+page access; add `server {}` or `go server {}` with the SSR addon when the page is
 not public.
 
 Current route validation accepts canonical absolute paths only:
@@ -123,7 +123,7 @@ The parser recognizes these top-level block declarations:
 ```gwdk
 paths {
 build {
-load {
+server {
 view {
 ```
 

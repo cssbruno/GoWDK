@@ -339,7 +339,7 @@ func blocksJSONFor(page gwdkir.Page) blocksJSON {
 	return blocksJSON{
 		Paths:     page.Blocks.Paths,
 		Build:     page.Blocks.Build,
-		Load:      page.Blocks.Load,
+		Load:      page.Blocks.Server,
 		View:      page.Blocks.View,
 		Actions:   actionNames(page.Blocks.Actions),
 		APIs:      apiNames(page.Blocks.APIs),

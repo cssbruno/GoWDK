@@ -19,6 +19,25 @@ func renderNodes(nodes []Node, ctx *renderContext) (string, error) {
 	for _, node := range nodes {
 		nodeCtx := ctx
 		if element, ok := node.(Element); ok {
+			// A server-lane g:if is a structural request-time region, not a
+			// client conditional chain: let renderElement dispatch it and do not
+			// open or continue a client if/else-if/else chain. g:else-if/g:else
+			// are client-only, so only a standalone g:if can take the server lane.
+			if elementHasAttr(element, "g:if") && !elementHasAttr(element, "g:else-if") && !elementHasAttr(element, "g:else") {
+				lane, err := ctx.ifDirectiveLane(element)
+				if err != nil {
+					return "", err
+				}
+				if lane == laneServer {
+					inChain = false
+					chainMatched = false
+					chainIndex = 0
+					if err := renderNode(node, ctx, &out); err != nil {
+						return "", err
+					}
+					continue
+				}
+			}
 			branch, err := conditionalBranch(element, ctx)
 			if err != nil {
 				return "", err

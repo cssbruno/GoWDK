@@ -21,7 +21,7 @@ page dashboard
 route "/dashboard"
 guard public
 
-load {
+server {
 }
 
 view {
@@ -600,7 +600,7 @@ page dashboard
 route "/dashboard"
 guard public
 
-load {
+server {
 }
 
 view {
@@ -623,7 +623,7 @@ view {
 	}
 	if diagnostics[0].Range == nil ||
 		diagnostics[0].Range.Start.Line != 7 || diagnostics[0].Range.Start.Column != 1 ||
-		diagnostics[0].Range.End.Line != 7 || diagnostics[0].Range.End.Column != 7 {
+		diagnostics[0].Range.End.Line != 7 || diagnostics[0].Range.End.Column != 9 {
 		t.Fatalf("expected compiler diagnostic range for load block, got %#v", diagnostics[0].Range)
 	}
 	if !strings.Contains(output, "SSR addon is not enabled") {

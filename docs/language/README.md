@@ -12,9 +12,9 @@ first-slice `g:post`, `g:target`, and `g:swap` lowering, literal dynamic SPA
 route expansion, literal build data, imported no-argument Go build data
 functions, default `go {}` build-data functions, package
 type-checking for saved default `go {}` blocks, generated
-`gowdk_go/` packages for default `go {}` and `go ssr {}` blocks,
+`gowdk_go/` packages for default `go {}` and `go server {}` blocks,
 same-page action/API/fragment handlers from default `go {}` blocks,
-page-level `go client {}` WASM mounts, `go ssr {}` load
+page-level `go client {}` WASM mounts, `go server {}` load
 handlers, configured-addon
 `go addon.<name> {}` validation and generated app Go file emission through
 `gowdk.GoBlockConsumer`, route/build-data

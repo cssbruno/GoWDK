@@ -47,7 +47,7 @@ statusCode   = digit digit digit
 ```
 
 The parser currently scans each trimmed line independently. It records
-declarations and captures raw body text for `paths {}`, `build {}`, `load {}`,
+declarations and captures raw body text for `paths {}`, `build {}`, `server {}`,
 `go {}`, `go target {}`, `view {}`, and `style {}` blocks until their
 closing `}`. CSS braces inside `style {}` and Go braces inside `go {}` do
 not close those blocks early. Go block bodies are parsed as Go during semantic
@@ -83,9 +83,9 @@ page declares the referenced import.
 
 Default `go {}` blocks can provide no-argument build-data functions for
 `build { => LocalFunc() }`. Saved default `go {}` blocks are type-checked with
-sibling Go files in the same package during validation. `go ssr {}` can provide
+sibling Go files in the same package during validation. `go server {}` can provide
 generated SSR load handlers when request-time rendering is enabled. Generated
-app source writes default `go {}` and `go ssr {}` blocks under `gowdk_go/`.
+app source writes default `go {}` and `go server {}` blocks under `gowdk_go/`.
 Page-level `go client {}` blocks that export `GOWDKMount<PageID>` with
 `//go:wasmexport` compile to client-side Go WASM and emit a page mount loader.
 Targets such as `addon.contracts` are preserved for lane-specific extraction.

@@ -107,10 +107,10 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 	if err != nil {
 		return SSRArtifact{}, err
 	}
-	if !regions.empty() && !page.Blocks.Load {
-		return SSRArtifact{}, fmt.Errorf("%s: g:each and g:when require SSR load {} data", page.ID)
+	if !regions.empty() && !page.Blocks.Server {
+		return SSRArtifact{}, fmt.Errorf("%s: g:for and g:if over server data require a server {} block", page.ID)
 	}
-	// A load field consumed only by g:each/g:when (resolved by the runtime region
+	// A load field consumed only by g:for/g:if (resolved by the runtime region
 	// renderer) leaves no scalar placeholder in the HTML. Drop those request-time
 	// replacements so the handler does not stringify and substitute a value that
 	// never appears in the output.
@@ -124,7 +124,7 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 		DynamicParams:    page.DynamicParams(),
 		RouteParams:      append([]source.RouteParam(nil), page.TypedRouteParams()...),
 		Guards:           append([]string(nil), page.Guards...),
-		HasLoad:          page.Blocks.Load,
+		HasLoad:          page.Blocks.Server,
 		LoadBinding:      sourceBackendBinding(page.LoadBinding),
 		HTML:             html,
 		Replacements:     replacements,
@@ -136,7 +136,7 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 
 // usedLoadReplacements keeps only the scalar load replacements whose placeholder
 // still appears in the rendered HTML. A placeholder is absent when its load field
-// is consumed solely by g:each, whose rows are expanded by the runtime list
+// is consumed solely by g:for, whose rows are expanded by the runtime list
 // renderer rather than by request-time string substitution.
 func usedLoadReplacements(html string, replacements []SSRLoadReplacement) []SSRLoadReplacement {
 	if len(replacements) == 0 {
@@ -167,15 +167,15 @@ func ssrRouteData(page gwdkir.Page) (map[string]string, []SSRReplacement) {
 }
 
 func ssrLoadData(page gwdkir.Page, existing map[string]string) (map[string]string, []SSRLoadReplacement, error) {
-	if !page.Blocks.Load {
+	if !page.Blocks.Server {
 		return nil, nil, nil
 	}
-	fields, err := parseLoadFields(page.Blocks.LoadBody)
+	fields, err := parseLoadFields(page.Blocks.ServerBody)
 	if err != nil {
 		return nil, nil, err
 	}
 	if len(fields) == 0 {
-		return nil, nil, fmt.Errorf("load {} must declare at least one field with `=> { field }`")
+		return nil, nil, fmt.Errorf("server {} must declare at least one field with `=> { field }`")
 	}
 	data := map[string]string{}
 	replacements := make([]SSRLoadReplacement, 0, len(fields))

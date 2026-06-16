@@ -39,7 +39,7 @@ result is the same: a guardless page route returns **403**.
 | --- | --- |
 | Static / build-time (SPA) | The generated app carries a deny registry. The route returns 403 before serving any static artifact. |
 | Dynamic build-time (`paths {}`) | The page **route pattern** (e.g. `/blog/{slug}`) is denied, so every concrete artifact expanded from `paths {}` returns 403 — not just the pattern string. |
-| Request-time (SSR / `load {}`) | The generated SSR handler returns 403 before running any context, load, or HTML statements. |
+| Request-time (SSR / `server {}`) | The generated SSR handler returns 403 before running any context, load, or HTML statements. |
 
 The deny check normalizes the request path first, so a page emitted as
 `<route>/index.html` is denied when fetched directly by its file path
@@ -75,5 +75,5 @@ Full authorization and richer request-local state are still planned — see
 
 - [spec.md](spec.md) — full page keyword and metadata declaration contract.
 - [docs/reference/routing.md](../reference/routing.md) — route validation and plans.
-- [ssr.md](ssr.md) — request-time render mode and `load {}`.
+- [ssr.md](ssr.md) — request-time render mode and `server {}`.
 - [diagnostics.md](diagnostics.md) — `missing_page_guard`, `public_guard_exclusive`.

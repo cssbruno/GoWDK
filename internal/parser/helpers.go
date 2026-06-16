@@ -6,6 +6,25 @@ func trimQuotes(value string) string {
 	return strings.Trim(strings.TrimSpace(value), `"`)
 }
 
+// renamedTopLevelBlockNudge reports a migration hint when a top-level block uses
+// a keyword that was renamed in the lane-model redesign, so existing pages get a
+// precise pointer instead of a generic "unsupported top-level block" error.
+func renamedTopLevelBlockNudge(line string) (string, bool) {
+	if !strings.HasSuffix(line, "{") {
+		return "", false
+	}
+	fields := strings.Fields(line)
+	if len(fields) == 0 {
+		return "", false
+	}
+	switch fields[0] {
+	case "load":
+		return "load {} was renamed to server {}; it declares the page's request-time server lane data (rendered with go server {})", true
+	default:
+		return "", false
+	}
+}
+
 func unsupportedTopLevelBlockName(line string) string {
 	if !strings.HasSuffix(line, "{") {
 		return ""

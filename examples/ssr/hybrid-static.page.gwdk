@@ -4,7 +4,7 @@ page hybrid.static
 route "/hybrid-static"
 guard public
 
-go ssr {
+go server {
 }
 
 build {

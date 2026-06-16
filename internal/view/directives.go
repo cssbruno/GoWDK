@@ -78,6 +78,10 @@ func unsupportedDirectiveMessage(name string) string {
 	switch {
 	case name == "g:html":
 		return "g:html was renamed to g:unsafe-html to make the raw-HTML XSS surface explicit; use g:unsafe-html={Expr} to opt into trusted raw HTML"
+	case name == "g:each":
+		return "g:each was unified into g:for; use g:for={item in collection} — the compiler renders it server-side when the collection is a server {} field and as a client island over state/store"
+	case name == "g:when":
+		return "g:when was unified into g:if; use g:if={field} (or g:if={!field}) — the compiler renders it server-side when the condition is a server {} field and as a client conditional over state/store"
 	case name == "g:transition" || name == "g:animate":
 		return fmt.Sprintf("unsupported g: directive %q; transitions and animations are deferred from the view {} contract — use CSS transitions or a future addon-specific contract", name)
 	case name == "g:window" || name == "g:document" || name == "g:body" || name == "g:head":

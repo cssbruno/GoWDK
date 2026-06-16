@@ -547,7 +547,7 @@ func apiMethodToken(value string) bool {
 
 func isSyntaxBlockName(name string) bool {
 	switch name {
-	case "paths", "build", "load", "client", "view", "style", "props", "exports", "emits":
+	case "paths", "build", "server", "client", "view", "style", "props", "exports", "emits":
 		return true
 	default:
 		return false

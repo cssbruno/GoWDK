@@ -76,7 +76,7 @@ func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]vie
 	return document(config, page, body, stylesheets, storeSeeds, scripts), regions, nil
 }
 
-// ssrRegions carries the server-rendered g:each lists and g:when conditionals
+// ssrRegions carries the server-rendered g:for lists and g:if conditionals
 // collected from a request-time page render.
 type ssrRegions struct {
 	Lists []source.SSRListSpec
@@ -87,7 +87,7 @@ func (r ssrRegions) empty() bool {
 	return len(r.Lists) == 0 && len(r.Conds) == 0
 }
 
-// convertSSRListSpecs lowers the view layer's collected g:each lists into the
+// convertSSRListSpecs lowers the view layer's collected g:for lists into the
 // source representation carried through the app generator to the runtime region
 // renderer.
 func convertSSRListSpecs(lists []view.SSRListReplacement) []source.SSRListSpec {
@@ -119,6 +119,7 @@ func convertSSRCondSpecs(conds []view.SSRCondReplacement) []source.SSRCondSpec {
 			Placeholder: cond.Placeholder,
 			SourcePath:  cond.SourcePath,
 			Negate:      cond.Negate,
+			Expr:        cond.Expr,
 			Template:    cond.Template,
 			Fields:      convertSSRListFields(cond.Fields),
 			Lists:       convertSSRListSpecs(cond.Lists),
@@ -165,10 +166,10 @@ func renderPageView(source string, nodes []view.Node, components map[string]view
 // is trusted and route params taint syntactically via param("..."), so neither
 // is included here.
 func requestTimeTaintedFields(page gwdkir.Page, policy renderModePolicy) map[string]bool {
-	if policy != renderModeRequestTime || !page.Blocks.Load {
+	if policy != renderModeRequestTime || !page.Blocks.Server {
 		return nil
 	}
-	fields, err := parseLoadFields(page.Blocks.LoadBody)
+	fields, err := parseLoadFields(page.Blocks.ServerBody)
 	if err != nil {
 		return nil
 	}

@@ -293,6 +293,12 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 		}
 		if match := goBlockPattern.FindStringSubmatch(line); match != nil {
 			target := strings.TrimSpace(match[1])
+			// go build {} is the explicit form of the default build lane; both
+			// canonicalize to the empty target so the IR has one representation
+			// and mixing them is caught as a duplicate.
+			if target == "build" {
+				target = ""
+			}
 			if span, exists := seenGoBlocks[target]; exists {
 				label := "go"
 				if target != "" {
@@ -387,6 +393,11 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 				TargetSpan: span,
 			}
 			body = nil
+			continue
+		}
+		if message, ok := renamedTopLevelBlockNudge(line); ok {
+			addError(lineDiagnosticError(DiagnosticUnsupportedTopLevelBlock, lineNumber, rawLine, "%s", message))
+			startSkippingBlock(strings.Fields(line)[0])
 			continue
 		}
 		if name := unsupportedTopLevelBlockName(line); name != "" {
@@ -523,7 +534,7 @@ func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, e
 			return SyntaxBlock{}, err
 		}
 		block.Records = records
-	case "load":
+	case "server":
 	case "client":
 	case "props":
 		props, err := parseSyntaxProps(body)

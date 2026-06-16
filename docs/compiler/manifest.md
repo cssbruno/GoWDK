@@ -110,6 +110,11 @@ metadata, typed public exports, and emitted event metadata when present.
 `uses`, `assets`, `cssClasses`, and `styleAttributes` are omitted when empty or
 false.
 
+`gowdk manifest` is source-oriented page/component metadata. Use
+`gowdk routes` or `gowdk endpoints` to inspect generated backend routes and
+handler binding status for actions, APIs, fragments, and command/query
+adapters.
+
 ## Current Site-Map JSON
 
 `gowdk sitemap` emits editor-facing data with source paths, dynamic params, and block presence. It is broader than public manifest JSON because the VS Code extension uses it for route/file visualization.
@@ -117,7 +122,8 @@ false.
 ## Current SPA Route Manifest
 
 `gowdk build` writes `gowdk-routes.json` in the selected output directory. It is
-separate from `gowdk manifest` and records generated spa page artifacts:
+separate from `gowdk manifest` and records generated SPA page artifacts plus
+generated request-time backend route metadata:
 
 ```json
 {
@@ -127,6 +133,20 @@ separate from `gowdk manifest` and records generated spa page artifacts:
       "page": "home",
       "route": "/",
       "path": "index.html"
+    }
+  ],
+  "endpoints": [
+    {
+      "kind": "fragment",
+      "directive": "fragment",
+      "method": "GET",
+      "route": "/patients/{id:int}/vitals",
+      "page": "patients",
+      "symbol": "PatientVitals",
+      "handler": "fragments.PatientsPatientVitals",
+      "dynamicParams": ["id"],
+      "routeParams": [{"name": "id", "type": "int"}],
+      "guards": ["public"]
     }
   ]
 }

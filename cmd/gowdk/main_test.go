@@ -3751,15 +3751,97 @@ func TestRunWithoutArgsPrintsUsage(t *testing.T) {
 	}
 }
 
-func TestRoutesCommandHelpPrintsUsage(t *testing.T) {
+func TestRunHelpPrintsUsage(t *testing.T) {
 	output, err := captureCLIStdout(t, func() error {
-		return run([]string{"routes", "--help"})
+		return run([]string{"--help"})
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(output, "usage: gowdk routes") || strings.Contains(output, "unknown routes flag") {
-		t.Fatalf("expected routes usage output, got:\n%s", output)
+	if !strings.Contains(output, "Commands:") || !strings.Contains(output, "check [--config <file>]") {
+		t.Fatalf("expected top-level usage output, got:\n%s", output)
+	}
+}
+
+func TestCommandHelpPrintsUsage(t *testing.T) {
+	commands := []struct {
+		name  string
+		usage string
+	}{
+		{"version", "usage: gowdk version"},
+		{"init", "usage: gowdk init"},
+		{"add", "usage: gowdk add"},
+		{"tokens", "usage: gowdk tokens"},
+		{"fmt", "usage: gowdk fmt"},
+		{"check", "usage: gowdk check"},
+		{"fix", "usage: gowdk fix"},
+		{"manifest", "usage: gowdk manifest"},
+		{"sitemap", "usage: gowdk sitemap"},
+		{"routes", "usage: gowdk routes"},
+		{"endpoints", "usage: gowdk endpoints"},
+		{"inspect", "usage: gowdk inspect"},
+		{"generate", "usage: gowdk generate"},
+		{"explain", "usage: gowdk explain"},
+		{"doctor", "usage: gowdk doctor"},
+		{"audit", "usage: gowdk audit"},
+		{"contracts", "usage: gowdk contracts"},
+		{"graph", "usage: gowdk graph"},
+		{"trace", "usage: gowdk trace"},
+		{"list", "usage: gowdk list"},
+		{"build", "usage: gowdk build"},
+		{"clean", "usage: gowdk clean"},
+		{"dev", "usage: gowdk dev"},
+		{"preview", "usage: gowdk preview"},
+		{"playground", "usage: gowdk playground"},
+		{"serve", "usage: gowdk serve"},
+		{"lsp", "usage: gowdk lsp"},
+	}
+	for _, command := range commands {
+		t.Run(command.name, func(t *testing.T) {
+			output, err := captureCLIStdout(t, func() error {
+				return run([]string{command.name, "--help"})
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(output, command.usage) || strings.Contains(output, "unknown ") || strings.Contains(output, "open --help") {
+				t.Fatalf("expected usage output for %s, got:\n%s", command.name, output)
+			}
+		})
+	}
+}
+
+func TestNestedCommandHelpPrintsUsage(t *testing.T) {
+	commands := []struct {
+		args  []string
+		usage string
+	}{
+		{[]string{"inspect", "ir", "--help"}, "usage: gowdk inspect ir"},
+		{[]string{"inspect", "tree", "--help"}, "usage: gowdk inspect tree"},
+		{[]string{"inspect", "endpoint-graph", "--help"}, "usage: gowdk inspect endpoint-graph"},
+		{[]string{"inspect", "asset-graph", "--help"}, "usage: gowdk inspect asset-graph"},
+		{[]string{"inspect", "go-bindings", "--help"}, "usage: gowdk inspect go-bindings"},
+		{[]string{"generate", "stubs", "--help"}, "usage: gowdk generate stubs"},
+		{[]string{"list", "commands", "--help"}, "usage: gowdk list commands|queries|events|jobs"},
+		{[]string{"list", "queries", "--help"}, "usage: gowdk list commands|queries|events|jobs"},
+		{[]string{"list", "events", "--help"}, "usage: gowdk list commands|queries|events|jobs"},
+		{[]string{"list", "jobs", "--help"}, "usage: gowdk list commands|queries|events|jobs"},
+		{[]string{"playground", "policy", "--help"}, "usage: gowdk playground policy"},
+		{[]string{"playground", "export", "--help"}, "usage: gowdk playground policy"},
+		{[]string{"playground", "run", "--help"}, "usage: gowdk playground policy"},
+	}
+	for _, command := range commands {
+		t.Run(strings.Join(command.args[:len(command.args)-1], "_"), func(t *testing.T) {
+			output, err := captureCLIStdout(t, func() error {
+				return run(command.args)
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(output, command.usage) || strings.Contains(output, "unknown ") || strings.Contains(output, "open --help") {
+				t.Fatalf("expected usage output for %v, got:\n%s", command.args, output)
+			}
+		})
 	}
 }
 
@@ -4997,6 +5079,10 @@ route "/patients"
 
 act Save POST "/patients/save"
 
+fragment Vitals GET "/patients/{id:int}/vitals" "#vitals" {
+  <section id="vitals">Vitals</section>
+}
+
 view {
   <main>
     <form g:post={Save}>
@@ -5005,6 +5091,7 @@ view {
     <form method="post" action="/patients" g:command="patients.CreatePatient">
       <input name="name" />
     </form>
+    <section id="vitals">Vitals</section>
   </main>
 }
 `)
@@ -5074,6 +5161,10 @@ func ListPatients(context.Context, *http.Request) (response.Response, error) {
 	if !ok || !graphPropBool(actionNode.Props, "csrf") || !graphPropListContains(actionNode.Props, "guards", "public") {
 		t.Fatalf("expected CSRF/guarded action endpoint node, got %#v", actionNode)
 	}
+	fragmentNode, ok := findGraphNode(report.Nodes, "endpoint", "Vitals")
+	if !ok || !graphPropListContains(fragmentNode.Props, "dynamicParams", "id") || !graphPropRouteParam(fragmentNode.Props, "id", "int") {
+		t.Fatalf("expected typed dynamic fragment endpoint node, got %#v", fragmentNode)
+	}
 	contractNode, ok := findGraphNode(report.Nodes, "contract", "patients.CreatePatient")
 	if !ok {
 		t.Fatalf("expected contract node:\n%s", output)
@@ -5090,6 +5181,9 @@ func ListPatients(context.Context, *http.Request) (response.Response, error) {
 	}
 	if !hasGraphEdgeToKind(report.Edges, report.Nodes, actionNode.ID, "handler", "handled_by") {
 		t.Fatalf("expected action -> handler edge in %#v", report.Edges)
+	}
+	if !hasGraphEdgeToKind(report.Edges, report.Nodes, fragmentNode.ID, "handler", "handled_by") {
+		t.Fatalf("expected fragment -> handler edge in %#v", report.Edges)
 	}
 	if !hasGraphEdgeTo(report.Edges, contractNode.ID, "references_contract") {
 		t.Fatalf("expected endpoint -> contract edge in %#v", report.Edges)
@@ -6901,6 +6995,33 @@ func TestOutputFileHandlerRejectsUnsupportedMethods(t *testing.T) {
 	}
 }
 
+func TestOutputFileHandlerUnsupportedMethodMentionsGeneratedEndpointManifest(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "index.html"), `<main>Home</main>`)
+	writeCLIFile(t, filepath.Join(root, "gowdk-routes.json"), `{
+  "version": 1,
+  "routes": [
+    {"page": "login", "route": "/", "path": "index.html"}
+  ],
+  "endpoints": [
+    {"kind": "action", "directive": "act", "method": "POST", "route": "/login", "page": "login", "symbol": "Login", "handler": "actions.LoginLogin", "csrf": true}
+  ]
+}`)
+
+	response := httptest.NewRecorder()
+	outputFileHandler(root).ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/login", nil))
+
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", response.Code)
+	}
+	body := response.Body.String()
+	for _, expected := range []string{"method not allowed: POST /login", "POST /login is a generated endpoint", "act Login", "gowdk serve only serves static GET/HEAD output"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected %q in 405 body, got:\n%s", expected, body)
+		}
+	}
+}
+
 func TestOutputFileHandlerDoesNotListDirectories(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "assets"), 0o755); err != nil {
@@ -7474,6 +7595,27 @@ func graphPropListContains(props map[string]any, key string, value string) bool 
 	}
 	for _, item := range items {
 		if item == value {
+			return true
+		}
+	}
+	return false
+}
+
+func graphPropRouteParam(props map[string]any, name string, paramType string) bool {
+	raw, ok := props["routeParams"]
+	if !ok {
+		return false
+	}
+	items, ok := raw.([]any)
+	if !ok {
+		return false
+	}
+	for _, item := range items {
+		param, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if param["name"] == name && param["type"] == paramType {
 			return true
 		}
 	}

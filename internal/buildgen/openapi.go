@@ -86,6 +86,9 @@ type openAPIGOWDKExtension struct {
 	PageID         string   `json:"pageId,omitempty"`
 	Symbol         string   `json:"symbol,omitempty"`
 	EndpointSource string   `json:"endpointSource,omitempty"`
+	Cache          string   `json:"cache,omitempty"`
+	Guards         []string `json:"guards,omitempty"`
+	CSRF           bool     `json:"csrf,omitempty"`
 	BindingStatus  string   `json:"bindingStatus,omitempty"`
 	Signature      string   `json:"signature,omitempty"`
 	InputType      string   `json:"inputType,omitempty"`
@@ -159,7 +162,7 @@ func addOpenAPIEndpointOperation(paths map[string]openAPIPath, components map[st
 		OperationID: operationID,
 		Summary:     endpointSummary(string(endpoint.Kind), endpoint.Symbol, endpoint.Path),
 		Tags:        []string{string(endpoint.Kind)},
-		Parameters:  pathParameters(openAPIPathFromGOWDK(endpoint.Path), nil),
+		Parameters:  pathParameters(openAPIPathFromGOWDK(endpoint.Path), endpoint.RouteParams),
 		Responses:   endpointResponses(components, string(endpoint.Kind), ""),
 		XGOWDK: openAPIGOWDKExtension{
 			Kind:           string(endpoint.Kind),
@@ -168,6 +171,9 @@ func addOpenAPIEndpointOperation(paths map[string]openAPIPath, components map[st
 			PageID:         endpoint.PageID,
 			Symbol:         endpoint.Symbol,
 			EndpointSource: string(endpoint.Source),
+			Cache:          endpoint.Cache,
+			Guards:         append([]string(nil), endpoint.Guards...),
+			CSRF:           endpoint.CSRF,
 			BindingStatus:  string(endpoint.Binding.Status),
 			Signature:      string(endpoint.Binding.Signature),
 			InputType:      endpoint.Binding.InputType,
@@ -193,14 +199,17 @@ func addOpenAPIContractOperation(paths map[string]openAPIPath, components map[st
 		Parameters:  pathParameters(openAPIPathFromGOWDK(ref.Path), nil),
 		Responses:   endpointResponses(components, kind, ref.Result),
 		XGOWDK: openAPIGOWDKExtension{
-			Kind:          kind,
-			Route:         ref.Path,
-			Source:        ref.Source,
-			PageID:        ref.OwnerID,
-			Symbol:        ref.Name,
-			BindingStatus: string(ref.Status),
-			InputType:     ref.Type,
-			Roles:         append([]string(nil), ref.Roles...),
+			Kind:           kind,
+			Route:          ref.Path,
+			Source:         ref.Source,
+			PageID:         ref.OwnerID,
+			Symbol:         ref.Name,
+			EndpointSource: "contract",
+			Cache:          "no-store",
+			Guards:         append([]string(nil), ref.Guards...),
+			BindingStatus:  string(ref.Status),
+			InputType:      ref.Type,
+			Roles:          append([]string(nil), ref.Roles...),
 		},
 	}
 	if len(ref.InputFields) > 0 {

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/compiler"
+	"github.com/cssbruno/gowdk/internal/source"
 	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
 )
 
@@ -27,15 +28,22 @@ type routeManifestEntry struct {
 }
 
 type routeManifestEndpointEntry struct {
-	Kind      compiler.EndpointKind `json:"kind"`
-	Directive string                `json:"directive,omitempty"`
-	Method    string                `json:"method"`
-	Route     string                `json:"route"`
-	PageID    string                `json:"page"`
-	Symbol    string                `json:"symbol,omitempty"`
-	Handler   string                `json:"handler"`
-	Guards    []string              `json:"guards,omitempty"`
-	CSRF      bool                  `json:"csrf,omitempty"`
+	Kind          compiler.EndpointKind `json:"kind"`
+	Directive     string                `json:"directive,omitempty"`
+	Method        string                `json:"method"`
+	Route         string                `json:"route"`
+	PageID        string                `json:"page"`
+	Symbol        string                `json:"symbol,omitempty"`
+	Handler       string                `json:"handler"`
+	DynamicParams []string              `json:"dynamicParams,omitempty"`
+	RouteParams   []routeManifestParam  `json:"routeParams,omitempty"`
+	Guards        []string              `json:"guards,omitempty"`
+	CSRF          bool                  `json:"csrf,omitempty"`
+}
+
+type routeManifestParam struct {
+	Name string `json:"name"`
+	Type string `json:"type,omitempty"`
 }
 
 func writeRouteManifest(outputDir string, artifacts []Artifact, endpoints []compiler.EndpointBinding) (string, error) {
@@ -87,15 +95,17 @@ func routeManifestEndpointEntries(endpoints []compiler.EndpointBinding) []routeM
 	routes := make([]routeManifestEndpointEntry, 0, len(endpoints))
 	for _, endpoint := range endpoints {
 		routes = append(routes, routeManifestEndpointEntry{
-			Kind:      endpoint.Kind,
-			Directive: routeManifestEndpointDirective(endpoint.Kind),
-			Method:    endpoint.Method,
-			Route:     endpoint.Route,
-			PageID:    endpoint.PageID,
-			Symbol:    endpoint.Symbol,
-			Handler:   endpoint.Handler,
-			Guards:    append([]string(nil), endpoint.Guards...),
-			CSRF:      endpoint.CSRF,
+			Kind:          endpoint.Kind,
+			Directive:     routeManifestEndpointDirective(endpoint.Kind),
+			Method:        endpoint.Method,
+			Route:         endpoint.Route,
+			PageID:        endpoint.PageID,
+			Symbol:        endpoint.Symbol,
+			Handler:       endpoint.Handler,
+			DynamicParams: append([]string(nil), endpoint.DynamicParams...),
+			RouteParams:   routeManifestParams(endpoint.RouteParams),
+			Guards:        append([]string(nil), endpoint.Guards...),
+			CSRF:          endpoint.CSRF,
 		})
 	}
 	sort.Slice(routes, func(i, j int) bool {
@@ -125,6 +135,17 @@ func routeManifestEndpointDirective(kind compiler.EndpointKind) string {
 	default:
 		return ""
 	}
+}
+
+func routeManifestParams(params []source.RouteParam) []routeManifestParam {
+	if len(params) == 0 {
+		return nil
+	}
+	out := make([]routeManifestParam, 0, len(params))
+	for _, param := range params {
+		out = append(out, routeManifestParam{Name: param.Name, Type: param.Type})
+	}
+	return out
 }
 
 func readRouteManifestIfExists(outputDir string) (routeManifest, error) {

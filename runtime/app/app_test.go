@@ -556,6 +556,39 @@ func TestHandlerMetricsRecordDispatchOutcomes(t *testing.T) {
 	}
 }
 
+func TestHandlerMethodNotAllowedSuggestsGeneratedEndpointFromRouteManifest(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"index.html": {Data: []byte("<main>Home</main>")},
+			"gowdk-routes.json": {Data: []byte(`{
+				"version": 1,
+				"routes": [
+					{"page": "login", "route": "/", "path": "index.html"}
+				],
+				"endpoints": [
+					{"kind": "action", "directive": "act", "method": "POST", "route": "/login", "page": "login", "symbol": "Login", "handler": "actions.LoginLogin", "csrf": true}
+				]
+			}`)},
+		},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", recorder.Code)
+	}
+	body := recorder.Body.String()
+	for _, expected := range []string{"method not allowed: POST /", "page route / accepts GET, HEAD", "generated endpoint POST /login", "act Login"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected %q in 405 body, got:\n%s", expected, body)
+		}
+	}
+}
+
 func TestHandlerServesGenerated404Page(t *testing.T) {
 	root := fstest.MapFS{
 		"404.html": {Data: []byte("<main>Missing</main>")},

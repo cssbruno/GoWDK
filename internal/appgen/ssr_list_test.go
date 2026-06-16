@@ -77,7 +77,7 @@ func TestGenerateWritesServerListRenderer(t *testing.T) {
 }
 
 // TestGeneratedBinaryExecutesServerList compiles and runs a real generated app
-// that renders a nested g:each board from request-time load data, proving the
+// that renders a nested g:for board from request-time load data, proving the
 // whole pipeline (codegen + runtime list renderer) works against the real
 // runtime.
 func TestGeneratedBinaryExecutesServerList(t *testing.T) {
@@ -175,7 +175,7 @@ func LoadBoard(ssr.LoadContext) (map[string]any, error) {
 }
 
 // TestGeneratedBinaryExecutesServerConditional compiles and runs a real
-// generated app that renders an empty-state g:when pair from request-time load
+// generated app that renders an empty-state g:if pair from request-time load
 // data, proving the conditional codegen + runtime work against the real runtime.
 func TestGeneratedBinaryExecutesServerConditional(t *testing.T) {
 	root := t.TempDir()

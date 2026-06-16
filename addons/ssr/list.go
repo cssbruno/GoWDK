@@ -9,10 +9,10 @@ import (
 	gowdkhtml "github.com/cssbruno/gowdk/runtime/html"
 )
 
-// ListSpec describes one server-rendered g:each list. It is generated at build
+// ListSpec describes one server-rendered g:for list. It is generated at build
 // time from a request-time page view and consumed by RenderRegions at request
-// time. A spec is a tree: Lists and Conds describe nested g:each lists and
-// g:when conditionals whose data is resolved relative to each parent row.
+// time. A spec is a tree: Lists and Conds describe nested g:for lists and
+// g:if conditionals whose data is resolved relative to each parent row.
 type ListSpec struct {
 	// Placeholder is the unique token embedded in the parent template that the
 	// rendered rows replace.
@@ -26,13 +26,13 @@ type ListSpec struct {
 	RowTemplate string
 	// Fields are the per-row scalar interpolations, each escaped at request time.
 	Fields []ListField
-	// Lists are nested g:each lists found inside RowTemplate.
+	// Lists are nested g:for lists found inside RowTemplate.
 	Lists []ListSpec
-	// Conds are g:when conditionals found inside RowTemplate.
+	// Conds are g:if conditionals found inside RowTemplate.
 	Conds []CondSpec
 }
 
-// CondSpec describes one server-rendered g:when conditional. Its branch is
+// CondSpec describes one server-rendered g:if conditional. Its branch is
 // rendered into the output only when SourcePath resolves to a truthy value
 // (negated when Negate is set). The branch shares the enclosing container scope,
 // so its fields and nested regions resolve against the same data as the
@@ -58,7 +58,7 @@ type ListField struct {
 	Index bool
 }
 
-// RenderRegions expands every top-level g:each list and g:when conditional in
+// RenderRegions expands every top-level g:for list and g:if conditional in
 // html by resolving their data from the request-time load data. Field values
 // are always HTML-escaped, preserving GOWDK's escape-by-default contract for
 // request-time server data.
@@ -124,7 +124,7 @@ func elementSlice(container any, path string) ([]any, bool) {
 	return toAnySlice(value)
 }
 
-// truthy reports whether a request-time value should render its g:when branch.
+// truthy reports whether a request-time value should render its g:if branch.
 // It mirrors common template semantics: false, "", 0, nil, and empty
 // slices/maps are falsy; everything else is truthy.
 func truthy(value any) bool {

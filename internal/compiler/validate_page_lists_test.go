@@ -34,192 +34,141 @@ func findCode(report []ValidationError, code string) (ValidationError, bool) {
 	return ValidationError{}, false
 }
 
-func TestValidateRejectsGForOverLoadData(t *testing.T) {
+func TestValidateAcceptsGForOverServerData(t *testing.T) {
+	// g:for over a server {} field renders server-side; it must not be rejected.
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
 			Server:     true,
 			ServerBody: `=> { columns }`,
-			View:     true,
-			ViewBody: `<div g:for={col in columns} g:key={col.id}>{col.title}</div>`,
+			View:       true,
+			ViewBody:   `<div g:for={col in columns}>{col.title}</div>`,
 		},
 	})
-	diag, ok := findCode(report, "gfor_over_load_data")
-	if !ok {
-		t.Fatalf("expected gfor_over_load_data diagnostic, got %v", report)
-	}
-	if !strings.Contains(diag.Message, "g:each={col in columns}") {
-		t.Fatalf("diagnostic should suggest g:each: %q", diag.Message)
-	}
-}
-
-func TestValidateAcceptsGEachOverLoadData(t *testing.T) {
-	report := validatePageListsFor(t, gwdkir.Page{
-		Blocks: gwdkir.Blocks{
-			Server:     true,
-			ServerBody: `=> { columns }`,
-			View:     true,
-			ViewBody: `<div g:each={col in columns}>{col.title}</div>`,
-		},
-	})
-	if _, ok := findCode(report, "geach_requires_load"); ok {
-		t.Fatalf("g:each over a load field should be accepted: %v", report)
-	}
-	if _, ok := findCode(report, "gfor_over_load_data"); ok {
-		t.Fatalf("unexpected g:for diagnostic: %v", report)
-	}
-}
-
-func TestValidateRejectsGEachOverNonLoadField(t *testing.T) {
-	report := validatePageListsFor(t, gwdkir.Page{
-		Blocks: gwdkir.Blocks{
-			Server:     true,
-			ServerBody: `=> { columns }`,
-			View:     true,
-			ViewBody: `<div g:each={x in other}>{x.name}</div>`,
-		},
-	})
-	if _, ok := findCode(report, "geach_requires_load"); !ok {
-		t.Fatalf("expected geach_requires_load diagnostic, got %v", report)
-	}
-}
-
-func TestValidateRejectsNestedGEachWrongScope(t *testing.T) {
-	report := validatePageListsFor(t, gwdkir.Page{
-		Blocks: gwdkir.Blocks{
-			Server:     true,
-			ServerBody: `=> { columns }`,
-			View:     true,
-			ViewBody: `<div g:each={col in columns}><span g:each={i in other}>{i.id}</span></div>`,
-		},
-	})
-	if _, ok := findCode(report, "geach_nested_scope"); !ok {
-		t.Fatalf("expected geach_nested_scope diagnostic, got %v", report)
-	}
-}
-
-func TestValidateRejectsGIfOverLoadData(t *testing.T) {
-	report := validatePageListsFor(t, gwdkir.Page{
-		Blocks: gwdkir.Blocks{
-			Server:     true,
-			ServerBody: `=> { hasItems, count }`,
-			View:     true,
-			ViewBody: `<p g:if={hasItems}>You have {count}</p>`,
-		},
-	})
-	diag, ok := findCode(report, "gif_over_load_data")
-	if !ok {
-		t.Fatalf("expected gif_over_load_data diagnostic, got %v", report)
-	}
-	if !strings.Contains(diag.Message, "g:when={hasItems}") {
-		t.Fatalf("diagnostic should suggest g:when: %q", diag.Message)
-	}
-}
-
-func TestValidateAcceptsGWhenOverLoadData(t *testing.T) {
-	report := validatePageListsFor(t, gwdkir.Page{
-		Blocks: gwdkir.Blocks{
-			Server:     true,
-			ServerBody: `=> { hasItems, count }`,
-			View:     true,
-			ViewBody: `<section><p g:when={hasItems}>You have {count}</p><p g:when={!hasItems}>None</p></section>`,
-		},
-	})
-	for _, code := range []string{"gwhen_requires_load", "gwhen_nested_scope", "gif_over_load_data"} {
+	for _, code := range []string{"server_for_invalid", "server_for_nested_scope"} {
 		if _, ok := findCode(report, code); ok {
-			t.Fatalf("g:when over a load field should be accepted, got %s: %v", code, report)
+			t.Fatalf("g:for over a server field should be accepted, got %s: %v", code, report)
 		}
 	}
 }
 
-func TestValidateRejectsGWhenOverNonLoadField(t *testing.T) {
+func TestValidateAcceptsGIfOverServerData(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
 			Server:     true,
-			ServerBody: `=> { hasItems }`,
-			View:     true,
-			ViewBody: `<p g:when={ready}>x</p>`,
+			ServerBody: `=> { hasItems, count }`,
+			View:       true,
+			ViewBody:   `<section><p g:if={hasItems}>You have {count}</p><p g:if={!hasItems}>None</p></section>`,
 		},
 	})
-	if _, ok := findCode(report, "gwhen_requires_load"); !ok {
-		t.Fatalf("expected gwhen_requires_load diagnostic, got %v", report)
+	for _, code := range []string{"server_if_invalid", "server_if_nested_scope"} {
+		if _, ok := findCode(report, code); ok {
+			t.Fatalf("g:if over a server field should be accepted, got %s: %v", code, report)
+		}
 	}
 }
 
-func TestValidateAcceptsGWhenInsideEachRow(t *testing.T) {
+func TestValidateAcceptsGForOverClientState(t *testing.T) {
+	// No server {} block: g:for is the client lane and is validated by the island
+	// validator, so the server-list validator must stay silent.
+	report := validatePageListsFor(t, gwdkir.Page{
+		Render: gowdk.SPA,
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<div g:for={item in items} g:key={item.id}>{item.title}</div>`,
+		},
+	})
+	for _, code := range []string{"server_for_invalid", "server_for_nested_scope"} {
+		if _, ok := findCode(report, code); ok {
+			t.Fatalf("client-lane g:for must not be flagged by the server validator, got %s: %v", code, report)
+		}
+	}
+}
+
+func TestValidateAcceptsGIfInsideServerRow(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
 			Server:     true,
 			ServerBody: `=> { issues }`,
-			View:     true,
-			ViewBody: `<ul><li g:each={issue in issues}>{issue.id}<b g:when={issue.urgent}>!</b></li></ul>`,
+			View:       true,
+			ViewBody:   `<ul><li g:for={issue in issues}>{issue.id}<b g:if={issue.urgent}>!</b></li></ul>`,
 		},
 	})
-	for _, code := range []string{"gwhen_requires_load", "gwhen_nested_scope"} {
+	for _, code := range []string{"server_if_invalid", "server_if_nested_scope"} {
 		if _, ok := findCode(report, code); ok {
-			t.Fatalf("g:when referencing the row item should be accepted, got %s: %v", code, report)
+			t.Fatalf("g:if referencing the row item should be accepted, got %s: %v", code, report)
 		}
 	}
 }
 
-func TestValidateRejectsGEachOverNonExactLoadPath(t *testing.T) {
-	// load declares only user.name; g:each over user.posts must fail at check,
-	// matching the build, which requires the exact declared path to be tainted.
-	report := validatePageListsFor(t, gwdkir.Page{
-		Blocks: gwdkir.Blocks{
-			Server:     true,
-			ServerBody: `=> { user.name }`,
-			View:     true,
-			ViewBody: `<li g:each={post in user.posts}>{post.title}</li>`,
-		},
-	})
-	if _, ok := findCode(report, "geach_requires_load"); !ok {
-		t.Fatalf("expected geach_requires_load for an undeclared dotted path, got %v", report)
-	}
-}
-
-func TestValidateRejectsGForInsideEachRow(t *testing.T) {
+func TestValidateAcceptsNestedGFor(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
 			Server:     true,
 			ServerBody: `=> { columns }`,
-			View:     true,
-			ViewBody: `<div g:each={col in columns}><span g:for={issue in col.issues} g:key={issue.id}>{issue.id}</span></div>`,
+			View:       true,
+			ViewBody:   `<div g:for={col in columns}><span g:for={issue in col.issues}>{issue.id}</span></div>`,
 		},
 	})
-	diag, ok := findCode(report, "gfor_over_load_data")
-	if !ok {
-		t.Fatalf("expected gfor_over_load_data for g:for inside a g:each row, got %v", report)
-	}
-	if !strings.Contains(diag.Message, "nested g:each") {
-		t.Fatalf("row diagnostic should suggest a nested g:each: %q", diag.Message)
+	for _, code := range []string{"server_for_invalid", "server_for_nested_scope"} {
+		if _, ok := findCode(report, code); ok {
+			t.Fatalf("nested server g:for should be accepted, got %s: %v", code, report)
+		}
 	}
 }
 
-func TestValidateRejectsNestedGEachOverParentItem(t *testing.T) {
+func TestValidateRejectsNestedGForWrongScope(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
 			Server:     true,
 			ServerBody: `=> { columns }`,
-			View:     true,
-			ViewBody: `<div g:each={col in columns}><span g:each={issue in col} g:key={issue.id}>{issue.id}</span></div>`,
+			View:       true,
+			ViewBody:   `<div g:for={col in columns}><span g:for={i in other}>{i.id}</span></div>`,
 		},
 	})
-	diag, ok := findCode(report, "geach_nested_scope")
+	if _, ok := findCode(report, "server_for_nested_scope"); !ok {
+		t.Fatalf("expected server_for_nested_scope diagnostic, got %v", report)
+	}
+}
+
+func TestValidateRejectsNestedGForOverParentItem(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { columns }`,
+			View:       true,
+			ViewBody:   `<div g:for={col in columns}><span g:for={issue in col}>{issue.id}</span></div>`,
+		},
+	})
+	diag, ok := findCode(report, "server_for_nested_scope")
 	if !ok {
-		t.Fatalf("expected geach_nested_scope when iterating the parent item itself, got %v", report)
+		t.Fatalf("expected server_for_nested_scope when iterating the parent item itself, got %v", report)
 	}
 	if !strings.Contains(diag.Message, "itself") {
 		t.Fatalf("diagnostic should explain it cannot be the parent item itself: %q", diag.Message)
 	}
 }
 
-func TestValidateRejectsGHTMLOverLoadData(t *testing.T) {
+func TestValidateRejectsNestedGIfWrongScope(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { issues }`,
+			View:       true,
+			ViewBody:   `<ul><li g:for={issue in issues}><b g:if={other}>!</b></li></ul>`,
+		},
+	})
+	if _, ok := findCode(report, "server_if_nested_scope"); !ok {
+		t.Fatalf("expected server_if_nested_scope diagnostic, got %v", report)
+	}
+}
+
+func TestValidateRejectsGHTMLOverServerData(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
 			Server:     true,
 			ServerBody: `=> { bodyHTML }`,
-			View:     true,
-			ViewBody: `<article g:unsafe-html={bodyHTML}></article>`,
+			View:       true,
+			ViewBody:   `<article g:unsafe-html={bodyHTML}></article>`,
 		},
 	})
 	diag, ok := findCode(report, "ghtml_over_load_data")
@@ -234,18 +183,16 @@ func TestValidateRejectsGHTMLOverLoadData(t *testing.T) {
 	}
 }
 
-func TestValidateAcceptsNestedGEach(t *testing.T) {
+func TestValidateRejectsGHTMLInsideServerRow(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
 			Server:     true,
-			ServerBody: `=> { columns }`,
-			View:     true,
-			ViewBody: `<div g:each={col in columns}><span g:each={issue in col.issues}>{issue.id}</span></div>`,
+			ServerBody: `=> { issues }`,
+			View:       true,
+			ViewBody:   `<ul><li g:for={issue in issues}><span g:unsafe-html={issue.body}></span></li></ul>`,
 		},
 	})
-	for _, code := range []string{"geach_requires_load", "geach_nested_scope", "geach_invalid"} {
-		if _, ok := findCode(report, code); ok {
-			t.Fatalf("nested g:each should be accepted, got %s: %v", code, report)
-		}
+	if _, ok := findCode(report, "ghtml_over_load_data"); !ok {
+		t.Fatalf("expected ghtml_over_load_data for raw HTML inside a server row, got %v", report)
 	}
 }

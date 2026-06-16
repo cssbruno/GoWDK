@@ -80,13 +80,13 @@ func buildSSRRegionArtifact(t *testing.T, loadBody, view string) SSRArtifact {
 }
 
 // TestSSRArtifactServerListEndToEnd builds a request-time page with a nested
-// g:each and exercises the full pipeline: the build-time row templates plus the
+// g:for and exercises the full pipeline: the build-time row templates plus the
 // runtime list renderer must produce the expected escaped HTML.
 func TestSSRArtifactServerListEndToEnd(t *testing.T) {
 	view := `<section class="board">` +
-		`<div class="col" g:each={col in columns}>` +
+		`<div class="col" g:for={col in columns}>` +
 		`<h2>{col.title}</h2>` +
-		`<article class="card" g:each={issue in col.issues}><span>{issue.id}</span> {issue.title}</article>` +
+		`<article class="card" g:for={issue in col.issues}><span>{issue.id}</span> {issue.title}</article>` +
 		`</div>` +
 		`</section>`
 	artifact := buildSSRListArtifact(t, view)
@@ -132,13 +132,13 @@ func TestSSRArtifactServerListEndToEnd(t *testing.T) {
 }
 
 // TestSSRArtifactServerConditionalEndToEnd builds a request-time page with an
-// empty-state g:when pair and a per-row conditional, then renders through the
+// empty-state g:if pair and a per-row conditional, then renders through the
 // runtime region renderer to verify the active branches.
 func TestSSRArtifactServerConditionalEndToEnd(t *testing.T) {
 	view := `<section>` +
-		`<p g:when={hasItems}>You have {count} items</p>` +
-		`<p g:when={!hasItems}>No issues yet</p>` +
-		`<ul><li g:each={issue in issues}>{issue.id}<b g:when={issue.urgent}> URGENT</b></li></ul>` +
+		`<p g:if={hasItems}>You have {count} items</p>` +
+		`<p g:if={!hasItems}>No issues yet</p>` +
+		`<ul><li g:for={issue in issues}>{issue.id}<b g:if={issue.urgent}> URGENT</b></li></ul>` +
 		`</section>`
 	artifact := buildSSRRegionArtifact(t, `=> { hasItems, count, issues }`, view)
 	if len(artifact.CondSpecs) != 2 {

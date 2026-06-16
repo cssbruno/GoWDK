@@ -91,7 +91,7 @@ func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool, csrf 
 	body = append(body, rateLimitStmts(rateLimit)...)
 	body = append(body, guardStmts(route.Guards)...)
 	body = append(body, define([]ast.Expr{id("html")}, stringLit(route.HTML)))
-	// Fetch load data and expand g:each/g:when regions BEFORE substituting any
+	// Fetch load data and expand g:for/g:if regions BEFORE substituting any
 	// attacker-influenceable scalar (route params, load fields). Otherwise a
 	// scalar value equal to a generated region placeholder would be expanded
 	// into row/branch markup, violating escape-by-default for request-time data.
@@ -212,7 +212,7 @@ func ssrLoadScalarReplaceStmts(route SSRRoute) []ast.Stmt {
 }
 
 // ssrRegionRenderStmts emits the request-time call that expands every top-level
-// g:each list and g:when conditional in the page HTML from the resolved load
+// g:for list and g:if conditional in the page HTML from the resolved load
 // data. The recursive rendering and escape-by-default substitution live in the
 // runtime region renderer; generated code only supplies the static spec tree.
 func ssrRegionRenderStmts(route SSRRoute) []ast.Stmt {
@@ -537,7 +537,7 @@ func ssrUsesLoad(routes []SSRRoute) bool {
 
 // ssrUsesLoadReplacements reports whether any served route substitutes a scalar
 // load field placeholder, which is what pulls in the strings/gowdkhtml/fmt
-// helpers. A page whose load data feeds only g:each lists renders entirely
+// helpers. A page whose load data feeds only g:for lists renders entirely
 // through the runtime list renderer and needs none of them.
 func ssrUsesLoadReplacements(routes []SSRRoute) bool {
 	for _, route := range routes {

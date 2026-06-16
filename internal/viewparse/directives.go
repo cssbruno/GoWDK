@@ -15,15 +15,14 @@ var supportedDirectiveNames = map[string]bool{
 	"g:bind:checked": true,
 	"g:bind:value":   true,
 	"g:command":      true,
-	"g:else":         true,
-	"g:else-if":      true,
-	// g:each is the server-side request-time list directive: it iterates SSR
-	// load {} slice data and renders rows server-side with escape-by-default
-	// interpolation. It is distinct from g:for, which binds client/island state.
-	"g:each": true,
+	"g:else":    true,
+	"g:else-if": true,
 	// g:event parses so the renderer can explain that domain events are
 	// backend-owned facts instead of emitting a generic unknown-directive error.
-	"g:event":       true,
+	"g:event": true,
+	// g:for and g:if span both lanes: over server {} request-time data they
+	// render server-side (the former g:each/g:when), and over client state/store
+	// they bind reactive islands. The compiler infers the lane from the operand.
 	"g:for":         true,
 	"g:unsafe-html": true,
 	"g:if":          true,
@@ -34,13 +33,8 @@ var supportedDirectiveNames = map[string]bool{
 	"g:ref":         true,
 	"g:slot":        true,
 	"g:subscribe":   true,
-	// g:when is the server-side request-time conditional directive: it renders
-	// its branch only when an SSR load {} bool field is truthy (or, with a
-	// leading !, falsy). It is distinct from g:if, which binds client/island
-	// state.
-	"g:when":   true,
-	"g:swap":   true,
-	"g:target": true,
+	"g:swap":        true,
+	"g:target":      true,
 }
 
 // supportedMessageDirectives are the g:message:* validation-message rules.
@@ -87,6 +81,10 @@ func unsupportedDirectiveMessage(name string) string {
 	switch {
 	case name == "g:html":
 		return "g:html was renamed to g:unsafe-html to make the raw-HTML XSS surface explicit; use g:unsafe-html={Expr} to opt into trusted raw HTML"
+	case name == "g:each":
+		return "g:each was unified into g:for; use g:for={item in collection} — the compiler renders it server-side when the collection is a server {} field and as a client island over state/store"
+	case name == "g:when":
+		return "g:when was unified into g:if; use g:if={field} (or g:if={!field}) — the compiler renders it server-side when the condition is a server {} field and as a client conditional over state/store"
 	case name == "g:transition" || name == "g:animate":
 		return fmt.Sprintf("unsupported g: directive %q; transitions and animations are deferred from the view {} contract — use CSS transitions or a future addon-specific contract", name)
 	case name == "g:window" || name == "g:document" || name == "g:body" || name == "g:head":

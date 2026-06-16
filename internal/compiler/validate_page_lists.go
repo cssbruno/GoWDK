@@ -9,10 +9,12 @@ import (
 	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
-// validatePageServerLists checks request-time region rendering at check time so
-// the diagnostics match build behavior. It rejects g:for/g:if/g:unsafe-html over
-// request-time server {} data (pointing at g:each/g:when), and validates that
-// g:each/g:when target server load data or, when nested, the enclosing row item.
+// validatePageServerLists mirrors, at check time, the server-lane rules the
+// renderer enforces at build time so the diagnostics match. In the lane model
+// g:for/g:if render server-side when their operand is a server {} request-time
+// field (or, when nested, the enclosing row item); this validates those
+// server-lane uses. A g:for/g:if over client state/store is the client lane and
+// is validated by the island validator, not here.
 func validatePageServerLists(page gwdkir.Page) []ValidationError {
 	nodes := pageViewNodes(page)
 	if len(nodes) == 0 {
@@ -39,10 +41,10 @@ func pageViewNodes(page gwdkir.Page) []viewmodel.Node {
 }
 
 // pageLoads describes a page's declared server {} fields. fields holds the exact
-// declared paths (e.g. "columns", "user.name") used to match a server region's
-// collection/condition the same way the renderer's taint set does. roots holds
-// the leading identifiers (e.g. "user") used for the advisory "you used a client
-// directive on load data" diagnostics, which only need to recognize the source.
+// declared paths (e.g. "columns", "user.name"); roots holds the leading
+// identifiers (e.g. "user"). The renderer resolves a top-level region's lane by
+// the operand's root, so root membership decides whether a g:for/g:if is the
+// server lane.
 type pageLoads struct {
 	fields map[string]bool
 	roots  map[string]bool
@@ -85,22 +87,13 @@ func walkPageListNodes(page gwdkir.Page, nodes []viewmodel.Node, loads pageLoads
 		inRow := len(eachVars) > 0
 		childVars := eachVars
 		if attr, has := elementAttr(element, "g:unsafe-html"); has {
-			validatePageHTMLDirective(page, attr, loads, inRow, diagnostics)
-		}
-		if attr, has := elementAttr(element, "g:for"); has {
-			validatePageForDirective(page, attr, loads, inRow, diagnostics)
+			validatePageRawHTMLDirective(page, attr, loads, inRow, diagnostics)
 		}
 		if attr, has := elementAttr(element, "g:if"); has {
-			validatePageIfDirective(page, attr, loads, inRow, diagnostics)
+			validatePageServerIfDirective(page, attr, loads, eachVars, diagnostics)
 		}
-		if attr, has := elementAttr(element, "g:else-if"); has {
-			validatePageIfDirective(page, attr, loads, inRow, diagnostics)
-		}
-		if attr, has := elementAttr(element, "g:when"); has {
-			validatePageWhenDirective(page, attr, loads, eachVars, diagnostics)
-		}
-		if attr, has := elementAttr(element, "g:each"); has {
-			pushed, ok := validatePageEachDirective(page, attr, loads, eachVars, diagnostics)
+		if attr, has := elementAttr(element, "g:for"); has {
+			pushed, ok := validatePageServerForDirective(page, attr, loads, eachVars, diagnostics)
 			if ok {
 				childVars = append(append([]string(nil), eachVars...), pushed)
 			}
@@ -109,103 +102,96 @@ func walkPageListNodes(page gwdkir.Page, nodes []viewmodel.Node, loads pageLoads
 	}
 }
 
-func validatePageIfDirective(page gwdkir.Page, attr viewmodel.Attr, loads pageLoads, inRow bool, diagnostics *[]ValidationError) {
-	expr := strings.TrimSpace(attr.Value)
-	if expr == "" {
-		return
+// serverLaneForCollection reports whether a g:for collection is the server lane:
+// nested inside a server row (inherits), or a top-level collection whose root is
+// a declared server {} field.
+func serverLaneForCollection(collection string, loads pageLoads, eachVars []string) bool {
+	if len(eachVars) > 0 {
+		return true
 	}
-	if inRow {
-		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "gif_over_load_data",
-			fmt.Sprintf("%s: %s is not supported inside a g:each row; %s binds client/island state. Branch on the row item with a nested g:when={item.field}", page.ID, attr.Name, attr.Name)))
-		return
-	}
-	if loads.roots[exprRoot(expr)] {
-		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "gif_over_load_data",
-			fmt.Sprintf("%s: %s cannot branch on request-time server {} data %q; %s binds client/island state. Render the server-side conditional with g:when={%s} (or g:when={!%s} for the empty branch)", page.ID, attr.Name, expr, attr.Name, expr, expr)))
-	}
+	return loads.roots[exprRoot(collection)]
 }
 
-func validatePageWhenDirective(page gwdkir.Page, attr viewmodel.Attr, loads pageLoads, eachVars []string, diagnostics *[]ValidationError) {
-	expr := strings.TrimSpace(attr.Value)
-	expr = strings.TrimSpace(strings.TrimPrefix(expr, "!"))
-	if expr == "" {
-		return
+func serverLaneForCondition(expr string, loads pageLoads, eachVars []string) bool {
+	if len(eachVars) > 0 {
+		return true
 	}
-	if len(eachVars) == 0 {
-		if !loads.fields[expr] {
-			*diagnostics = append(*diagnostics, pageListDiagnostic(page, "gwhen_requires_load",
-				fmt.Sprintf("%s: g:when condition %q must be a declared server {} field; g:when renders request-time server data — use g:if for client/island state", page.ID, expr)))
-		}
-		return
-	}
-	parent := eachVars[len(eachVars)-1]
-	if expr == parent {
-		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "gwhen_nested_scope",
-			fmt.Sprintf("%s: nested g:when condition cannot be the row item %q itself; reference a field such as %s.field", page.ID, parent, parent)))
-		return
-	}
-	if exprRoot(expr) != parent {
-		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "gwhen_nested_scope",
-			fmt.Sprintf("%s: nested g:when condition %q must reference the enclosing row item %q (for example %s.field)", page.ID, expr, parent, parent)))
-	}
+	return loads.roots[exprRoot(expr)]
 }
 
-func validatePageHTMLDirective(page gwdkir.Page, attr viewmodel.Attr, loads pageLoads, inRow bool, diagnostics *[]ValidationError) {
-	expr := strings.TrimSpace(attr.Value)
-	if expr == "" {
-		return
-	}
-	if inRow {
-		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "ghtml_over_load_data",
-			fmt.Sprintf("%s: g:unsafe-html is not supported inside a g:each row; row data is attacker-influenceable and bypasses escape-by-default. Render row text with escape-by-default interpolation instead of raw HTML", page.ID)))
-		return
-	}
-	if loads.roots[exprRoot(expr)] {
-		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "ghtml_over_load_data",
-			fmt.Sprintf("%s: g:unsafe-html cannot render request-time server {} data %q; server {} fields are attacker-influenceable and bypass escape-by-default. Render request-time text with escape-by-default interpolation (e.g. inside g:each) instead of raw HTML", page.ID, expr)))
-	}
-}
-
-func validatePageForDirective(page gwdkir.Page, attr viewmodel.Attr, loads pageLoads, inRow bool, diagnostics *[]ValidationError) {
+func validatePageServerForDirective(page gwdkir.Page, attr viewmodel.Attr, loads pageLoads, eachVars []string, diagnostics *[]ValidationError) (string, bool) {
 	loop, err := viewparse.ParseForDirective(attr.Value)
 	if err != nil {
-		return
+		if serverLaneForCollection(strings.TrimSpace(attr.Value), loads, eachVars) {
+			*diagnostics = append(*diagnostics, pageListDiagnostic(page, "server_for_invalid", fmt.Sprintf("%s: %v", page.ID, err)))
+		}
+		return "", false
 	}
-	if inRow {
-		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "gfor_over_load_data",
-			fmt.Sprintf("%s: g:for is not supported inside a g:each row; g:for binds client/island state. Iterate row data with a nested g:each={%s in %s}", page.ID, loop.Var, loop.Collection)))
-		return
-	}
-	if loads.roots[exprRoot(loop.Collection)] {
-		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "gfor_over_load_data",
-			fmt.Sprintf("%s: g:for cannot iterate request-time server {} data %q; g:for binds client/island state. Render the server-side list with g:each={%s in %s}", page.ID, loop.Collection, loop.Var, loop.Collection)))
-	}
-}
-
-func validatePageEachDirective(page gwdkir.Page, attr viewmodel.Attr, loads pageLoads, eachVars []string, diagnostics *[]ValidationError) (string, bool) {
-	each, err := viewparse.ParseEachDirective(attr.Value)
-	if err != nil {
-		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "geach_invalid", fmt.Sprintf("%s: %v", page.ID, err)))
+	if !serverLaneForCollection(loop.Collection, loads, eachVars) {
+		// Client lane: a g:for over client state/store is validated by the island
+		// validator. Do not push a client loop variable into the server row scope.
 		return "", false
 	}
 	if len(eachVars) == 0 {
-		if !loads.fields[each.Collection] {
-			*diagnostics = append(*diagnostics, pageListDiagnostic(page, "geach_requires_load",
-				fmt.Sprintf("%s: g:each collection %q must be a declared server {} field; g:each renders request-time server data — use g:for for client/island state", page.ID, each.Collection)))
-		}
-		return each.Var, true
+		return loop.Var, true
 	}
 	parent := eachVars[len(eachVars)-1]
-	if each.Collection == parent {
-		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "geach_nested_scope",
-			fmt.Sprintf("%s: nested g:each collection cannot be the parent item %q itself; reference a slice field such as %s.items", page.ID, parent, parent)))
-		return each.Var, true
+	if loop.Collection == parent {
+		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "server_for_nested_scope",
+			fmt.Sprintf("%s: nested g:for collection cannot be the parent row item %q itself; reference a slice field such as %s.items", page.ID, parent, parent)))
+		return loop.Var, true
 	}
-	if exprRoot(each.Collection) != parent {
-		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "geach_nested_scope",
-			fmt.Sprintf("%s: nested g:each collection %q must reference the parent item %q (for example %s.field)", page.ID, each.Collection, parent, parent)))
+	if exprRoot(loop.Collection) != parent {
+		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "server_for_nested_scope",
+			fmt.Sprintf("%s: nested g:for collection %q must reference the parent row item %q (for example %s.field)", page.ID, loop.Collection, parent, parent)))
 	}
-	return each.Var, true
+	return loop.Var, true
+}
+
+func validatePageServerIfDirective(page gwdkir.Page, attr viewmodel.Attr, loads pageLoads, eachVars []string, diagnostics *[]ValidationError) {
+	raw := strings.TrimSpace(attr.Value)
+	condition := strings.TrimSpace(strings.TrimPrefix(raw, "!"))
+	if condition == "" {
+		return
+	}
+	if !serverLaneForCondition(condition, loads, eachVars) {
+		// Client lane: validated by the island validator.
+		return
+	}
+	if strings.ContainsAny(condition, "!&|=<>(){}") {
+		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "server_if_invalid",
+			fmt.Sprintf("%s: server-lane g:if condition %q must be a single server {} field, optionally negated with a leading !; compute compound conditions in Go and expose a bool server {} field", page.ID, condition)))
+		return
+	}
+	if len(eachVars) == 0 {
+		return
+	}
+	parent := eachVars[len(eachVars)-1]
+	if condition == parent {
+		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "server_if_nested_scope",
+			fmt.Sprintf("%s: nested g:if condition cannot be the row item %q itself; reference a field such as %s.field", page.ID, parent, parent)))
+		return
+	}
+	if exprRoot(condition) != parent {
+		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "server_if_nested_scope",
+			fmt.Sprintf("%s: nested g:if condition %q must reference the enclosing row item %q (for example %s.field)", page.ID, condition, parent, parent)))
+	}
+}
+
+func validatePageRawHTMLDirective(page gwdkir.Page, attr viewmodel.Attr, loads pageLoads, inRow bool, diagnostics *[]ValidationError) {
+	expr := strings.TrimSpace(attr.Value)
+	if expr == "" {
+		return
+	}
+	if inRow {
+		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "ghtml_over_load_data",
+			fmt.Sprintf("%s: g:unsafe-html is not supported inside a server-lane g:for row; row data is attacker-influenceable and bypasses escape-by-default. Render row text with escape-by-default interpolation instead of raw HTML", page.ID)))
+		return
+	}
+	if loads.roots[exprRoot(expr)] {
+		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "ghtml_over_load_data",
+			fmt.Sprintf("%s: g:unsafe-html cannot render request-time server {} data %q; server {} fields are attacker-influenceable and bypass escape-by-default. Render request-time text with escape-by-default interpolation (e.g. inside g:for) instead of raw HTML", page.ID, expr)))
+	}
 }
 
 func pageListDiagnostic(page gwdkir.Page, code, message string) ValidationError {

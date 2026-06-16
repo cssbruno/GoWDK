@@ -14,16 +14,32 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 	if node.Name == "slot" {
 		return renderSlotElement(node, ctx, out)
 	}
-	if elementHasEach(node) {
-		return renderServerListElement(node, ctx, out)
+	// g:for and g:if route to the server (request-time region) or client
+	// (reactive island) lane depending on whether their operand resolves to
+	// server {} request-time data or to client state/store. Inside a server
+	// region every nested directive inherits the server lane.
+	if elementHasAttr(node, "g:for") {
+		lane, err := ctx.forDirectiveLane(node)
+		if err != nil {
+			return err
+		}
+		if lane == laneServer {
+			return renderServerListElement(node, ctx, out)
+		}
+		if loop, keyExpr, ok, err := elementForDirective(node, ctx); err != nil {
+			return err
+		} else if ok {
+			return renderForElement(node, ctx, out, loop, keyExpr)
+		}
 	}
-	if elementHasWhen(node) {
-		return renderServerConditionalElement(node, ctx, out)
-	}
-	if loop, keyExpr, ok, err := elementForDirective(node, ctx); err != nil {
-		return err
-	} else if ok {
-		return renderForElement(node, ctx, out, loop, keyExpr)
+	if elementHasAttr(node, "g:if") && ctx.conditional == nil {
+		lane, err := ctx.ifDirectiveLane(node)
+		if err != nil {
+			return err
+		}
+		if lane == laneServer {
+			return renderServerConditionalElement(node, ctx, out)
+		}
 	}
 	if ctx.conditional != nil {
 		out.write(`<!--gowdk-if:`)
@@ -168,7 +184,7 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 			}
 			return fmt.Errorf("%s must follow a sibling g:if or g:else-if", attr.Name)
 		}
-		if attr.Name == "g:for" || attr.Name == "g:each" || attr.Name == "g:when" || attr.Name == "g:key" {
+		if attr.Name == "g:for" || attr.Name == "g:key" {
 			continue
 		}
 		if attr.Name == "g:bind:value" {

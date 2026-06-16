@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
 // SSRListReplacement is a build-time description of one server-rendered g:each
@@ -45,19 +43,11 @@ type SSRListField struct {
 	Index       bool
 }
 
-// EachDirective is a parsed g:each declaration.
-type EachDirective = viewparse.EachDirective
-
-// ParseEachDirective parses a g:each value such as "item in Items".
-func ParseEachDirective(source string) (EachDirective, error) {
-	return viewparse.ParseEachDirective(source)
-}
-
-// serverScope tracks the active g:each row or g:when branch while rendering its
-// template. itemVar is set for a row scope (interpolations are item-relative);
-// when itemVar is empty the scope is a load scope (interpolations are load {}
-// field paths validated against tainted). It also carries the collectors for the
-// region currently being built.
+// serverScope tracks the active server-lane g:for row or g:if branch while
+// rendering its template. itemVar is set for a row scope (interpolations are
+// item-relative); when itemVar is empty the scope is a load scope
+// (interpolations are server {} field paths validated against tainted). It also
+// carries the collectors for the region currently being built.
 type serverScope struct {
 	itemVar   string
 	indexVar  string
@@ -69,12 +59,75 @@ type serverScope struct {
 	seenIndex string
 }
 
-func elementHasEach(node Element) bool {
-	return elementHasAttr(node, "g:each")
+// directiveLane is the resolved execution lane of a g:for/g:if directive.
+type directiveLane int
+
+const (
+	laneClient directiveLane = iota
+	laneServer
+)
+
+// resolveDirectiveLane decides whether a g:for/g:if whose operand has the given
+// root identifier renders server-side (request-time server {} data) or
+// client-side (state/store islands). Inside an active server region every nested
+// directive inherits the server lane.
+func (ctx *renderContext) resolveDirectiveLane(root string) (directiveLane, error) {
+	if ctx.serverScope != nil {
+		return laneServer, nil
+	}
+	server := ctx.tainted[root]
+	client := ctx.isClientDataRoot(root)
+	switch {
+	case server && client:
+		return laneClient, fmt.Errorf("%q is declared as both request-time server {} data and client state/store; rename one so the directive lane is unambiguous", root)
+	case server:
+		return laneServer, nil
+	default:
+		// Client lane covers both declared client state and unknown sources; the
+		// client validator (or check-time validation) reports an unknown source.
+		return laneClient, nil
+	}
 }
 
-func elementHasWhen(node Element) bool {
-	return elementHasAttr(node, "g:when")
+func (ctx *renderContext) isClientDataRoot(root string) bool {
+	if ctx.readFields[root] {
+		return true
+	}
+	if _, ok := ctx.stateTypes[root]; ok {
+		return true
+	}
+	return false
+}
+
+// forDirectiveLane resolves the lane of an element's g:for from its collection
+// source. A parse failure falls back to the client lane so the client validator
+// reports the precise syntax error.
+func (ctx *renderContext) forDirectiveLane(node Element) (directiveLane, error) {
+	for _, attr := range node.Attrs {
+		if attr.Name != "g:for" || attr.Boolean {
+			continue
+		}
+		loop, err := ParseForDirective(strings.TrimSpace(attr.Value))
+		if err != nil {
+			return laneClient, nil
+		}
+		return ctx.resolveDirectiveLane(exprRootName(loop.Collection))
+	}
+	return laneClient, nil
+}
+
+// ifDirectiveLane resolves the lane of an element's g:if from its condition's
+// root identifier (after stripping a leading server-style negation).
+func (ctx *renderContext) ifDirectiveLane(node Element) (directiveLane, error) {
+	for _, attr := range node.Attrs {
+		if attr.Name != "g:if" || attr.Boolean {
+			continue
+		}
+		expr := strings.TrimSpace(attr.Value)
+		expr = strings.TrimSpace(strings.TrimPrefix(expr, "!"))
+		return ctx.resolveDirectiveLane(exprRootName(expr))
+	}
+	return laneClient, nil
 }
 
 func elementHasAttr(node Element, name string) bool {
@@ -92,20 +145,20 @@ func elementHasAttr(node Element, name string) bool {
 // nested g:each and g:when recurse into child specs.
 func renderServerListElement(node Element, ctx *renderContext, out *renderOutput) error {
 	if ctx.serverScope == nil && ctx.lists == nil {
-		return fmt.Errorf("g:each is only supported in a request-time page view; it cannot be used inside a component, layout, or fragment. Move the load {} data and g:each onto the page")
+		return fmt.Errorf("server-lane g:for is only supported in a request-time page view; it cannot be used inside a component, layout, or fragment. Move the server {} data and g:for onto the page")
 	}
-	if elementHasWhen(node) {
-		return fmt.Errorf("element cannot combine g:each with g:when; place g:when on a child or wrapping element")
+	if elementHasAttr(node, "g:if") {
+		return fmt.Errorf("element cannot combine a server-lane g:for with g:if; place g:if on a child or wrapping element")
 	}
-	each, err := elementEachDirective(node)
+	each, err := elementServerForDirective(node)
 	if err != nil {
 		return err
 	}
-	sourcePath, err := serverSourcePath(each.Collection, ctx, "g:each")
+	sourcePath, err := serverSourcePath(each.Collection, ctx, "g:for")
 	if err != nil {
 		return err
 	}
-	templateNode := elementWithoutAttrs(node, "g:each", "g:key")
+	templateNode := elementWithoutAttrs(node, "g:for", "g:key")
 	if err := validateServerRegionSubtree([]Node{templateNode}); err != nil {
 		return err
 	}
@@ -149,17 +202,17 @@ func renderServerListElement(node Element, ctx *renderContext, out *renderOutput
 // rendered once into a branch template in the enclosing container scope.
 func renderServerConditionalElement(node Element, ctx *renderContext, out *renderOutput) error {
 	if ctx.serverScope == nil && ctx.conds == nil {
-		return fmt.Errorf("g:when is only supported in a request-time page view; it cannot be used inside a component, layout, or fragment. Move the load {} data and g:when onto the page")
+		return fmt.Errorf("server-lane g:if is only supported in a request-time page view; it cannot be used inside a component, layout, or fragment. Move the server {} data and g:if onto the page")
 	}
-	condition, negate, err := elementWhenDirective(node)
+	condition, negate, err := elementServerIfDirective(node)
 	if err != nil {
 		return err
 	}
-	sourcePath, err := serverSourcePath(condition, ctx, "g:when")
+	sourcePath, err := serverSourcePath(condition, ctx, "g:if")
 	if err != nil {
 		return err
 	}
-	templateNode := elementWithoutAttrs(node, "g:when")
+	templateNode := elementWithoutAttrs(node, "g:if")
 	if err := validateServerRegionSubtree([]Node{templateNode}); err != nil {
 		return err
 	}
@@ -224,54 +277,54 @@ func appendServerCond(ctx *renderContext, replacement SSRCondReplacement) {
 	}
 }
 
-func elementEachDirective(node Element) (EachDirective, error) {
-	hasEach := false
-	var each EachDirective
+// elementServerForDirective parses the g:for collection on a server-lane list
+// element (its lane was already resolved from the collection's data source).
+func elementServerForDirective(node Element) (ForDirective, error) {
+	hasFor := false
+	var loop ForDirective
 	for _, attr := range node.Attrs {
-		if attr.Name != "g:each" {
+		if attr.Name != "g:for" {
 			continue
 		}
-		if hasEach {
-			return EachDirective{}, fmt.Errorf("element declares multiple g:each directives")
+		if hasFor {
+			return ForDirective{}, fmt.Errorf("element declares multiple g:for directives")
 		}
 		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
-			return EachDirective{}, fmt.Errorf("g:each requires an expression value such as g:each={item in Items}")
+			return ForDirective{}, fmt.Errorf("g:for requires an expression value such as g:for={item in Items}")
 		}
-		parsed, err := ParseEachDirective(attr.Value)
+		parsed, err := ParseForDirective(attr.Value)
 		if err != nil {
-			return EachDirective{}, err
+			return ForDirective{}, err
 		}
-		each = parsed
-		hasEach = true
+		loop = parsed
+		hasFor = true
 	}
-	for _, attr := range node.Attrs {
-		if attr.Name == "g:for" {
-			return EachDirective{}, fmt.Errorf("element cannot combine g:each with g:for; g:each renders request-time server data, g:for binds client/island state")
-		}
-	}
-	return each, nil
+	return loop, nil
 }
 
-// elementWhenDirective parses a g:when value such as "field" or "!field".
-func elementWhenDirective(node Element) (string, bool, error) {
-	hasWhen := false
+// elementServerIfDirective parses the g:if condition on a server-lane
+// conditional element. In the lane model the server condition is a single
+// server {} field, optionally negated with a leading !; richer comparison and
+// logic grammar is evaluated server-side (see the server expression evaluator).
+func elementServerIfDirective(node Element) (string, bool, error) {
+	hasIf := false
 	var raw string
 	for _, attr := range node.Attrs {
-		if attr.Name != "g:when" {
+		if attr.Name != "g:if" {
 			continue
 		}
-		if hasWhen {
-			return "", false, fmt.Errorf("element declares multiple g:when directives")
+		if hasIf {
+			return "", false, fmt.Errorf("element declares multiple g:if directives")
 		}
 		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
-			return "", false, fmt.Errorf("g:when requires an expression value such as g:when={field} or g:when={!field}")
+			return "", false, fmt.Errorf("g:if requires an expression value such as g:if={field} or g:if={!field}")
 		}
 		raw = strings.TrimSpace(attr.Value)
-		hasWhen = true
+		hasIf = true
 	}
 	for _, attr := range node.Attrs {
-		if attr.Name == "g:if" || attr.Name == "g:else-if" || attr.Name == "g:else" {
-			return "", false, fmt.Errorf("element cannot combine g:when with %s; g:when renders request-time server data, %s binds client/island state", attr.Name, attr.Name)
+		if attr.Name == "g:else-if" || attr.Name == "g:else" {
+			return "", false, fmt.Errorf("%s is a client-lane directive and cannot follow a server-lane g:if; use a sibling g:if={!field} for the server empty branch", attr.Name)
 		}
 	}
 	negate := false
@@ -280,10 +333,10 @@ func elementWhenDirective(node Element) (string, bool, error) {
 		raw = strings.TrimSpace(raw[1:])
 	}
 	if raw == "" {
-		return "", false, fmt.Errorf("g:when requires a field after %q", "!")
+		return "", false, fmt.Errorf("g:if requires a field after %q", "!")
 	}
 	if strings.ContainsAny(raw, "!&|=<>(){}") {
-		return "", false, fmt.Errorf("g:when condition %q must be a single server {} field, optionally negated with a leading !; compute compound conditions in Go and expose a bool server {} field", raw)
+		return "", false, fmt.Errorf("server-lane g:if condition %q must be a single server {} field, optionally negated with a leading !; compute compound conditions in Go and expose a bool server {} field", raw)
 	}
 	return raw, negate, nil
 }
@@ -325,10 +378,10 @@ func validateServerRegionSubtree(nodes []Node) error {
 				if !strings.HasPrefix(attr.Name, "g:") {
 					continue
 				}
-				if attr.Name == "g:each" || attr.Name == "g:key" || attr.Name == "g:when" {
+				if attr.Name == "g:for" || attr.Name == "g:key" || attr.Name == "g:if" {
 					continue
 				}
-				return fmt.Errorf("g:each rows and g:when branches support only static markup, scoped interpolation, nested g:each, and nested g:when; %q is not allowed", attr.Name)
+				return fmt.Errorf("server-lane g:for rows and g:if branches support only static markup, scoped interpolation, nested g:for, and nested g:if; %q is not allowed", attr.Name)
 			}
 			if err := validateServerRegionSubtree(typed.Children); err != nil {
 				return err

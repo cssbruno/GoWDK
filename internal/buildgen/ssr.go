@@ -108,9 +108,9 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 		return SSRArtifact{}, err
 	}
 	if !regions.empty() && !page.Blocks.Server {
-		return SSRArtifact{}, fmt.Errorf("%s: g:each and g:when require SSR load {} data", page.ID)
+		return SSRArtifact{}, fmt.Errorf("%s: g:for and g:if over server data require a server {} block", page.ID)
 	}
-	// A load field consumed only by g:each/g:when (resolved by the runtime region
+	// A load field consumed only by g:for/g:if (resolved by the runtime region
 	// renderer) leaves no scalar placeholder in the HTML. Drop those request-time
 	// replacements so the handler does not stringify and substitute a value that
 	// never appears in the output.
@@ -136,7 +136,7 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 
 // usedLoadReplacements keeps only the scalar load replacements whose placeholder
 // still appears in the rendered HTML. A placeholder is absent when its load field
-// is consumed solely by g:each, whose rows are expanded by the runtime list
+// is consumed solely by g:for, whose rows are expanded by the runtime list
 // renderer rather than by request-time string substitution.
 func usedLoadReplacements(html string, replacements []SSRLoadReplacement) []SSRLoadReplacement {
 	if len(replacements) == 0 {

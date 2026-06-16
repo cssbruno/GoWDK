@@ -21,7 +21,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-const buildUsage = "usage: gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
+const buildUsage = "usage: gowdk build [--config <file>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
 
 func build(args []string) error {
 	started := time.Now()
@@ -68,6 +68,7 @@ type buildOptions struct {
 	DockerBase        string
 	DeployRecipes     []string
 	ConfigPath        string
+	EnvFilePath       string
 	TargetNames       []string
 	ModuleNames       []string
 	Paths             []string
@@ -746,6 +747,16 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 			plan.ConfigPath = args[i]
 		case len(arg) > len("--config=") && arg[:len("--config=")] == "--config=":
 			plan.ConfigPath = arg[len("--config="):]
+		case arg == "--env-file":
+			i++
+			if i >= len(args) {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.EnvFilePath = args[i]
+			plan.Options.EnvFilePath = args[i]
+		case len(arg) > len("--env-file=") && arg[:len("--env-file=")] == "--env-file=":
+			plan.EnvFilePath = arg[len("--env-file="):]
+			plan.Options.EnvFilePath = plan.EnvFilePath
 		case arg == "--target":
 			i++
 			if i >= len(args) {

@@ -222,7 +222,7 @@ func (state devBuildState) snapshot() (inputSnapshot, error) {
 }
 
 func (state devBuildState) configChanged(change inputChange) bool {
-	return inputChangeTouchesConfig(change, state.plan.ConfigPath)
+	return inputChangeTouchesConfig(change, state.plan.ConfigPath) || inputChangeTouchesEnvFile(change, state.plan.Options.EnvFilePath)
 }
 
 type devServeState struct {

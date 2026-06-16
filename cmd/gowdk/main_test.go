@@ -53,6 +53,64 @@ view {
 	}
 }
 
+func TestCheckCommandLoadsExplicitEnvFile(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	secretName := "GOWDK_TEST_ENV_FILE_SECRET_EXPLICIT"
+	_ = os.Unsetenv(secretName)
+	t.Cleanup(func() { _ = os.Unsetenv(secretName) })
+	config := writeEnvContractCLIConfig(t, root, secretName, 32)
+	envPath := filepath.Join(root, ".env.dev")
+	writeCLIFile(t, envPath, secretName+"=development-secret-value-32-bytes-long\n")
+	writeCLIFile(t, source, `package app
+
+page home
+route "/"
+
+view {
+  <main>Env file</main>
+}
+`)
+
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"check", "--config", config, "--env-file", envPath, source})
+	})
+	if err != nil {
+		t.Fatalf("expected check to load env file, got err=%v stderr=%s", err, stderr)
+	}
+	if strings.TrimSpace(stdout) != "ok" || stderr != "" {
+		t.Fatalf("unexpected check output stdout=%q stderr=%q", stdout, stderr)
+	}
+}
+
+func TestCheckCommandKeepsProcessEnvOverEnvFile(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	secretName := "GOWDK_TEST_ENV_FILE_SECRET_PROCESS"
+	t.Setenv(secretName, "process-secret-value-32-bytes-long")
+	config := writeEnvContractCLIConfig(t, root, secretName, 32)
+	writeCLIFile(t, filepath.Join(root, ".env"), secretName+"=short\n")
+	writeCLIFile(t, source, `package app
+
+page home
+route "/"
+
+view {
+  <main>Process env</main>
+}
+`)
+
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"check", "--config", config, source})
+	})
+	if err != nil {
+		t.Fatalf("expected process env to win over short file value, got err=%v stderr=%s", err, stderr)
+	}
+	if strings.TrimSpace(stdout) != "ok" || stderr != "" {
+		t.Fatalf("unexpected check output stdout=%q stderr=%q", stdout, stderr)
+	}
+}
+
 func TestBuildCommandPrerendersSupportedStaticSlice(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "docs.page.gwdk")
@@ -6848,6 +6906,24 @@ import "github.com/cssbruno/gowdk"
 var Config = gowdk.Config{}
 `)
 	return path
+}
+
+func writeEnvContractCLIConfig(t *testing.T, root string, secretName string, minBytes int) string {
+	t.Helper()
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, fmt.Sprintf(`package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Env: gowdk.EnvConfig{
+		Secrets: []gowdk.SecretEnv{
+			{Name: %q, Required: true, MinBytes: %d},
+		},
+	},
+}
+`, secretName, minBytes))
+	return config
 }
 
 func writeCLITestModule(t *testing.T, root string, modulePath string) {

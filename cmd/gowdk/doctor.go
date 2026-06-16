@@ -15,7 +15,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/lang"
 )
 
-const doctorUsage = "usage: gowdk doctor [--config <file>] [--module <name>] [--ssr] [--json] [files...]"
+const doctorUsage = "usage: gowdk doctor [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...]"
 
 type doctorReport struct {
 	Version     int               `json:"version"`
@@ -33,11 +33,15 @@ type doctorSummary struct {
 }
 
 type doctorEnvironment struct {
-	GOWDKVersion string `json:"gowdkVersion"`
-	WorkingDir   string `json:"workingDir"`
-	ConfigPath   string `json:"configPath,omitempty"`
-	GoVersion    string `json:"goVersion,omitempty"`
-	GoEnvVersion string `json:"goEnvVersion,omitempty"`
+	GOWDKVersion string   `json:"gowdkVersion"`
+	WorkingDir   string   `json:"workingDir"`
+	ConfigPath   string   `json:"configPath,omitempty"`
+	EnvFilePath  string   `json:"envFilePath,omitempty"`
+	EnvFile      string   `json:"envFile,omitempty"`
+	EnvFileVars  []string `json:"envFileVars,omitempty"`
+	ProcessVars  []string `json:"processVars,omitempty"`
+	GoVersion    string   `json:"goVersion,omitempty"`
+	GoEnvVersion string   `json:"goEnvVersion,omitempty"`
 }
 
 type doctorCheck struct {
@@ -225,13 +229,50 @@ func (report *doctorReport) runConfigCheck(options *cliOptions, configPath strin
 		return false
 	}
 	report.Environment.ConfigPath = doctorConfigDisplayPath(configPath)
+	report.Environment.EnvFilePath = doctorEnvFileDisplayPath(*options)
 	report.addCheck(doctorCheck{
 		ID:       "config",
 		Status:   "ok",
 		Severity: "info",
 		Message:  "loaded " + report.Environment.ConfigPath,
 	})
+	report.addEnvFileCheck(options)
 	return true
+}
+
+func (report *doctorReport) addEnvFileCheck(options *cliOptions) {
+	if options.EnvFileLoaded {
+		report.Environment.EnvFilePath = options.EnvFilePath
+		report.Environment.EnvFile = "loaded"
+		report.Environment.EnvFileVars = append([]string(nil), options.EnvFileApplied...)
+		report.Environment.ProcessVars = append([]string(nil), options.EnvFileSkipped...)
+		report.addCheck(doctorCheck{
+			ID:       "env_file",
+			Status:   "ok",
+			Severity: "info",
+			Message:  doctorEnvFileLoadedMessage(options),
+		})
+		return
+	}
+	if options.EnvFileExplicit {
+		report.Environment.EnvFilePath = options.EnvFilePath
+		report.Environment.EnvFile = "missing"
+		report.addCheck(doctorCheck{
+			ID:        "env_file",
+			Status:    "error",
+			Severity:  "error",
+			Message:   "env file was requested but did not load",
+			NextSteps: []string{"Check the --env-file path."},
+		})
+		return
+	}
+	report.Environment.EnvFile = "not_found"
+	report.addCheck(doctorCheck{
+		ID:       "env_file",
+		Status:   "ok",
+		Severity: "info",
+		Message:  "no .env file discovered",
+	})
 }
 
 func (report *doctorReport) runSourcesCheck(config gowdk.Config, moduleNames, paths []string, projectRoot string) ([]string, bool) {
@@ -445,6 +486,28 @@ func doctorConfigDisplayPath(configPath string) string {
 		return configPath
 	}
 	return "gowdk.config.go"
+}
+
+func doctorEnvFileDisplayPath(options cliOptions) string {
+	if strings.TrimSpace(options.EnvFilePath) == "" {
+		return ""
+	}
+	return options.EnvFilePath
+}
+
+func doctorEnvFileLoadedMessage(options *cliOptions) string {
+	message := "loaded " + options.EnvFilePath
+	if len(options.EnvFileApplied) == 0 && len(options.EnvFileSkipped) == 0 {
+		return message
+	}
+	var details []string
+	if len(options.EnvFileApplied) > 0 {
+		details = append(details, fmt.Sprintf("from file: %s", strings.Join(options.EnvFileApplied, ", ")))
+	}
+	if len(options.EnvFileSkipped) > 0 {
+		details = append(details, fmt.Sprintf("process kept: %s", strings.Join(options.EnvFileSkipped, ", ")))
+	}
+	return message + " (" + strings.Join(details, ", ") + ")"
 }
 
 func doctorNodeLooksRelevant() bool {

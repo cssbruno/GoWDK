@@ -133,6 +133,59 @@ view {
 	}
 }
 
+func TestDoctorCommandReportsLoadedEnvFile(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "home.page.gwdk")
+	secretName := "GOWDK_TEST_DOCTOR_ENV_FILE_SECRET"
+	_ = os.Unsetenv(secretName)
+	t.Cleanup(func() { _ = os.Unsetenv(secretName) })
+	config := writeEnvContractCLIConfig(t, root, secretName, 32)
+	envPath := filepath.Join(root, ".env")
+	writeCLIFile(t, envPath, secretName+"=doctor-secret-value-32-bytes-long\n")
+	writeCLIFile(t, source, `package app
+
+page home
+route "/"
+
+view {
+  <main>Doctor env</main>
+}
+`)
+
+	stdout, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"doctor", "--json", "--config", config, source})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	var decoded struct {
+		Environment struct {
+			EnvFilePath string `json:"envFilePath"`
+			EnvFile     string `json:"envFile"`
+		} `json:"environment"`
+		Checks []struct {
+			ID      string `json:"id"`
+			Status  string `json:"status"`
+			Message string `json:"message"`
+		} `json:"checks"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &decoded); err != nil {
+		t.Fatalf("expected JSON doctor output, got %q: %v", stdout, err)
+	}
+	if decoded.Environment.EnvFilePath != envPath || decoded.Environment.EnvFile != "loaded" {
+		t.Fatalf("expected loaded env file in environment: %#v", decoded.Environment)
+	}
+	if !doctorReportHasCheck(decoded.Checks, "env_file", "ok") {
+		t.Fatalf("expected env_file ok check: %#v", decoded.Checks)
+	}
+	if strings.Contains(stdout, "doctor-secret-value") {
+		t.Fatalf("doctor output must not include secret values:\n%s", stdout)
+	}
+}
+
 func TestDoctorCommandReportsMissingConfig(t *testing.T) {
 	root := t.TempDir()
 	withWorkingDir(t, root, func() {

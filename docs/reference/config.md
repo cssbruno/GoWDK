@@ -282,12 +282,27 @@ or blank in the host environment fail with a direct diagnostic such as
 treated as satisfied by the default. Secrets have no `Default` or value field by
 type; `Default` and `Value` are rejected in literal config parsing too.
 
+Project-aware CLI commands can load local env files before validation:
+
+```sh
+gowdk check --env-file .env.dev
+gowdk build --env-file .env.production
+```
+
+If `--env-file` is omitted, GOWDK auto-loads `.env.<GOWDK_ENV>` from the
+project root when `GOWDK_ENV` is set and the file exists, otherwise `.env` when
+present. Process environment values always win over file values. The file is
+only a value source for the same validation contract; it does not bypass
+`Required` or `MinBytes`.
+
 The same name cannot appear in both `Vars` and `Secrets`. Secret-looking var
 names ending in `_SECRET`, `_TOKEN`, `_PASSWORD`, or `_KEY` are rejected and
 must move to `Secrets`. Diagnostics print names only and never print values.
 
 Generated app binaries repeat the required env check before serving requests.
-This is a startup redundancy layer only. It does not replace backend
+For direct binary runs, set `GOWDK_ENV_FILE=/path/to/.env` or place `.env` in
+the process working directory. This is a startup redundancy layer only. It does
+not replace backend
 authorization, handler validation, database checks, deployment secrets, or
 runtime-specific security controls.
 

@@ -9,6 +9,7 @@ import (
 	gowdkactions "github.com/cssbruno/gowdk/addons/actions"
 	gowdkruntime "github.com/cssbruno/gowdk/runtime/app"
 	gowdkcontracts "github.com/cssbruno/gowdk/runtime/contracts"
+	gowdkenvfile "github.com/cssbruno/gowdk/runtime/envfile"
 	gowdkform "github.com/cssbruno/gowdk/runtime/form"
 	gowdkresponse "github.com/cssbruno/gowdk/runtime/response"
 	"io/fs"
@@ -46,6 +47,9 @@ func Handler() (http.Handler, error) {
 	return ServeMux()
 }
 func ServeMux() (*http.ServeMux, error) {
+	if err := loadEnvFile(); err != nil {
+		return nil, err
+	}
 	root, err := fs.Sub(embeddedFiles, "app")
 	if err != nil {
 		return nil, err
@@ -63,6 +67,15 @@ func ServeMux() (*http.ServeMux, error) {
 	mux := http.NewServeMux()
 	mux.Handle("/", gowdkruntime.ApplyMiddlewares(&gowdkruntime.Handler{Root: root, Identity: gowdkruntime.InstanceIdentity(), Assets: gowdkruntime.LoadAssetManifest(root), ErrorPages: gowdkruntime.LoadErrorPages(root), Backend: backendRouter.HandlerFunc(), CSRF: csrfTokenSource, SSRExact: ssrExact, SSRDynamic: ssrDynamic, RequestTimeout: gowdkruntime.DefaultRequestTimeout}, registeredMiddlewares()...))
 	return mux, nil
+}
+func loadEnvFile() error {
+	explicit := strings.TrimSpace(os.Getenv("GOWDK_ENV_FILE"))
+	path, _, err := gowdkenvfile.LookupPath("", explicit)
+	if err != nil {
+		return err
+	}
+	_, err = gowdkenvfile.LoadIntoEnv(path, explicit != "")
+	return err
 }
 func action(response http.ResponseWriter, request *http.Request) bool {
 	requestPath := actionRequestPath(request.URL.Path)

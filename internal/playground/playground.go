@@ -66,8 +66,8 @@ func DefaultPolicy() Policy {
 	return Policy{
 		HostedExecutionEnabled: false,
 		Workspace:              "isolated disposable workspace copied from allowed project files",
-		Network:                "disabled by default; hosted runners must keep GOPROXY=off and block outbound access",
-		Filesystem:             "empty workspace only; repository secrets, host credentials, generated output, and private files are not mounted",
+		Network:                "no network: the build runs in an isolated network namespace with no configured interface",
+		Filesystem:             "pivot_root confinement: only the staged workspace, output directory, and a read-only toolchain are visible; the host filesystem is unreachable",
 		Persistence:            "none unless the user explicitly exports a project archive",
 		VersionPinning:         "hosted runners must pin the GOWDK binary version for the session",
 		Export:                 "ordinary GOWDK source project archive without .gowdk, dist, bin, env files, secrets, or generated reports",
@@ -79,8 +79,8 @@ func DefaultPolicy() Policy {
 			MaxOutputBytes:   2 * 1024 * 1024,
 		},
 		Environment: []string{
-			"only PATH and isolated Go cache variables are inherited or synthesized",
-			"secret-looking environment variables are rejected",
+			"the build runs with a synthesized environment, not the host's; no variables are inherited",
+			"only the in-sandbox toolchain and cache paths are set",
 			"GOPROXY=off",
 			"GOSUMDB=off",
 			"GOWORK=off",

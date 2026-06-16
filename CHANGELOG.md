@@ -7,6 +7,27 @@ packages, and tooling contracts may change before 1.0.
 
 ### Implemented
 
+- **OS-level playground sandbox (#459).** `gowdk playground run
+  --allow-hosted-execution` now builds inside a real Linux sandbox instead of
+  in-process. It re-executes into fresh user/mount/PID/network/IPC/UTS
+  namespaces, `pivot_root`s into a minimal tree (read-only toolchain + throwaway
+  module-cache overlay + the staged workspace and output only; no host `/dev/tty`),
+  drops privileges (`no_new_privs`, emptied capability bounding/ambient sets),
+  caps resources with rlimits (including a process cap) and size-bounded tmpfs
+  mounts, and runs with a synthesized environment (`GOPROXY=off`, `GOSUMDB=off`,
+  `GOWORK=off`). The
+  result: the build has no network, cannot read host data, and cannot escalate —
+  even though it executes the Go toolchain. Confinement is gated to the launched
+  namespaces (a direct invocation of the internal build target refuses), the
+  child dies with its parent, and `run` requires an explicit module-cache choice
+  (`--module-cache <dir>` for a per-session cache, or `--allow-shared-module-cache`)
+  plus a fresh empty `--out`. It **fails closed** when the sandbox is unavailable
+  (non-Linux, or unprivileged user namespaces disabled/denied) rather than
+  running unconfined. Isolation is verified by an `internal/playground` test that
+  asserts network egress and host-file reads are denied inside the sandbox.
+  seccomp/Landlock and cgroup memory/pids caps are tracked follow-ups, and a
+  hosted runner must still wrap this in an outer VM/container boundary.
+
 - **Addon lifecycle contract and version handshake (#416).**
   `docs/reference/addons.md` now documents the four-phase addon lifecycle
   (config loading → compiler validation → generated output → runtime hook
@@ -17,6 +38,7 @@ packages, and tooling contracts may change before 1.0.
   `Registry.UnsupportedFor` check a CLI version against an entry's
   `minGOWDK`/`maxGOWDK` bounds (supported/unsupported/unknown) — with tests.
   Build-time auto-enforcement of the bound remains a deliberate follow-up.
+
 - **Real-world Go interop example (#329).** `examples/go-interop/newsletter.go`
   + `newsletter-digest.page.gwdk` show a page delegating real behavior to the
   standard library: subscriber addresses are validated with `net/mail` and the

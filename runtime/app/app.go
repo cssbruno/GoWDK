@@ -228,7 +228,7 @@ func (handler *Handler) serveHTTP(response http.ResponseWriter, request *http.Re
 	if request.Method != http.MethodGet && request.Method != http.MethodHead {
 		metrics.recordMethodNotAllowed()
 		response.Header().Set("Allow", "GET, HEAD")
-		http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
+		http.Error(response, handler.methodNotAllowedMessage(request), http.StatusMethodNotAllowed)
 		return
 	}
 	if handler.isDeniedPath(request.URL.Path) {
@@ -261,6 +261,91 @@ func (handler *Handler) serveHTTP(response http.ResponseWriter, request *http.Re
 	metrics.recordStatic()
 	handler.setGeneratedStaticCache(response, assetName)
 	http.ServeContent(response, request, info.Name(), info.ModTime(), bytes.NewReader(payload))
+}
+
+type generatedRouteManifest struct {
+	Routes []struct {
+		PageID string `json:"page"`
+		Route  string `json:"route"`
+	} `json:"routes"`
+	Endpoints []generatedRouteEndpoint `json:"endpoints"`
+}
+
+type generatedRouteEndpoint struct {
+	Kind      string `json:"kind"`
+	Directive string `json:"directive"`
+	Method    string `json:"method"`
+	Route     string `json:"route"`
+	PageID    string `json:"page"`
+	Symbol    string `json:"symbol"`
+	Handler   string `json:"handler"`
+}
+
+func (handler Handler) methodNotAllowedMessage(request *http.Request) string {
+	if request == nil {
+		return "method not allowed"
+	}
+	message := "method not allowed: " + request.Method + " " + request.URL.Path
+	manifest, ok := handler.loadRouteManifest()
+	if !ok {
+		return message
+	}
+	for _, route := range manifest.Routes {
+		if route.Route == request.URL.Path {
+			message += "; page route " + route.Route + " accepts GET, HEAD"
+			break
+		}
+	}
+	if endpoint, ok := manifest.endpointForRequest(request.Method, request.URL.Path); ok {
+		message += "; generated endpoint " + endpoint.Method + " " + endpoint.Route
+		if endpoint.Directive != "" || endpoint.Symbol != "" {
+			message += " (" + strings.TrimSpace(endpoint.Directive+" "+endpoint.Symbol) + ")"
+		}
+		if endpoint.PageID != "" {
+			message += " exists for page " + endpoint.PageID
+		}
+	}
+	return message
+}
+
+func (handler Handler) loadRouteManifest() (generatedRouteManifest, bool) {
+	if handler.Root == nil {
+		return generatedRouteManifest{}, false
+	}
+	payload, err := fs.ReadFile(handler.Root, "gowdk-routes.json")
+	if err != nil {
+		return generatedRouteManifest{}, false
+	}
+	var manifest generatedRouteManifest
+	if err := json.Unmarshal(payload, &manifest); err != nil {
+		return generatedRouteManifest{}, false
+	}
+	return manifest, true
+}
+
+func (manifest generatedRouteManifest) endpointForRequest(method string, path string) (generatedRouteEndpoint, bool) {
+	method = strings.ToUpper(strings.TrimSpace(method))
+	for _, endpoint := range manifest.Endpoints {
+		if strings.ToUpper(strings.TrimSpace(endpoint.Method)) != method {
+			continue
+		}
+		if generatedEndpointRouteMatches(endpoint.Route, path) {
+			return endpoint, true
+		}
+	}
+	return generatedRouteEndpoint{}, false
+}
+
+func generatedEndpointRouteMatches(endpointRoute string, requestPath string) bool {
+	endpointRoute = strings.TrimSpace(endpointRoute)
+	if endpointRoute == requestPath {
+		return true
+	}
+	if !strings.Contains(endpointRoute, "{") {
+		return false
+	}
+	_, ok := route.Match(endpointRoute, requestPath)
+	return ok
 }
 
 // isDeniedPath reports whether requestPath resolves to a guardless page that is

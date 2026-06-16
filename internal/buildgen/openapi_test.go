@@ -3,11 +3,13 @@ package buildgen
 import (
 	"testing"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestBuildOpenAPISpecKeepsOriginalGOWDKRoute(t *testing.T) {
-	spec := buildOpenAPISpec(gwdkir.Program{
+	spec := buildOpenAPISpec(gowdk.Config{}, gwdkir.Program{
 		Endpoints: []gwdkir.Endpoint{{
 			Kind:   gwdkir.EndpointFragment,
 			Method: "GET",
@@ -27,5 +29,111 @@ func TestBuildOpenAPISpecKeepsOriginalGOWDKRoute(t *testing.T) {
 	}
 	if operation.XGOWDK.Route != "/docs/{path...}" {
 		t.Fatalf("x-gowdk route = %q, want %q", operation.XGOWDK.Route, "/docs/{path...}")
+	}
+}
+
+func TestBuildOpenAPISpecIncludesTypedEndpointRouteMetadata(t *testing.T) {
+	spec := buildOpenAPISpec(gowdk.Config{}, gwdkir.Program{
+		Endpoints: []gwdkir.Endpoint{{
+			Kind:        gwdkir.EndpointFragment,
+			Source:      gwdkir.EndpointSourceGOWDK,
+			Method:      "GET",
+			Path:        "/patients/{id:int}/vitals",
+			PageID:      "patients",
+			Symbol:      "Vitals",
+			Cache:       "no-store",
+			Guards:      []string{"auth.required"},
+			CSRF:        true,
+			RouteParams: []source.RouteParam{{Name: "id", Type: "int"}},
+		}},
+	})
+
+	operation := spec.Paths["/patients/{id}/vitals"]["get"]
+	if len(operation.Parameters) != 1 {
+		t.Fatalf("expected path parameter, got %#v", operation.Parameters)
+	}
+	param := operation.Parameters[0]
+	if param.Name != "id" || param.In != "path" || !param.Required || param.Schema.Type != "integer" || param.Schema.Format != "int64" {
+		t.Fatalf("unexpected path parameter: %#v", param)
+	}
+	if operation.XGOWDK.EndpointSource != "gwdk" ||
+		operation.XGOWDK.Cache != "no-store" ||
+		!operation.XGOWDK.CSRF ||
+		len(operation.XGOWDK.Guards) != 1 ||
+		operation.XGOWDK.Guards[0] != "auth.required" {
+		t.Fatalf("unexpected x-gowdk metadata: %#v", operation.XGOWDK)
+	}
+}
+
+func TestBuildOpenAPISpecMapsSupportedEndpointRouteParamTypes(t *testing.T) {
+	tests := []struct {
+		paramType  string
+		schemaType string
+		format     string
+	}{
+		{paramType: "string", schemaType: "string"},
+		{paramType: "int", schemaType: "integer", format: "int64"},
+		{paramType: "int64", schemaType: "integer", format: "int64"},
+		{paramType: "uint", schemaType: "integer", format: "uint64"},
+		{paramType: "uint64", schemaType: "integer", format: "uint64"},
+		{paramType: "bool", schemaType: "boolean"},
+		{paramType: "float64", schemaType: "number", format: "double"},
+	}
+	for _, test := range tests {
+		t.Run(test.paramType, func(t *testing.T) {
+			spec := buildOpenAPISpec(gowdk.Config{}, gwdkir.Program{
+				Endpoints: []gwdkir.Endpoint{{
+					Kind:        gwdkir.EndpointAPI,
+					Source:      gwdkir.EndpointSourceGOWDK,
+					Method:      "GET",
+					Path:        "/values/{value:" + test.paramType + "}",
+					PageID:      "values",
+					Symbol:      "Show",
+					RouteParams: []source.RouteParam{{Name: "value", Type: test.paramType}},
+				}},
+			})
+
+			operation := spec.Paths["/values/{value}"]["get"]
+			if len(operation.Parameters) != 1 {
+				t.Fatalf("expected one path parameter, got %#v", operation.Parameters)
+			}
+			schema := operation.Parameters[0].Schema
+			if schema.Type != test.schemaType || schema.Format != test.format {
+				t.Fatalf("route param %s schema = %#v, want type=%q format=%q", test.paramType, schema, test.schemaType, test.format)
+			}
+		})
+	}
+}
+
+func TestBuildOpenAPISpecMarksCommandContractsCSRFProtectedByDefault(t *testing.T) {
+	spec := buildOpenAPISpec(gowdk.Config{}, gwdkir.Program{
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:    gwdkir.ContractCommand,
+			Name:    "patients.Create",
+			Method:  "POST",
+			Path:    "/_gowdk/commands/patients.Create",
+			Status:  gwdkir.ContractBindingBound,
+			OwnerID: "patients",
+		}},
+	})
+
+	operation := spec.Paths["/_gowdk/commands/patients.Create"]["post"]
+	if !operation.XGOWDK.CSRF {
+		t.Fatalf("expected command contract OpenAPI metadata to preserve CSRF: %#v", operation.XGOWDK)
+	}
+
+	disabled := buildOpenAPISpec(gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{Disabled: true}}}, gwdkir.Program{
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:    gwdkir.ContractCommand,
+			Name:    "patients.Create",
+			Method:  "POST",
+			Path:    "/_gowdk/commands/patients.Create",
+			Status:  gwdkir.ContractBindingBound,
+			OwnerID: "patients",
+		}},
+	})
+	operation = disabled.Paths["/_gowdk/commands/patients.Create"]["post"]
+	if operation.XGOWDK.CSRF {
+		t.Fatalf("expected disabled CSRF config to be reflected in OpenAPI metadata: %#v", operation.XGOWDK)
 	}
 }

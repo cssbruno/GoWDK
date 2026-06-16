@@ -32,6 +32,20 @@ func run(args []string) error {
 		usage()
 		return nil
 	}
+	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help") {
+		usage()
+		return nil
+	}
+	if help, ok := nestedCommandUsage(args); ok {
+		fmt.Println(help)
+		return nil
+	}
+	if commandHelpRequested(args) {
+		if help, ok := commandUsage(args[0]); ok {
+			fmt.Println(help)
+			return nil
+		}
+	}
 
 	switch args[0] {
 	case "version":
@@ -91,6 +105,99 @@ func run(args []string) error {
 	default:
 		usage()
 		return fmt.Errorf("unknown command %q", args[0])
+	}
+}
+
+func commandHelpRequested(args []string) bool {
+	return len(args) == 2 && (args[1] == "-h" || args[1] == "--help")
+}
+
+func nestedCommandUsage(args []string) (string, bool) {
+	if len(args) != 3 || (args[2] != "-h" && args[2] != "--help") {
+		return "", false
+	}
+	switch args[0] {
+	case "inspect":
+		switch args[1] {
+		case "ir", "tree", "endpoint-graph", "asset-graph", "go-bindings":
+			return fmt.Sprintf("usage: gowdk inspect %s [--config <file>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...]", args[1]), true
+		}
+	case "generate":
+		if args[1] == "stubs" {
+			return generateUsage, true
+		}
+	case "list":
+		switch args[1] {
+		case "commands", "queries", "events", "jobs":
+			return "usage: gowdk list commands|queries|events|jobs [--json] [dir]", true
+		}
+	case "playground":
+		switch args[1] {
+		case "policy", "export", "run":
+			return playgroundUsage, true
+		}
+	}
+	return "", false
+}
+
+func commandUsage(command string) (string, bool) {
+	switch command {
+	case "version":
+		return "usage: gowdk version [--json]", true
+	case "init":
+		return initUsage, true
+	case "add":
+		return addUsage, true
+	case "tokens":
+		return "usage: gowdk tokens <file.gwdk>", true
+	case "fmt":
+		return "usage: gowdk fmt [--write] <files>", true
+	case "check":
+		return projectCommandUsage("check", true), true
+	case "fix":
+		return fixUsage, true
+	case "manifest":
+		return projectCommandUsage("manifest", false), true
+	case "sitemap":
+		return projectCommandUsage("sitemap", false), true
+	case "routes":
+		return projectCommandUsage("routes", false), true
+	case "endpoints":
+		return projectCommandUsage("endpoints", false), true
+	case "inspect":
+		return inspectUsage, true
+	case "generate":
+		return generateUsage, true
+	case "explain":
+		return "usage: gowdk explain [--json] <diagnostic-code>", true
+	case "doctor":
+		return doctorUsage, true
+	case "audit":
+		return auditUsage, true
+	case "contracts":
+		return "usage: gowdk contracts [--json] [dir]", true
+	case "graph":
+		return "usage: gowdk graph [--json] [dir]", true
+	case "trace":
+		return "usage: gowdk trace <contract> [--json] [dir]", true
+	case "list":
+		return "usage: gowdk list commands|queries|events|jobs [--json] [dir]", true
+	case "build":
+		return buildUsage, true
+	case "clean":
+		return cleanUsage, true
+	case "dev":
+		return devUsage(), true
+	case "preview":
+		return previewUsage(), true
+	case "playground":
+		return playgroundUsage, true
+	case "serve":
+		return "usage: gowdk serve --dir <dir> [--addr <addr>]", true
+	case "lsp":
+		return lspUsage, true
+	default:
+		return "", false
 	}
 }
 

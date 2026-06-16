@@ -130,6 +130,52 @@ func TestBuildWritesSPAHTMLForSimpleRoute(t *testing.T) {
 	}
 }
 
+func TestRouteManifestIncludesTypedDynamicEndpointParams(t *testing.T) {
+	outputDir := t.TempDir()
+	ir := gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			ID:     "patients",
+			Route:  "/patients",
+			Guards: []string{"public"},
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main>Patients</main>`,
+			},
+		}},
+		Endpoints: []gwdkir.Endpoint{{
+			Kind:          gwdkir.EndpointFragment,
+			Source:        gwdkir.EndpointSourceGOWDK,
+			PageID:        "patients",
+			Symbol:        "Vitals",
+			Method:        "GET",
+			Path:          "/patients/{id:int}/vitals",
+			Cache:         "no-store",
+			DynamicParams: []string{"id"},
+			RouteParams:   []source.RouteParam{{Name: "id", Type: "int"}},
+			Guards:        []string{"public"},
+		}},
+	}
+
+	if _, err := BuildFromIR(gowdk.Config{}, ir, outputDir); err != nil {
+		t.Fatal(err)
+	}
+
+	routes := readRouteManifest(t, outputDir)
+	if len(routes.Endpoints) != 1 {
+		t.Fatalf("expected endpoint route in manifest, got %#v", routes.Endpoints)
+	}
+	endpoint := routes.Endpoints[0]
+	if endpoint.Kind != "fragment" || endpoint.Route != "/patients/{id:int}/vitals" {
+		t.Fatalf("unexpected endpoint route: %#v", endpoint)
+	}
+	if len(endpoint.DynamicParams) != 1 || endpoint.DynamicParams[0] != "id" {
+		t.Fatalf("expected dynamic param id, got %#v", endpoint.DynamicParams)
+	}
+	if len(endpoint.RouteParams) != 1 || endpoint.RouteParams[0].Name != "id" || endpoint.RouteParams[0].Type != "int" {
+		t.Fatalf("expected route param id:int, got %#v", endpoint.RouteParams)
+	}
+}
+
 func TestBuildEmitsSPANavigationRuntimeForInternalLinks(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{

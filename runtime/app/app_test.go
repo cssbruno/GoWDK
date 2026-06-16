@@ -556,6 +556,108 @@ func TestHandlerMetricsRecordDispatchOutcomes(t *testing.T) {
 	}
 }
 
+func TestHandlerMethodNotAllowedSuggestsGeneratedEndpointFromRouteManifest(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"index.html": {Data: []byte("<main>Home</main>")},
+			"gowdk-routes.json": {Data: []byte(`{
+				"version": 1,
+				"routes": [
+					{"page": "login", "route": "/", "path": "index.html"}
+				],
+				"endpoints": [
+					{"kind": "action", "directive": "act", "method": "POST", "route": "/login", "page": "login", "symbol": "Login", "handler": "actions.LoginLogin", "csrf": true}
+				]
+			}`)},
+		},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/login", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", recorder.Code)
+	}
+	body := recorder.Body.String()
+	for _, expected := range []string{"method not allowed: POST /login", "generated endpoint POST /login", "act Login"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected %q in 405 body, got:\n%s", expected, body)
+		}
+	}
+}
+
+func TestHandlerMethodNotAllowedDoesNotSuggestUnmatchedGeneratedEndpoint(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"index.html": {Data: []byte("<main>Home</main>")},
+			"gowdk-routes.json": {Data: []byte(`{
+				"version": 1,
+				"routes": [
+					{"page": "login", "route": "/", "path": "index.html"}
+				],
+				"endpoints": [
+					{"kind": "action", "directive": "act", "method": "POST", "route": "/login", "page": "login", "symbol": "Login", "handler": "actions.LoginLogin", "csrf": true}
+				]
+			}`)},
+		},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/typo", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", recorder.Code)
+	}
+	body := recorder.Body.String()
+	if !strings.Contains(body, "method not allowed: POST /typo") {
+		t.Fatalf("expected request path in 405 body, got:\n%s", body)
+	}
+	for _, unexpected := range []string{"generated endpoint POST /login", "act Login"} {
+		if strings.Contains(body, unexpected) {
+			t.Fatalf("did not expect unmatched endpoint text %q in 405 body:\n%s", unexpected, body)
+		}
+	}
+}
+
+func TestHandlerMethodNotAllowedMatchesGeneratedEndpointPattern(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"index.html": {Data: []byte("<main>Home</main>")},
+			"gowdk-routes.json": {Data: []byte(`{
+				"version": 1,
+				"routes": [
+					{"page": "patients", "route": "/", "path": "index.html"}
+				],
+				"endpoints": [
+					{"kind": "action", "directive": "act", "method": "POST", "route": "/patients/{id:int}/vitals", "page": "patients", "symbol": "SaveVitals", "handler": "actions.PatientsSaveVitals", "csrf": true}
+				]
+			}`)},
+		},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/patients/1/vitals", nil)
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", recorder.Code)
+	}
+	body := recorder.Body.String()
+	for _, expected := range []string{"method not allowed: POST /patients/1/vitals", "generated endpoint POST /patients/{id:int}/vitals", "act SaveVitals"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected %q in 405 body, got:\n%s", expected, body)
+		}
+	}
+}
+
 func TestHandlerServesGenerated404Page(t *testing.T) {
 	root := fstest.MapFS{
 		"404.html": {Data: []byte("<main>Missing</main>")},

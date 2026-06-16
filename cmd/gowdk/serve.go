@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	gowdkroute "github.com/cssbruno/gowdk/runtime/route"
 )
 
 func serve(args []string) error {
@@ -86,7 +89,7 @@ func outputFileHandler(root string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodGet && request.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			http.Error(w, staticMethodNotAllowedMessage(root, request), http.StatusMethodNotAllowed)
 			return
 		}
 
@@ -97,6 +100,78 @@ func outputFileHandler(root string) http.Handler {
 		}
 		http.ServeFile(w, request, filePath)
 	})
+}
+
+type staticRouteManifest struct {
+	Endpoints []staticRouteEndpoint `json:"endpoints"`
+}
+
+type staticRouteEndpoint struct {
+	Kind      string `json:"kind"`
+	Directive string `json:"directive"`
+	Method    string `json:"method"`
+	Route     string `json:"route"`
+	PageID    string `json:"page"`
+	Symbol    string `json:"symbol"`
+	Handler   string `json:"handler"`
+}
+
+func staticMethodNotAllowedMessage(root string, request *http.Request) string {
+	if request == nil {
+		return "method not allowed"
+	}
+	message := "method not allowed: " + request.Method + " " + request.URL.Path
+	endpoint, ok := staticEndpointForRequest(root, request)
+	if !ok {
+		return message
+	}
+	message += "; " + endpoint.Method + " " + endpoint.Route + " is a generated endpoint"
+	if endpoint.Directive != "" || endpoint.Symbol != "" {
+		message += " (" + strings.TrimSpace(endpoint.Directive+" "+endpoint.Symbol) + ")"
+	}
+	return message + "; gowdk serve only serves static GET/HEAD output; run the generated app or binary for backend endpoints"
+}
+
+func staticEndpointForRequest(root string, request *http.Request) (staticRouteEndpoint, bool) {
+	manifest, ok := readStaticRouteManifest(root)
+	if !ok {
+		return staticRouteEndpoint{}, false
+	}
+	method := strings.ToUpper(strings.TrimSpace(request.Method))
+	requestPath := request.URL.Path
+	for _, endpoint := range manifest.Endpoints {
+		if strings.ToUpper(strings.TrimSpace(endpoint.Method)) != method {
+			continue
+		}
+		if staticEndpointRouteMatches(endpoint.Route, requestPath) {
+			return endpoint, true
+		}
+	}
+	return staticRouteEndpoint{}, false
+}
+
+func staticEndpointRouteMatches(endpointRoute string, requestPath string) bool {
+	endpointRoute = strings.TrimSpace(endpointRoute)
+	if endpointRoute == requestPath {
+		return true
+	}
+	if !strings.Contains(endpointRoute, "{") {
+		return false
+	}
+	_, ok := gowdkroute.Match(endpointRoute, requestPath)
+	return ok
+}
+
+func readStaticRouteManifest(root string) (staticRouteManifest, bool) {
+	payload, err := os.ReadFile(filepath.Join(root, "gowdk-routes.json"))
+	if err != nil {
+		return staticRouteManifest{}, false
+	}
+	var manifest staticRouteManifest
+	if err := json.Unmarshal(payload, &manifest); err != nil {
+		return staticRouteManifest{}, false
+	}
+	return manifest, true
 }
 
 func liveReloadFileHandler(root string, reload *liveReloadBroker) http.Handler {

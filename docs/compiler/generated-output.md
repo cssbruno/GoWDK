@@ -380,7 +380,8 @@ directory. Dynamic app routes are recorded once for each generated concrete
 route, for example `/blog/{slug}` with `=> { slug: "hello-gowdk" }` is recorded
 as `/blog/hello-gowdk`. The optional `endpoints` array records generated
 request-time action, API, fragment, command, and query adapter routes; it does
-not point at static files.
+not point at static files. Dynamic endpoint routes also include
+`dynamicParams` and typed `routeParams` when route parameters are declared.
 
 ## Current App Asset Manifest
 

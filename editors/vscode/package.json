@@ -2,7 +2,7 @@
   "name": "gowdk-vscode",
   "displayName": "GOWDK",
   "description": "Language tools for portable .gwdk files.",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "publisher": "gowdk",
   "license": "MIT",
   "icon": "icons/gowdk.png",

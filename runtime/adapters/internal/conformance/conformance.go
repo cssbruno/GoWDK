@@ -164,6 +164,39 @@ func AssertOpenAPIRestRoute(t *testing.T, prefix string, mount MountFunc) {
 	}
 }
 
+// AssertPrefixedRedirect verifies that prefixed mounts rebase generated
+// same-origin redirects back under the host-framework prefix.
+func AssertPrefixedRedirect(t *testing.T, prefix string, mount MountFunc) {
+	t.Helper()
+
+	routes := []gowdkadapters.Route{{Method: http.MethodPost, Path: "/login"}}
+	gowdkHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost || request.URL.Path != "/login" {
+			http.Error(writer, "unexpected generated route", http.StatusBadRequest)
+			return
+		}
+		http.Redirect(writer, request, "/dashboard", http.StatusSeeOther)
+	})
+	host, err := mount(routes, gowdkHandler, prefix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostPath, err := gowdkadapters.JoinPrefix(prefix, "/login")
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, hostPath, nil)
+	host.ServeHTTP(recorder, request)
+	wantLocation, err := gowdkadapters.JoinPrefix(prefix, "/dashboard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recorder.Code != http.StatusSeeOther || recorder.Header().Get("Location") != wantLocation {
+		t.Fatalf("unexpected prefixed redirect: status=%d location=%q want %q", recorder.Code, recorder.Header().Get("Location"), wantLocation)
+	}
+}
+
 func expectedGeneratedRequests(t *testing.T, routes []gowdkadapters.Route) map[string]bool {
 	t.Helper()
 	expected := map[string]bool{}

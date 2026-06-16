@@ -19,7 +19,7 @@ gowdk manifest [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [
 gowdk sitemap [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
 gowdk routes [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
 gowdk endpoints [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
-gowdk inspect ir|tree|endpoint-graph|go-bindings [--config <file>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...]
+gowdk inspect ir|tree|endpoint-graph|asset-graph|go-bindings [--config <file>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...]
 gowdk generate stubs [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
 gowdk doctor [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...]
@@ -176,6 +176,7 @@ go run ./cmd/gowdk endpoints --module frontend --ssr
 go run ./cmd/gowdk inspect ir --module frontend --ssr
 go run ./cmd/gowdk inspect tree --json --module frontend --ssr
 go run ./cmd/gowdk inspect endpoint-graph --json --module frontend --ssr
+go run ./cmd/gowdk inspect asset-graph --json --module frontend --ssr
 go run ./cmd/gowdk contracts --json .
 go run ./cmd/gowdk graph .
 go run ./cmd/gowdk list commands .
@@ -386,6 +387,13 @@ a versioned source-linked node tree with `program`, `package`, `page`,
 cache, guards, CSRF policy, binding status, signature, and input type when
 available. The graph is additive on top of `gowdk routes`/`gowdk endpoints`;
 keep those commands for stable route and endpoint report integrations.
+
+`gowdk inspect asset-graph` prints a versioned graph with source owners,
+templates, and declared assets. Asset nodes include kind, package, owner,
+source path, declared asset path, inline status, use alias/package metadata,
+and scope/hash metadata when available. Use it to debug which page or component
+introduced CSS, JavaScript, component file assets, or WASM asset declarations
+before checking generated build output manifests.
 
 `gowdk inspect go-bindings` prints a versioned report of Go interop bindings:
 actions, APIs, fragments, SSR load functions, build-time Go function calls, and

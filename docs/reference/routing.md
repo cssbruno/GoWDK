@@ -417,6 +417,12 @@ guard policy, and routable command/query contract references. Endpoint nodes
 carry method/path, source kind, cache, guards, CSRF policy, binding status,
 signature, input type, and source span when available.
 
+Use `gowdk inspect asset-graph --json` when debugging which source owner
+introduced CSS, JavaScript, component file assets, or WASM declarations. The
+current graph schema is version `1` and includes owner, template, and asset
+nodes with deterministic `has_template`, `declares_asset`, and `uses_package`
+edges.
+
 Use `gowdk inspect tree --json` when source navigation needs the unified node
 tree instead of a route-only projection. The current tree schema is version `1`
 and includes package, page, component, layout, route, endpoint,

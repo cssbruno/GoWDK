@@ -10,7 +10,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/lang"
 )
 
-const inspectUsage = "usage: gowdk inspect ir|tree|endpoint-graph|go-bindings [--config <file>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...]"
+const inspectUsage = "usage: gowdk inspect ir|tree|endpoint-graph|asset-graph|go-bindings [--config <file>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...]"
 
 func inspect(args []string) error {
 	if len(args) == 0 {
@@ -23,6 +23,8 @@ func inspect(args []string) error {
 		return inspectTree(args[1:])
 	case "endpoint-graph":
 		return inspectEndpointGraph(args[1:])
+	case "asset-graph":
+		return inspectAssetGraph(args[1:])
 	case "go-bindings":
 		return inspectGoBindings(args[1:])
 	default:
@@ -57,6 +59,14 @@ func inspectEndpointGraph(args []string) error {
 		return err
 	}
 	return writeInspectJSON(inspectreport.BuildEndpointGraph(options.Config, ir))
+}
+
+func inspectAssetGraph(args []string) error {
+	_, ir, err := inspectProgram(args, "inspect asset-graph")
+	if err != nil {
+		return err
+	}
+	return writeInspectJSON(inspectreport.BuildAssetGraph(ir))
 }
 
 func inspectGoBindings(args []string) error {

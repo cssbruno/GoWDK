@@ -603,9 +603,9 @@ Every 0.x minor release must have:
 
 - [x] Add `gowdk doctor`.
 - [ ] Add `gowdk explain <diagnostic-code>`.
-- [ ] Add `gowdk inspect` targets. `ir`, `tree`, `endpoint-graph`, and
-  `go-bindings` are implemented; `assets`, `generated`, and `deps` remain
-  planned.
+- [ ] Add `gowdk inspect` targets. `ir`, `tree`, `endpoint-graph`,
+  `asset-graph`, and `go-bindings` are implemented; `generated` and `deps`
+  remain planned.
 - [x] Add `gowdk generate stubs`.
 - [ ] Add `gowdk clean`, `gowdk env`, `gowdk version --json`, and
   `gowdk benchmark`.

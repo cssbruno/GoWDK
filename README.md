@@ -164,7 +164,7 @@ pipeline. Run `gowdk` with no arguments for full flags.
 | `gowdk explain <code>` | Explain a diagnostic code and its next steps |
 | `gowdk doctor` | Check local environment and project health |
 | `gowdk audit` | Derive security posture, evaluate baseline/declared policies, and optionally emit/run audit tests (`--json` for CI) |
-| `gowdk inspect ir` / `tree` / `endpoint-graph` / `go-bindings` | Print validated compiler IR, source-linked node tree, endpoint dispatch graph, or Go binding report JSON |
+| `gowdk inspect ir` / `tree` / `endpoint-graph` / `asset-graph` / `go-bindings` | Print validated compiler IR, source-linked node tree, endpoint dispatch graph, asset graph, or Go binding report JSON |
 | `gowdk manifest` / `routes` / `sitemap` | Print validated manifest, route/endpoint metadata, or editor site-map JSON |
 | `gowdk tokens` | Print raw language tokens for a file |
 | `gowdk fmt` | Format `.gwdk` sources (`--write`) |

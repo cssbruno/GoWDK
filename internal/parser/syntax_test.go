@@ -198,7 +198,7 @@ func HomePageForBuild() PageCopy {
 }
 }
 
-go ssr {
+go server {
 func LoadDashboard() string {
 	return "dashboard"
 }
@@ -212,7 +212,7 @@ view {
 		t.Fatal(err)
 	}
 	if len(file.Blocks) != 3 {
-		t.Fatalf("expected go block, go ssr, and view blocks, got %#v", file.Blocks)
+		t.Fatalf("expected go block, go server, and view blocks, got %#v", file.Blocks)
 	}
 	if file.Blocks[0].Kind != "go" || file.Blocks[0].Name != "" {
 		t.Fatalf("unexpected default go block block: %#v", file.Blocks[0])
@@ -220,7 +220,7 @@ view {
 	if !strings.Contains(file.Blocks[0].Body, "func HomePageForBuild") {
 		t.Fatalf("unexpected default go block body: %q", file.Blocks[0].Body)
 	}
-	if file.Blocks[1].Kind != "go" || file.Blocks[1].Name != "ssr" {
+	if file.Blocks[1].Kind != "go" || file.Blocks[1].Name != "server" {
 		t.Fatalf("unexpected targeted go block block: %#v", file.Blocks[1])
 	}
 	if !strings.Contains(file.Blocks[1].Body, "func LoadDashboard") {
@@ -232,11 +232,11 @@ func TestParseSyntaxRejectsDuplicateGoBlockTarget(t *testing.T) {
 	_, err := ParseSyntax([]byte(`page home
 route "/"
 
-go ssr {
+go server {
 func One() {}
 }
 
-go ssr {
+go server {
 func Two() {}
 }
 
@@ -247,7 +247,7 @@ view {
 	if err == nil {
 		t.Fatal("expected duplicate go target error")
 	}
-	if !strings.Contains(err.Error(), "duplicate go ssr block") {
+	if !strings.Contains(err.Error(), "duplicate go server block") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

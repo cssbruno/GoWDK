@@ -133,8 +133,8 @@ type Blocks struct {
 	BuildBody    string
 	BuildRecords []LiteralRecord `json:"-"`
 	BuildCall    *BuildCall      `json:"-"`
-	Load         bool
-	LoadBody     string
+	Server       bool
+	ServerBody   string
 	Client       bool
 	ClientBody   string
 	GoBlocks     []GoBlock
@@ -195,7 +195,7 @@ type PageSpans struct {
 type BlockSpans struct {
 	Paths         source.SourceSpan
 	Build         source.SourceSpan
-	Load          source.SourceSpan
+	Server        source.SourceSpan
 	Client        source.SourceSpan
 	GoBlocks      []source.NamedSpan
 	View          source.SourceSpan

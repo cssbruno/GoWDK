@@ -396,7 +396,7 @@ route "/dashboard"
 layout root, dashboard
 guard auth.required
 
-load {
+server {
   user := session.User()
   => { user }
 }
@@ -416,11 +416,11 @@ view {
 	if page.RenderMode(gowdk.SPA) != gowdk.SSR {
 		t.Fatalf("expected effective ssr render, got %q", page.RenderMode(gowdk.SPA))
 	}
-	if !page.Blocks.Load {
+	if !page.Blocks.Server {
 		t.Fatal("expected load block")
 	}
-	if page.Blocks.LoadBody != "user := session.User()\n  => { user }" {
-		t.Fatalf("unexpected load body: %q", page.Blocks.LoadBody)
+	if page.Blocks.ServerBody != "user := session.User()\n  => { user }" {
+		t.Fatalf("unexpected load body: %q", page.Blocks.ServerBody)
 	}
 	if page.Guards[0] != "auth.required" {
 		t.Fatalf("expected auth guard, got %#v", page.Guards)
@@ -710,8 +710,8 @@ func parserGoldenSummary(page gwdkir.Page, component gwdkir.Component) parserGol
 				PathsBody: page.Blocks.PathsBody,
 				Build:     page.Blocks.Build,
 				BuildBody: page.Blocks.BuildBody,
-				Load:      page.Blocks.Load,
-				LoadBody:  page.Blocks.LoadBody,
+				Load:      page.Blocks.Server,
+				LoadBody:  page.Blocks.ServerBody,
 				View:      page.Blocks.View,
 				ViewBody:  page.Blocks.ViewBody,
 				Actions:   parserGoldenActions(page.Blocks.Actions),
@@ -1199,7 +1199,7 @@ func HomePageForBuild() PageCopy {
 }
 }
 
-go ssr {
+go server {
 func LoadHome() string {
 	return "Home"
 }
@@ -1218,10 +1218,10 @@ view {
 	if page.Blocks.GoBlocks[0].Target != "" || !strings.Contains(page.Blocks.GoBlocks[0].Body, "HomePageForBuild") {
 		t.Fatalf("unexpected default go block: %#v", page.Blocks.GoBlocks[0])
 	}
-	if page.Blocks.GoBlocks[1].Target != "ssr" || !strings.Contains(page.Blocks.GoBlocks[1].Body, "LoadHome") {
+	if page.Blocks.GoBlocks[1].Target != "server" || !strings.Contains(page.Blocks.GoBlocks[1].Body, "LoadHome") {
 		t.Fatalf("unexpected ssr go block: %#v", page.Blocks.GoBlocks[1])
 	}
-	if len(page.Blocks.Spans.GoBlocks) != 2 || page.Blocks.Spans.GoBlocks[1].Name != "ssr" {
+	if len(page.Blocks.Spans.GoBlocks) != 2 || page.Blocks.Spans.GoBlocks[1].Name != "server" {
 		t.Fatalf("unexpected go spans: %#v", page.Blocks.Spans.GoBlocks)
 	}
 }
@@ -1253,7 +1253,7 @@ func TestParseLayoutReadsGoBlock(t *testing.T) {
 	layout, err := ParseLayout("root.layout.gwdk", []byte(`
 layout root
 
-go ssr {
+go server {
 func LayoutData() string {
 	return "root"
 }
@@ -1266,7 +1266,7 @@ view {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(layout.Blocks.GoBlocks) != 1 || layout.Blocks.GoBlocks[0].Target != "ssr" {
+	if len(layout.Blocks.GoBlocks) != 1 || layout.Blocks.GoBlocks[0].Target != "server" {
 		t.Fatalf("unexpected layout go blocks: %#v", layout.Blocks.GoBlocks)
 	}
 }
@@ -1344,7 +1344,7 @@ func TestParseComponentRejectsUnsupportedTopLevelBlock(t *testing.T) {
 	_, err := ParseComponent([]byte(`
 component Hero
 
-load {
+server {
 }
 
 view {
@@ -1353,7 +1353,7 @@ view {
 	if err == nil {
 		t.Fatal("expected unsupported top-level block error")
 	}
-	if err.Error() != `line 4: unsupported top-level block "load"` {
+	if err.Error() != `line 4: unsupported top-level block "server"` {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

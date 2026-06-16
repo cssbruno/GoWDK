@@ -38,11 +38,11 @@ neither the table nor the registry can drift without failing a test.
 | `use` | Stable | Package-scoped component import. |
 | `paths {}` | Partial | Literal `=> { field: "value" }` records only. |
 | `build {}` | Partial | Literal records and no-argument Go calls. |
-| `load {}` | Partial | Request-time data; requires the SSR addon. |
+| `server {}` | Partial | Request-time server-lane data; requires the SSR addon. |
 | `view {}` | Stable | Markup; see directives below. |
 | `style {}` | Stable | Scoped CSS body. |
 | `client {}` | Partial | Bounded component client language. |
-| `go {}` / `go ssr {}` / `go client {}` / `go addon.* {}` | Partial | Colocated Go lanes. |
+| `go {}` / `go build {}` / `go server {}` / `go client {}` / `go addon.* {}` | Partial | Colocated Go lanes. |
 | `store` / `props` / `state` / `emits` | Partial | Component contracts. |
 | Unknown top-level block | Planned | Rejected with `unsupported_top_level_block`. |
 

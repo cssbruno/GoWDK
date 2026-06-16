@@ -304,8 +304,8 @@ func TestSSRArtifactsRenderLoadPlaceholders(t *testing.T) {
 		Route:  "/dashboard",
 		Render: gowdk.SSR,
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: `=> { user.name, account.plan }`,
+			Server:     true,
+			ServerBody: `=> { user.name, account.plan }`,
 			View:     true,
 			ViewBody: `<main><h1>{user.name}</h1><p>{account.plan}</p></main>`,
 		},
@@ -346,8 +346,8 @@ func TestSSRArtifactsComposePageLoadThroughLayouts(t *testing.T) {
 			Render:  gowdk.SSR,
 			Layouts: []string{"shell"},
 			Blocks: gwdkir.Blocks{
-				Load:     true,
-				LoadBody: `=> { user.name }`,
+				Server:     true,
+				ServerBody: `=> { user.name }`,
 				View:     true,
 				ViewBody: `<main>{user.name}</main>`,
 			},

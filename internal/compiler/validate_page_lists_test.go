@@ -37,8 +37,8 @@ func findCode(report []ValidationError, code string) (ValidationError, bool) {
 func TestValidateRejectsGForOverLoadData(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: `=> { columns }`,
+			Server:     true,
+			ServerBody: `=> { columns }`,
 			View:     true,
 			ViewBody: `<div g:for={col in columns} g:key={col.id}>{col.title}</div>`,
 		},
@@ -55,8 +55,8 @@ func TestValidateRejectsGForOverLoadData(t *testing.T) {
 func TestValidateAcceptsGEachOverLoadData(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: `=> { columns }`,
+			Server:     true,
+			ServerBody: `=> { columns }`,
 			View:     true,
 			ViewBody: `<div g:each={col in columns}>{col.title}</div>`,
 		},
@@ -72,8 +72,8 @@ func TestValidateAcceptsGEachOverLoadData(t *testing.T) {
 func TestValidateRejectsGEachOverNonLoadField(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: `=> { columns }`,
+			Server:     true,
+			ServerBody: `=> { columns }`,
 			View:     true,
 			ViewBody: `<div g:each={x in other}>{x.name}</div>`,
 		},
@@ -86,8 +86,8 @@ func TestValidateRejectsGEachOverNonLoadField(t *testing.T) {
 func TestValidateRejectsNestedGEachWrongScope(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: `=> { columns }`,
+			Server:     true,
+			ServerBody: `=> { columns }`,
 			View:     true,
 			ViewBody: `<div g:each={col in columns}><span g:each={i in other}>{i.id}</span></div>`,
 		},
@@ -100,8 +100,8 @@ func TestValidateRejectsNestedGEachWrongScope(t *testing.T) {
 func TestValidateRejectsGIfOverLoadData(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: `=> { hasItems, count }`,
+			Server:     true,
+			ServerBody: `=> { hasItems, count }`,
 			View:     true,
 			ViewBody: `<p g:if={hasItems}>You have {count}</p>`,
 		},
@@ -118,8 +118,8 @@ func TestValidateRejectsGIfOverLoadData(t *testing.T) {
 func TestValidateAcceptsGWhenOverLoadData(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: `=> { hasItems, count }`,
+			Server:     true,
+			ServerBody: `=> { hasItems, count }`,
 			View:     true,
 			ViewBody: `<section><p g:when={hasItems}>You have {count}</p><p g:when={!hasItems}>None</p></section>`,
 		},
@@ -134,8 +134,8 @@ func TestValidateAcceptsGWhenOverLoadData(t *testing.T) {
 func TestValidateRejectsGWhenOverNonLoadField(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: `=> { hasItems }`,
+			Server:     true,
+			ServerBody: `=> { hasItems }`,
 			View:     true,
 			ViewBody: `<p g:when={ready}>x</p>`,
 		},
@@ -148,8 +148,8 @@ func TestValidateRejectsGWhenOverNonLoadField(t *testing.T) {
 func TestValidateAcceptsGWhenInsideEachRow(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: `=> { issues }`,
+			Server:     true,
+			ServerBody: `=> { issues }`,
 			View:     true,
 			ViewBody: `<ul><li g:each={issue in issues}>{issue.id}<b g:when={issue.urgent}>!</b></li></ul>`,
 		},
@@ -166,8 +166,8 @@ func TestValidateRejectsGEachOverNonExactLoadPath(t *testing.T) {
 	// matching the build, which requires the exact declared path to be tainted.
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: `=> { user.name }`,
+			Server:     true,
+			ServerBody: `=> { user.name }`,
 			View:     true,
 			ViewBody: `<li g:each={post in user.posts}>{post.title}</li>`,
 		},
@@ -180,8 +180,8 @@ func TestValidateRejectsGEachOverNonExactLoadPath(t *testing.T) {
 func TestValidateRejectsGForInsideEachRow(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: `=> { columns }`,
+			Server:     true,
+			ServerBody: `=> { columns }`,
 			View:     true,
 			ViewBody: `<div g:each={col in columns}><span g:for={issue in col.issues} g:key={issue.id}>{issue.id}</span></div>`,
 		},
@@ -198,8 +198,8 @@ func TestValidateRejectsGForInsideEachRow(t *testing.T) {
 func TestValidateRejectsNestedGEachOverParentItem(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: `=> { columns }`,
+			Server:     true,
+			ServerBody: `=> { columns }`,
 			View:     true,
 			ViewBody: `<div g:each={col in columns}><span g:each={issue in col} g:key={issue.id}>{issue.id}</span></div>`,
 		},
@@ -216,8 +216,8 @@ func TestValidateRejectsNestedGEachOverParentItem(t *testing.T) {
 func TestValidateRejectsGHTMLOverLoadData(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: `=> { bodyHTML }`,
+			Server:     true,
+			ServerBody: `=> { bodyHTML }`,
 			View:     true,
 			ViewBody: `<article g:unsafe-html={bodyHTML}></article>`,
 		},
@@ -229,16 +229,16 @@ func TestValidateRejectsGHTMLOverLoadData(t *testing.T) {
 	if strings.Contains(diag.Message, "route param") {
 		t.Fatalf("diagnostic must not misname the cause as a route param: %q", diag.Message)
 	}
-	if !strings.Contains(diag.Message, "load {}") {
-		t.Fatalf("diagnostic should name load {} as the source: %q", diag.Message)
+	if !strings.Contains(diag.Message, "server {}") {
+		t.Fatalf("diagnostic should name server {} as the source: %q", diag.Message)
 	}
 }
 
 func TestValidateAcceptsNestedGEach(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: `=> { columns }`,
+			Server:     true,
+			ServerBody: `=> { columns }`,
 			View:     true,
 			ViewBody: `<div g:each={col in columns}><span g:each={issue in col.issues}>{issue.id}</span></div>`,
 		},

@@ -283,14 +283,14 @@ func elementWhenDirective(node Element) (string, bool, error) {
 		return "", false, fmt.Errorf("g:when requires a field after %q", "!")
 	}
 	if strings.ContainsAny(raw, "!&|=<>(){}") {
-		return "", false, fmt.Errorf("g:when condition %q must be a single load {} field, optionally negated with a leading !; compute compound conditions in Go and expose a bool load field", raw)
+		return "", false, fmt.Errorf("g:when condition %q must be a single server {} field, optionally negated with a leading !; compute compound conditions in Go and expose a bool server {} field", raw)
 	}
 	return raw, negate, nil
 }
 
 // serverSourcePath resolves the load path for a g:each collection or g:when
 // condition. A top-level region (or a load-scope branch) must target a declared
-// SSR load {} field; a row-scope region must reference its enclosing item.
+// server {} field; a row-scope region must reference its enclosing item.
 func serverSourcePath(expr string, ctx *renderContext, directive string) (string, error) {
 	scope := ctx.serverScope
 	if scope == nil || scope.itemVar == "" {
@@ -299,7 +299,7 @@ func serverSourcePath(expr string, ctx *renderContext, directive string) (string
 			tainted = scope.tainted
 		}
 		if !tainted[exprRootName(expr)] {
-			return "", fmt.Errorf("%s collection/condition %q must be an SSR load {} field; %s renders request-time server data — use the client-state directive for client/island state", directive, expr, directive)
+			return "", fmt.Errorf("%s collection/condition %q must be a server {} field; %s renders request-time server data — use the client-state directive for client/island state", directive, expr, directive)
 		}
 		return expr, nil
 	}
@@ -388,7 +388,7 @@ func (scope *serverScope) resolvePath(name string) (path string, isIndex bool, o
 
 func (scope *serverScope) scopeHint() string {
 	if scope.itemVar == "" {
-		return "declared load {} fields"
+		return "declared server {} fields"
 	}
 	hint := "the row item " + strconv.Quote(scope.itemVar)
 	if scope.indexVar != "" {

@@ -77,7 +77,7 @@ var integrationCoverage = map[string]string{
 	// Blocks and keywords needing Go types, sibling files, or config.
 	"import":     "../parser/syntax_test.go",
 	"paths {}":   "../compiler/validate_test.go",
-	"load {}":    "../compiler/validate_test.go",
+	"server {}":    "../compiler/validate_test.go",
 	"client {}":  "../compiler/validate_test.go",
 	"go {}":      "../compiler/backend_bindings_test.go",
 	"store":      "../compiler/validate_test.go",

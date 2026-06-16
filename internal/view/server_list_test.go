@@ -52,7 +52,7 @@ func TestServerConditionalRejectsNonLoadField(t *testing.T) {
 		ServerListSink: &[]SSRListReplacement{},
 		ServerCondSink: &[]SSRCondReplacement{},
 	})
-	if err == nil || !strings.Contains(err.Error(), "must be an SSR load") {
+	if err == nil || !strings.Contains(err.Error(), "must be a server {} field") {
 		t.Fatalf("want load-field error, got %v", err)
 	}
 }
@@ -62,7 +62,7 @@ func TestServerConditionalRejectsCompoundExpression(t *testing.T) {
 		Tainted:        map[string]bool{"a": true, "b": true},
 		ServerCondSink: &[]SSRCondReplacement{},
 	})
-	if err == nil || !strings.Contains(err.Error(), "single load {} field") {
+	if err == nil || !strings.Contains(err.Error(), "single server {} field") {
 		t.Fatalf("want compound-expression error, got %v", err)
 	}
 }
@@ -142,7 +142,7 @@ func TestServerListTopLevel(t *testing.T) {
 func TestServerListRejectsNonLoadField(t *testing.T) {
 	source := `<li g:each={item in items}>{item.name}</li>`
 	_, err := RenderWithOptions(source, nil, nil, Options{ServerListSink: &[]SSRListReplacement{}})
-	if err == nil || !strings.Contains(err.Error(), "must be an SSR load") {
+	if err == nil || !strings.Contains(err.Error(), "must be a server {} field") {
 		t.Fatalf("want load-field error, got %v", err)
 	}
 }

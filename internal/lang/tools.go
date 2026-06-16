@@ -595,9 +595,9 @@ func diagnosticSuggestion(validation compiler.ValidationError) string {
 	case "missing_realtime_addon":
 		return "Enable realtime.Addon() in gowdk.config.go or remove g:subscribe."
 	case "spa_dynamic_route_missing_paths":
-		return "Add paths { ... } for the dynamic spa route or declare request-time page behavior with load { ... } or go ssr { ... }."
+		return "Add paths { ... } for the dynamic spa route or declare request-time page behavior with server { ... } or go server { ... }."
 	case "load_requires_request_render":
-		return "Enable ssr.Addon() for pages with load { ... }."
+		return "Enable ssr.Addon() for pages with server { ... }."
 	case "invalid_go_endpoint_handler":
 		return "Move the gowdk endpoint comment onto an exported package-level function."
 	case "duplicate_go_endpoint_comment":

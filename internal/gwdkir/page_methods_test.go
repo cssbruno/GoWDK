@@ -16,8 +16,8 @@ func TestPageRenderModeResolvesRequestTime(t *testing.T) {
 		want gowdk.RenderMode
 	}{
 		{"explicit", Page{Render: gowdk.SSR}, gowdk.SPA, gowdk.SSR},
-		{"load_block", Page{Blocks: Blocks{Load: true}}, gowdk.SPA, gowdk.SSR},
-		{"go_ssr_block", Page{Blocks: Blocks{GoBlocks: []GoBlock{{Target: "ssr"}}}}, gowdk.SPA, gowdk.SSR},
+		{"load_block", Page{Blocks: Blocks{Server: true}}, gowdk.SPA, gowdk.SSR},
+		{"go_ssr_block", Page{Blocks: Blocks{GoBlocks: []GoBlock{{Target: "server"}}}}, gowdk.SPA, gowdk.SSR},
 		{"default_spa", Page{}, "", gowdk.SPA},
 		{"default_passthrough", Page{}, gowdk.Action, gowdk.Action},
 	}

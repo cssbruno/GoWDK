@@ -389,6 +389,11 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			body = nil
 			continue
 		}
+		if message, ok := renamedTopLevelBlockNudge(line); ok {
+			addError(lineDiagnosticError(DiagnosticUnsupportedTopLevelBlock, lineNumber, rawLine, "%s", message))
+			startSkippingBlock(strings.Fields(line)[0])
+			continue
+		}
 		if name := unsupportedTopLevelBlockName(line); name != "" {
 			addError(lineDiagnosticError(DiagnosticUnsupportedTopLevelBlock, lineNumber, rawLine, "unsupported top-level block %q", name))
 			startSkippingBlock(name)
@@ -523,7 +528,7 @@ func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, e
 			return SyntaxBlock{}, err
 		}
 		block.Records = records
-	case "load":
+	case "server":
 	case "client":
 	case "props":
 		props, err := parseSyntaxProps(body)

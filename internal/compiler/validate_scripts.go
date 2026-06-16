@@ -18,7 +18,7 @@ func validateGoBlocks(config gowdk.Config, app gwdkir.Program) []ValidationError
 		mode := page.RenderMode(config.Render.DefaultMode())
 		for _, block := range page.Blocks.GoBlocks {
 			diagnostics = append(diagnostics, validateGoBlockSyntax(page.Package, page.Source, page.ID, "", block)...)
-			diagnostics = append(diagnostics, validateGoBlockTarget(config, enabledAddons, page.ID, "", page.Source, page.Package, mode, page.Blocks.Load, block)...)
+			diagnostics = append(diagnostics, validateGoBlockTarget(config, enabledAddons, page.ID, "", page.Source, page.Package, mode, page.Blocks.Server, block)...)
 		}
 	}
 	for _, component := range app.Components {
@@ -62,18 +62,22 @@ func validateGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.A
 	switch {
 	case target == "" || target == "client":
 		return nil
-	case target == "ssr":
+	case target == "build":
+		return nil
+	case target == "server":
 		if mode == gowdk.SSR || mode == gowdk.Hybrid {
 			return nil
 		}
 		return []ValidationError{{
-			Code:          "go_ssr_requires_request_render",
+			Code:          "go_server_requires_request_render",
 			PageID:        pageID,
 			ComponentName: componentName,
 			Source:        sourcePath,
 			Span:          block.Span,
-			Message:       fmt.Sprintf("%s declares go ssr {}, but ssr Go code is request-time behavior and requires the SSR addon", pageID),
+			Message:       fmt.Sprintf("%s declares go server {}, but server Go code is request-time behavior and requires the SSR addon", pageID),
 		}}
+	case target == "ssr":
+		return []ValidationError{renamedGoServerTarget(pageID, componentName, sourcePath, block)}
 	case strings.HasPrefix(target, "addon."):
 		return validateAddonGoBlockTarget(enabledAddons, pageID, componentName, sourcePath, packageName, mode, block)
 	default:
@@ -83,8 +87,22 @@ func validateGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.A
 			ComponentName: componentName,
 			Source:        sourcePath,
 			Span:          block.Span,
-			Message:       fmt.Sprintf("unknown go block target %q; use go {}, go client {}, go ssr {}, or go addon.<name> {}", target),
+			Message:       fmt.Sprintf("unknown go block target %q; use go {}, go build {}, go client {}, go server {}, or go addon.<name> {}", target),
 		}}
+	}
+}
+
+// renamedGoServerTarget reports the breaking rename of the request-time Go block
+// target from go ssr {} to go server {} so existing pages get a precise nudge
+// rather than an opaque "unknown go block target" error.
+func renamedGoServerTarget(pageID, componentName, sourcePath string, block gwdkir.GoBlock) ValidationError {
+	return ValidationError{
+		Code:          "go_ssr_renamed_to_server",
+		PageID:        pageID,
+		ComponentName: componentName,
+		Source:        sourcePath,
+		Span:          block.Span,
+		Message:       "go ssr {} was renamed to go server {}; the server lane (server {} + go server {}) is GoWDK's request-time lane",
 	}
 }
 
@@ -102,7 +120,9 @@ func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]
 			Span:          block.Span,
 			Message:       "go client {} is page-level client-side behavior; use a page go client {} block or a component wasm package",
 		}}
-	case target == "ssr":
+	case target == "build":
+		return nil
+	case target == "server":
 		if config.HasFeature(gowdk.FeatureSSR) {
 			return nil
 		}
@@ -112,8 +132,10 @@ func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]
 			ComponentName: componentName,
 			Source:        sourcePath,
 			Span:          block.Span,
-			Message:       "go ssr {} requires the SSR addon before request-time Go code can be validated or generated",
+			Message:       "go server {} requires the SSR addon before request-time Go code can be validated or generated",
 		}}
+	case target == "ssr":
+		return []ValidationError{renamedGoServerTarget(pageID, componentName, sourcePath, block)}
 	case strings.HasPrefix(target, "addon."):
 		return validateAddonGoBlockTarget(enabledAddons, pageID, componentName, sourcePath, packageName, gowdk.SPA, block)
 	default:
@@ -123,7 +145,7 @@ func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]
 			ComponentName: componentName,
 			Source:        sourcePath,
 			Span:          block.Span,
-			Message:       fmt.Sprintf("unknown go block target %q; use go {}, go client {}, go ssr {}, or go addon.<name> {}", target),
+			Message:       fmt.Sprintf("unknown go block target %q; use go {}, go build {}, go client {}, go server {}, or go addon.<name> {}", target),
 		}}
 	}
 }

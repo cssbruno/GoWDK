@@ -107,7 +107,7 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 	if err != nil {
 		return SSRArtifact{}, err
 	}
-	if !regions.empty() && !page.Blocks.Load {
+	if !regions.empty() && !page.Blocks.Server {
 		return SSRArtifact{}, fmt.Errorf("%s: g:each and g:when require SSR load {} data", page.ID)
 	}
 	// A load field consumed only by g:each/g:when (resolved by the runtime region
@@ -124,7 +124,7 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 		DynamicParams:    page.DynamicParams(),
 		RouteParams:      append([]source.RouteParam(nil), page.TypedRouteParams()...),
 		Guards:           append([]string(nil), page.Guards...),
-		HasLoad:          page.Blocks.Load,
+		HasLoad:          page.Blocks.Server,
 		LoadBinding:      sourceBackendBinding(page.LoadBinding),
 		HTML:             html,
 		Replacements:     replacements,
@@ -167,15 +167,15 @@ func ssrRouteData(page gwdkir.Page) (map[string]string, []SSRReplacement) {
 }
 
 func ssrLoadData(page gwdkir.Page, existing map[string]string) (map[string]string, []SSRLoadReplacement, error) {
-	if !page.Blocks.Load {
+	if !page.Blocks.Server {
 		return nil, nil, nil
 	}
-	fields, err := parseLoadFields(page.Blocks.LoadBody)
+	fields, err := parseLoadFields(page.Blocks.ServerBody)
 	if err != nil {
 		return nil, nil, err
 	}
 	if len(fields) == 0 {
-		return nil, nil, fmt.Errorf("load {} must declare at least one field with `=> { field }`")
+		return nil, nil, fmt.Errorf("server {} must declare at least one field with `=> { field }`")
 	}
 	data := map[string]string{}
 	replacements := make([]SSRLoadReplacement, 0, len(fields))

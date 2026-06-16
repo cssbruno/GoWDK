@@ -165,10 +165,10 @@ func renderPageView(source string, nodes []view.Node, components map[string]view
 // is trusted and route params taint syntactically via param("..."), so neither
 // is included here.
 func requestTimeTaintedFields(page gwdkir.Page, policy renderModePolicy) map[string]bool {
-	if policy != renderModeRequestTime || !page.Blocks.Load {
+	if policy != renderModeRequestTime || !page.Blocks.Server {
 		return nil
 	}
-	fields, err := parseLoadFields(page.Blocks.LoadBody)
+	fields, err := parseLoadFields(page.Blocks.ServerBody)
 	if err != nil {
 		return nil
 	}

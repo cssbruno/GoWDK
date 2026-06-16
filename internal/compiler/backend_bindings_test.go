@@ -276,7 +276,7 @@ func LoadBroken() map[string]any {
 			Route:  "/dashboard",
 			Render: gowdk.SSR,
 			Blocks: gwdkir.Blocks{
-				Load: true,
+				Server: true,
 			},
 		},
 		{
@@ -285,7 +285,7 @@ func LoadBroken() map[string]any {
 			Route:  "/profile",
 			Render: gowdk.SSR,
 			Blocks: gwdkir.Blocks{
-				Load: true,
+				Server: true,
 			},
 		},
 		{
@@ -294,7 +294,7 @@ func LoadBroken() map[string]any {
 			Route:  "/broken",
 			Render: gowdk.SSR,
 			Blocks: gwdkir.Blocks{
-				Load: true,
+				Server: true,
 			},
 		},
 		{
@@ -303,7 +303,7 @@ func LoadBroken() map[string]any {
 			Route:  "/missing",
 			Render: gowdk.SSR,
 			Blocks: gwdkir.Blocks{
-				Load: true,
+				Server: true,
 			},
 		},
 	}})
@@ -335,9 +335,9 @@ func TestBindBackendHandlersBindsInlineSSRScriptLoad(t *testing.T) {
 			Path:  ssrImportPath,
 		}},
 		Blocks: gwdkir.Blocks{
-			Load: true,
+			Server: true,
 			GoBlocks: []gwdkir.GoBlock{{
-				Target: "ssr",
+				Target: "server",
 				Body: `func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	return map[string]any{"user": "Ada"}, nil
 }`,
@@ -812,7 +812,7 @@ func TestValidateBackendBindingPolicyIRSeesMissingLoadBinding(t *testing.T) {
 			ID:          "dashboard",
 			Source:      "dashboard.page.gwdk",
 			Route:       "/dashboard",
-			Blocks:      gwdkir.Blocks{Load: true},
+			Blocks:      gwdkir.Blocks{Server: true},
 			LoadBinding: gwdkir.Binding{Status: source.BackendBindingMissing},
 		}},
 		Endpoints: []gwdkir.Endpoint{{

@@ -4259,7 +4259,7 @@ var Config = gowdk.Config{
 page dashboard
 route "/dashboard"
 
-go ssr {
+go server {
 }
 
 view {
@@ -4490,7 +4490,7 @@ func TestRoutesCommandPrintsSSRRouteKind(t *testing.T) {
 page dashboard
 route "/dashboard"
 
-load {
+server {
 }
 
 view {
@@ -4530,7 +4530,7 @@ func TestRoutesCommandPrintsBareHybridAsSSRRoute(t *testing.T) {
 page dashboard
 route "/dashboard"
 
-go ssr {
+go server {
 }
 
 view {
@@ -5024,7 +5024,7 @@ build {
   => interop.FeaturedCopyWithErrorForBuild()
 }
 
-load {
+server {
   => { user.name }
 }
 
@@ -6229,7 +6229,7 @@ func TestBuildCommandBuildsSSRBinary(t *testing.T) {
 page dashboard
 route "/dashboard"
 
-go ssr {
+go server {
 }
 
 build {
@@ -6282,7 +6282,7 @@ func TestBuildCommandBuildsDynamicSSRBinary(t *testing.T) {
 page blog.post
 route "/blog/{slug}"
 
-go ssr {
+go server {
 }
 
 build {

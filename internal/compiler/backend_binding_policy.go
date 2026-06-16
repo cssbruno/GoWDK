@@ -44,7 +44,7 @@ func ValidateBackendBindingPolicyIR(config gowdk.Config, ir gwdkir.Program) erro
 
 func programDeclaresBackendEndpoints(ir gwdkir.Program) bool {
 	for _, page := range ir.Pages {
-		if len(page.Blocks.Actions) > 0 || len(page.Blocks.APIs) > 0 || page.Blocks.Load {
+		if len(page.Blocks.Actions) > 0 || len(page.Blocks.APIs) > 0 || page.Blocks.Server {
 			return true
 		}
 	}

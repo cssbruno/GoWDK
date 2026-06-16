@@ -214,7 +214,7 @@ func TestDoctorCommandReportsLanguageErrors(t *testing.T) {
 page bad
 route "/bad"
 
-load {
+server {
   => { title: "needs ssr" }
 }
 

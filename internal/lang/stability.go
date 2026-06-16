@@ -49,7 +49,7 @@ func ConstructStabilities() []ConstructStability {
 		{Name: "use", Kind: ConstructBlock, Tier: TierStable},
 		{Name: "paths {}", Kind: ConstructBlock, Tier: TierPartial},
 		{Name: "build {}", Kind: ConstructBlock, Tier: TierPartial},
-		{Name: "load {}", Kind: ConstructBlock, Tier: TierPartial},
+		{Name: "server {}", Kind: ConstructBlock, Tier: TierPartial},
 		{Name: "view {}", Kind: ConstructBlock, Tier: TierStable},
 		{Name: "style {}", Kind: ConstructBlock, Tier: TierStable},
 		{Name: "client {}", Kind: ConstructBlock, Tier: TierPartial},

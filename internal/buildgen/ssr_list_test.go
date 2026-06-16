@@ -63,8 +63,8 @@ func buildSSRRegionArtifact(t *testing.T, loadBody, view string) SSRArtifact {
 		Render: gowdk.SSR,
 		Guards: []string{"public"},
 		Blocks: gwdkir.Blocks{
-			Load:     true,
-			LoadBody: loadBody,
+			Server:     true,
+			ServerBody: loadBody,
 			View:     view != "",
 			ViewBody: view,
 		},

@@ -4,7 +4,7 @@ page dynamic.ssr
 route "/ssr/{slug}"
 guard public
 
-go ssr {
+go server {
 }
 
 build {

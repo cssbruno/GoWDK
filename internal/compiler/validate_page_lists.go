@@ -11,7 +11,7 @@ import (
 
 // validatePageServerLists checks request-time region rendering at check time so
 // the diagnostics match build behavior. It rejects g:for/g:if/g:unsafe-html over
-// request-time load {} data (pointing at g:each/g:when), and validates that
+// request-time server {} data (pointing at g:each/g:when), and validates that
 // g:each/g:when target server load data or, when nested, the enclosing row item.
 func validatePageServerLists(page gwdkir.Page) []ValidationError {
 	nodes := pageViewNodes(page)
@@ -38,7 +38,7 @@ func pageViewNodes(page gwdkir.Page) []viewmodel.Node {
 	return nodes
 }
 
-// pageLoads describes a page's declared load {} fields. fields holds the exact
+// pageLoads describes a page's declared server {} fields. fields holds the exact
 // declared paths (e.g. "columns", "user.name") used to match a server region's
 // collection/condition the same way the renderer's taint set does. roots holds
 // the leading identifiers (e.g. "user") used for the advisory "you used a client
@@ -50,10 +50,10 @@ type pageLoads struct {
 
 func collectPageLoads(page gwdkir.Page) pageLoads {
 	loads := pageLoads{fields: map[string]bool{}, roots: map[string]bool{}}
-	if !page.Blocks.Load {
+	if !page.Blocks.Server {
 		return loads
 	}
-	for _, line := range strings.Split(page.Blocks.LoadBody, "\n") {
+	for _, line := range strings.Split(page.Blocks.ServerBody, "\n") {
 		_, body, ok := strings.Cut(line, "=>")
 		if !ok {
 			continue
@@ -121,7 +121,7 @@ func validatePageIfDirective(page gwdkir.Page, attr viewmodel.Attr, loads pageLo
 	}
 	if loads.roots[exprRoot(expr)] {
 		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "gif_over_load_data",
-			fmt.Sprintf("%s: %s cannot branch on request-time load {} data %q; %s binds client/island state. Render the server-side conditional with g:when={%s} (or g:when={!%s} for the empty branch)", page.ID, attr.Name, expr, attr.Name, expr, expr)))
+			fmt.Sprintf("%s: %s cannot branch on request-time server {} data %q; %s binds client/island state. Render the server-side conditional with g:when={%s} (or g:when={!%s} for the empty branch)", page.ID, attr.Name, expr, attr.Name, expr, expr)))
 	}
 }
 
@@ -134,7 +134,7 @@ func validatePageWhenDirective(page gwdkir.Page, attr viewmodel.Attr, loads page
 	if len(eachVars) == 0 {
 		if !loads.fields[expr] {
 			*diagnostics = append(*diagnostics, pageListDiagnostic(page, "gwhen_requires_load",
-				fmt.Sprintf("%s: g:when condition %q must be a declared SSR load {} field; g:when renders request-time server data — use g:if for client/island state", page.ID, expr)))
+				fmt.Sprintf("%s: g:when condition %q must be a declared server {} field; g:when renders request-time server data — use g:if for client/island state", page.ID, expr)))
 		}
 		return
 	}
@@ -162,7 +162,7 @@ func validatePageHTMLDirective(page gwdkir.Page, attr viewmodel.Attr, loads page
 	}
 	if loads.roots[exprRoot(expr)] {
 		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "ghtml_over_load_data",
-			fmt.Sprintf("%s: g:unsafe-html cannot render request-time load {} data %q; load fields are attacker-influenceable and bypass escape-by-default. Render request-time text with escape-by-default interpolation (e.g. inside g:each) instead of raw HTML", page.ID, expr)))
+			fmt.Sprintf("%s: g:unsafe-html cannot render request-time server {} data %q; server {} fields are attacker-influenceable and bypass escape-by-default. Render request-time text with escape-by-default interpolation (e.g. inside g:each) instead of raw HTML", page.ID, expr)))
 	}
 }
 
@@ -178,7 +178,7 @@ func validatePageForDirective(page gwdkir.Page, attr viewmodel.Attr, loads pageL
 	}
 	if loads.roots[exprRoot(loop.Collection)] {
 		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "gfor_over_load_data",
-			fmt.Sprintf("%s: g:for cannot iterate request-time load {} data %q; g:for binds client/island state. Render the server-side list with g:each={%s in %s}", page.ID, loop.Collection, loop.Var, loop.Collection)))
+			fmt.Sprintf("%s: g:for cannot iterate request-time server {} data %q; g:for binds client/island state. Render the server-side list with g:each={%s in %s}", page.ID, loop.Collection, loop.Var, loop.Collection)))
 	}
 }
 
@@ -191,7 +191,7 @@ func validatePageEachDirective(page gwdkir.Page, attr viewmodel.Attr, loads page
 	if len(eachVars) == 0 {
 		if !loads.fields[each.Collection] {
 			*diagnostics = append(*diagnostics, pageListDiagnostic(page, "geach_requires_load",
-				fmt.Sprintf("%s: g:each collection %q must be a declared SSR load {} field; g:each renders request-time server data — use g:for for client/island state", page.ID, each.Collection)))
+				fmt.Sprintf("%s: g:each collection %q must be a declared server {} field; g:each renders request-time server data — use g:for for client/island state", page.ID, each.Collection)))
 		}
 		return each.Var, true
 	}

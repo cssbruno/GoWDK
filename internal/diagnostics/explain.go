@@ -82,7 +82,7 @@ store cart ui.CartState = ui.NewCartState() persist "local"`,
 	"guard_requires_request_render": {
 		Details: "Protected page guards must gate the page GET route at request time. A build-time SPA page emits plain static HTML, so it cannot enforce frontend page access.",
 		NextSteps: []string{
-			"Add load {} or go ssr {} and enable the SSR addon when the page should be protected.",
+			"Add server {} or go server {} and enable the SSR addon when the page should be protected.",
 			"Use guard public when the page is intentionally public and keep backend authorization in Go handlers.",
 		},
 		Invalid: `page dashboard
@@ -98,10 +98,10 @@ load {
 `,
 	},
 	"missing_ssr_addon": {
-		Details: "The source selects request-time page rendering through load {}, go ssr {}, SSR render mode, or hybrid render mode, but the loaded config does not enable the SSR addon.",
+		Details: "The source selects request-time page rendering through server {}, go server {}, SSR render mode, or hybrid render mode, but the loaded config does not enable the SSR addon.",
 		NextSteps: []string{
 			"Enable ssr.Addon() in gowdk.config.go when request-time page rendering is intentional.",
-			"Remove load {} or go ssr {} when the page should stay build-time SPA output.",
+			"Remove server {} or go server {} when the page should stay build-time SPA output.",
 		},
 		Invalid: `package pages
 
@@ -143,7 +143,7 @@ view {
 		Details: "Build-time SPA pages with dynamic route params need concrete paths at build time. Request-time pages can skip paths because params are decoded per request.",
 		NextSteps: []string{
 			"Add paths { ... } with concrete param values for every static output path.",
-			"Use load {} or go ssr {} with the SSR addon when the route should render per request.",
+			"Use server {} or go server {} with the SSR addon when the route should render per request.",
 		},
 		Invalid: `page post
 route "/blog/{slug}"

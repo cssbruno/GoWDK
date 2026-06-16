@@ -302,7 +302,7 @@ page admin
 route "/admin"
 guard role:admin
 
-go ssr {
+go server {
 }
 
 view {
@@ -340,7 +340,7 @@ page admin
 route "/admin"
 guard auth.required
 
-go ssr {
+go server {
 }
 
 view {

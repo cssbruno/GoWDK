@@ -6,7 +6,7 @@ page hybrid
 route "/hybrid"
 guard public
 css flagship
-go ssr {
+go server {
 }
 
 build {

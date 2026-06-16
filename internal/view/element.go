@@ -441,7 +441,7 @@ func elementRawHTMLContent(node Element, ctx *renderContext) (string, bool, erro
 	}
 	if tainted {
 		if ctx.tainted[expr] || ctx.tainted[taintedExprRoot(expr)] {
-			return "", false, fmt.Errorf("g:unsafe-html cannot render %q: it comes from request-time load {} data, which is attacker-influenceable and bypasses escape-by-default. Render request-time text with escape-by-default interpolation (e.g. inside g:each) instead of raw HTML", expr)
+			return "", false, fmt.Errorf("g:unsafe-html cannot render %q: it comes from request-time server {} data, which is attacker-influenceable and bypasses escape-by-default. Render request-time text with escape-by-default interpolation (e.g. inside g:each) instead of raw HTML", expr)
 		}
 		return "", false, fmt.Errorf("g:unsafe-html cannot render %q: route param interpolation is attacker-influenceable and not allowed as raw HTML", expr)
 	}

@@ -50,7 +50,7 @@ emitted.
   URLs remain supported.
 - Raw `on*` HTML event handler attributes are rejected; use `g:on:*` in
   stateful components instead.
-- `srcdoc` is rejected because it embeds raw HTML outside the `g:html`
+- `srcdoc` is rejected because it embeds raw HTML outside the `g:unsafe-html`
   contract.
 - `<script>` in `view {}` is rejected; configured and scoped script assets
   remain the supported path.

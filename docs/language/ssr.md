@@ -175,7 +175,56 @@ Contract:
   the enclosing row item; its slice is resolved per parent row.
 - Rows support static markup, item interpolation, and nested `g:each` only.
   Components, client directives (`g:on:*`, `g:if`, `g:bind:*`, islands), and
-  `g:html` are not part of a server row. Request-time (tainted) values remain
+  `g:unsafe-html` are not part of a server row. Request-time (tainted) values remain
   rejected in URL, event-handler, `style`, and `srcdoc` attributes.
 - `g:each` requires the SSR addon and a request-time page; it has no SPA/static
+  output form.
+
+## Server-rendered conditionals (`g:when`)
+
+`g:when` is the server-side counterpart to the client-only `g:if`. It renders
+its element (and subtree) at request time only when an SSR `load {}` field is
+truthy, with a leading `!` for the inverse. This covers the everyday empty-state,
+auth-gated section, and feature-flag patterns over request-time data.
+
+```gwdk
+page board
+route "/board"
+guard public
+load { => { hasItems, count } }
+view {
+  <section>
+    <p g:when={hasItems}>You have {count} items</p>
+    <p g:when={!hasItems}>No issues yet</p>
+  </section>
+}
+```
+
+```go
+func LoadBoard(ssr.LoadContext) (map[string]any, error) {
+	b := issues.Board()
+	return map[string]any{"hasItems": b.Count > 0, "count": b.Count}, nil
+}
+```
+
+Contract:
+
+- A top-level `g:when` condition must be a declared `load {}` field, optionally
+  negated with a leading `!`. Branching client/island state belongs to `g:if`;
+  branching request-time `load {}` data with `g:if` is rejected at `gowdk check`
+  with a diagnostic pointing at `g:when`.
+- The condition is a single field reference, not a compound expression. A value
+  is truthy when it is a non-zero number, non-empty string, `true`, or a
+  non-empty slice/map. Compute compound conditions in Go and expose a bool load
+  field.
+- A `g:when` branch shares the enclosing scope: a top-level branch interpolates
+  `load {}` fields (`{count}`); a `g:when` inside a `g:each` row references the
+  row item (`{issue.id}`), and its condition must reference the row item
+  (`g:when={issue.urgent}`).
+- `g:when` and `g:each` nest in either direction: a list inside a branch, a
+  conditional inside a row. Branches support static markup, scoped
+  interpolation, nested `g:each`, and nested `g:when` only.
+- The empty/else branch is expressed with a sibling `g:when={!field}`; an
+  `else`/`else-if` chain is not part of this directive.
+- `g:when` requires the SSR addon and a request-time page; it has no SPA/static
   output form.

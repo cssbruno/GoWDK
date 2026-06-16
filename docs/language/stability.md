@@ -81,6 +81,7 @@ Supported exact-name directives (the closed set in
 | `g:if` / `g:else-if` / `g:else` | Stable | Conditional flow. |
 | `g:for` / `g:key` | Stable | Client/island list rendering. |
 | `g:each` | Stable | Server-side request-time list rendering over SSR `load {}` data. |
+| `g:when` | Stable | Server-side request-time conditional rendering over SSR `load {}` data. |
 | `g:bind:value` / `g:bind:checked` | Partial | Two-way bindings. |
 | `g:on:*` | Partial | Event handlers with `.prevent`/`.stop`/`.once`/`.capture`/`.debounce`/`.throttle`. |
 | `g:post` / `g:target` / `g:swap` | Partial | Progressive form/fragment submission. |
@@ -89,7 +90,7 @@ Supported exact-name directives (the closed set in
 | `g:command` / `g:query` | Partial | Contract web adapters. |
 | `g:subscribe` | Partial | Realtime presentation-event subscription metadata on query-owned elements. |
 | `g:event` | Partial | Parses to explain backend-owned domain events. |
-| `g:html` | Stable | Raw HTML escape hatch; `unsafe_raw_html` is reported. |
+| `g:unsafe-html` | Stable | Raw HTML escape hatch; `unsafe_raw_html` is reported. |
 | `g:ref` | Partial | Client reference. |
 | `g:slot` | Partial | Named/scoped slot. |
 

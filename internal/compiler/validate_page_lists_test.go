@@ -97,6 +97,143 @@ func TestValidateRejectsNestedGEachWrongScope(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsGIfOverLoadData(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { hasItems, count }`,
+			View:     true,
+			ViewBody: `<p g:if={hasItems}>You have {count}</p>`,
+		},
+	})
+	diag, ok := findCode(report, "gif_over_load_data")
+	if !ok {
+		t.Fatalf("expected gif_over_load_data diagnostic, got %v", report)
+	}
+	if !strings.Contains(diag.Message, "g:when={hasItems}") {
+		t.Fatalf("diagnostic should suggest g:when: %q", diag.Message)
+	}
+}
+
+func TestValidateAcceptsGWhenOverLoadData(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { hasItems, count }`,
+			View:     true,
+			ViewBody: `<section><p g:when={hasItems}>You have {count}</p><p g:when={!hasItems}>None</p></section>`,
+		},
+	})
+	for _, code := range []string{"gwhen_requires_load", "gwhen_nested_scope", "gif_over_load_data"} {
+		if _, ok := findCode(report, code); ok {
+			t.Fatalf("g:when over a load field should be accepted, got %s: %v", code, report)
+		}
+	}
+}
+
+func TestValidateRejectsGWhenOverNonLoadField(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { hasItems }`,
+			View:     true,
+			ViewBody: `<p g:when={ready}>x</p>`,
+		},
+	})
+	if _, ok := findCode(report, "gwhen_requires_load"); !ok {
+		t.Fatalf("expected gwhen_requires_load diagnostic, got %v", report)
+	}
+}
+
+func TestValidateAcceptsGWhenInsideEachRow(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { issues }`,
+			View:     true,
+			ViewBody: `<ul><li g:each={issue in issues}>{issue.id}<b g:when={issue.urgent}>!</b></li></ul>`,
+		},
+	})
+	for _, code := range []string{"gwhen_requires_load", "gwhen_nested_scope"} {
+		if _, ok := findCode(report, code); ok {
+			t.Fatalf("g:when referencing the row item should be accepted, got %s: %v", code, report)
+		}
+	}
+}
+
+func TestValidateRejectsGEachOverNonExactLoadPath(t *testing.T) {
+	// load declares only user.name; g:each over user.posts must fail at check,
+	// matching the build, which requires the exact declared path to be tainted.
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { user.name }`,
+			View:     true,
+			ViewBody: `<li g:each={post in user.posts}>{post.title}</li>`,
+		},
+	})
+	if _, ok := findCode(report, "geach_requires_load"); !ok {
+		t.Fatalf("expected geach_requires_load for an undeclared dotted path, got %v", report)
+	}
+}
+
+func TestValidateRejectsGForInsideEachRow(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { columns }`,
+			View:     true,
+			ViewBody: `<div g:each={col in columns}><span g:for={issue in col.issues} g:key={issue.id}>{issue.id}</span></div>`,
+		},
+	})
+	diag, ok := findCode(report, "gfor_over_load_data")
+	if !ok {
+		t.Fatalf("expected gfor_over_load_data for g:for inside a g:each row, got %v", report)
+	}
+	if !strings.Contains(diag.Message, "nested g:each") {
+		t.Fatalf("row diagnostic should suggest a nested g:each: %q", diag.Message)
+	}
+}
+
+func TestValidateRejectsNestedGEachOverParentItem(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { columns }`,
+			View:     true,
+			ViewBody: `<div g:each={col in columns}><span g:each={issue in col} g:key={issue.id}>{issue.id}</span></div>`,
+		},
+	})
+	diag, ok := findCode(report, "geach_nested_scope")
+	if !ok {
+		t.Fatalf("expected geach_nested_scope when iterating the parent item itself, got %v", report)
+	}
+	if !strings.Contains(diag.Message, "itself") {
+		t.Fatalf("diagnostic should explain it cannot be the parent item itself: %q", diag.Message)
+	}
+}
+
+func TestValidateRejectsGHTMLOverLoadData(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { bodyHTML }`,
+			View:     true,
+			ViewBody: `<article g:unsafe-html={bodyHTML}></article>`,
+		},
+	})
+	diag, ok := findCode(report, "ghtml_over_load_data")
+	if !ok {
+		t.Fatalf("expected ghtml_over_load_data diagnostic, got %v", report)
+	}
+	if strings.Contains(diag.Message, "route param") {
+		t.Fatalf("diagnostic must not misname the cause as a route param: %q", diag.Message)
+	}
+	if !strings.Contains(diag.Message, "load {}") {
+		t.Fatalf("diagnostic should name load {} as the source: %q", diag.Message)
+	}
+}
+
 func TestValidateAcceptsNestedGEach(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{

@@ -36,7 +36,7 @@ func TestGenerateWritesServerListRenderer(t *testing.T) {
 			SourcePath:  "columns",
 			RowTemplate: `<div>__GOWDK_SSR_FIELD_1____GOWDK_SSR_LIST_s2__</div>`,
 			Fields:      []SSRListField{{Placeholder: "__GOWDK_SSR_FIELD_1__", Path: "title"}},
-			Children: []SSRListSpec{{
+			Lists: []SSRListSpec{{
 				Placeholder: "__GOWDK_SSR_LIST_s2__",
 				SourcePath:  "issues",
 				RowTemplate: `<li>__GOWDK_SSR_FIELD_2__</li>`,
@@ -60,13 +60,14 @@ func TestGenerateWritesServerListRenderer(t *testing.T) {
 
 	for _, expected := range []string{
 		`gowdkssr "github.com/cssbruno/gowdk/addons/ssr"`,
-		`html = gowdkssr.RenderLists(html, []gowdkssr.ListSpec{`,
+		`html = gowdkssr.RenderRegions(html, []gowdkssr.ListSpec{`,
 		`Placeholder: "__GOWDK_SSR_LIST_s1__"`,
 		`SourcePath: "columns"`,
 		`Fields: []gowdkssr.ListField{`,
 		`Path: "title"`,
-		`Children: []gowdkssr.ListSpec{`,
+		`Lists: []gowdkssr.ListSpec{`,
 		`SourcePath: "issues"`,
+		`}, []gowdkssr.CondSpec{`,
 		`}, loadData)`,
 	} {
 		if !strings.Contains(generated, expected) {
@@ -104,7 +105,7 @@ func TestGeneratedBinaryExecutesServerList(t *testing.T) {
 			SourcePath:  "columns",
 			RowTemplate: `<section><h2>__GOWDK_SSR_FIELD_1__</h2>__GOWDK_SSR_LIST_s2__</section>`,
 			Fields:      []SSRListField{{Placeholder: "__GOWDK_SSR_FIELD_1__", Path: "title"}},
-			Children: []SSRListSpec{{
+			Lists: []SSRListSpec{{
 				Placeholder: "__GOWDK_SSR_LIST_s2__",
 				SourcePath:  "issues",
 				RowTemplate: `<article><span>__GOWDK_SSR_FIELD_2__</span> __GOWDK_SSR_FIELD_3__</article>`,
@@ -170,5 +171,168 @@ func LoadBoard(ssr.LoadContext) (map[string]any, error) {
 	}
 	if strings.Contains(body, "__GOWDK_SSR_") {
 		t.Fatalf("unconsumed placeholder in response: %s", body)
+	}
+}
+
+// TestGeneratedBinaryExecutesServerConditional compiles and runs a real
+// generated app that renders an empty-state g:when pair from request-time load
+// data, proving the conditional codegen + runtime work against the real runtime.
+func TestGeneratedBinaryExecutesServerConditional(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:  "board",
+		Route:   "/board",
+		Guards:  []string{"public"},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "gowdk-generated-app/board",
+			PackageName:  "board",
+			FunctionName: "LoadBoard",
+			Signature:    source.BackendSignatureLoadError,
+		},
+		HTML: `<main>__GOWDK_SSR_COND_w1____GOWDK_SSR_COND_w2__</main>`,
+		CondSpecs: []SSRCondSpec{
+			{
+				Placeholder: "__GOWDK_SSR_COND_w1__",
+				SourcePath:  "hasItems",
+				Template:    `<p>You have __GOWDK_SSR_FIELD_1__ items</p>`,
+				Fields:      []SSRListField{{Placeholder: "__GOWDK_SSR_FIELD_1__", Path: "count"}},
+			},
+			{
+				Placeholder: "__GOWDK_SSR_COND_w2__",
+				SourcePath:  "hasItems",
+				Negate:      true,
+				Template:    `<p>No issues yet</p>`,
+			},
+		},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "board", "board.go"), `package board
+
+import (
+	"net/http"
+
+	"github.com/cssbruno/gowdk/addons/ssr"
+)
+
+func LoadBoard(ctx ssr.LoadContext) (map[string]any, error) {
+	if ctx.Request.URL.Query().Get("empty") == "1" {
+		return map[string]any{"hasItems": false, "count": 0}, nil
+	}
+	return map[string]any{"hasItems": true, "count": 4}, nil
+}
+
+var _ = http.StatusOK
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	populated, _, err := waitForHTTPResponse("http://" + addr + "/board")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(populated, "You have 4 items") || strings.Contains(populated, "No issues yet") {
+		t.Fatalf("populated branch wrong: %s", populated)
+	}
+	empty, _, err := waitForHTTPResponse("http://" + addr + "/board?empty=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(empty, "No issues yet") || strings.Contains(empty, "You have") {
+		t.Fatalf("empty branch wrong: %s", empty)
+	}
+	if strings.Contains(populated, "__GOWDK_SSR_") || strings.Contains(empty, "__GOWDK_SSR_") {
+		t.Fatalf("unconsumed placeholder remains")
+	}
+}
+
+// TestGeneratedBinaryDoesNotExpandRegionTokenInScalar proves the ordering fix:
+// a load scalar whose value equals a generated list placeholder must NOT be
+// expanded into rows. The handler expands regions before substituting scalars,
+// so the malicious value appears literally and the list renders exactly once.
+func TestGeneratedBinaryDoesNotExpandRegionTokenInScalar(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:  "board",
+		Route:   "/board",
+		Guards:  []string{"public"},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "gowdk-generated-app/board",
+			PackageName:  "board",
+			FunctionName: "LoadBoard",
+			Signature:    source.BackendSignatureLoadError,
+		},
+		HTML:             `<main><span>__GOWDK_SSR_LOAD_x__</span><ul>__GOWDK_SSR_LIST_s1__</ul></main>`,
+		LoadReplacements: []SSRLoadReplacement{{Path: "x", Placeholder: "__GOWDK_SSR_LOAD_x__"}},
+		ListSpecs: []SSRListSpec{{
+			Placeholder: "__GOWDK_SSR_LIST_s1__",
+			SourcePath:  "items",
+			RowTemplate: `<li>__GOWDK_SSR_FIELD_1__</li>`,
+			Fields:      []SSRListField{{Placeholder: "__GOWDK_SSR_FIELD_1__", Path: "name"}},
+		}},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "board", "board.go"), `package board
+
+import "github.com/cssbruno/gowdk/addons/ssr"
+
+func LoadBoard(ssr.LoadContext) (map[string]any, error) {
+	return map[string]any{
+		"x":     "__GOWDK_SSR_LIST_s1__",
+		"items": []any{map[string]any{"name": "a"}, map[string]any{"name": "b"}},
+	}, nil
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, _, err := waitForHTTPResponse("http://" + addr + "/board")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(body, "<li>"); got != 2 {
+		t.Fatalf("list should render exactly twice (not expanded inside the scalar), got %d:\n%s", got, body)
+	}
+	if !strings.Contains(body, "<span>__GOWDK_SSR_LIST_s1__</span>") {
+		t.Fatalf("malicious scalar value should appear literally, not be expanded:\n%s", body)
 	}
 }

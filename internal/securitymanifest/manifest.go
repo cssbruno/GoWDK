@@ -107,7 +107,7 @@ type BundleLeak struct {
 	Kind   string `json:"kind"`
 }
 
-// RawHTMLSink records one raw-HTML (g:html) render site.
+// RawHTMLSink records one raw-HTML (g:unsafe-html) render site.
 type RawHTMLSink struct {
 	OwnerKind string `json:"ownerKind"`
 	OwnerID   string `json:"ownerId"`
@@ -316,7 +316,7 @@ func rawHTMLSinksForNodes(nodes []viewmodel.Node, template gwdkir.Template) []Ra
 			switch typed := node.(type) {
 			case viewmodel.Element:
 				for _, attr := range typed.Attrs {
-					if attr.Name != "g:html" {
+					if attr.Name != "g:unsafe-html" {
 						continue
 					}
 					sinks = append(sinks, RawHTMLSink{

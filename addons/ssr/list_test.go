@@ -2,7 +2,7 @@ package ssr
 
 import "testing"
 
-func TestRenderListsTopLevel(t *testing.T) {
+func TestRenderRegionsTopLevel(t *testing.T) {
 	specs := []ListSpec{{
 		Placeholder: "@LIST@",
 		SourcePath:  "items",
@@ -13,14 +13,14 @@ func TestRenderListsTopLevel(t *testing.T) {
 		map[string]any{"name": "alpha"},
 		map[string]any{"name": "beta"},
 	}}
-	got := RenderLists("<ul>@LIST@</ul>", specs, data)
+	got := RenderRegions("<ul>@LIST@</ul>", specs, nil, data)
 	want := "<ul><li>alpha</li><li>beta</li></ul>"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
 }
 
-func TestRenderListsEscapesFields(t *testing.T) {
+func TestRenderRegionsEscapesFields(t *testing.T) {
 	specs := []ListSpec{{
 		Placeholder: "@LIST@",
 		SourcePath:  "items",
@@ -28,14 +28,14 @@ func TestRenderListsEscapesFields(t *testing.T) {
 		Fields:      []ListField{{Placeholder: "@NAME@", Path: "name"}},
 	}}
 	data := map[string]any{"items": []any{map[string]any{"name": "<script>x</script>"}}}
-	got := RenderLists("@LIST@", specs, data)
+	got := RenderRegions("@LIST@", specs, nil, data)
 	want := "<li>&lt;script&gt;x&lt;/script&gt;</li>"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
 }
 
-func TestRenderListsIndexField(t *testing.T) {
+func TestRenderRegionsIndexField(t *testing.T) {
 	specs := []ListSpec{{
 		Placeholder: "@LIST@",
 		SourcePath:  "items",
@@ -49,20 +49,20 @@ func TestRenderListsIndexField(t *testing.T) {
 		map[string]any{"name": "a"},
 		map[string]any{"name": "b"},
 	}}
-	got := RenderLists("@LIST@", specs, data)
+	got := RenderRegions("@LIST@", specs, nil, data)
 	want := "<li>0:a</li><li>1:b</li>"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
 }
 
-func TestRenderListsNested(t *testing.T) {
+func TestRenderRegionsNestedList(t *testing.T) {
 	specs := []ListSpec{{
 		Placeholder: "@COLS@",
 		SourcePath:  "columns",
 		RowTemplate: "<div>@TITLE@<ul>@ISSUES@</ul></div>",
 		Fields:      []ListField{{Placeholder: "@TITLE@", Path: "title"}},
-		Children: []ListSpec{{
+		Lists: []ListSpec{{
 			Placeholder: "@ISSUES@",
 			SourcePath:  "issues",
 			RowTemplate: "<li>@ID@</li>",
@@ -78,14 +78,91 @@ func TestRenderListsNested(t *testing.T) {
 			map[string]any{"id": "D-1"},
 		}},
 	}}
-	got := RenderLists("@COLS@", specs, data)
+	got := RenderRegions("@COLS@", specs, nil, data)
 	want := "<div>Todo<ul><li>T-1</li><li>T-2</li></ul></div><div>Done<ul><li>D-1</li></ul></div>"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
 }
 
-func TestRenderListsStructSliceAndDottedPath(t *testing.T) {
+func TestRenderRegionsConditionalTopLevel(t *testing.T) {
+	conds := []CondSpec{
+		{Placeholder: "@YES@", SourcePath: "hasItems", Template: "<p>You have @COUNT@ items</p>", Fields: []ListField{{Placeholder: "@COUNT@", Path: "count"}}},
+		{Placeholder: "@NO@", SourcePath: "hasItems", Negate: true, Template: "<p>No issues yet</p>"},
+	}
+	yes := RenderRegions("<div>@YES@@NO@</div>", nil, conds, map[string]any{"hasItems": true, "count": 3})
+	if yes != "<div><p>You have 3 items</p></div>" {
+		t.Fatalf("truthy branch wrong: %q", yes)
+	}
+	no := RenderRegions("<div>@YES@@NO@</div>", nil, conds, map[string]any{"hasItems": false, "count": 0})
+	if no != "<div><p>No issues yet</p></div>" {
+		t.Fatalf("falsy branch wrong: %q", no)
+	}
+}
+
+func TestRenderRegionsConditionalInsideRow(t *testing.T) {
+	specs := []ListSpec{{
+		Placeholder: "@LIST@",
+		SourcePath:  "issues",
+		RowTemplate: "<li>@ID@@BADGE@</li>",
+		Fields:      []ListField{{Placeholder: "@ID@", Path: "id"}},
+		Conds: []CondSpec{{
+			Placeholder: "@BADGE@",
+			SourcePath:  "urgent",
+			Template:    " <b>!</b>",
+		}},
+	}}
+	data := map[string]any{"issues": []any{
+		map[string]any{"id": "A", "urgent": true},
+		map[string]any{"id": "B", "urgent": false},
+	}}
+	got := RenderRegions("@LIST@", specs, nil, data)
+	want := "<li>A <b>!</b></li><li>B</li>"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestRenderRegionsListInsideConditional(t *testing.T) {
+	conds := []CondSpec{{
+		Placeholder: "@WHEN@",
+		SourcePath:  "hasItems",
+		Template:    "<ul>@LIST@</ul>",
+		Lists: []ListSpec{{
+			Placeholder: "@LIST@",
+			SourcePath:  "items",
+			RowTemplate: "<li>@NAME@</li>",
+			Fields:      []ListField{{Placeholder: "@NAME@", Path: "name"}},
+		}},
+	}}
+	data := map[string]any{"hasItems": true, "items": []any{
+		map[string]any{"name": "a"}, map[string]any{"name": "b"},
+	}}
+	got := RenderRegions("@WHEN@", nil, conds, data)
+	if got != "<ul><li>a</li><li>b</li></ul>" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestTruthy(t *testing.T) {
+	cases := []struct {
+		value any
+		want  bool
+	}{
+		{true, true}, {false, false},
+		{"x", true}, {"", false},
+		{1, true}, {0, false},
+		{[]any{1}, true}, {[]any{}, false},
+		{nil, false},
+	}
+	for _, tc := range cases {
+		if got := truthy(tc.value); got != tc.want {
+			t.Fatalf("truthy(%#v) = %v want %v", tc.value, got, tc.want)
+		}
+	}
+}
+
+func TestRenderRegionsStructSliceAndDottedPath(t *testing.T) {
 	type issue struct {
 		ID     string
 		Author struct{ Name string }
@@ -102,21 +179,21 @@ func TestRenderListsStructSliceAndDottedPath(t *testing.T) {
 		},
 	}}
 	data := map[string]any{"issues": []issue{a}}
-	got := RenderLists("@LIST@", specs, data)
+	got := RenderRegions("@LIST@", specs, nil, data)
 	want := "<li>X-1 by Ada</li>"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
 }
 
-func TestRenderListsMissingSliceRendersEmpty(t *testing.T) {
+func TestRenderRegionsMissingSliceRendersEmpty(t *testing.T) {
 	specs := []ListSpec{{
 		Placeholder: "@LIST@",
 		SourcePath:  "items",
 		RowTemplate: "<li>@NAME@</li>",
 		Fields:      []ListField{{Placeholder: "@NAME@", Path: "name"}},
 	}}
-	got := RenderLists("[@LIST@]", specs, map[string]any{})
+	got := RenderRegions("[@LIST@]", specs, nil, map[string]any{})
 	if got != "[]" {
 		t.Fatalf("got %q want %q", got, "[]")
 	}

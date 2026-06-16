@@ -14,7 +14,7 @@ func validateParsedHTMLAttrSafety(attr Attr) error {
 		return fmt.Errorf("inline event handler attribute %q is not supported; use g:on:* inside stateful components", attr.Name)
 	}
 	if strings.EqualFold(strings.TrimSpace(attr.Name), "srcdoc") {
-		return fmt.Errorf("srcdoc attribute is not supported; use g:html only with trusted sanitized HTML")
+		return fmt.Errorf("srcdoc attribute is not supported; use g:unsafe-html only with trusted sanitized HTML")
 	}
 	if attr.Boolean {
 		if urlBearingAttr(attr.Name) {
@@ -33,7 +33,7 @@ func validateRenderedHTMLAttrSafety(name, value string) error {
 		return fmt.Errorf("inline event handler attribute %q is not supported; use g:on:* inside stateful components", name)
 	}
 	if strings.EqualFold(strings.TrimSpace(name), "srcdoc") {
-		return fmt.Errorf("srcdoc attribute is not supported; use g:html only with trusted sanitized HTML")
+		return fmt.Errorf("srcdoc attribute is not supported; use g:unsafe-html only with trusted sanitized HTML")
 	}
 	return validateURLAttrValue(name, value)
 }

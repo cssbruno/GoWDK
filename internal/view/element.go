@@ -17,6 +17,9 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 	if elementHasEach(node) {
 		return renderServerListElement(node, ctx, out)
 	}
+	if elementHasWhen(node) {
+		return renderServerConditionalElement(node, ctx, out)
+	}
 	if loop, keyExpr, ok, err := elementForDirective(node, ctx); err != nil {
 		return err
 	} else if ok {
@@ -165,7 +168,7 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 			}
 			return fmt.Errorf("%s must follow a sibling g:if or g:else-if", attr.Name)
 		}
-		if attr.Name == "g:for" || attr.Name == "g:each" || attr.Name == "g:key" {
+		if attr.Name == "g:for" || attr.Name == "g:each" || attr.Name == "g:when" || attr.Name == "g:key" {
 			continue
 		}
 		if attr.Name == "g:bind:value" {
@@ -407,7 +410,7 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 	return nil
 }
 
-// rawHTMLContent evaluates the explicit g:html raw HTML escape hatch for one
+// rawHTMLContent evaluates the explicit g:unsafe-html raw HTML escape hatch for one
 // element. The expression resolves through the same render-data lookup as text
 // interpolation, and the resulting string is written without escaping. Raw
 // HTML is rejected inside stateful component views and g:for loops because the
@@ -416,7 +419,7 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 func elementRawHTMLContent(node Element, ctx *renderContext) (string, bool, error) {
 	expr := ""
 	for _, attr := range node.Attrs {
-		if attr.Name == "g:html" {
+		if attr.Name == "g:unsafe-html" {
 			expr = strings.TrimSpace(attr.Value)
 		}
 	}
@@ -424,22 +427,36 @@ func elementRawHTMLContent(node Element, ctx *renderContext) (string, bool, erro
 		return "", false, nil
 	}
 	if ctx.templateLoop != nil || ctx.loopItem != nil {
-		return "", false, fmt.Errorf("g:html is not supported inside g:for loops; the island loop runtime re-renders rows as escaped text")
+		return "", false, fmt.Errorf("g:unsafe-html is not supported inside g:for loops; the island loop runtime re-renders rows as escaped text")
 	}
 	if len(ctx.stateFields) > 0 || len(ctx.stateTypes) > 0 || len(ctx.handlers) > 0 || len(ctx.emits) > 0 {
-		return "", false, fmt.Errorf("g:html is not supported inside stateful component views; the island runtime re-renders bound content as escaped text and cannot honor raw HTML")
+		return "", false, fmt.Errorf("g:unsafe-html is not supported inside stateful component views; the island runtime re-renders bound content as escaped text and cannot honor raw HTML")
 	}
 	if ctx.bindFields[expr] {
-		return "", false, fmt.Errorf("g:html cannot reference reactive field %q; the island runtime re-renders bound content as escaped text", expr)
+		return "", false, fmt.Errorf("g:unsafe-html cannot reference reactive field %q; the island runtime re-renders bound content as escaped text", expr)
 	}
 	value, tainted, err := interpolateValue(ctx, "{"+expr+"}")
 	if err != nil {
-		return "", false, fmt.Errorf("g:html: %w", err)
+		return "", false, fmt.Errorf("g:unsafe-html: %w", err)
 	}
 	if tainted {
-		return "", false, fmt.Errorf("route param interpolation is not allowed in g:html")
+		if ctx.tainted[expr] || ctx.tainted[taintedExprRoot(expr)] {
+			return "", false, fmt.Errorf("g:unsafe-html cannot render %q: it comes from request-time load {} data, which is attacker-influenceable and bypasses escape-by-default. Render request-time text with escape-by-default interpolation (e.g. inside g:each) instead of raw HTML", expr)
+		}
+		return "", false, fmt.Errorf("g:unsafe-html cannot render %q: route param interpolation is attacker-influenceable and not allowed as raw HTML", expr)
 	}
 	return value, true, nil
+}
+
+// taintedExprRoot returns the leading identifier of a dotted/indexed
+// interpolation expression so a tainted source can be matched against declared
+// load field roots.
+func taintedExprRoot(expr string) string {
+	expr = strings.TrimSpace(expr)
+	if cut := strings.IndexAny(expr, ".[ "); cut >= 0 {
+		return expr[:cut]
+	}
+	return expr
 }
 
 // voidElements are HTML elements that have no end tag; emitting one (for

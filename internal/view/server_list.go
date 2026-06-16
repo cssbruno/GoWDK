@@ -2,6 +2,7 @@ package view
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/viewparse"
@@ -9,8 +10,9 @@ import (
 
 // SSRListReplacement is a build-time description of one server-rendered g:each
 // list. It is collected during a request-time page render and handed to the app
-// generator, which serializes it for the runtime list renderer. The tree
-// mirrors nesting: Children describe g:each lists found inside RowTemplate.
+// generator, which serializes it for the runtime region renderer. The tree
+// mirrors nesting: Lists and Conds describe g:each lists and g:when conditionals
+// found inside RowTemplate.
 type SSRListReplacement struct {
 	Placeholder string
 	SourcePath  string
@@ -18,10 +20,25 @@ type SSRListReplacement struct {
 	IndexVar    string
 	RowTemplate string
 	Fields      []SSRListField
-	Children    []SSRListReplacement
+	Lists       []SSRListReplacement
+	Conds       []SSRCondReplacement
 }
 
-// SSRListField is one per-row scalar substitution inside a row template.
+// SSRCondReplacement is a build-time description of one server-rendered g:when
+// conditional. Its branch renders only when SourcePath resolves to a truthy
+// value (negated when Negate is set). The branch shares the enclosing container
+// scope.
+type SSRCondReplacement struct {
+	Placeholder string
+	SourcePath  string
+	Negate      bool
+	Template    string
+	Fields      []SSRListField
+	Lists       []SSRListReplacement
+	Conds       []SSRCondReplacement
+}
+
+// SSRListField is one per-render scalar substitution inside a region template.
 type SSRListField struct {
 	Placeholder string
 	Path        string
@@ -36,19 +53,33 @@ func ParseEachDirective(source string) (EachDirective, error) {
 	return viewparse.ParseEachDirective(source)
 }
 
-// serverListScope tracks the active g:each row while rendering its template.
-type serverListScope struct {
+// serverScope tracks the active g:each row or g:when branch while rendering its
+// template. itemVar is set for a row scope (interpolations are item-relative);
+// when itemVar is empty the scope is a load scope (interpolations are load {}
+// field paths validated against tainted). It also carries the collectors for the
+// region currently being built.
+type serverScope struct {
 	itemVar   string
 	indexVar  string
+	tainted   map[string]bool
 	fields    *[]SSRListField
-	children  *[]SSRListReplacement
+	lists     *[]SSRListReplacement
+	conds     *[]SSRCondReplacement
 	seen      map[string]string
 	seenIndex string
 }
 
 func elementHasEach(node Element) bool {
+	return elementHasAttr(node, "g:each")
+}
+
+func elementHasWhen(node Element) bool {
+	return elementHasAttr(node, "g:when")
+}
+
+func elementHasAttr(node Element, name string) bool {
 	for _, attr := range node.Attrs {
-		if attr.Name == "g:each" {
+		if attr.Name == name {
 			return true
 		}
 	}
@@ -58,55 +89,139 @@ func elementHasEach(node Element) bool {
 // renderServerListElement renders a g:each element into a list placeholder plus
 // a collected SSRListReplacement. The element's subtree is rendered once as a
 // row template in which item interpolations become per-row field placeholders;
-// nested g:each elements recurse into child specs.
+// nested g:each and g:when recurse into child specs.
 func renderServerListElement(node Element, ctx *renderContext, out *renderOutput) error {
+	if ctx.serverScope == nil && ctx.lists == nil {
+		return fmt.Errorf("g:each is only supported in a request-time page view; it cannot be used inside a component, layout, or fragment. Move the load {} data and g:each onto the page")
+	}
+	if elementHasWhen(node) {
+		return fmt.Errorf("element cannot combine g:each with g:when; place g:when on a child or wrapping element")
+	}
 	each, err := elementEachDirective(node)
 	if err != nil {
 		return err
 	}
-	sourcePath, err := serverListSourcePath(each, ctx)
+	sourcePath, err := serverSourcePath(each.Collection, ctx, "g:each")
 	if err != nil {
 		return err
 	}
 	templateNode := elementWithoutAttrs(node, "g:each", "g:key")
-	if err := validateServerListSubtree(templateNode.Children); err != nil {
+	if err := validateServerRegionSubtree([]Node{templateNode}); err != nil {
 		return err
 	}
 
-	group := ctx.idAllocator().nextListGroup()
 	fields := []SSRListField{}
-	children := []SSRListReplacement{}
-	scope := &serverListScope{
+	lists := []SSRListReplacement{}
+	conds := []SSRCondReplacement{}
+	scope := &serverScope{
 		itemVar:  each.Var,
 		indexVar: each.IndexVar,
 		fields:   &fields,
-		children: &children,
+		lists:    &lists,
+		conds:    &conds,
 		seen:     map[string]string{},
 	}
 
 	rowCtx := *ctx
-	rowCtx.serverList = scope
+	rowCtx.serverScope = scope
 	var rowOut renderOutput
 	if err := renderElement(templateNode, &rowCtx, &rowOut); err != nil {
 		return err
 	}
 
 	replacement := SSRListReplacement{
-		Placeholder: "__GOWDK_SSR_LIST_" + group + "__",
+		Placeholder: "__GOWDK_SSR_LIST_" + ctx.idAllocator().nextListGroup() + "__",
 		SourcePath:  sourcePath,
 		ItemVar:     each.Var,
 		IndexVar:    each.IndexVar,
 		RowTemplate: rowOut.string(),
 		Fields:      fields,
-		Children:    children,
+		Lists:       lists,
+		Conds:       conds,
 	}
-	if ctx.serverList != nil {
-		*ctx.serverList.children = append(*ctx.serverList.children, replacement)
-	} else if ctx.lists != nil {
-		*ctx.lists = append(*ctx.lists, replacement)
-	}
+	appendServerList(ctx, replacement)
 	out.write(replacement.Placeholder)
 	return nil
+}
+
+// renderServerConditionalElement renders a g:when element into a conditional
+// placeholder plus a collected SSRCondReplacement. The element's subtree is
+// rendered once into a branch template in the enclosing container scope.
+func renderServerConditionalElement(node Element, ctx *renderContext, out *renderOutput) error {
+	if ctx.serverScope == nil && ctx.conds == nil {
+		return fmt.Errorf("g:when is only supported in a request-time page view; it cannot be used inside a component, layout, or fragment. Move the load {} data and g:when onto the page")
+	}
+	condition, negate, err := elementWhenDirective(node)
+	if err != nil {
+		return err
+	}
+	sourcePath, err := serverSourcePath(condition, ctx, "g:when")
+	if err != nil {
+		return err
+	}
+	templateNode := elementWithoutAttrs(node, "g:when")
+	if err := validateServerRegionSubtree([]Node{templateNode}); err != nil {
+		return err
+	}
+
+	fields := []SSRListField{}
+	lists := []SSRListReplacement{}
+	conds := []SSRCondReplacement{}
+	// The branch renders in the enclosing container scope: a row scope keeps the
+	// parent item var; a top-level g:when renders against the load data map.
+	scope := &serverScope{
+		fields: &fields,
+		lists:  &lists,
+		conds:  &conds,
+		seen:   map[string]string{},
+	}
+	if parent := ctx.serverScope; parent != nil {
+		scope.itemVar = parent.itemVar
+		scope.indexVar = parent.indexVar
+		scope.tainted = parent.tainted
+	} else {
+		scope.tainted = ctx.tainted
+	}
+
+	branchCtx := *ctx
+	branchCtx.serverScope = scope
+	var branchOut renderOutput
+	if err := renderElement(templateNode, &branchCtx, &branchOut); err != nil {
+		return err
+	}
+
+	replacement := SSRCondReplacement{
+		Placeholder: "__GOWDK_SSR_COND_" + ctx.idAllocator().nextCondGroup() + "__",
+		SourcePath:  sourcePath,
+		Negate:      negate,
+		Template:    branchOut.string(),
+		Fields:      fields,
+		Lists:       lists,
+		Conds:       conds,
+	}
+	appendServerCond(ctx, replacement)
+	out.write(replacement.Placeholder)
+	return nil
+}
+
+func appendServerList(ctx *renderContext, replacement SSRListReplacement) {
+	if ctx.serverScope != nil {
+		*ctx.serverScope.lists = append(*ctx.serverScope.lists, replacement)
+		return
+	}
+	if ctx.lists != nil {
+		*ctx.lists = append(*ctx.lists, replacement)
+	}
+}
+
+func appendServerCond(ctx *renderContext, replacement SSRCondReplacement) {
+	if ctx.serverScope != nil {
+		*ctx.serverScope.conds = append(*ctx.serverScope.conds, replacement)
+		return
+	}
+	if ctx.conds != nil {
+		*ctx.conds = append(*ctx.conds, replacement)
+	}
 }
 
 func elementEachDirective(node Element) (EachDirective, error) {
@@ -137,32 +252,72 @@ func elementEachDirective(node Element) (EachDirective, error) {
 	return each, nil
 }
 
-// serverListSourcePath resolves the load path for a g:each collection. A
-// top-level g:each must target an SSR load {} field; a nested g:each must
-// reference its parent item so its slice can be resolved per parent row.
-func serverListSourcePath(each EachDirective, ctx *renderContext) (string, error) {
-	if ctx.serverList == nil {
-		if !ctx.tainted[each.Collection] {
-			return "", fmt.Errorf("g:each collection %q must be an SSR load {} field; g:each renders request-time server data — use g:for for client/island state", each.Collection)
+// elementWhenDirective parses a g:when value such as "field" or "!field".
+func elementWhenDirective(node Element) (string, bool, error) {
+	hasWhen := false
+	var raw string
+	for _, attr := range node.Attrs {
+		if attr.Name != "g:when" {
+			continue
 		}
-		return each.Collection, nil
+		if hasWhen {
+			return "", false, fmt.Errorf("element declares multiple g:when directives")
+		}
+		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+			return "", false, fmt.Errorf("g:when requires an expression value such as g:when={field} or g:when={!field}")
+		}
+		raw = strings.TrimSpace(attr.Value)
+		hasWhen = true
 	}
-	parent := ctx.serverList.itemVar
-	prefix := parent + "."
-	if each.Collection == parent {
-		return "", fmt.Errorf("nested g:each collection cannot be the parent item %q itself; reference a slice field such as %s.items", parent, parent)
+	for _, attr := range node.Attrs {
+		if attr.Name == "g:if" || attr.Name == "g:else-if" || attr.Name == "g:else" {
+			return "", false, fmt.Errorf("element cannot combine g:when with %s; g:when renders request-time server data, %s binds client/island state", attr.Name, attr.Name)
+		}
 	}
-	if !strings.HasPrefix(each.Collection, prefix) {
-		return "", fmt.Errorf("nested g:each collection %q must reference the parent item %q (for example %sfield)", each.Collection, parent, prefix)
+	negate := false
+	if strings.HasPrefix(raw, "!") {
+		negate = true
+		raw = strings.TrimSpace(raw[1:])
 	}
-	return strings.TrimPrefix(each.Collection, prefix), nil
+	if raw == "" {
+		return "", false, fmt.Errorf("g:when requires a field after %q", "!")
+	}
+	if strings.ContainsAny(raw, "!&|=<>(){}") {
+		return "", false, fmt.Errorf("g:when condition %q must be a single load {} field, optionally negated with a leading !; compute compound conditions in Go and expose a bool load field", raw)
+	}
+	return raw, negate, nil
 }
 
-// validateServerListSubtree rejects constructs that cannot be rendered inside a
-// request-time g:each row. Rows support static markup, item interpolation, and
-// nested g:each only; client directives, components, and inline scripts have no
-// server-render semantics here.
-func validateServerListSubtree(nodes []Node) error {
+// serverSourcePath resolves the load path for a g:each collection or g:when
+// condition. A top-level region (or a load-scope branch) must target a declared
+// SSR load {} field; a row-scope region must reference its enclosing item.
+func serverSourcePath(expr string, ctx *renderContext, directive string) (string, error) {
+	scope := ctx.serverScope
+	if scope == nil || scope.itemVar == "" {
+		tainted := ctx.tainted
+		if scope != nil {
+			tainted = scope.tainted
+		}
+		if !tainted[exprRootName(expr)] {
+			return "", fmt.Errorf("%s collection/condition %q must be an SSR load {} field; %s renders request-time server data — use the client-state directive for client/island state", directive, expr, directive)
+		}
+		return expr, nil
+	}
+	parent := scope.itemVar
+	prefix := parent + "."
+	if expr == parent {
+		return "", fmt.Errorf("nested %s %q cannot be the parent item %q itself; reference a field such as %s.field", directive, expr, parent, parent)
+	}
+	if !strings.HasPrefix(expr, prefix) {
+		return "", fmt.Errorf("nested %s %q must reference the parent item %q (for example %sfield)", directive, expr, parent, prefix)
+	}
+	return strings.TrimPrefix(expr, prefix), nil
+}
+
+// validateServerRegionSubtree rejects constructs that cannot be rendered inside
+// a request-time g:each row or g:when branch. Regions support static markup,
+// scoped interpolation, nested g:each, and nested g:when only.
+func validateServerRegionSubtree(nodes []Node) error {
 	for _, node := range nodes {
 		switch typed := node.(type) {
 		case Element:
@@ -170,29 +325,29 @@ func validateServerListSubtree(nodes []Node) error {
 				if !strings.HasPrefix(attr.Name, "g:") {
 					continue
 				}
-				if attr.Name == "g:each" || attr.Name == "g:key" {
+				if attr.Name == "g:each" || attr.Name == "g:key" || attr.Name == "g:when" {
 					continue
 				}
-				return fmt.Errorf("g:each rows support only static markup, item interpolation, and nested g:each; %q is not allowed inside a g:each row", attr.Name)
+				return fmt.Errorf("g:each rows and g:when branches support only static markup, scoped interpolation, nested g:each, and nested g:when; %q is not allowed", attr.Name)
 			}
-			if err := validateServerListSubtree(typed.Children); err != nil {
+			if err := validateServerRegionSubtree(typed.Children); err != nil {
 				return err
 			}
 		case ComponentCall:
-			return fmt.Errorf("g:each rows cannot contain component calls; render request-time lists with static markup and nested g:each")
+			return fmt.Errorf("g:each rows and g:when branches cannot contain component calls; render request-time markup with static elements, g:each, and g:when")
 		}
 	}
 	return nil
 }
 
-// serverListFieldPlaceholder resolves a row interpolation name to a stable
-// per-row field placeholder, recording the item-relative path (or index) on the
-// active scope. It returns an error when the name does not reference the row's
-// own item or index variable.
-func (scope *serverListScope) serverListFieldPlaceholder(name string, ids *renderIDAllocator) (string, error) {
-	path, isIndex, ok := scope.itemRelativePath(name)
+// serverScopeFieldPlaceholder resolves a region interpolation name to a stable
+// field placeholder, recording the resolved path on the active scope. In a row
+// scope only the row item (and index) are valid; in a load scope only declared
+// load {} fields are valid.
+func (scope *serverScope) serverScopeFieldPlaceholder(name string, ids *renderIDAllocator) (string, error) {
+	path, isIndex, ok := scope.resolvePath(name)
 	if !ok {
-		return "", fmt.Errorf("g:each row may only interpolate its item %q%s; cannot resolve %q", scope.itemVar, scope.indexHint(), name)
+		return "", fmt.Errorf("server region may only interpolate %s; cannot resolve %q", scope.scopeHint(), name)
 	}
 	if isIndex {
 		if scope.seenIndex == "" {
@@ -210,8 +365,15 @@ func (scope *serverListScope) serverListFieldPlaceholder(name string, ids *rende
 	return placeholder, nil
 }
 
-func (scope *serverListScope) itemRelativePath(name string) (path string, isIndex bool, ok bool) {
+func (scope *serverScope) resolvePath(name string) (path string, isIndex bool, ok bool) {
 	name = strings.TrimSpace(name)
+	if scope.itemVar == "" {
+		// Load scope: any declared load field is valid; path is the full name.
+		if scope.tainted[exprRootName(name)] {
+			return name, false, true
+		}
+		return "", false, false
+	}
 	if scope.indexVar != "" && name == scope.indexVar {
 		return "", true, true
 	}
@@ -224,16 +386,33 @@ func (scope *serverListScope) itemRelativePath(name string) (path string, isInde
 	return "", false, false
 }
 
-func (scope *serverListScope) indexHint() string {
-	if scope.indexVar == "" {
-		return ""
+func (scope *serverScope) scopeHint() string {
+	if scope.itemVar == "" {
+		return "declared load {} fields"
 	}
-	return " or index " + scope.indexVar
+	hint := "the row item " + strconv.Quote(scope.itemVar)
+	if scope.indexVar != "" {
+		hint += " or index " + scope.indexVar
+	}
+	return hint
+}
+
+func exprRootName(expr string) string {
+	expr = strings.TrimSpace(expr)
+	if cut := strings.IndexAny(expr, ".[ "); cut >= 0 {
+		return expr[:cut]
+	}
+	return expr
 }
 
 func (ids *renderIDAllocator) nextListGroup() string {
 	ids.list++
 	return fmt.Sprintf("s%d", ids.list)
+}
+
+func (ids *renderIDAllocator) nextCondGroup() string {
+	ids.cond++
+	return fmt.Sprintf("w%d", ids.cond)
 }
 
 func (ids *renderIDAllocator) nextListField() string {

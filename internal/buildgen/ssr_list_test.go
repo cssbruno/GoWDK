@@ -18,21 +18,44 @@ func toRuntimeListSpecs(specs []source.SSRListSpec) []gowdkssr.ListSpec {
 			Placeholder: spec.Placeholder,
 			SourcePath:  spec.SourcePath,
 			RowTemplate: spec.RowTemplate,
-			Children:    toRuntimeListSpecs(spec.Children),
-		}
-		for _, field := range spec.Fields {
-			runtime.Fields = append(runtime.Fields, gowdkssr.ListField{
-				Placeholder: field.Placeholder,
-				Path:        field.Path,
-				Index:       field.Index,
-			})
+			Fields:      toRuntimeListFields(spec.Fields),
+			Lists:       toRuntimeListSpecs(spec.Lists),
+			Conds:       toRuntimeCondSpecs(spec.Conds),
 		}
 		out = append(out, runtime)
 	}
 	return out
 }
 
+func toRuntimeListFields(fields []source.SSRListField) []gowdkssr.ListField {
+	out := make([]gowdkssr.ListField, 0, len(fields))
+	for _, field := range fields {
+		out = append(out, gowdkssr.ListField{Placeholder: field.Placeholder, Path: field.Path, Index: field.Index})
+	}
+	return out
+}
+
+func toRuntimeCondSpecs(specs []source.SSRCondSpec) []gowdkssr.CondSpec {
+	out := make([]gowdkssr.CondSpec, 0, len(specs))
+	for _, spec := range specs {
+		out = append(out, gowdkssr.CondSpec{
+			Placeholder: spec.Placeholder,
+			SourcePath:  spec.SourcePath,
+			Negate:      spec.Negate,
+			Template:    spec.Template,
+			Fields:      toRuntimeListFields(spec.Fields),
+			Lists:       toRuntimeListSpecs(spec.Lists),
+			Conds:       toRuntimeCondSpecs(spec.Conds),
+		})
+	}
+	return out
+}
+
 func buildSSRListArtifact(t *testing.T, view string) SSRArtifact {
+	return buildSSRRegionArtifact(t, `=> { columns }`, view)
+}
+
+func buildSSRRegionArtifact(t *testing.T, loadBody, view string) SSRArtifact {
 	t.Helper()
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:     "board",
@@ -41,8 +64,8 @@ func buildSSRListArtifact(t *testing.T, view string) SSRArtifact {
 		Guards: []string{"public"},
 		Blocks: gwdkir.Blocks{
 			Load:     true,
-			LoadBody: `=> { columns }`,
-			View:     true,
+			LoadBody: loadBody,
+			View:     view != "",
 			ViewBody: view,
 		},
 	}}}
@@ -85,7 +108,7 @@ func TestSSRArtifactServerListEndToEnd(t *testing.T) {
 		}},
 	}}
 
-	html := gowdkssr.RenderLists(artifact.HTML, toRuntimeListSpecs(artifact.ListSpecs), data)
+	html := gowdkssr.RenderRegions(artifact.HTML, toRuntimeListSpecs(artifact.ListSpecs), toRuntimeCondSpecs(artifact.CondSpecs), data)
 
 	for _, want := range []string{
 		`<h2>Todo</h2>`,
@@ -105,5 +128,48 @@ func TestSSRArtifactServerListEndToEnd(t *testing.T) {
 	// Escape-by-default: the raw angle brackets must not survive.
 	if strings.Contains(html, "<auth>") {
 		t.Fatalf("server data was not escaped:\n%s", html)
+	}
+}
+
+// TestSSRArtifactServerConditionalEndToEnd builds a request-time page with an
+// empty-state g:when pair and a per-row conditional, then renders through the
+// runtime region renderer to verify the active branches.
+func TestSSRArtifactServerConditionalEndToEnd(t *testing.T) {
+	view := `<section>` +
+		`<p g:when={hasItems}>You have {count} items</p>` +
+		`<p g:when={!hasItems}>No issues yet</p>` +
+		`<ul><li g:each={issue in issues}>{issue.id}<b g:when={issue.urgent}> URGENT</b></li></ul>` +
+		`</section>`
+	artifact := buildSSRRegionArtifact(t, `=> { hasItems, count, issues }`, view)
+	if len(artifact.CondSpecs) != 2 {
+		t.Fatalf("expected 2 top-level conditionals, got %#v", artifact.CondSpecs)
+	}
+
+	render := func(data map[string]any) string {
+		return gowdkssr.RenderRegions(artifact.HTML, toRuntimeListSpecs(artifact.ListSpecs), toRuntimeCondSpecs(artifact.CondSpecs), data)
+	}
+
+	populated := render(map[string]any{
+		"hasItems": true, "count": 2,
+		"issues": []any{
+			map[string]any{"id": "A", "urgent": true},
+			map[string]any{"id": "B", "urgent": false},
+		},
+	})
+	for _, want := range []string{"You have 2 items", "<li>A<b> URGENT</b></li>", "<li>B</li>"} {
+		if !strings.Contains(populated, want) {
+			t.Fatalf("populated render missing %q\n%s", want, populated)
+		}
+	}
+	if strings.Contains(populated, "No issues yet") {
+		t.Fatalf("empty branch should not render when populated:\n%s", populated)
+	}
+
+	empty := render(map[string]any{"hasItems": false, "count": 0, "issues": []any{}})
+	if !strings.Contains(empty, "No issues yet") || strings.Contains(empty, "You have") {
+		t.Fatalf("empty-state branch wrong:\n%s", empty)
+	}
+	if strings.Contains(empty, "__GOWDK_SSR_") {
+		t.Fatalf("unconsumed placeholder remains:\n%s", empty)
 	}
 }

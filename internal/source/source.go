@@ -138,10 +138,25 @@ type SSRListSpec struct {
 	SourcePath  string
 	RowTemplate string
 	Fields      []SSRListField
-	Children    []SSRListSpec
+	Lists       []SSRListSpec
+	Conds       []SSRCondSpec
 }
 
-// SSRListField is one per-row scalar substitution inside a server list row.
+// SSRCondSpec describes one server-rendered g:when conditional for a
+// request-time page. Its branch renders only when SourcePath resolves to a
+// truthy value (negated when Negate is set). It mirrors view.SSRCondReplacement
+// and ssr.CondSpec.
+type SSRCondSpec struct {
+	Placeholder string
+	SourcePath  string
+	Negate      bool
+	Template    string
+	Fields      []SSRListField
+	Lists       []SSRListSpec
+	Conds       []SSRCondSpec
+}
+
+// SSRListField is one per-render scalar substitution inside a server region.
 type SSRListField struct {
 	Placeholder string
 	Path        string

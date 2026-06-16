@@ -7,15 +7,112 @@ import (
 
 func renderServerList(t *testing.T, source string, tainted map[string]bool) (string, []SSRListReplacement) {
 	t.Helper()
+	html, lists, _ := renderServerRegions(t, source, tainted)
+	return html, lists
+}
+
+func renderServerRegions(t *testing.T, source string, tainted map[string]bool) (string, []SSRListReplacement, []SSRCondReplacement) {
+	t.Helper()
 	var lists []SSRListReplacement
+	var conds []SSRCondReplacement
 	html, err := RenderWithOptions(source, nil, nil, Options{
 		Tainted:        tainted,
 		ServerListSink: &lists,
+		ServerCondSink: &conds,
 	})
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
-	return html, lists
+	return html, lists, conds
+}
+
+func TestServerConditionalTopLevel(t *testing.T) {
+	source := `<section><p g:when={hasItems}>You have {count} items</p><p g:when={!hasItems}>No issues yet</p></section>`
+	html, _, conds := renderServerRegions(t, source, map[string]bool{"hasItems": true, "count": true})
+	if len(conds) != 2 {
+		t.Fatalf("want 2 conditionals, got %d", len(conds))
+	}
+	if conds[0].SourcePath != "hasItems" || conds[0].Negate {
+		t.Fatalf("first cond wrong: %+v", conds[0])
+	}
+	if conds[1].SourcePath != "hasItems" || !conds[1].Negate {
+		t.Fatalf("second cond should be negated: %+v", conds[1])
+	}
+	if !strings.Contains(html, conds[0].Placeholder) || !strings.Contains(html, conds[1].Placeholder) {
+		t.Fatalf("html missing cond placeholders: %q", html)
+	}
+	if len(conds[0].Fields) != 1 || conds[0].Fields[0].Path != "count" {
+		t.Fatalf("branch should interpolate load field count: %+v", conds[0].Fields)
+	}
+}
+
+func TestServerConditionalRejectsNonLoadField(t *testing.T) {
+	_, err := RenderWithOptions(`<p g:when={ready}>x</p>`, nil, nil, Options{
+		Tainted:        map[string]bool{},
+		ServerListSink: &[]SSRListReplacement{},
+		ServerCondSink: &[]SSRCondReplacement{},
+	})
+	if err == nil || !strings.Contains(err.Error(), "must be an SSR load") {
+		t.Fatalf("want load-field error, got %v", err)
+	}
+}
+
+func TestServerConditionalRejectsCompoundExpression(t *testing.T) {
+	_, err := RenderWithOptions(`<p g:when={a && b}>x</p>`, nil, nil, Options{
+		Tainted:        map[string]bool{"a": true, "b": true},
+		ServerCondSink: &[]SSRCondReplacement{},
+	})
+	if err == nil || !strings.Contains(err.Error(), "single load {} field") {
+		t.Fatalf("want compound-expression error, got %v", err)
+	}
+}
+
+func TestServerListRejectsDirectiveOnRowElement(t *testing.T) {
+	// A disallowed directive on the repeated row element itself (not a child)
+	// must be rejected, matching the documented server-row contract.
+	_, err := RenderWithOptions(`<li g:each={item in items} g:if={item.show} g:key={item.id}>{item.name}</li>`, nil, nil, Options{
+		Tainted:        map[string]bool{"items": true},
+		ServerListSink: &[]SSRListReplacement{},
+		ServerCondSink: &[]SSRCondReplacement{},
+	})
+	if err == nil || !strings.Contains(err.Error(), "g:if") {
+		t.Fatalf("want row-element g:if rejection, got %v", err)
+	}
+}
+
+func TestServerListRejectedOutsidePageContext(t *testing.T) {
+	// Without a page region sink (e.g. a component/fragment render), g:each must
+	// be rejected rather than silently dropping the spec and emitting an
+	// unconsumed placeholder.
+	_, err := RenderWithData(`<li g:each={item in items}>{item.name}</li>`, nil, map[string]string{})
+	if err == nil || !strings.Contains(err.Error(), "only supported in a request-time page view") {
+		t.Fatalf("want page-only rejection, got %v", err)
+	}
+}
+
+func TestServerConditionalInsideEachRow(t *testing.T) {
+	source := `<ul><li g:each={issue in issues}>{issue.id}<b g:when={issue.urgent}>!</b></li></ul>`
+	_, lists, conds := renderServerRegions(t, source, map[string]bool{"issues": true})
+	if len(conds) != 0 {
+		t.Fatalf("conditional should be nested in the row, not top-level: %d", len(conds))
+	}
+	if len(lists) != 1 || len(lists[0].Conds) != 1 {
+		t.Fatalf("want 1 nested conditional in the row, got %+v", lists)
+	}
+	if lists[0].Conds[0].SourcePath != "urgent" {
+		t.Fatalf("nested cond should be item-relative: %q", lists[0].Conds[0].SourcePath)
+	}
+}
+
+func TestServerEachInsideConditionalBranch(t *testing.T) {
+	source := `<div g:when={hasItems}><article g:each={item in items} g:key={item.id}>{item.name}</article></div>`
+	_, _, conds := renderServerRegions(t, source, map[string]bool{"hasItems": true, "items": true})
+	if len(conds) != 1 || len(conds[0].Lists) != 1 {
+		t.Fatalf("want a list nested in the conditional branch, got %+v", conds)
+	}
+	if conds[0].Lists[0].SourcePath != "items" {
+		t.Fatalf("nested list source wrong: %q", conds[0].Lists[0].SourcePath)
+	}
 }
 
 func TestServerListTopLevel(t *testing.T) {
@@ -56,7 +153,7 @@ func TestServerListRejectsNonItemInterpolation(t *testing.T) {
 		Tainted:        map[string]bool{"items": true},
 		ServerListSink: &[]SSRListReplacement{},
 	})
-	if err == nil || !strings.Contains(err.Error(), "may only interpolate its item") {
+	if err == nil || !strings.Contains(err.Error(), "may only interpolate the row item") {
 		t.Fatalf("want item-scope error, got %v", err)
 	}
 }
@@ -71,10 +168,10 @@ func TestServerListNested(t *testing.T) {
 	if outer.SourcePath != "columns" {
 		t.Fatalf("outer source = %q", outer.SourcePath)
 	}
-	if len(outer.Children) != 1 {
-		t.Fatalf("want 1 nested list, got %d", len(outer.Children))
+	if len(outer.Lists) != 1 {
+		t.Fatalf("want 1 nested list, got %d", len(outer.Lists))
 	}
-	inner := outer.Children[0]
+	inner := outer.Lists[0]
 	if inner.SourcePath != "issues" {
 		t.Fatalf("inner source = %q (want relative path)", inner.SourcePath)
 	}

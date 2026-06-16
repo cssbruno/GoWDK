@@ -10,103 +10,155 @@ import (
 )
 
 // ListSpec describes one server-rendered g:each list. It is generated at build
-// time from a request-time page view and consumed by RenderLists at request
-// time. A spec is a tree: Children describe nested g:each lists whose data is
-// resolved relative to each parent row element.
+// time from a request-time page view and consumed by RenderRegions at request
+// time. A spec is a tree: Lists and Conds describe nested g:each lists and
+// g:when conditionals whose data is resolved relative to each parent row.
 type ListSpec struct {
-	// Placeholder is the unique token embedded in the parent HTML (for a
-	// top-level list) or parent RowTemplate (for a nested list) that the
+	// Placeholder is the unique token embedded in the parent template that the
 	// rendered rows replace.
 	Placeholder string
-	// SourcePath is the dotted load path to the slice. For a top-level list it
-	// is resolved against the request-time load {} data map; for a nested list
-	// it is resolved relative to the parent row element.
+	// SourcePath is the dotted path to the slice, resolved against the enclosing
+	// container (the request-time load data at the top level, or a parent row
+	// element when nested).
 	SourcePath string
 	// RowTemplate is the escaped HTML rendered once per slice element, still
-	// containing this spec's Field and Child placeholders.
+	// containing this spec's Field, List, and Cond placeholders.
 	RowTemplate string
-	// Fields are the per-row scalar interpolations to substitute, each escaped
-	// at request time.
+	// Fields are the per-row scalar interpolations, each escaped at request time.
 	Fields []ListField
-	// Children are nested g:each lists found inside RowTemplate.
-	Children []ListSpec
+	// Lists are nested g:each lists found inside RowTemplate.
+	Lists []ListSpec
+	// Conds are g:when conditionals found inside RowTemplate.
+	Conds []CondSpec
 }
 
-// ListField is one per-row scalar substitution inside a ListSpec's RowTemplate.
-type ListField struct {
-	// Placeholder is the unique token inside RowTemplate replaced per row.
+// CondSpec describes one server-rendered g:when conditional. Its branch is
+// rendered into the output only when SourcePath resolves to a truthy value
+// (negated when Negate is set). The branch shares the enclosing container scope,
+// so its fields and nested regions resolve against the same data as the
+// conditional itself.
+type CondSpec struct {
 	Placeholder string
-	// Path is the dotted, item-relative path to the value (e.g. "title" or
-	// "author.name"). Ignored when Index is true.
+	SourcePath  string
+	Negate      bool
+	Template    string
+	Fields      []ListField
+	Lists       []ListSpec
+	Conds       []CondSpec
+}
+
+// ListField is one per-row scalar substitution inside a region template.
+type ListField struct {
+	// Placeholder is the unique token inside the template replaced per render.
+	Placeholder string
+	// Path is the dotted path to the value (item-relative inside a row, or a
+	// load field path inside a top-level region). Ignored when Index is true.
 	Path string
-	// Index is true when this field substitutes the zero-based row index rather
-	// than an element field.
+	// Index is true when this field substitutes the zero-based row index.
 	Index bool
 }
 
-// RenderLists expands every top-level list spec into html by resolving each
-// spec's slice from the request-time load data and substituting rendered rows.
-// Field values are always HTML-escaped, preserving GOWDK's escape-by-default
-// contract for request-time server data.
-func RenderLists(html string, specs []ListSpec, data map[string]any) string {
-	for _, spec := range specs {
-		slice, _ := resolveListSlice(data, spec.SourcePath, true)
-		html = strings.ReplaceAll(html, spec.Placeholder, renderListRows(spec, slice))
-	}
-	return html
+// RenderRegions expands every top-level g:each list and g:when conditional in
+// html by resolving their data from the request-time load data. Field values
+// are always HTML-escaped, preserving GOWDK's escape-by-default contract for
+// request-time server data.
+func RenderRegions(html string, lists []ListSpec, conds []CondSpec, data map[string]any) string {
+	return expandRegion(html, nil, lists, conds, data, -1)
 }
 
-func renderListRows(spec ListSpec, slice []any) string {
+// expandRegion substitutes a region template's fields, nested lists, and nested
+// conditionals against a container value (the load data map at the top level, or
+// a row element when nested). index is the current row index, or -1 outside a
+// row.
+func expandRegion(template string, fields []ListField, lists []ListSpec, conds []CondSpec, container any, index int) string {
+	for _, field := range fields {
+		template = strings.ReplaceAll(template, field.Placeholder, listFieldValue(field, container, index))
+	}
+	for _, list := range lists {
+		slice, _ := elementSlice(container, list.SourcePath)
+		template = strings.ReplaceAll(template, list.Placeholder, renderListRows(list, slice))
+	}
+	for _, cond := range conds {
+		branch := ""
+		if condHolds(container, cond) {
+			branch = expandRegion(cond.Template, cond.Fields, cond.Lists, cond.Conds, container, index)
+		}
+		template = strings.ReplaceAll(template, cond.Placeholder, branch)
+	}
+	return template
+}
+
+func renderListRows(list ListSpec, slice []any) string {
 	var builder strings.Builder
 	for index, element := range slice {
-		row := spec.RowTemplate
-		for _, field := range spec.Fields {
-			row = strings.ReplaceAll(row, field.Placeholder, listFieldValue(field, element, index))
-		}
-		for _, child := range spec.Children {
-			childSlice, _ := resolveListSlice(element, child.SourcePath, false)
-			row = strings.ReplaceAll(row, child.Placeholder, renderListRows(child, childSlice))
-		}
-		builder.WriteString(row)
+		builder.WriteString(expandRegion(list.RowTemplate, list.Fields, list.Lists, list.Conds, element, index))
 	}
 	return builder.String()
 }
 
-func listFieldValue(field ListField, element any, index int) string {
+func condHolds(container any, cond CondSpec) bool {
+	value, ok := ElementPath(container, cond.SourcePath)
+	show := ok && truthy(value)
+	if cond.Negate {
+		return !show
+	}
+	return show
+}
+
+func listFieldValue(field ListField, container any, index int) string {
 	if field.Index {
 		return gowdkhtml.Escape(strconv.Itoa(index))
 	}
-	value, ok := ElementPath(element, field.Path)
+	value, ok := ElementPath(container, field.Path)
 	if !ok || value == nil {
 		return ""
 	}
 	return gowdkhtml.Escape(fmt.Sprint(value))
 }
 
-// resolveListSlice resolves a dotted path to a slice. When isMap is true the
-// container is the top-level load data map; otherwise it is a parent row
-// element resolved with the same field-access rules as LoadPath.
-func resolveListSlice(container any, path string, isMap bool) ([]any, bool) {
-	var value any
-	var ok bool
-	if isMap {
-		data, isData := container.(map[string]any)
-		if !isData {
-			return nil, false
-		}
-		value, ok = LoadPath(data, path)
-	} else {
-		value, ok = ElementPath(container, path)
-	}
+func elementSlice(container any, path string) ([]any, bool) {
+	value, ok := ElementPath(container, path)
 	if !ok {
 		return nil, false
 	}
 	return toAnySlice(value)
 }
 
+// truthy reports whether a request-time value should render its g:when branch.
+// It mirrors common template semantics: false, "", 0, nil, and empty
+// slices/maps are falsy; everything else is truthy.
+func truthy(value any) bool {
+	if value == nil {
+		return false
+	}
+	reflected := reflect.ValueOf(value)
+	for reflected.Kind() == reflect.Pointer || reflected.Kind() == reflect.Interface {
+		if reflected.IsNil() {
+			return false
+		}
+		reflected = reflected.Elem()
+	}
+	switch reflected.Kind() {
+	case reflect.Bool:
+		return reflected.Bool()
+	case reflect.String:
+		return reflected.String() != ""
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return reflected.Int() != 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return reflected.Uint() != 0
+	case reflect.Float32, reflect.Float64:
+		return reflected.Float() != 0
+	case reflect.Slice, reflect.Array, reflect.Map:
+		return reflected.Len() > 0
+	default:
+		return true
+	}
+}
+
 // ElementPath resolves a dotted field path against an arbitrary value (map,
 // struct, pointer, or interface), mirroring LoadPath's field-matching rules but
-// rooted at a slice element rather than the load data map.
+// rooted at a row element or the load data map.
 func ElementPath(value any, path string) (any, bool) {
 	if strings.TrimSpace(path) == "" {
 		return value, true

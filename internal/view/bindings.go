@@ -358,6 +358,12 @@ func elementDirectiveValues(node Element) (postDirectives, error) {
 			}
 			continue
 		}
+		if attr.Name == "g:when" {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return postDirectives{}, fmt.Errorf("g:when requires an expression value")
+			}
+			continue
+		}
 		if attr.Name == "g:key" {
 			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
 				return postDirectives{}, fmt.Errorf("g:key requires an expression value")
@@ -382,9 +388,9 @@ func elementDirectiveValues(node Element) (postDirectives, error) {
 			}
 			continue
 		}
-		if attr.Name == "g:html" {
+		if attr.Name == "g:unsafe-html" {
 			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
-				return postDirectives{}, fmt.Errorf("g:html requires an expression value")
+				return postDirectives{}, fmt.Errorf("g:unsafe-html requires an expression value")
 			}
 			continue
 		}

@@ -36,14 +36,15 @@ var corpusConstructs = map[string]bool{
 // breaks the gate instead of silently passing.
 var integrationCoverage = map[string]string{
 	// g: directives parsed by internal/view.
-	"g:if":      "../view/view_test.go",
-	"g:else-if": "../view/view_test.go",
-	"g:else":    "../view/view_test.go",
-	"g:for":     "../view/view_test.go",
-	"g:each":    "../view/server_list_test.go",
-	"g:key":     "../view/view_test.go",
-	"g:html":    "../view/view_test.go",
-	"g:on:*":    "../view/view_test.go",
+	"g:if":          "../view/view_test.go",
+	"g:else-if":     "../view/view_test.go",
+	"g:else":        "../view/view_test.go",
+	"g:for":         "../view/view_test.go",
+	"g:each":        "../view/server_list_test.go",
+	"g:when":        "../view/server_list_test.go",
+	"g:key":         "../view/view_test.go",
+	"g:unsafe-html": "../view/view_test.go",
+	"g:on:*":        "../view/view_test.go",
 
 	// g: directives validated against component contracts by internal/compiler.
 	"g:bind:value":   "../compiler/validate_test.go",

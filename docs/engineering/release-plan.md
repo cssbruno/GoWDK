@@ -402,7 +402,7 @@ Every 0.x minor release must have:
 - [x] Escape text and attributes by default.
 - [x] Define URL escaping, boolean attributes, class binding, style binding,
   event binding, form binding, and raw HTML policy.
-- [x] Add unsafe raw HTML diagnostics for the explicit `g:html` escape hatch.
+- [x] Add unsafe raw HTML diagnostics for the explicit `g:unsafe-html` escape hatch.
 - [x] Add the first practical accessibility warning, `missing_img_alt`.
   Missing labels, empty links, button type, and heading order are deferred to
   #237.

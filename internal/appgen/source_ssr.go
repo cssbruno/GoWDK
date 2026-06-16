@@ -91,6 +91,12 @@ func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool, csrf 
 	body = append(body, rateLimitStmts(rateLimit)...)
 	body = append(body, guardStmts(route.Guards)...)
 	body = append(body, define([]ast.Expr{id("html")}, stringLit(route.HTML)))
+	// Fetch load data and expand g:each/g:when regions BEFORE substituting any
+	// attacker-influenceable scalar (route params, load fields). Otherwise a
+	// scalar value equal to a generated region placeholder would be expanded
+	// into row/branch markup, violating escape-by-default for request-time data.
+	body = append(body, ssrLoadFetchStmts(route)...)
+	body = append(body, ssrRegionRenderStmts(route)...)
 	for _, replacement := range route.Replacements {
 		body = append(body, assign([]ast.Expr{id("html")}, call(
 			sel("strings", "ReplaceAll"),
@@ -99,7 +105,7 @@ func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool, csrf 
 			call(sel("gowdkhtml", "Escape"), &ast.IndexExpr{X: id("params"), Index: stringLit(replacement.Param)}),
 		)))
 	}
-	body = append(body, ssrLoadStmts(route)...)
+	body = append(body, ssrLoadScalarReplaceStmts(route)...)
 	if csrf {
 		body = append(body, ssrCSRFHTMLStmts()...)
 	}
@@ -143,7 +149,9 @@ func ssrRoutePanicBoundaryStmt() ast.Stmt {
 	})}
 }
 
-func ssrLoadStmts(route SSRRoute) []ast.Stmt {
+// ssrLoadFetchStmts fetches the request-time load {} data into loadData and
+// handles load errors. It does not yet substitute anything into the HTML.
+func ssrLoadFetchStmts(route SSRRoute) []ast.Stmt {
 	if !route.HasLoad {
 		return nil
 	}
@@ -168,6 +176,18 @@ func ssrLoadStmts(route SSRRoute) []ast.Stmt {
 	default:
 		stmts = append(stmts, define([]ast.Expr{id("loadData")}, loadCall))
 	}
+	return stmts
+}
+
+// ssrLoadScalarReplaceStmts substitutes the scalar load {} field placeholders
+// with their escaped request-time values. It runs after region expansion so an
+// attacker-influenceable scalar value that happens to equal a generated region
+// placeholder cannot be expanded into row/branch markup.
+func ssrLoadScalarReplaceStmts(route SSRRoute) []ast.Stmt {
+	if route.LoadBinding.Status != source.BackendBindingBound {
+		return nil
+	}
+	var stmts []ast.Stmt
 	for index, replacement := range route.LoadReplacements {
 		valueName := id("loadValue" + intIdentSuffix(index))
 		okName := id("loadOK" + intIdentSuffix(index))
@@ -188,23 +208,23 @@ func ssrLoadStmts(route SSRRoute) []ast.Stmt {
 			)),
 		)
 	}
-	stmts = append(stmts, ssrListRenderStmts(route)...)
 	return stmts
 }
 
-// ssrListRenderStmts emits the request-time call that expands every top-level
-// g:each list in the page HTML from the resolved load data. The recursive
-// rendering and escape-by-default substitution live in the runtime list
-// renderer; generated code only supplies the static spec tree.
-func ssrListRenderStmts(route SSRRoute) []ast.Stmt {
-	if len(route.ListSpecs) == 0 {
+// ssrRegionRenderStmts emits the request-time call that expands every top-level
+// g:each list and g:when conditional in the page HTML from the resolved load
+// data. The recursive rendering and escape-by-default substitution live in the
+// runtime region renderer; generated code only supplies the static spec tree.
+func ssrRegionRenderStmts(route SSRRoute) []ast.Stmt {
+	if len(route.ListSpecs) == 0 && len(route.CondSpecs) == 0 {
 		return nil
 	}
 	return []ast.Stmt{
 		assign([]ast.Expr{id("html")}, call(
-			sel("gowdkssr", "RenderLists"),
+			sel("gowdkssr", "RenderRegions"),
 			id("html"),
 			ssrListSpecsExpr(route.ListSpecs),
+			ssrCondSpecsExpr(route.CondSpecs),
 			id("loadData"),
 		)),
 	}
@@ -230,10 +250,45 @@ func ssrListSpecExpr(spec SSRListSpec) ast.Expr {
 	if len(spec.Fields) > 0 {
 		elts = append(elts, keyValue("Fields", ssrListFieldsExpr(spec.Fields)))
 	}
-	if len(spec.Children) > 0 {
-		elts = append(elts, keyValue("Children", ssrListSpecsExpr(spec.Children)))
+	if len(spec.Lists) > 0 {
+		elts = append(elts, keyValue("Lists", ssrListSpecsExpr(spec.Lists)))
+	}
+	if len(spec.Conds) > 0 {
+		elts = append(elts, keyValue("Conds", ssrCondSpecsExpr(spec.Conds)))
 	}
 	return &ast.CompositeLit{Type: sel("gowdkssr", "ListSpec"), Elts: elts}
+}
+
+func ssrCondSpecsExpr(specs []SSRCondSpec) ast.Expr {
+	elts := make([]ast.Expr, 0, len(specs))
+	for _, spec := range specs {
+		elts = append(elts, ssrCondSpecExpr(spec))
+	}
+	return &ast.CompositeLit{
+		Type: &ast.ArrayType{Elt: sel("gowdkssr", "CondSpec")},
+		Elts: elts,
+	}
+}
+
+func ssrCondSpecExpr(spec SSRCondSpec) ast.Expr {
+	elts := []ast.Expr{
+		keyValue("Placeholder", stringLit(spec.Placeholder)),
+		keyValue("SourcePath", stringLit(spec.SourcePath)),
+	}
+	if spec.Negate {
+		elts = append(elts, keyValue("Negate", id("true")))
+	}
+	elts = append(elts, keyValue("Template", stringLit(spec.Template)))
+	if len(spec.Fields) > 0 {
+		elts = append(elts, keyValue("Fields", ssrListFieldsExpr(spec.Fields)))
+	}
+	if len(spec.Lists) > 0 {
+		elts = append(elts, keyValue("Lists", ssrListSpecsExpr(spec.Lists)))
+	}
+	if len(spec.Conds) > 0 {
+		elts = append(elts, keyValue("Conds", ssrCondSpecsExpr(spec.Conds)))
+	}
+	return &ast.CompositeLit{Type: sel("gowdkssr", "CondSpec"), Elts: elts}
 }
 
 func ssrListFieldsExpr(fields []SSRListField) ast.Expr {

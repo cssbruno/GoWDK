@@ -10,12 +10,14 @@ type renderContext struct {
 	ids          *renderIDAllocator
 	loopItem     *loopItemRender
 	templateLoop *templateLoopRender
-	// serverList is the active g:each row scope, set while rendering a
-	// request-time server list row template. It is nil outside g:each rows.
-	serverList *serverListScope
-	// lists collects top-level g:each list specs discovered during a render.
-	// It is a shared pointer so it survives renderContext value copies.
+	// serverScope is the active g:each row or g:when branch scope, set while
+	// rendering a request-time server region template. It is nil outside regions.
+	serverScope *serverScope
+	// lists and conds collect the top-level g:each lists and g:when conditionals
+	// discovered during a render. They are shared pointers so they survive
+	// renderContext value copies.
 	lists *[]SSRListReplacement
+	conds *[]SSRCondReplacement
 }
 
 type renderComponentContext struct {
@@ -56,6 +58,7 @@ type renderIDAllocator struct {
 	binding int
 	island  int
 	list    int
+	cond    int
 	field   int
 }
 

@@ -108,7 +108,7 @@ func TestBuildPopulatesFrontendAuditSurface(t *testing.T) {
 			OwnerKind: gwdkir.SourcePage,
 			OwnerID:   "home",
 			Source:    "home.page.gwdk",
-			Body:      `<main><div g:html={TrustedHTML}></div></main>`,
+			Body:      `<main><div g:unsafe-html={TrustedHTML}></div></main>`,
 			BodyStart: source.SourcePosition{Line: 12, Column: 1},
 			Span:      source.SourceSpan{Start: source.SourcePosition{Line: 11, Column: 1}},
 		}},

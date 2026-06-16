@@ -71,11 +71,16 @@ page `layout` references by package and declared ID and reports unknown or
 duplicate layout IDs. Duplicate layout IDs are allowed across different GOWDK
 packages and rejected inside the same package. App generation composes declared
 page layouts by replacing each layout's single `<slot />` placeholder with the
-child page or inner layout source before rendering the combined markup once. The
-SSR addon exposes request-aware `LayoutFunc`, `LayoutRegistry`, and
-`ComposeLayouts` contracts that wrap page HTML from innermost to outermost
-layout while passing the request `LoadContext` to each layout. Generated app
-wiring is planned.
+child page or inner layout source before rendering the combined markup once.
+Generated request-time pages use the same composition path for `server {}` and
+hybrid routes, so declared load fields can render in both the page body and its
+layout stack with request-time escaping. Generated request-time route metadata
+also carries the declared layout stack through `runtime/app.Route(ctx)`.
+
+The SSR addon exposes request-aware `LayoutFunc`, `LayoutRegistry`, and
+`ComposeLayouts` contracts for runtime helpers that need to apply the same
+outermost-to-innermost layout order while passing the request `LoadContext` to
+each layout.
 
 Current app-shell layout rules:
 
@@ -94,6 +99,13 @@ Current app-shell layout rules:
 - A layout may not reference itself or form a cyclic inheritance chain.
 - Layout markup is rendered through the same escaped view renderer as
   pages.
+- Request-time layout markup can read fields declared by the page's `server {}`
+  block. Missing fields fail the generated request with the same no-store error
+  policy as page body load failures.
+- Hybrid pages use the same generated request-time layout composition when
+  their render mode is selected by config or IR. This does not make request-time
+  rendering the default; pages still opt in through `server {}`, `go server {}`,
+  or internal hybrid route metadata.
 
 Rules that should remain true as implementation grows:
 

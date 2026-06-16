@@ -4169,6 +4169,99 @@ func TestGeneratedBinaryExecutesInlineSSRScriptLoad(t *testing.T) {
 	}
 }
 
+func TestGeneratedBinaryRendersRequestAwareHybridLayouts(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	sourceDir := filepath.Join(root, "src")
+	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:      "dashboard",
+			Package: "pages",
+			Source:  filepath.Join(sourceDir, "dashboard.page.gwdk"),
+			Route:   "/dashboard",
+			Render:  gowdk.Hybrid,
+			Layouts: []string{"shell"},
+			Guards:  []string{"public"},
+			Imports: []gwdkir.Import{{
+				Alias: "ssr",
+				Path:  "github.com/cssbruno/gowdk/runtime/ssr",
+			}},
+			Blocks: gwdkir.Blocks{
+				Server:     true,
+				ServerBody: `=> { request.path }`,
+				View:       true,
+				ViewBody:   `<main>{request.path}</main>`,
+				GoBlocks: []gwdkir.GoBlock{{
+					Target: "server",
+					Body: `func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
+	return map[string]any{
+		"request": map[string]any{"path": ctx.Request.URL.Path},
+	}, nil
+}`,
+				}},
+			},
+		}},
+		Layouts: []gwdkir.Layout{{
+			ID:      "shell",
+			Package: "pages",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<section><header>{request.path}</header><slot /></section>`,
+			},
+		}},
+	}
+	ir := gwdkanalysis.BuildProgram(config, app)
+	compiler.BindBackendHandlers(&ir)
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{AutoRoutes: true, Config: config, IR: &ir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`Render: "hybrid"`,
+		`Layouts: []string{"shell"}`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
+		}
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, _, err := waitForHTTPResponse("http://" + addr + "/dashboard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, "<section><header>/dashboard</header><main>/dashboard</main></section>") {
+		t.Fatalf("expected request-aware hybrid layout response, got:\n%s", body)
+	}
+}
+
 func TestGenerateWritesStaticInlineGoBlockPackages(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

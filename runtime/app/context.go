@@ -29,6 +29,7 @@ type RouteMetadata struct {
 	ErrorPage     string
 	DynamicParams []string
 	RouteParams   []RouteParamMetadata
+	Layouts       []string
 	Guards        []string
 	HasLoad       bool
 }
@@ -125,6 +126,7 @@ func Session(ctx context.Context) any {
 func WithRoute(ctx context.Context, route RouteMetadata) context.Context {
 	route.DynamicParams = copyStrings(route.DynamicParams)
 	route.RouteParams = copyRouteParamMetadata(route.RouteParams)
+	route.Layouts = copyStrings(route.Layouts)
 	route.Guards = copyStrings(route.Guards)
 	return context.WithValue(ctx, routeContextKey, route)
 }
@@ -135,6 +137,7 @@ func Route(ctx context.Context) (RouteMetadata, bool) {
 	route, ok := ctx.Value(routeContextKey).(RouteMetadata)
 	route.DynamicParams = copyStrings(route.DynamicParams)
 	route.RouteParams = copyRouteParamMetadata(route.RouteParams)
+	route.Layouts = copyStrings(route.Layouts)
 	route.Guards = copyStrings(route.Guards)
 	return route, ok
 }

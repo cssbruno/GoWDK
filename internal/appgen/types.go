@@ -116,6 +116,7 @@ type SSRRoute struct {
 	ErrorPage        string
 	DynamicParams    []string
 	RouteParams      []source.RouteParam
+	Layouts          []string
 	Guards           []string
 	HasLoad          bool
 	LoadBinding      source.BackendBinding

@@ -372,6 +372,9 @@ func TestSSRArtifactsComposePageLoadThroughLayouts(t *testing.T) {
 	if len(artifact.LoadReplacements) != 1 || artifact.LoadReplacements[0].Path != "user.name" {
 		t.Fatalf("expected page load replacement to be shared with layout, got %#v", artifact.LoadReplacements)
 	}
+	if len(artifact.Layouts) != 1 || artifact.Layouts[0] != "shell" {
+		t.Fatalf("expected artifact layout stack, got %#v", artifact.Layouts)
+	}
 	placeholder := artifact.LoadReplacements[0].Placeholder
 	if strings.Count(artifact.HTML, placeholder) != 2 {
 		t.Fatalf("expected page load placeholder in layout and page body, got:\n%s", artifact.HTML)

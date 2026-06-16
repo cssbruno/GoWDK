@@ -130,7 +130,8 @@ level, the current baseline already includes:
   generated `501` responses for missing or unsupported bindings, deterministic
   import aliases, and formatted generated app source;
 - shared backend routing primitives in `runtime/app`, runtime action/API
-  adapter helpers, one generated backend hook, request body limits, and no-store
+  adapter helpers, generated app `App()` startup, lifecycle service
+  supervision, one generated backend hook, request body limits, and no-store
   defaults for request-time responses;
 - typed backend adapter IR driving generated action/API/fragment/contract route
   registrations, backend imports, split frontend proxy route matching,

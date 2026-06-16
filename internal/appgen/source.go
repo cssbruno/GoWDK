@@ -179,6 +179,9 @@ func runtimeImportMap(options Options) map[string]string {
 			imports[alias] = importPath
 		}
 	}
+	for _, provider := range lifecycleServiceProviders(options) {
+		imports[provider.Alias] = provider.ImportPath
+	}
 
 	return imports
 }
@@ -262,8 +265,11 @@ func appShellDecls(options Options) []ast.Decl {
 	}
 	decls = append(decls, middlewareDecls()...)
 	decls = append(decls,
+		appDecl(options),
 		handlerDecl(),
+		newServeMuxDecl(options, true),
 		serveMuxDecl(options, true),
+		configuredServicesDecl(options),
 	)
 	decls = append(decls, loadEnvFileDecl(options)...)
 	decls = append(decls, validateEnvContractDecl(options.Config.Env)...)
@@ -277,8 +283,11 @@ func backendShellDecls(options Options) []ast.Decl {
 	}
 	decls = append(decls, middlewareDecls()...)
 	decls = append(decls,
+		appDecl(options),
 		handlerDecl(),
+		newServeMuxDecl(options, false),
 		serveMuxDecl(options, false),
+		configuredServicesDecl(options),
 	)
 	decls = append(decls, loadEnvFileDecl(options)...)
 	decls = append(decls, validateEnvContractDecl(options.Config.Env)...)
@@ -408,6 +417,15 @@ func handlerDecl() ast.Decl {
 }
 
 func serveMuxDecl(options Options, embedded bool) ast.Decl {
+	return funcDecl("ServeMux", nil, []*ast.Field{
+		{Type: &ast.StarExpr{X: sel("http", "ServeMux")}},
+		{Type: id("error")},
+	}, []ast.Stmt{
+		&ast.ReturnStmt{Results: []ast.Expr{call(id("newServeMux"), call(sel("gowdkruntime", "InstanceIdentity")))}},
+	})
+}
+
+func newServeMuxDecl(options Options, embedded bool) ast.Decl {
 	stmts := []ast.Stmt{}
 	stmts = append(stmts, loadEnvFileStmt(options)...)
 	stmts = append(stmts, authSetupStmts(options)...)
@@ -440,7 +458,7 @@ func serveMuxDecl(options Options, embedded bool) ast.Decl {
 			Fun: sel("gowdkruntime", "ApplyMiddlewares"),
 			Args: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: &ast.CompositeLit{
 				Type: sel("gowdkruntime", "Handler"),
-				Elts: embeddedHandlerFields(options),
+				Elts: embeddedHandlerFields(options, id("identity")),
 			}}, call(id("registeredMiddlewares"))},
 			Ellipsis: token.Pos(1),
 		})))
@@ -448,7 +466,9 @@ func serveMuxDecl(options Options, embedded bool) ast.Decl {
 		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), stringLit("/"), backendOnlyHandlerExpr(options))))
 	}
 	stmts = append(stmts, &ast.ReturnStmt{Results: []ast.Expr{id("mux"), id("nil")}})
-	return funcDecl("ServeMux", nil, []*ast.Field{
+	return funcDecl("newServeMux", []*ast.Field{
+		{Names: []*ast.Ident{id("identity")}, Type: sel("gowdkruntime", "Identity")},
+	}, []*ast.Field{
 		{Type: &ast.StarExpr{X: sel("http", "ServeMux")}},
 		{Type: id("error")},
 	}, stmts)
@@ -479,14 +499,14 @@ func csrfSetupStmts(options Options) []ast.Stmt {
 	}
 }
 
-func embeddedHandlerFields(options Options) []ast.Expr {
+func embeddedHandlerFields(options Options, identity ast.Expr) []ast.Expr {
 	backend := ast.Expr(id(backendCallbackName(options)))
 	if hasBackendRoutes(options) && !options.ProxyBackend {
 		backend = call(selExpr(id("backendRouter"), "HandlerFunc"))
 	}
 	fields := []ast.Expr{
 		keyValue("Root", id("root")),
-		keyValue("Identity", call(sel("gowdkruntime", "InstanceIdentity"))),
+		keyValue("Identity", identity),
 		keyValue("Assets", call(sel("gowdkruntime", "LoadAssetManifest"), id("root"))),
 		keyValue("ErrorPages", errorPagesExpr(options)),
 		keyValue("Backend", backend),

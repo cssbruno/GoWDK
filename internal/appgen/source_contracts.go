@@ -381,12 +381,27 @@ func contractRegistryDecls(exposures []BackendContractExposure) []ast.Decl {
 		return nil
 	}
 	return []ast.Decl{
+		contractRegistryStateDecl(),
 		newContractRegistryDecl(exposures),
+		contractRegistryDecl(),
 		runContractEventWorkerDecl(),
 		runContractEventWorkerWithOptionsDecl(),
 		runContractEventWorkerWithSeenStoreDecl(),
 		runContractEventWorkerWithSeenStoreAndOptionsDecl(),
 	}
+}
+
+func contractRegistryStateDecl() ast.Decl {
+	return &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{
+		&ast.ValueSpec{
+			Names: []*ast.Ident{id("contractRegistryOnce")},
+			Type:  sel("sync", "Once"),
+		},
+		&ast.ValueSpec{
+			Names: []*ast.Ident{id("contractRegistry")},
+			Type:  &ast.StarExpr{X: sel("gowdkcontracts", "Registry")},
+		},
+	}}
 }
 
 func newContractRegistryDecl(exposures []BackendContractExposure) ast.Decl {
@@ -400,6 +415,20 @@ func newContractRegistryDecl(exposures []BackendContractExposure) ast.Decl {
 	return funcDecl("NewContractRegistry", nil, []*ast.Field{
 		{Type: &ast.StarExpr{X: sel("gowdkcontracts", "Registry")}},
 	}, stmts)
+}
+
+func contractRegistryDecl() ast.Decl {
+	return funcDecl("ContractRegistry", nil, []*ast.Field{
+		{Type: &ast.StarExpr{X: sel("gowdkcontracts", "Registry")}},
+	}, []ast.Stmt{
+		exprStmt(call(selExpr(id("contractRegistryOnce"), "Do"), &ast.FuncLit{
+			Type: &ast.FuncType{
+				Params: &ast.FieldList{},
+			},
+			Body: block(assign([]ast.Expr{id("contractRegistry")}, call(id("NewContractRegistry")))),
+		})),
+		&ast.ReturnStmt{Results: []ast.Expr{id("contractRegistry")}},
+	})
 }
 
 func runContractEventWorkerDecl() ast.Decl {

@@ -76,7 +76,8 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 	}
 	for _, expected := range []string{
 		`"gowdk-generated-app/gowdkapp"`,
-		"handler, err := gowdkapp.Handler()",
+		"application, err := gowdkapp.App()",
+		"gowdkruntime.Run(context.Background(), server, application",
 		"ReadHeaderTimeout: 5 * time.Second",
 		"ReadTimeout: 10 * time.Second",
 		"WriteTimeout: 30 * time.Second",
@@ -94,12 +95,15 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 	for _, expected := range []string{
 		"package gowdkapp",
 		"//go:embed app",
+		"func App() (*gowdkruntime.Application, error)",
 		"func Handler() (http.Handler, error)",
+		"func newServeMux(identity gowdkruntime.Identity) (*http.ServeMux, error)",
 		"func ServeMux() (*http.ServeMux, error)",
+		"func configuredServices() ([]gowdkruntime.Service, error)",
 		"func RegisterMiddleware(middleware gowdkruntime.Middleware)",
 		`gowdkruntime "github.com/cssbruno/gowdk/runtime/app"`,
 		`mux.Handle("/", gowdkruntime.ApplyMiddlewares(&gowdkruntime.Handler{`,
-		`Identity: gowdkruntime.InstanceIdentity(),`,
+		`Identity: identity,`,
 		`Assets: gowdkruntime.LoadAssetManifest(root),`,
 		`ErrorPages: gowdkruntime.LoadErrorPages(root),`,
 		`Backend: backend,`,
@@ -125,6 +129,86 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 		if strings.Contains(string(packagePayload), copiedRuntime) {
 			t.Fatalf("expected generated gowdkapp/app.go not to copy runtime helper %q:\n%s", copiedRuntime, packagePayload)
 		}
+	}
+}
+
+func TestGenerateWiresConfiguredLifecycleServices(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Config: gowdk.Config{
+		Lifecycle: gowdk.LifecycleConfig{Services: []gowdk.ServiceRef{
+			{ImportPath: "example.com/site/services", Function: "Services"},
+			{ImportPath: "example.com/site/services", Function: "Workers"},
+			{ImportPath: "example.com/site/metrics", Function: "Metrics"},
+		}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkservice0 "example.com/site/services"`,
+		`gowdkservice1 "example.com/site/metrics"`,
+		`func configuredServices() ([]gowdkruntime.Service, error)`,
+		`provided0, err := gowdkservice0.Services()`,
+		`services = append(services, provided0...)`,
+		`provided1, err := gowdkservice0.Workers()`,
+		`services = append(services, provided1...)`,
+		`provided2, err := gowdkservice1.Metrics()`,
+		`services = append(services, provided2...)`,
+		`Services: services`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated lifecycle source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateLifecycleServiceAppCompiles(t *testing.T) {
+	root := t.TempDir()
+	repoRoot, ok := gowdkRuntimeModuleRoot()
+	if !ok {
+		t.Fatal("could not locate GOWDK module root")
+	}
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/site
+
+go 1.22
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+filepath.ToSlash(repoRoot)+`
+`)
+	writeTestFile(t, filepath.Join(root, "dist", "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(root, "services", "services.go"), `package services
+
+import gowdkapp "github.com/cssbruno/gowdk/runtime/app"
+
+func Services() ([]gowdkapp.Service, error) {
+	return []gowdkapp.Service{gowdkapp.ServiceHooks{ServiceName: "noop"}}, nil
+}
+`)
+	t.Chdir(root)
+
+	result, err := GenerateWithOptions(filepath.Join(root, "dist"), filepath.Join(root, "generated-app"), Options{Config: gowdk.Config{
+		Lifecycle: gowdk.LifecycleConfig{Services: []gowdk.ServiceRef{{
+			ImportPath: "example.com/site/services",
+			Function:   "Services",
+		}}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("go", "test", "./...")
+	command.Dir = result.AppDir
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("expected lifecycle generated app to compile: %v\n%s", err, output)
 	}
 }
 
@@ -695,6 +779,9 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 		`sync`,
 		`contractRegistry := gowdkcontracts.NewRegistry()`,
 		`patients.Register(contractRegistry)`,
+		`values[gowdkruntime.ServiceValueContractRegistry] = ContractRegistry()`,
+		`contractRegistryOnce sync.Once`,
+		`contractRegistry := ContractRegistry()`,
 		`Kind: "command", Handler: commandPatientsCreatePatientPOSTPatients(contractRegistry)`,
 		`Kind: "query", Handler: queryPatientsGetPatientPageGETPatients(contractRegistry)`,
 		`var contractEventSink gowdkcontracts.CommandEventSink`,
@@ -702,6 +789,7 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 		`contractEventSinkMu.Lock()`,
 		`contractEventSinkMu.RLock()`,
 		`func NewContractRegistry() *gowdkcontracts.Registry`,
+		`func ContractRegistry() *gowdkcontracts.Registry`,
 		`func RunContractEventWorker(ctx context.Context, source gowdkcontracts.EventSource) error`,
 		`func RunContractEventWorkerWithOptions(ctx context.Context, source gowdkcontracts.EventSource, options ...gowdkcontracts.EventWorkerOption) error`,
 		`func RunContractEventWorkerWithSeenStore(ctx context.Context, source gowdkcontracts.EventSource, seen gowdkcontracts.SeenStore) error`,
@@ -4597,6 +4685,21 @@ func HomeTitle() string {
 	}
 	if !optionsUsesModuleImports(Options{IR: &ir}, "example.com/site") {
 		t.Fatalf("expected inline go blocks to mark example.com/site as used")
+	}
+}
+
+func TestLifecycleServiceImportsParticipateInModuleDetection(t *testing.T) {
+	options := Options{Config: gowdk.Config{
+		Lifecycle: gowdk.LifecycleConfig{Services: []gowdk.ServiceRef{{
+			ImportPath: "example.com/site/services",
+			Function:   "Services",
+		}}},
+	}}
+	if !appHasLocalModuleImports(options) {
+		t.Fatal("expected lifecycle service imports to require app module wiring")
+	}
+	if !optionsUsesModuleImports(options, "example.com/site") {
+		t.Fatal("expected lifecycle service imports to mark example.com/site as used")
 	}
 }
 

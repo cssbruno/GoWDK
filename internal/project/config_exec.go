@@ -17,14 +17,15 @@ import (
 )
 
 type executableConfig struct {
-	AppName string                   `json:"appName"`
-	Source  gowdk.SourceConfig       `json:"source"`
-	Modules []gowdk.ModuleConfig     `json:"modules"`
-	Render  gowdk.RenderConfig       `json:"render"`
-	Env     gowdk.EnvConfig          `json:"env"`
-	Build   gowdk.BuildConfig        `json:"build"`
-	CSS     gowdk.CSSConfig          `json:"css"`
-	Addons  []executableAddonDetails `json:"addons"`
+	AppName   string                   `json:"appName"`
+	Source    gowdk.SourceConfig       `json:"source"`
+	Modules   []gowdk.ModuleConfig     `json:"modules"`
+	Render    gowdk.RenderConfig       `json:"render"`
+	Env       gowdk.EnvConfig          `json:"env"`
+	Lifecycle gowdk.LifecycleConfig    `json:"lifecycle"`
+	Build     gowdk.BuildConfig        `json:"build"`
+	CSS       gowdk.CSSConfig          `json:"css"`
+	Addons    []executableAddonDetails `json:"addons"`
 }
 
 type executableAddonDetails struct {
@@ -103,13 +104,14 @@ func loadExecutableConfig(configPath string) (gowdk.Config, error) {
 	}
 
 	config := gowdk.Config{
-		AppName: wire.AppName,
-		Source:  wire.Source,
-		Modules: wire.Modules,
-		Render:  wire.Render,
-		Env:     wire.Env,
-		Build:   wire.Build,
-		CSS:     wire.CSS,
+		AppName:   wire.AppName,
+		Source:    wire.Source,
+		Modules:   wire.Modules,
+		Render:    wire.Render,
+		Env:       wire.Env,
+		Lifecycle: wire.Lifecycle,
+		Build:     wire.Build,
+		CSS:       wire.CSS,
 	}
 	for _, addon := range wire.Addons {
 		proxy := executableAddon{
@@ -385,14 +387,15 @@ import (
 )
 
 type executableConfig struct {
-	AppName string                    ` + "`json:\"appName\"`" + `
-	Source  gowdk.SourceConfig       ` + "`json:\"source\"`" + `
-	Modules []gowdk.ModuleConfig     ` + "`json:\"modules\"`" + `
-	Render  gowdk.RenderConfig       ` + "`json:\"render\"`" + `
-	Env     gowdk.EnvConfig          ` + "`json:\"env\"`" + `
-	Build   gowdk.BuildConfig        ` + "`json:\"build\"`" + `
-	CSS     gowdk.CSSConfig          ` + "`json:\"css\"`" + `
-	Addons  []executableAddonDetails ` + "`json:\"addons\"`" + `
+	AppName   string                    ` + "`json:\"appName\"`" + `
+	Source    gowdk.SourceConfig       ` + "`json:\"source\"`" + `
+	Modules   []gowdk.ModuleConfig     ` + "`json:\"modules\"`" + `
+	Render    gowdk.RenderConfig       ` + "`json:\"render\"`" + `
+	Env       gowdk.EnvConfig          ` + "`json:\"env\"`" + `
+	Lifecycle gowdk.LifecycleConfig    ` + "`json:\"lifecycle\"`" + `
+	Build     gowdk.BuildConfig        ` + "`json:\"build\"`" + `
+	CSS       gowdk.CSSConfig          ` + "`json:\"css\"`" + `
+	Addons    []executableAddonDetails ` + "`json:\"addons\"`" + `
 }
 
 type executableAddonDetails struct {
@@ -466,13 +469,14 @@ func main() {
 func writeConfig() {
 	config := configpkg.Config
 	wire := executableConfig{
-		AppName: config.AppName,
-		Source:  config.Source,
-		Modules: config.Modules,
-		Render:  config.Render,
-		Env:     config.Env,
-		Build:   config.Build,
-		CSS:     config.CSS,
+		AppName:   config.AppName,
+		Source:    config.Source,
+		Modules:   config.Modules,
+		Render:    config.Render,
+		Env:       config.Env,
+		Lifecycle: config.Lifecycle,
+		Build:     config.Build,
+		CSS:       config.CSS,
 	}
 	for index, addon := range config.Addons {
 		_, cssProcessor := addon.(gowdk.CSSProcessor)

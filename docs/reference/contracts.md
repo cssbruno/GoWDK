@@ -512,7 +512,8 @@ outbox sinks receive the full event batch.
 Generated packages with executable contract registrations also expose:
 
 ```go
-registry := gowdkapp.NewContractRegistry()
+shared := gowdkapp.ContractRegistry()
+fresh := gowdkapp.NewContractRegistry()
 err := gowdkapp.RunContractEventWorker(ctx, source)
 err = gowdkapp.RunContractEventWorkerWithOptions(
     ctx,
@@ -528,12 +529,16 @@ err = gowdkapp.RunContractEventWorkerWithSeenStoreAndOptions(
 )
 ```
 
-`NewContractRegistry` creates a fresh registry using the scanned registration
-functions. `RunContractEventWorker` replays an `EventSource` through the same
-registrations with the worker role. `RunContractEventWorkerWithSeenStore` uses
-the same worker role and skips duplicate event IDs through the provided
-`contracts.SeenStore`. The `WithOptions` variants pass runtime worker options,
-including nacked-batch backoff, through to `runtime/contracts`.
+`ContractRegistry` returns the generated app's shared in-process registry.
+Generated web command/query routes use the same registry, and lifecycle
+services can read it from `runtime/app.ServiceContext.Values` with key
+`runtime/app.ServiceValueContractRegistry`. `NewContractRegistry` creates a
+fresh registry using the scanned registration functions. `RunContractEventWorker`
+replays an `EventSource` through a fresh registry with the worker role.
+`RunContractEventWorkerWithSeenStore` uses the same worker role and skips
+duplicate event IDs through the provided `contracts.SeenStore`. The
+`WithOptions` variants pass runtime worker options, including nacked-batch
+backoff, through to `runtime/contracts`.
 
 These helpers are deliberately local process APIs. Use them from the generated
 binary, a user-owned worker or cron command, or a test fixture. Generated
@@ -1046,7 +1051,7 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Generated command adapters expose `RegisterContractEventSink`; a registered
   `CommandEventSink` receives captured command events before the generated
   adapter writes the JSON command result.
-- Generated contract packages expose `NewContractRegistry` and
+- Generated contract packages expose `ContractRegistry`, `NewContractRegistry`, and
   `RunContractEventWorker` / `RunContractEventWorkerWithSeenStore` when
   executable contract registrations are present.
 - Queue/outbox adapters can implement the dependency-free `EventSource`

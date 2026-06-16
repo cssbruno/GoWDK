@@ -185,6 +185,9 @@ func appBackendImportPaths(options Options) map[string]bool {
 	for importPath := range inlineGoBlockImports(options.IR) {
 		paths[importPath] = true
 	}
+	for _, provider := range lifecycleServiceProviders(options) {
+		paths[provider.ImportPath] = true
+	}
 	return paths
 }
 

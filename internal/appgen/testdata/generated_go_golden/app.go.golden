@@ -43,10 +43,24 @@ func registeredMiddlewares() []gowdkruntime.Middleware {
 	defer middlewareMu.RUnlock()
 	return append([]gowdkruntime.Middleware(nil), middlewares...)
 }
+func App() (*gowdkruntime.Application, error) {
+	identity := gowdkruntime.InstanceIdentity()
+	mux, err := newServeMux(identity)
+	if err != nil {
+		return nil, err
+	}
+	values := map[string]any{}
+	values[gowdkruntime.ServiceValueContractRegistry] = ContractRegistry()
+	services, err := configuredServices()
+	if err != nil {
+		return nil, err
+	}
+	return &gowdkruntime.Application{Handler: mux, Mux: mux, Identity: identity, Services: services, Values: values}, nil
+}
 func Handler() (http.Handler, error) {
 	return ServeMux()
 }
-func ServeMux() (*http.ServeMux, error) {
+func newServeMux(identity gowdkruntime.Identity) (*http.ServeMux, error) {
 	if err := loadEnvFile(); err != nil {
 		return nil, err
 	}
@@ -65,8 +79,14 @@ func ServeMux() (*http.ServeMux, error) {
 		return nil, err
 	}
 	mux := http.NewServeMux()
-	mux.Handle("/", gowdkruntime.ApplyMiddlewares(&gowdkruntime.Handler{Root: root, Identity: gowdkruntime.InstanceIdentity(), Assets: gowdkruntime.LoadAssetManifest(root), ErrorPages: gowdkruntime.LoadErrorPages(root), Backend: backendRouter.HandlerFunc(), CSRF: csrfTokenSource, SSRExact: ssrExact, SSRDynamic: ssrDynamic, RequestTimeout: gowdkruntime.DefaultRequestTimeout}, registeredMiddlewares()...))
+	mux.Handle("/", gowdkruntime.ApplyMiddlewares(&gowdkruntime.Handler{Root: root, Identity: identity, Assets: gowdkruntime.LoadAssetManifest(root), ErrorPages: gowdkruntime.LoadErrorPages(root), Backend: backendRouter.HandlerFunc(), CSRF: csrfTokenSource, SSRExact: ssrExact, SSRDynamic: ssrDynamic, RequestTimeout: gowdkruntime.DefaultRequestTimeout}, registeredMiddlewares()...))
 	return mux, nil
+}
+func ServeMux() (*http.ServeMux, error) {
+	return newServeMux(gowdkruntime.InstanceIdentity())
+}
+func configuredServices() ([]gowdkruntime.Service, error) {
+	return nil, nil
 }
 func loadEnvFile() error {
 	explicit := strings.TrimSpace(os.Getenv("GOWDK_ENV_FILE"))
@@ -290,9 +310,21 @@ func currentContractEventSink() gowdkcontracts.CommandEventSink {
 	defer contractEventSinkMu.RUnlock()
 	return contractEventSink
 }
+
+var (
+	contractRegistryOnce sync.Once
+	contractRegistry     *gowdkcontracts.Registry
+)
+
 func NewContractRegistry() *gowdkcontracts.Registry {
 	contractRegistry := gowdkcontracts.NewRegistry()
 	patients.Register(contractRegistry)
+	return contractRegistry
+}
+func ContractRegistry() *gowdkcontracts.Registry {
+	contractRegistryOnce.Do(func() {
+		contractRegistry = NewContractRegistry()
+	})
 	return contractRegistry
 }
 func RunContractEventWorker(ctx context.Context, source gowdkcontracts.EventSource) error {
@@ -308,7 +340,7 @@ func RunContractEventWorkerWithSeenStoreAndOptions(ctx context.Context, source g
 	return gowdkcontracts.RunEventWorkerWithSeenStoreAndOptions(ctx, NewContractRegistry(), source, seen, options...)
 }
 func newBackendRouter() (*gowdkruntime.BackendRouter, error) {
-	contractRegistry := NewContractRegistry()
+	contractRegistry := ContractRegistry()
 	return gowdkruntime.NewBackendRouter(gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", Handler: action}, gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/patients", Kind: "command", Handler: commandPatientsCreatePatientPOSTPatients(contractRegistry)}, gowdkruntime.BackendRoute{Method: http.MethodGet, Path: "/patients", Kind: "query", Handler: queryPatientsGetPatientPageGETPatients(contractRegistry)})
 }
 

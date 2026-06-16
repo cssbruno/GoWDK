@@ -11,7 +11,7 @@ unsupported unless another language reference explicitly says otherwise.
   and unknown `g:` attributes are rejected with explicit diagnostics instead
   of being translated or silently ignored.
 - Rendered text and attributes are escaped by default. The one explicit raw
-  HTML opt-in is the `g:html={Expr}` directive documented below; all other raw
+  HTML opt-in is the `g:unsafe-html={Expr}` directive documented below; all other raw
   HTML syntax (including `{@html ...}`) is rejected.
 - URL-bearing attributes accept local, relative, fragment, query, `http`,
   `https`, `mailto`, and `tel` values. Active-content schemes,
@@ -19,7 +19,7 @@ unsupported unless another language reference explicitly says otherwise.
 - Raw inline event handler attributes such as `onclick` are rejected. Use
   `g:on:*` inside stateful components for compiler-owned local behavior.
 - `<script>` tags and `srcdoc` are not part of `view {}`. Use configured or
-  scoped script assets for explicit scripts, and `g:html={Expr}` only for
+  scoped script assets for explicit scripts, and `g:unsafe-html={Expr}` only for
   trusted or sanitized HTML content.
 - Snippet/render blocks are not supported. Use GOWDK component slots for the
   supported reusable-markup model.
@@ -45,8 +45,8 @@ Deferred construct families each fail with a registered diagnostic (see
 - DOM actions/attachments (`g:use`, `g:action`, `g:attach`) are deferred. The
   diagnostic points at component `client {}` blocks with `g:ref`
   (`unsupported_markup_directive`).
-- Raw HTML beyond the `g:html` hatch — `{@html ...}` and any other foreign
-  raw-HTML syntax — is rejected with guidance toward `g:html={Expr}`
+- Raw HTML beyond the `g:unsafe-html` hatch — `{@html ...}` and any other foreign
+  raw-HTML syntax — is rejected with guidance toward `g:unsafe-html={Expr}`
   (`unsupported_markup_syntax`).
 
 Implemented today:
@@ -187,12 +187,12 @@ Implemented today:
   WASM island assets. `g:island="wasm"` remains a call-site override. Unknown
   `g:island` values are compile/render errors. Without `wasm` or `g:island`,
   stateful component calls use generated JavaScript by default.
-- The explicit raw HTML escape hatch `g:html={Expr}` on a non-void element
-  without markup children. See the "Raw HTML (`g:html`)" section below.
+- The explicit raw HTML escape hatch `g:unsafe-html={Expr}` on a non-void element
+  without markup children. See the "Raw HTML (`g:unsafe-html`)" section below.
 - Familiar external-template block syntax such as `{#if}`, `{#each}`,
   `{#await}`, `{#snippet}`, `{@html}`, `{@const}`, and `{@debug}`
   is rejected with diagnostics that point to the current GOWDK-native
-  alternatives — `{@html body}` now points at the explicit `g:html={Expr}`
+  alternatives — `{@html body}` now points at the explicit `g:unsafe-html={Expr}`
   directive. These diagnostics are guidance only; they do not imply that
   GOWDK will implement those external constructs feature-for-feature.
 - Unknown `g:` attributes are rejected at parse time with a diagnostic that
@@ -226,8 +226,8 @@ These are the supported `g:` directives in `view {}` markup:
   elements for contract web adapters.
 - `g:subscribe="pkg.PresentationEvent"` beside `g:query` for realtime
   subscription metadata.
-- `g:html={Expr}` on non-void HTML elements without markup children, in pages
-  and stateless component views. See "Raw HTML (`g:html`)" below.
+- `g:unsafe-html={Expr}` on non-void HTML elements without markup children, in pages
+  and stateless component views. See "Raw HTML (`g:unsafe-html`)" below.
 
 All other `g:` directives are unsupported today and rejected at parse time
 with the `unsupported_markup_directive` message. In particular, there is no
@@ -267,16 +267,16 @@ Literal `<script>` tags in `view {}` are rejected. Compiler-owned generated
 scripts, configured scripts, scoped script assets, and island/WASM runtime
 assets are emitted by the build pipeline instead of handwritten script tags in
 markup. `srcdoc` is also rejected because it embeds raw HTML outside the
-`g:html` contract.
+`g:unsafe-html` contract.
 
-## Raw HTML (`g:html`)
+## Raw HTML (`g:unsafe-html`)
 
-`g:html={Expr}` is the single explicit, GOWDK-owned opt-in for raw HTML
+`g:unsafe-html={Expr}` is the single explicit, GOWDK-owned opt-in for raw HTML
 output:
 
 ```gwdk
 view {
-  <article class="prose" g:html={post.BodyHTML}></article>
+  <article class="prose" g:unsafe-html={post.BodyHTML}></article>
 }
 ```
 
@@ -289,31 +289,31 @@ Contract:
   fail the same way text interpolation fails.
 - The resolved string is written as the element content **without escaping**.
 
-**Security warning:** content rendered through `g:html` bypasses GOWDK's
+**Security warning:** content rendered through `g:unsafe-html` bypasses GOWDK's
 escape-by-default output. Only feed trusted or server-side sanitized HTML to
-`g:html`. Never pass user-controlled input through it; route-param
-interpolation (`{param("...")}`) is rejected inside `g:html` for this reason.
+`g:unsafe-html`. Never pass user-controlled input through it; route-param
+interpolation (`{param("...")}`) is rejected inside `g:unsafe-html` for this reason.
 
 Restrictions (each is an explicit error):
 
 - The element must have no children in markup; the expression provides the
   whole content.
-- `g:html` requires an expression value (`g:html={Body}`), not a string
+- `g:unsafe-html` requires an expression value (`g:unsafe-html={Body}`), not a string
   literal or boolean attribute.
-- `g:html` is not allowed on void elements such as `<br>` or `<img>`.
-- `g:html` cannot combine with `g:for`/`g:key` or `g:bind:*` on the same
+- `g:unsafe-html` is not allowed on void elements such as `<br>` or `<img>`.
+- `g:unsafe-html` cannot combine with `g:for`/`g:key` or `g:bind:*` on the same
   element.
-- `g:html` is rejected inside stateful component views, inside `g:for` loops,
+- `g:unsafe-html` is rejected inside stateful component views, inside `g:for` loops,
   and for island-bound reactive fields, because the island runtime re-renders
   bound content as escaped text and cannot honor raw HTML there.
 
 Server-rendered fragment swaps (`g:post` + `g:target`/`g:swap`) inject
 server-rendered HTML via `innerHTML`/`outerHTML`, so raw HTML rendered with
-`g:html` flows through them unchanged.
+`g:unsafe-html` flows through them unchanged.
 
 Not implemented yet:
 
-- Raw HTML escape hatches beyond the `g:html` element directive, including
+- Raw HTML escape hatches beyond the `g:unsafe-html` element directive, including
   attribute-position or text-position raw output.
 - Snippet/render block syntax as a first-class reusable markup value.
 - Template-level await blocks, local const tags, debug tags, transitions,
@@ -338,5 +338,5 @@ Future markup work must define:
 - Attribute escaping.
 - Boolean, string, and expression attributes.
 - `g:` directives.
-- Raw HTML escape hatches beyond the element-level `g:html` directive, if any.
+- Raw HTML escape hatches beyond the element-level `g:unsafe-html` directive, if any.
 - Source spans and diagnostics for malformed markup.

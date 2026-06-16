@@ -219,7 +219,7 @@ func TestValidateRejectsGHTMLOverLoadData(t *testing.T) {
 			Load:     true,
 			LoadBody: `=> { bodyHTML }`,
 			View:     true,
-			ViewBody: `<article g:html={bodyHTML}></article>`,
+			ViewBody: `<article g:unsafe-html={bodyHTML}></article>`,
 		},
 	})
 	diag, ok := findCode(report, "ghtml_over_load_data")

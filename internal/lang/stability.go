@@ -68,7 +68,7 @@ func ConstructStabilities() []ConstructStability {
 		{Name: "g:each", Kind: ConstructDirective, Tier: TierStable},
 		{Name: "g:when", Kind: ConstructDirective, Tier: TierStable},
 		{Name: "g:key", Kind: ConstructDirective, Tier: TierStable},
-		{Name: "g:html", Kind: ConstructDirective, Tier: TierStable},
+		{Name: "g:unsafe-html", Kind: ConstructDirective, Tier: TierStable},
 		{Name: "g:bind:value", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:bind:checked", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:post", Kind: ConstructDirective, Tier: TierPartial},

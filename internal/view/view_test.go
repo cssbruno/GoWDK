@@ -2296,7 +2296,7 @@ func TestRenderSPAOmitsVoidElementEndTags(t *testing.T) {
 
 func TestRenderWithDataRendersRawHTMLDirectiveUnescaped(t *testing.T) {
 	got, err := RenderWithData(
-		`<main><div title="a & b" g:html={body}></div><p>{plain}</p></main>`,
+		`<main><div title="a & b" g:unsafe-html={body}></div><p>{plain}</p></main>`,
 		nil,
 		map[string]string{
 			"body":  `<strong>Hi & bye</strong>`,
@@ -2313,7 +2313,7 @@ func TestRenderWithDataRendersRawHTMLDirectiveUnescaped(t *testing.T) {
 }
 
 func TestRenderWithDataRawHTMLDirectiveOnSelfClosingElement(t *testing.T) {
-	got, err := RenderWithData(`<section g:html={body} />`, nil, map[string]string{
+	got, err := RenderWithData(`<section g:unsafe-html={body} />`, nil, map[string]string{
 		"body": `<p class="x">raw</p>`,
 	})
 	if err != nil {
@@ -2326,7 +2326,7 @@ func TestRenderWithDataRawHTMLDirectiveOnSelfClosingElement(t *testing.T) {
 }
 
 func TestRawHTMLDirectiveFailsLikeTextInterpolationForUnknownFields(t *testing.T) {
-	_, err := RenderWithData(`<div g:html={missing}></div>`, nil, map[string]string{"body": "x"})
+	_, err := RenderWithData(`<div g:unsafe-html={missing}></div>`, nil, map[string]string{"body": "x"})
 	if err == nil {
 		t.Fatal("expected unknown interpolation error")
 	}
@@ -2343,50 +2343,50 @@ func TestParseRejectsRawHTMLDirectiveContractViolations(t *testing.T) {
 	}{
 		{
 			name:    "children",
-			source:  `<div g:html={body}><p>child</p></div>`,
-			message: "element with g:html must not declare children",
+			source:  `<div g:unsafe-html={body}><p>child</p></div>`,
+			message: "element with g:unsafe-html must not declare children",
 		},
 		{
 			name:    "void element",
-			source:  `<br g:html={body} />`,
-			message: "g:html is not supported on void element <br>",
+			source:  `<br g:unsafe-html={body} />`,
+			message: "g:unsafe-html is not supported on void element <br>",
 		},
 		{
 			name:    "string literal",
-			source:  `<div g:html="<p>raw</p>"></div>`,
+			source:  `<div g:unsafe-html="<p>raw</p>"></div>`,
 			message: "not a string literal",
 		},
 		{
 			name:    "boolean attribute",
-			source:  `<div g:html></div>`,
-			message: "g:html requires an expression value",
+			source:  `<div g:unsafe-html></div>`,
+			message: "g:unsafe-html requires an expression value",
 		},
 		{
 			name:    "empty expression",
-			source:  `<div g:html={}></div>`,
-			message: "g:html requires an expression value",
+			source:  `<div g:unsafe-html={}></div>`,
+			message: "g:unsafe-html requires an expression value",
 		},
 		{
 			name:    "duplicate",
-			source:  `<div g:html={a} g:html={b}></div>`,
-			message: "multiple g:html directives",
+			source:  `<div g:unsafe-html={a} g:unsafe-html={b}></div>`,
+			message: "multiple g:unsafe-html directives",
 		},
 		{
 			name:    "g:for combination",
-			source:  `<li g:for={item in Items} g:key={item.ID} g:html={item.Body}></li>`,
-			message: "g:html cannot combine with g:for",
+			source:  `<li g:for={item in Items} g:key={item.ID} g:unsafe-html={item.Body}></li>`,
+			message: "g:unsafe-html cannot combine with g:for",
 		},
 		{
 			name:    "g:bind combination",
-			source:  `<textarea g:bind:value={Field} g:html={body}></textarea>`,
-			message: "g:html cannot combine with g:bind:value",
+			source:  `<textarea g:bind:value={Field} g:unsafe-html={body}></textarea>`,
+			message: "g:unsafe-html cannot combine with g:bind:value",
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := Parse(test.source)
 			if err == nil {
-				t.Fatal("expected g:html contract error")
+				t.Fatal("expected g:unsafe-html contract error")
 			}
 			if !strings.Contains(err.Error(), test.message) {
 				t.Fatalf("expected error containing %q, got %v", test.message, err)
@@ -2400,7 +2400,7 @@ func TestRenderWithComponentsRendersRawHTMLDirectiveInsideStatelessComponent(t *
 		"Prose": {
 			Name:  "Prose",
 			Props: []string{"content"},
-			Body:  `<article g:html={content}></article>`,
+			Body:  `<article g:unsafe-html={content}></article>`,
 		},
 	})
 	if err != nil {
@@ -2419,19 +2419,19 @@ func TestRawHTMLDirectiveIsRejectedInsideStatefulComponentViews(t *testing.T) {
 			State:      map[string]string{"Body": "<p>hi</p>"},
 			StateTypes: map[string]clientlang.ValueType{"Body": clientlang.TypeString},
 			StateJSON:  `{"Body":"<p>hi</p>"}`,
-			Body:       `<div g:html={Body}></div>`,
+			Body:       `<div g:unsafe-html={Body}></div>`,
 		},
 	})
 	if err == nil {
-		t.Fatal("expected stateful g:html rejection")
+		t.Fatal("expected stateful g:unsafe-html rejection")
 	}
-	if !strings.Contains(err.Error(), "g:html is not supported inside stateful component views") {
+	if !strings.Contains(err.Error(), "g:unsafe-html is not supported inside stateful component views") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestRawHTMLDirectiveRejectsRouteParamInterpolation(t *testing.T) {
-	_, err := RenderWithData(`<div g:html={param("slug")}></div>`, nil, map[string]string{"slug": "<p>x</p>"})
+	_, err := RenderWithData(`<div g:unsafe-html={param("slug")}></div>`, nil, map[string]string{"slug": "<p>x</p>"})
 	if err == nil {
 		t.Fatal("expected route param rejection")
 	}
@@ -2440,8 +2440,28 @@ func TestRawHTMLDirectiveRejectsRouteParamInterpolation(t *testing.T) {
 	}
 }
 
+func TestRawHTMLDirectiveRendersUnsafeHTML(t *testing.T) {
+	html, err := RenderWithData(`<div g:unsafe-html={body}></div>`, nil, map[string]string{"body": "<b>hi</b>"})
+	if err != nil {
+		t.Fatalf("g:unsafe-html should render trusted raw HTML: %v", err)
+	}
+	if !strings.Contains(html, "<b>hi</b>") {
+		t.Fatalf("raw HTML not rendered: %q", html)
+	}
+}
+
+func TestOldGHTMLNameIsRejectedWithRenameHint(t *testing.T) {
+	_, err := RenderWithData(`<div g:html={body}></div>`, nil, map[string]string{"body": "x"})
+	if err == nil {
+		t.Fatal("expected the renamed g:html directive to be rejected")
+	}
+	if !strings.Contains(err.Error(), "renamed to g:unsafe-html") {
+		t.Fatalf("error should nudge to the new name: %v", err)
+	}
+}
+
 func TestRawHTMLDirectiveRejectsLoadFieldWithLoadMessage(t *testing.T) {
-	_, err := RenderWithOptions(`<article g:html={bodyHTML}></article>`, nil, map[string]string{"bodyHTML": "<p>x</p>"}, Options{Tainted: map[string]bool{"bodyHTML": true}})
+	_, err := RenderWithOptions(`<article g:unsafe-html={bodyHTML}></article>`, nil, map[string]string{"bodyHTML": "<p>x</p>"}, Options{Tainted: map[string]bool{"bodyHTML": true}})
 	if err == nil {
 		t.Fatal("expected load field rejection")
 	}
@@ -2528,7 +2548,7 @@ func TestParseRejectsRawHTMLTemplateTagWithEscapeHatchGuidance(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected raw HTML syntax rejection")
 	}
-	if !strings.Contains(err.Error(), "use the explicit g:html={Expr} directive") {
+	if !strings.Contains(err.Error(), "use the explicit g:unsafe-html={Expr} directive") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

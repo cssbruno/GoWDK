@@ -410,7 +410,7 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 	return nil
 }
 
-// rawHTMLContent evaluates the explicit g:html raw HTML escape hatch for one
+// rawHTMLContent evaluates the explicit g:unsafe-html raw HTML escape hatch for one
 // element. The expression resolves through the same render-data lookup as text
 // interpolation, and the resulting string is written without escaping. Raw
 // HTML is rejected inside stateful component views and g:for loops because the
@@ -419,7 +419,7 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 func elementRawHTMLContent(node Element, ctx *renderContext) (string, bool, error) {
 	expr := ""
 	for _, attr := range node.Attrs {
-		if attr.Name == "g:html" {
+		if attr.Name == "g:unsafe-html" {
 			expr = strings.TrimSpace(attr.Value)
 		}
 	}
@@ -427,23 +427,23 @@ func elementRawHTMLContent(node Element, ctx *renderContext) (string, bool, erro
 		return "", false, nil
 	}
 	if ctx.templateLoop != nil || ctx.loopItem != nil {
-		return "", false, fmt.Errorf("g:html is not supported inside g:for loops; the island loop runtime re-renders rows as escaped text")
+		return "", false, fmt.Errorf("g:unsafe-html is not supported inside g:for loops; the island loop runtime re-renders rows as escaped text")
 	}
 	if len(ctx.stateFields) > 0 || len(ctx.stateTypes) > 0 || len(ctx.handlers) > 0 || len(ctx.emits) > 0 {
-		return "", false, fmt.Errorf("g:html is not supported inside stateful component views; the island runtime re-renders bound content as escaped text and cannot honor raw HTML")
+		return "", false, fmt.Errorf("g:unsafe-html is not supported inside stateful component views; the island runtime re-renders bound content as escaped text and cannot honor raw HTML")
 	}
 	if ctx.bindFields[expr] {
-		return "", false, fmt.Errorf("g:html cannot reference reactive field %q; the island runtime re-renders bound content as escaped text", expr)
+		return "", false, fmt.Errorf("g:unsafe-html cannot reference reactive field %q; the island runtime re-renders bound content as escaped text", expr)
 	}
 	value, tainted, err := interpolateValue(ctx, "{"+expr+"}")
 	if err != nil {
-		return "", false, fmt.Errorf("g:html: %w", err)
+		return "", false, fmt.Errorf("g:unsafe-html: %w", err)
 	}
 	if tainted {
 		if ctx.tainted[expr] || ctx.tainted[taintedExprRoot(expr)] {
-			return "", false, fmt.Errorf("g:html cannot render %q: it comes from request-time load {} data, which is attacker-influenceable and bypasses escape-by-default. Render request-time text with escape-by-default interpolation (e.g. inside g:each) instead of raw HTML", expr)
+			return "", false, fmt.Errorf("g:unsafe-html cannot render %q: it comes from request-time load {} data, which is attacker-influenceable and bypasses escape-by-default. Render request-time text with escape-by-default interpolation (e.g. inside g:each) instead of raw HTML", expr)
 		}
-		return "", false, fmt.Errorf("g:html cannot render %q: route param interpolation is attacker-influenceable and not allowed as raw HTML", expr)
+		return "", false, fmt.Errorf("g:unsafe-html cannot render %q: route param interpolation is attacker-influenceable and not allowed as raw HTML", expr)
 	}
 	return value, true, nil
 }

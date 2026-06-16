@@ -87,7 +87,7 @@ func unsupportedTemplateSyntax(text string) (int, string, bool) {
 		case strings.HasPrefix(fragment, "{#snippet"), strings.HasPrefix(fragment, "{/snippet"):
 			return offset, "unsupported template snippet syntax; use GOWDK component slots for supported reusable markup", true
 		case strings.HasPrefix(fragment, "{@html"):
-			return offset, "unsupported raw HTML syntax; GOWDK escapes rendered text by default — use the explicit g:html={Expr} directive on an element to opt into trusted raw HTML", true
+			return offset, "unsupported raw HTML syntax; GOWDK escapes rendered text by default — use the explicit g:unsafe-html={Expr} directive on an element to opt into trusted raw HTML", true
 		case strings.HasPrefix(fragment, "{@const"), strings.HasPrefix(fragment, "{@debug"):
 			return offset, "unsupported template tag syntax; declare data in build/load blocks or component client code", true
 		default:
@@ -368,11 +368,11 @@ func (parser *parser) directiveAttr(name string) (Attr, error) {
 		if err != nil {
 			return Attr{}, err
 		}
-		return Attr{Name: name, Value: value, Expression: name == "g:html"}, nil
+		return Attr{Name: name, Value: value, Expression: name == "g:unsafe-html"}, nil
 	}
 	if parser.startsWith(`"`) {
-		if name == "g:html" {
-			return Attr{}, parser.errorf("g:html must use an expression value such as g:html={Body}, not a string literal")
+		if name == "g:unsafe-html" {
+			return Attr{}, parser.errorf("g:unsafe-html must use an expression value such as g:unsafe-html={Body}, not a string literal")
 		}
 		value, err := parser.quotedAttrValue(name)
 		if err != nil {

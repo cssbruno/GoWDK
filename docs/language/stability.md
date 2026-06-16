@@ -90,7 +90,7 @@ Supported exact-name directives (the closed set in
 | `g:command` / `g:query` | Partial | Contract web adapters. |
 | `g:subscribe` | Partial | Realtime presentation-event subscription metadata on query-owned elements. |
 | `g:event` | Partial | Parses to explain backend-owned domain events. |
-| `g:html` | Stable | Raw HTML escape hatch; `unsafe_raw_html` is reported. |
+| `g:unsafe-html` | Stable | Raw HTML escape hatch; `unsafe_raw_html` is reported. |
 | `g:ref` | Partial | Client reference. |
 | `g:slot` | Partial | Named/scoped slot. |
 

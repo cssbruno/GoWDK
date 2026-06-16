@@ -220,7 +220,7 @@ guard public
 		Details: "view {} markup expands only through GOWDK-owned AST nodes and g: directives. Foreign template blocks such as {#if}, {#each}, {#await}, {#snippet}, {@html}, {@const}, and {@debug} are rejected with guidance instead of being translated implicitly. These rejections currently surface through the view_parse_error carrier code with this canonical message text.",
 		NextSteps: []string{
 			"Use g:if/g:else-if/g:else, g:for with g:key, component slots, or build/load data instead of foreign template blocks.",
-			"Use the explicit g:html={Expr} directive when trusted raw HTML output is intentional.",
+			"Use the explicit g:unsafe-html={Expr} directive when trusted raw HTML output is intentional.",
 		},
 	},
 	"unsupported_markup_directive": {
@@ -315,9 +315,9 @@ guard public
 		},
 	},
 	"audit_raw_html_sink": {
-		Details: "A view renders raw, unescaped HTML through g:html (or an equivalent raw sink). Raw sinks are an XSS surface and must be explicitly allowlisted so each one is a reviewed decision.",
+		Details: "A view renders raw, unescaped HTML through g:unsafe-html (or an equivalent raw sink). Raw sinks are an XSS surface and must be explicitly allowlisted so each one is a reviewed decision.",
 		NextSteps: []string{
-			"Render escaped interpolation instead of g:html when raw HTML is not required.",
+			"Render escaped interpolation instead of g:unsafe-html when raw HTML is not required.",
 			"Add the sink (source:field) to the policy raw-HTML allowlist when raw output is intentional and the input is trusted.",
 		},
 	},

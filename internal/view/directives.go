@@ -19,19 +19,19 @@ var supportedDirectiveNames = map[string]bool{
 	"g:else-if":      true,
 	// g:event parses so the renderer can explain that domain events are
 	// backend-owned facts instead of emitting a generic unknown-directive error.
-	"g:event":     true,
-	"g:for":       true,
-	"g:html":      true,
-	"g:if":        true,
-	"g:island":    true,
-	"g:key":       true,
-	"g:post":      true,
-	"g:query":     true,
-	"g:ref":       true,
-	"g:slot":      true,
-	"g:subscribe": true,
-	"g:swap":      true,
-	"g:target":    true,
+	"g:event":       true,
+	"g:for":         true,
+	"g:unsafe-html": true,
+	"g:if":          true,
+	"g:island":      true,
+	"g:key":         true,
+	"g:post":        true,
+	"g:query":       true,
+	"g:ref":         true,
+	"g:slot":        true,
+	"g:subscribe":   true,
+	"g:swap":        true,
+	"g:target":      true,
 }
 
 // supportedMessageDirectives are the g:message:* validation-message rules.
@@ -76,6 +76,8 @@ func isComponentBindDirective(name string) bool {
 // construct families get explicit guidance instead of a generic rejection.
 func unsupportedDirectiveMessage(name string) string {
 	switch {
+	case name == "g:html":
+		return "g:html was renamed to g:unsafe-html to make the raw-HTML XSS surface explicit; use g:unsafe-html={Expr} to opt into trusted raw HTML"
 	case name == "g:transition" || name == "g:animate":
 		return fmt.Sprintf("unsupported g: directive %q; transitions and animations are deferred from the view {} contract — use CSS transitions or a future addon-specific contract", name)
 	case name == "g:window" || name == "g:document" || name == "g:body" || name == "g:head":
@@ -93,14 +95,14 @@ func unsupportedDirectiveMessage(name string) string {
 	}
 }
 
-// validateRawHTMLDirective enforces the parse-time g:html contract: one g:html
+// validateRawHTMLDirective enforces the parse-time g:unsafe-html contract: one g:unsafe-html
 // per element, expression value only, no markup children, no void elements,
 // and no combination with g:for/g:key or g:bind:* directives.
 func validateRawHTMLDirective(name string, attrs []Attr, children []Node) error {
 	count := 0
 	var raw Attr
 	for _, attr := range attrs {
-		if attr.Name == "g:html" {
+		if attr.Name == "g:unsafe-html" {
 			count++
 			raw = attr
 		}
@@ -109,23 +111,23 @@ func validateRawHTMLDirective(name string, attrs []Attr, children []Node) error 
 		return nil
 	}
 	if count > 1 {
-		return fmt.Errorf("element declares multiple g:html directives")
+		return fmt.Errorf("element declares multiple g:unsafe-html directives")
 	}
 	if voidElements[name] {
-		return fmt.Errorf("g:html is not supported on void element <%s>", name)
+		return fmt.Errorf("g:unsafe-html is not supported on void element <%s>", name)
 	}
 	if raw.Boolean || strings.TrimSpace(raw.Value) == "" {
-		return fmt.Errorf("g:html requires an expression value such as g:html={Body}")
+		return fmt.Errorf("g:unsafe-html requires an expression value such as g:unsafe-html={Body}")
 	}
 	if !raw.Expression {
-		return fmt.Errorf("g:html must use an expression value such as g:html={Body}, not a string literal")
+		return fmt.Errorf("g:unsafe-html must use an expression value such as g:unsafe-html={Body}, not a string literal")
 	}
 	if len(children) > 0 {
-		return fmt.Errorf("element with g:html must not declare children; the g:html expression provides the element content")
+		return fmt.Errorf("element with g:unsafe-html must not declare children; the g:unsafe-html expression provides the element content")
 	}
 	for _, attr := range attrs {
 		if attr.Name == "g:for" || attr.Name == "g:key" || strings.HasPrefix(attr.Name, "g:bind:") {
-			return fmt.Errorf("g:html cannot combine with %s", attr.Name)
+			return fmt.Errorf("g:unsafe-html cannot combine with %s", attr.Name)
 		}
 	}
 	return nil

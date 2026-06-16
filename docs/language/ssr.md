@@ -175,7 +175,7 @@ Contract:
   the enclosing row item; its slice is resolved per parent row.
 - Rows support static markup, item interpolation, and nested `g:each` only.
   Components, client directives (`g:on:*`, `g:if`, `g:bind:*`, islands), and
-  `g:html` are not part of a server row. Request-time (tainted) values remain
+  `g:unsafe-html` are not part of a server row. Request-time (tainted) values remain
   rejected in URL, event-handler, `style`, and `srcdoc` attributes.
 - `g:each` requires the SSR addon and a request-time page; it has no SPA/static
   output form.

@@ -10,7 +10,7 @@ import (
 )
 
 // validatePageServerLists checks request-time region rendering at check time so
-// the diagnostics match build behavior. It rejects g:for/g:if/g:html over
+// the diagnostics match build behavior. It rejects g:for/g:if/g:unsafe-html over
 // request-time load {} data (pointing at g:each/g:when), and validates that
 // g:each/g:when target server load data or, when nested, the enclosing row item.
 func validatePageServerLists(page gwdkir.Page) []ValidationError {
@@ -84,7 +84,7 @@ func walkPageListNodes(page gwdkir.Page, nodes []viewmodel.Node, loads pageLoads
 		}
 		inRow := len(eachVars) > 0
 		childVars := eachVars
-		if attr, has := elementAttr(element, "g:html"); has {
+		if attr, has := elementAttr(element, "g:unsafe-html"); has {
 			validatePageHTMLDirective(page, attr, loads, inRow, diagnostics)
 		}
 		if attr, has := elementAttr(element, "g:for"); has {
@@ -157,12 +157,12 @@ func validatePageHTMLDirective(page gwdkir.Page, attr viewmodel.Attr, loads page
 	}
 	if inRow {
 		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "ghtml_over_load_data",
-			fmt.Sprintf("%s: g:html is not supported inside a g:each row; row data is attacker-influenceable and bypasses escape-by-default. Render row text with escape-by-default interpolation instead of raw HTML", page.ID)))
+			fmt.Sprintf("%s: g:unsafe-html is not supported inside a g:each row; row data is attacker-influenceable and bypasses escape-by-default. Render row text with escape-by-default interpolation instead of raw HTML", page.ID)))
 		return
 	}
 	if loads.roots[exprRoot(expr)] {
 		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "ghtml_over_load_data",
-			fmt.Sprintf("%s: g:html cannot render request-time load {} data %q; load fields are attacker-influenceable and bypass escape-by-default. Render request-time text with escape-by-default interpolation (e.g. inside g:each) instead of raw HTML", page.ID, expr)))
+			fmt.Sprintf("%s: g:unsafe-html cannot render request-time load {} data %q; load fields are attacker-influenceable and bypass escape-by-default. Render request-time text with escape-by-default interpolation (e.g. inside g:each) instead of raw HTML", page.ID, expr)))
 	}
 }
 

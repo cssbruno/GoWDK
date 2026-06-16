@@ -130,6 +130,24 @@ Current packages:
 - `addons/db`
 - `addons/seo`
 
+Request-time helpers live under `runtime/` even when an addon enables the
+feature. Config files still import `addons/<name>` and call `<name>.Addon()`.
+Generated apps and request-time extension code should import the runtime package
+for helpers:
+
+| Config addon | Request-time helpers |
+| --- | --- |
+| `addons/actions` | `runtime/actions` |
+| `addons/api` | `runtime/api` |
+| `addons/partial` | `runtime/partial` |
+| `addons/ratelimit` | `runtime/ratelimit` |
+| `addons/realtime` | `runtime/realtime` |
+| `addons/ssr` | `runtime/ssr` |
+
+The addon packages re-export their runtime helpers for 0.x compatibility, but
+new generated app code imports `runtime/<name>` so request-time binaries do not
+pull in the root build-time config package through addon markers.
+
 `addons/static` is the build-time static page output boundary. `addons/spa`
 remains available for existing configs and static-first SPA navigation; both
 enable the existing `spa` feature ID.
@@ -414,7 +432,7 @@ core or runtime core, or generate Tailwind v3 content configuration. The literal
 config loader recognizes `tailwind.Addon` with a literal `tailwind.Options`
 value.
 
-`addons/ratelimit` provides request-time HTTP middleware with fixed-window
+`runtime/ratelimit` provides request-time HTTP middleware with fixed-window
 decisions, rate-limit response headers, a process-local in-memory store, and a
 Redis-backed store adapter. It does not add a Redis client dependency or choose
 an application policy automatically. When `ratelimit.Addon()` is enabled and a
@@ -449,7 +467,7 @@ package gowdkapp
 import (
 	"time"
 
-	"github.com/cssbruno/gowdk/addons/ratelimit"
+	"github.com/cssbruno/gowdk/runtime/ratelimit"
 )
 
 func init() {

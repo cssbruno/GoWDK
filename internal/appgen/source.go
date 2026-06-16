@@ -72,7 +72,7 @@ func runtimeImportMap(options Options) map[string]string {
 		imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
 	}
 	if actionsUseFragments(actions) || fragmentsUseStaticFallback(fragments) {
-		imports["gowdkpartial"] = "github.com/cssbruno/gowdk/addons/partial"
+		imports["gowdkpartial"] = "github.com/cssbruno/gowdk/runtime/partial"
 	}
 	if actionsParseForm(actions) {
 		imports["strings"] = "strings"
@@ -94,7 +94,7 @@ func runtimeImportMap(options Options) map[string]string {
 	if generatedRealtimeEnabled(options) {
 		imports["context"] = "context"
 		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
-		imports["gowdkrealtime"] = "github.com/cssbruno/gowdk/addons/realtime"
+		imports["gowdkrealtime"] = "github.com/cssbruno/gowdk/runtime/realtime"
 	}
 	if generatedObservabilityEnabled(options) {
 		imports["gowdktrace"] = "github.com/cssbruno/gowdk/runtime/trace"
@@ -131,7 +131,7 @@ func runtimeImportMap(options Options) map[string]string {
 	}
 	if csrfEnabled(options) {
 		imports["errors"] = "errors"
-		imports["gowdkactions"] = "github.com/cssbruno/gowdk/addons/actions"
+		imports["gowdkactions"] = "github.com/cssbruno/gowdk/runtime/actions"
 		imports["os"] = "os"
 		imports["strings"] = "strings"
 	}
@@ -142,7 +142,7 @@ func runtimeImportMap(options Options) map[string]string {
 		imports["gowdkguard"] = "github.com/cssbruno/gowdk/runtime/guard"
 	}
 	if ssrUsesLoad(ssr) {
-		imports["gowdkssr"] = "github.com/cssbruno/gowdk/addons/ssr"
+		imports["gowdkssr"] = "github.com/cssbruno/gowdk/runtime/ssr"
 	}
 	if generatedUsesGuards(options) {
 		imports["gowdkauth"] = "github.com/cssbruno/gowdk/runtime/auth"
@@ -158,7 +158,7 @@ func runtimeImportMap(options Options) map[string]string {
 		imports["fmt"] = "fmt"
 	}
 	if generatedUsesRateLimit(options) {
-		imports["gowdkratelimit"] = "github.com/cssbruno/gowdk/addons/ratelimit"
+		imports["gowdkratelimit"] = "github.com/cssbruno/gowdk/runtime/ratelimit"
 	}
 	if !options.ProxyBackend {
 		for importPath, alias := range backendImports(adapter, ssr) {

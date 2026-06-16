@@ -39,7 +39,7 @@ func backendRuntimeImportMap(options Options) map[string]string {
 	if generatedRealtimeEnabled(options) {
 		imports["context"] = "context"
 		imports["gowdkcontracts"] = "github.com/cssbruno/gowdk/runtime/contracts"
-		imports["gowdkrealtime"] = "github.com/cssbruno/gowdk/addons/realtime"
+		imports["gowdkrealtime"] = "github.com/cssbruno/gowdk/runtime/realtime"
 	}
 	if generatedObservabilityEnabled(options) {
 		imports["gowdktrace"] = "github.com/cssbruno/gowdk/runtime/trace"
@@ -76,7 +76,7 @@ func backendRuntimeImportMap(options Options) map[string]string {
 		imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
 	}
 	if actionsUseFragments(adapter.Actions) || fragmentsUseStaticFallback(adapter.Fragments) {
-		imports["gowdkpartial"] = "github.com/cssbruno/gowdk/addons/partial"
+		imports["gowdkpartial"] = "github.com/cssbruno/gowdk/runtime/partial"
 	}
 	if actionsUseValidation(adapter.Actions) {
 		imports["gowdkvalidation"] = "github.com/cssbruno/gowdk/runtime/validation"
@@ -87,7 +87,7 @@ func backendRuntimeImportMap(options Options) map[string]string {
 	}
 	if csrfEnabled(options) {
 		imports["errors"] = "errors"
-		imports["gowdkactions"] = "github.com/cssbruno/gowdk/addons/actions"
+		imports["gowdkactions"] = "github.com/cssbruno/gowdk/runtime/actions"
 		imports["os"] = "os"
 		imports["strings"] = "strings"
 	}

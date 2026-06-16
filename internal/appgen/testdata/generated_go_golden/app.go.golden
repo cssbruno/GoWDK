@@ -6,7 +6,7 @@ import (
 	"errors"
 	patients "example.com/app/contracts/patients"
 	newsletter "example.com/app/newsletter"
-	gowdkactions "github.com/cssbruno/gowdk/addons/actions"
+	gowdkactions "github.com/cssbruno/gowdk/runtime/actions"
 	gowdkruntime "github.com/cssbruno/gowdk/runtime/app"
 	gowdkcontracts "github.com/cssbruno/gowdk/runtime/contracts"
 	gowdkform "github.com/cssbruno/gowdk/runtime/form"

@@ -639,7 +639,7 @@ Generated binaries currently support:
 - Standalone concrete and dynamic fragment routes with raw and typed route
   params exposed to fragment hooks.
 - First-slice concrete and dynamic request-time SSR pages with declared
-  `load {}` identifier or dotted paths.
+  `server {}` identifier or dotted paths.
 - Optional split frontend/backend generation with `--backend-app` and
   `--backend-bin`; the frontend proxies backend routes to
   `GOWDK_BACKEND_ORIGIN`.

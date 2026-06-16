@@ -162,21 +162,20 @@ Implemented today:
   `g:for={item in Items}` or `g:for={item, i in Items}` and a required scalar
   `g:key={item.ID}`. The first slice supports item field interpolation such as
   `{item.Name}`, index interpolation such as `{i}`, and keyed row reuse/reorder
-  during island render passes. `g:for` binds **client/island state only**; it
-  cannot iterate request-time `load {}` data.
-- Page elements can render a **request-time server list** over SSR `load {}`
-  data with `g:each={item in field}` (or `g:each={item, i in field}`). The
-  collection must be a declared `load {}` field; rows render server-side with
-  escape-by-default interpolation (`{item.Name}`, `{i}`). `g:each` lists nest —
-  a nested `g:each={child in item.children}` resolves its slice per parent row.
-  See [ssr.md](ssr.md) for the full server-list contract. Use `g:each` for
-  server data and `g:for` for client state; mixing the two is rejected.
-- Page elements can **conditionally render** request-time server data with
-  `g:when={field}` (or `g:when={!field}` for the inverse), the server-side
-  counterpart to `g:if`. The condition must be a declared `load {}` bool field;
-  the branch renders server-side and nests with `g:each`. Branching `load {}`
-  data with `g:if` is rejected at `gowdk check` with a diagnostic pointing at
-  `g:when`. See [ssr.md](ssr.md).
+  during island render passes. Over component `state`/`store` this `g:for` is a
+  **client island**; over a `server {}` field the same `g:for` is a server list
+  (next item). The compiler infers the lane from the operand's data source.
+- `g:for`/`g:if` over a **`server {}` request-time field** render **server-side**.
+  `g:for={item in field}` (or `g:for={item, i in field}`) renders rows with
+  escape-by-default interpolation (`{item.Name}`, `{i}`); server lists nest — a
+  nested `g:for={child in item.children}` resolves its slice per parent row.
+  `g:if={field}` / `g:if={!field}` conditionally renders a branch, and a
+  top-level server `g:if` accepts a full bool expression
+  (`g:if={count > 0 && status == "open"}`) evaluated at request time. The lane is
+  chosen by the data source — a declared `server {}` field is server-rendered;
+  `state`/`store` is a client island. See [ssr.md](ssr.md) for the full
+  server-region contract. (`g:each`/`g:when` were unified into `g:for`/`g:if`;
+  the old names parse to a migration nudge.)
 - Client handlers can mutate state arrays with compiler-owned built-ins:
   `append(Items, { Field: expr })`, `remove(Items, index)`, and
   `move(Items, from, to)`.

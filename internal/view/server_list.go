@@ -8,10 +8,10 @@ import (
 	"github.com/cssbruno/gowdk/internal/clientlang"
 )
 
-// SSRListReplacement is a build-time description of one server-rendered g:each
+// SSRListReplacement is a build-time description of one server-rendered g:for
 // list. It is collected during a request-time page render and handed to the app
 // generator, which serializes it for the runtime region renderer. The tree
-// mirrors nesting: Lists and Conds describe g:each lists and g:when conditionals
+// mirrors nesting: Lists and Conds describe g:for lists and g:if conditionals
 // found inside RowTemplate.
 type SSRListReplacement struct {
 	Placeholder string
@@ -24,7 +24,7 @@ type SSRListReplacement struct {
 	Conds       []SSRCondReplacement
 }
 
-// SSRCondReplacement is a build-time description of one server-rendered g:when
+// SSRCondReplacement is a build-time description of one server-rendered g:if
 // conditional. Its branch renders only when SourcePath resolves to a truthy
 // value (negated when Negate is set). The branch shares the enclosing container
 // scope.
@@ -144,10 +144,10 @@ func elementHasAttr(node Element, name string) bool {
 	return false
 }
 
-// renderServerListElement renders a g:each element into a list placeholder plus
+// renderServerListElement renders a g:for element into a list placeholder plus
 // a collected SSRListReplacement. The element's subtree is rendered once as a
 // row template in which item interpolations become per-row field placeholders;
-// nested g:each and g:when recurse into child specs.
+// nested g:for and g:if recurse into child specs.
 func renderServerListElement(node Element, ctx *renderContext, out *renderOutput) error {
 	if ctx.serverScope == nil && ctx.lists == nil {
 		return fmt.Errorf("server-lane g:for is only supported in a request-time page view; it cannot be used inside a component, layout, or fragment. Move the server {} data and g:for onto the page")
@@ -202,7 +202,7 @@ func renderServerListElement(node Element, ctx *renderContext, out *renderOutput
 	return nil
 }
 
-// renderServerConditionalElement renders a g:when element into a conditional
+// renderServerConditionalElement renders a g:if element into a conditional
 // placeholder plus a collected SSRCondReplacement. The element's subtree is
 // rendered once into a branch template in the enclosing container scope.
 func renderServerConditionalElement(node Element, ctx *renderContext, out *renderOutput) error {
@@ -239,7 +239,7 @@ func renderServerConditionalElement(node Element, ctx *renderContext, out *rende
 	lists := []SSRListReplacement{}
 	conds := []SSRCondReplacement{}
 	// The branch renders in the enclosing container scope: a row scope keeps the
-	// parent item var; a top-level g:when renders against the load data map.
+	// parent item var; a top-level g:if renders against the load data map.
 	scope := &serverScope{
 		fields: &fields,
 		lists:  &lists,
@@ -394,7 +394,7 @@ func isSimpleCondition(raw string) bool {
 	return !strings.ContainsAny(stripped, "!&|=<>(){}\"' \t")
 }
 
-// serverSourcePath resolves the load path for a g:each collection or g:when
+// serverSourcePath resolves the load path for a g:for collection or g:if
 // condition. A top-level region (or a load-scope branch) must target a declared
 // server {} field; a row-scope region must reference its enclosing item.
 func serverSourcePath(expr string, ctx *renderContext, directive string) (string, error) {
@@ -421,8 +421,8 @@ func serverSourcePath(expr string, ctx *renderContext, directive string) (string
 }
 
 // validateServerRegionSubtree rejects constructs that cannot be rendered inside
-// a request-time g:each row or g:when branch. Regions support static markup,
-// scoped interpolation, nested g:each, and nested g:when only.
+// a request-time g:for row or g:if branch. Regions support static markup,
+// scoped interpolation, nested g:for, and nested g:if only.
 func validateServerRegionSubtree(nodes []Node) error {
 	for _, node := range nodes {
 		switch typed := node.(type) {
@@ -440,7 +440,7 @@ func validateServerRegionSubtree(nodes []Node) error {
 				return err
 			}
 		case ComponentCall:
-			return fmt.Errorf("g:each rows and g:when branches cannot contain component calls; render request-time markup with static elements, g:each, and g:when")
+			return fmt.Errorf("g:for rows and g:if branches cannot contain component calls; render request-time markup with static elements, g:for, and g:if")
 		}
 	}
 	return nil
@@ -449,7 +449,7 @@ func validateServerRegionSubtree(nodes []Node) error {
 // serverScopeFieldPlaceholder resolves a region interpolation name to a stable
 // field placeholder, recording the resolved path on the active scope. In a row
 // scope only the row item (and index) are valid; in a load scope only declared
-// load {} fields are valid.
+// server {} fields are valid.
 func (scope *serverScope) serverScopeFieldPlaceholder(name string, ids *renderIDAllocator) (string, error) {
 	path, isIndex, ok := scope.resolvePath(name)
 	if !ok {

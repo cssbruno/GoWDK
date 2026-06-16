@@ -471,7 +471,7 @@ Every 0.x minor release must have:
 
 ## SSR, Hybrid, Cache, Guards, And Auth Hooks
 
-- [x] Document SSR lifecycle, render mode, feature requirement, `load {}`
+- [x] Document SSR lifecycle, render mode, feature requirement, `server {}`
   grammar, declared load paths, typed route params, `(T, error)` load functions,
   `context.Context` load functions, redirects, not found, custom errors,
   route-local error pages, endpoint-local error pages, panic boundaries,

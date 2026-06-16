@@ -95,7 +95,7 @@ Use one of these explicit outcomes:
 - Redirect after full-page POST so the browser loads fresh page output.
 - Return a fragment response for the changed region.
 - Return `response.ReloadPage()` so enhanced forms reload the current page and
-  rerun request-time `load {}` data.
+  rerun request-time `server {}` data.
 - Return JSON to a user-owned client integration.
 - Call an app-owned API or reload policy outside generated core.
 

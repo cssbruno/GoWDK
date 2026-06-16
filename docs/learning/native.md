@@ -90,7 +90,7 @@ Use installed `gowdk` commands inside an initialized app. Use
 - Read [SSR](../language/ssr.md).
 - Build a request-time page:
   `go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/ssr/simple-ssr.page.gwdk`.
-- `load {}` selects the request-time page lane and requires the SSR addon.
+- `server {}` selects the request-time page lane and requires the SSR addon.
 
 ## Lesson 12: Add A Guard
 
@@ -185,5 +185,5 @@ GOWDK_CSRF_SECRET=development-flagship-csrf-secret-32b GOWDK_ADDR=127.0.0.1:8092
 ```
 
 The flagship app covers static output, build-time Go data, actions,
-validation, CSRF, API, fragments, SSR `load {}`, guards, one binary,
+validation, CSRF, API, fragments, SSR `server {}`, guards, one binary,
 contracts, CSS/assets, and an explicit WASM island placeholder.

@@ -4060,8 +4060,8 @@ func TestGeneratedBinaryExecutesInlineSSRScriptLoad(t *testing.T) {
 		Blocks: gwdkir.Blocks{
 			Server:     true,
 			ServerBody: `=> { user.name, request.path }`,
-			View:     true,
-			ViewBody: `<main><h1>{user.name}</h1><p>{request.path}</p></main>`,
+			View:       true,
+			ViewBody:   `<main><h1>{user.name}</h1><p>{request.path}</p></main>`,
 			GoBlocks: []gwdkir.GoBlock{{
 				Target: "server",
 				Body: `func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {

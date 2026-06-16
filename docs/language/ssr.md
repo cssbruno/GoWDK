@@ -5,11 +5,11 @@ SSR is optional and must not become the default framework identity.
 ## Current Support
 
 - Pages default to build-time SPA output.
-- `load {}` selects request-time SSR and requires the SSR addon.
-- `go ssr {}` also selects request-time SSR and requires the SSR addon.
+- `server {}` selects request-time SSR and requires the SSR addon.
+- `go server {}` also selects request-time SSR and requires the SSR addon.
 - `gowdk build --ssr --app <dir> --bin <file>` can generate a binary that
   serves concrete and dynamic request-time SSR pages rendered from `view {}`,
-  literal or imported `build {}` data, and declared `load {}` data.
+  literal or imported `build {}` data, and declared `server {}` data.
 - Dynamic SSR routes such as `/blog/{slug}` can be matched by generated
   binaries in the first supported slice. Route params render through generated
   placeholders and request-time HTML escaping. Generated handlers attach raw
@@ -17,7 +17,7 @@ SSR is optional and must not become the default framework identity.
   `runtime/app.TypedParams(ctx)` before guards, load functions, or rendering
   run. Invalid typed params return 400; missing params return 404.
 - Generated SSR supports declared identifier and dotted-path fields such as
-  `load { => { user, title, account.plan } }` and calls a same-package exported
+  `server { => { user, title, account.plan } }` and calls a same-package exported
   Go function named `Load<PageID>`. `<PageID>` is the explicit `page` value
   when present, otherwise the filename-derived page ID.
 - Supported load function signatures are
@@ -42,7 +42,7 @@ SSR is optional and must not become the default framework identity.
   before response headers are written becomes a no-store HTTP 500 response,
   using the route-local `error` page when declared or `500.html` when present,
   without exposing the panic value.
-- Non-redirect `load {}` failures also use the same 5xx message policy:
+- Non-redirect `server {}` failures also use the same 5xx message policy:
   ordinary error details are hidden, and only explicit
   `response.HandlerError.Message` values are rendered to clients.
 - Page layouts compose around SSR pages at request time. Declared load data is
@@ -129,24 +129,40 @@ Native RBAC guards are a defense-in-depth redundancy layer for generated
 route/page access. They must never replace backend authorization for protected
 resources in normal Go handlers and services.
 
-## Server-rendered lists (`g:each`)
+## Lane inference: one directive, two lanes
+
+GOWDK has two execution lanes for `g:for` and `g:if`, and the compiler picks the
+lane from the **data source**, not from a separate directive:
+
+- When the operand is a **`server {}` request-time field** (or, when nested, the
+  enclosing row item), `g:for`/`g:if` render **server-side** at request time, with
+  escape-by-default interpolation — no HTML is built in Go and no client island is
+  involved.
+- When the operand is **client `state`/`store`**, `g:for`/`g:if` bind a **reactive
+  client island**.
+
+So `g:for={col in columns}` over a `server {}` field is a server-rendered list,
+while `g:for={todo in todos}` over component `state` is a client island — same
+directive, lane chosen by where the data lives. A name that is neither a declared
+`server {}` field nor client state is rejected. There are no separate `g:each` /
+`g:when` directives; the lane is inferred.
+
+## Server-rendered lists (`g:for` over `server {}`)
 
 Request-time pages render collection data — board columns, chat logs, activity
-feeds, search results, inboxes — declaratively with `g:each`, the server-side
-counterpart to the client-only `g:for`. The list is rendered server-side at
-request time with escape-by-default interpolation: no HTML is built in Go, no
-client island is involved, and every interpolated value is HTML-escaped.
+feeds, search results, inboxes — declaratively with `g:for` over a `server {}`
+field. Every interpolated value is HTML-escaped.
 
 ```gwdk
 page board
 route "/board"
 guard public
-load { => { columns } }
+server { => { columns } }
 view {
   <section class="board">
-    <div class="column" g:each={col in columns}>
+    <div class="column" g:for={col in columns}>
       <h2>{col.title}</h2>
-      <article class="card" g:each={issue in col.issues}>
+      <article class="card" g:for={issue in col.issues}>
         <span>{issue.id}</span> {issue.title}
       </article>
     </div>
@@ -163,39 +179,39 @@ func LoadBoard(ssr.LoadContext) (map[string]any, error) {
 
 Contract:
 
-- A top-level `g:each` collection must be a declared `load {}` field. Iterating
-  client/island state belongs to `g:for`; iterating request-time `load {}` data
-  with `g:for` is rejected at `gowdk check` with a diagnostic pointing at
-  `g:each`.
+- A top-level `g:for` over a declared `server {}` field renders server-side. The
+  same `g:for` over component `state`/`store` is a client island instead — the
+  lane follows the source.
 - Rows interpolate the item with `{item.Field}` (dotted paths such as
   `{item.author.name}` are supported) and the optional index with
-  `g:each={item, i in field}` then `{i}`. Field values are matched against map
+  `g:for={item, i in field}` then `{i}`. Field values are matched against map
   keys, exported Go struct fields, or json tags, and are always escaped.
-- `g:each` lists nest. A nested `g:each={child in item.children}` must reference
-  the enclosing row item; its slice is resolved per parent row.
-- Rows support static markup, item interpolation, and nested `g:each` only.
-  Components, client directives (`g:on:*`, `g:if`, `g:bind:*`, islands), and
-  `g:unsafe-html` are not part of a server row. Request-time (tainted) values remain
-  rejected in URL, event-handler, `style`, and `srcdoc` attributes.
-- `g:each` requires the SSR addon and a request-time page; it has no SPA/static
-  output form.
+- Server lists nest. A nested `g:for={child in item.children}` must reference the
+  enclosing row item; its slice is resolved per parent row. Nested directives
+  inherit the server lane.
+- Rows support static markup, item interpolation, nested `g:for`, and nested
+  `g:if` only. Components, other client directives (`g:on:*`, `g:bind:*`,
+  islands), and `g:unsafe-html` are not part of a server row. Request-time
+  (tainted) values remain rejected in URL, event-handler, `style`, and `srcdoc`
+  attributes.
+- A server-rendered `g:for` requires the SSR addon and a request-time page; it
+  has no SPA/static output form. `g:key` is accepted but ignored server-side.
 
-## Server-rendered conditionals (`g:when`)
+## Server-rendered conditionals (`g:if` over `server {}`)
 
-`g:when` is the server-side counterpart to the client-only `g:if`. It renders
-its element (and subtree) at request time only when an SSR `load {}` field is
-truthy, with a leading `!` for the inverse. This covers the everyday empty-state,
-auth-gated section, and feature-flag patterns over request-time data.
+`g:if` over a `server {}` field renders its element (and subtree) at request time
+only when the condition holds. This covers the everyday empty-state, auth-gated
+section, and feature-flag patterns over request-time data.
 
 ```gwdk
 page board
 route "/board"
 guard public
-load { => { hasItems, count } }
+server { => { count, status } }
 view {
   <section>
-    <p g:when={hasItems}>You have {count} items</p>
-    <p g:when={!hasItems}>No issues yet</p>
+    <p g:if={count > 0 && status == "open"}>You have {count} open items</p>
+    <p g:if={!count}>No issues yet</p>
   </section>
 }
 ```
@@ -203,28 +219,29 @@ view {
 ```go
 func LoadBoard(ssr.LoadContext) (map[string]any, error) {
 	b := issues.Board()
-	return map[string]any{"hasItems": b.Count > 0, "count": b.Count}, nil
+	return map[string]any{"count": b.Count, "status": b.Status}, nil
 }
 ```
 
 Contract:
 
-- A top-level `g:when` condition must be a declared `load {}` field, optionally
-  negated with a leading `!`. Branching client/island state belongs to `g:if`;
-  branching request-time `load {}` data with `g:if` is rejected at `gowdk check`
-  with a diagnostic pointing at `g:when`.
-- The condition is a single field reference, not a compound expression. A value
-  is truthy when it is a non-zero number, non-empty string, `true`, or a
-  non-empty slice/map. Compute compound conditions in Go and expose a bool load
-  field.
-- A `g:when` branch shares the enclosing scope: a top-level branch interpolates
-  `load {}` fields (`{count}`); a `g:when` inside a `g:each` row references the
-  row item (`{issue.id}`), and its condition must reference the row item
-  (`g:when={issue.urgent}`).
-- `g:when` and `g:each` nest in either direction: a list inside a branch, a
-  conditional inside a row. Branches support static markup, scoped
-  interpolation, nested `g:each`, and nested `g:when` only.
-- The empty/else branch is expressed with a sibling `g:when={!field}`; an
-  `else`/`else-if` chain is not part of this directive.
-- `g:when` requires the SSR addon and a request-time page; it has no SPA/static
-  output form.
+- A top-level `g:if` whose condition references a `server {}` field renders
+  server-side; over client `state`/`store` the same `g:if` is a client
+  conditional instead.
+- A top-level server `g:if` accepts a full bool expression — comparisons (`==`,
+  `!=`, `<`, `<=`, `>`, `>=`), logic (`&&`, `||`, `!`), and literals — over
+  `server {}` fields, evaluated at request time. A value with no operator is a
+  truthiness check (non-zero number, non-empty string, `true`, non-empty
+  slice/map). Evaluation that fails (e.g. a missing field) fails closed: the
+  branch is hidden. Function calls are not evaluated server-side — compute those
+  in Go and expose a field.
+- A `g:if` branch shares the enclosing scope: a top-level branch interpolates
+  `server {}` fields (`{count}`); a `g:if` inside a server `g:for` row references
+  the row item (`{issue.id}`), and a **nested** server `g:if` is a single row
+  field (`g:if={issue.urgent}`), not a compound expression.
+- Server `g:for` and `g:if` nest in either direction: a list inside a branch, a
+  conditional inside a row.
+- The empty/else branch is a sibling `g:if={!field}`. `g:else`/`g:else-if` are
+  client-only chains and cannot follow a server `g:if`.
+- A server-rendered `g:if` requires the SSR addon and a request-time page; it has
+  no SPA/static output form.

@@ -67,11 +67,11 @@ must pass `--config <file>`.
 4. Parser behavior for `.gwdk` syntax.
 5. SPA/prerender output and generated route handlers.
 6. Typed action decoding, validation, CSRF, redirects, and fragments.
-7. SSR addon routing, guards, `load {}`, layouts, and errors.
+7. SSR addon routing, guards, `server {}`, layouts, and errors.
 
 ## Existing Coverage
 
-- `internal/compiler` tests cover SSR addon enforcement, duplicate page/component/layout identities, layout reference resolution, dynamic SPA routes requiring `paths`, actions without SSR, and `load {}` rejection on SPA pages.
+- `internal/compiler` tests cover SSR addon enforcement, duplicate page/component/layout identities, layout reference resolution, dynamic SPA routes requiring `paths`, actions without SSR, and `server {}` rejection on SPA pages.
 - `internal/discover` tests cover recursive `.gwdk` include/exclude matching.
 - `internal/parser` tests cover page/component/layout metadata declarations, `paths`, `build`, `load`, `view`, `props`, `act`, captured `paths`/`build`/`load`/`view` bodies, the first action input/redirect body subset, and render mode rejection.
 - `internal/view` tests cover view markup rendering, escaping, expression attributes, shorthand class/id normalization, component expansion, and missing component/prop errors.

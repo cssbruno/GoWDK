@@ -2,14 +2,14 @@
 
 Hybrid rendering is not exposed as separate source syntax.
 
-Pages default to build-time SPA output. Use `load {}` or `go ssr {}` when a
+Pages default to build-time SPA output. Use `server {}` or `go server {}` when a
 page must run through generated request-time rendering. Both require the SSR
 addon.
 
 The compiler still has internal `hybrid` route metadata for generated route
 reports and configured render defaults, but there is no page metadata
 declaration for selecting hybrid behavior in `.gwdk` files. A page without
-`load {}` remains build-time SPA output; a page with `load {}` or `go ssr {}`
+`server {}` remains build-time SPA output; a page with `server {}` or `go server {}`
 uses the integrated request-time page lane.
 
 Current generated hybrid behavior is deliberately narrow:

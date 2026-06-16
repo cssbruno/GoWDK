@@ -10,10 +10,10 @@ type renderContext struct {
 	ids          *renderIDAllocator
 	loopItem     *loopItemRender
 	templateLoop *templateLoopRender
-	// serverScope is the active g:each row or g:when branch scope, set while
+	// serverScope is the active g:for row or g:if branch scope, set while
 	// rendering a request-time server region template. It is nil outside regions.
 	serverScope *serverScope
-	// lists and conds collect the top-level g:each lists and g:when conditionals
+	// lists and conds collect the top-level g:for lists and g:if conditionals
 	// discovered during a render. They are shared pointers so they survive
 	// renderContext value copies.
 	lists *[]SSRListReplacement

@@ -9,7 +9,7 @@ Generated JavaScript does not own page loading policy.
 | --- | --- | --- | --- |
 | `paths {}` | build time | concrete dynamic SPA routes | Literal records only. Required for dynamic SPA pages unless the page uses request-time rendering. |
 | `build {}` | build time | static page data | Literal records plus imported or same-package no-argument Go functions. |
-| `load {}` | request time | SSR page data | One same-package `Load<PageID>` function returns `map[string]any` data. |
+| `server {}` | request time | SSR page data | One same-package `Load<PageID>` function returns `map[string]any` data. |
 | `act` | request time | POST/action endpoint behavior | Same-package Go handler returns `runtime/response.Response`. |
 | `api` | request time | API endpoint behavior | Same-package Go handler returns `runtime/response.Response`. |
 | `fragment` | request time | partial endpoint behavior | Same-package Go hook or static generated fragment body. |
@@ -18,7 +18,7 @@ Generated JavaScript does not own page loading policy.
 
 - `build {}` data is rendered into generated static output. It must not depend
   on the incoming HTTP request.
-- `load {}` selects request-time SSR and requires the SSR addon.
+- `server {}` selects request-time SSR and requires the SSR addon.
 - Generated SSR calls one same-package function named `Load<PageID>`.
 - Supported load signatures are:
 
@@ -27,9 +27,9 @@ func LoadDashboard(ssr.LoadContext) map[string]any
 func LoadDashboard(ssr.LoadContext) (map[string]any, error)
 ```
 
-- One `load {}` block can declare multiple fields. They come from the single
+- One `server {}` block can declare multiple fields. They come from the single
   returned map, including dotted paths such as `user.name`.
-- Layouts do not have independent `load {}` data yet. Request-time layout data
+- Layouts do not have independent `server {}` data yet. Request-time layout data
   composition is planned.
 - Load redirects use `ssr.RedirectTo("/path")` or
   `ssr.Redirect("/path", status)`. Redirect targets must be local absolute
@@ -45,11 +45,11 @@ func LoadDashboard(ssr.LoadContext) (map[string]any, error)
 - Full POST actions and enhanced POST actions share the same user Go handler
   ownership. The handler response decides redirect, HTML, JSON, or fragment
   behavior.
-- GOWDK does not automatically rerun `load {}` after an action today.
+- GOWDK does not automatically rerun `server {}` after an action today.
 - Partial updates use explicit fragment responses or standalone fragment
   endpoints. Fragments own their request-time data through the fragment Go hook.
 - Fragments do not declare compiler-tracked data dependencies today.
-- Generated client navigation does not prefetch or reuse `load {}` data today.
+- Generated client navigation does not prefetch or reuse `server {}` data today.
   Any future prefetch or reuse must be an explicit generated-client feature,
   not hidden browser-owned loading policy.
 
@@ -62,6 +62,6 @@ func LoadDashboard(ssr.LoadContext) (map[string]any, error)
 - Generated JavaScript may enhance form submissions, fragments, islands, and
   static SPA navigation. It must not become the authority for routes, auth,
   validation, server data, action behavior, cache, or page loading policy.
-- Actions do not invalidate `load {}` data implicitly. Use redirects,
+- Actions do not invalidate `server {}` data implicitly. Use redirects,
   fragments, JSON, or `response.ReloadPage()` to make the lifecycle visible in
   the action result.

@@ -130,13 +130,13 @@ contract):
 - `guard public` marks intentional public access and cannot be combined with
   protected guard IDs.
 - Non-public page guards on build-time SPA/action page routes fail validation;
-  add `load {}` or `go ssr {}` with the SSR addon when the page itself is
+  add `server {}` or `go server {}` with the SSR addon when the page itself is
   protected.
 - Guards run in declaration order.
 - Missing custom guard backing code fails at Go compile time.
 - Guard errors fail closed with HTTP 403.
 - Guards run before action decoding, API handler calls, fragment hooks, SSR
-  `load {}`, and user business logic.
+  `server {}`, and user business logic.
 - Guards return `nil` or `error`. Ordinary errors fail closed with HTTP 403.
   `runtime/guard.RedirectTo`, `runtime/guard.Redirect`, and
   `runtime/guard.Respond` are the explicit no-store redirect/custom-response

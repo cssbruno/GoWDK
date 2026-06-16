@@ -54,7 +54,7 @@ route "/dashboard"
 guard auth.required
 error "/errors/dashboard.html"
 
-load {
+server {
 }
 ```
 

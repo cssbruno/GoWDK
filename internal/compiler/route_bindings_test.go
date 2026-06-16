@@ -27,7 +27,7 @@ func TestBuildRouteMetadataSeparatesRoutesFromEndpoints(t *testing.T) {
 				Render: gowdk.SSR,
 				Blocks: gwdkir.Blocks{
 					Server: true,
-					View: true,
+					View:   true,
 				},
 			},
 			{
@@ -121,7 +121,7 @@ func TestBuildRouteMetadataMapsHybridWithLoadToHybridRoute(t *testing.T) {
 		Render: gowdk.Hybrid,
 		Blocks: gwdkir.Blocks{
 			Server: true,
-			View: true,
+			View:   true,
 		},
 	}}}
 

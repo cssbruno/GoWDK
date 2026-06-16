@@ -306,8 +306,8 @@ func TestSSRArtifactsRenderLoadPlaceholders(t *testing.T) {
 		Blocks: gwdkir.Blocks{
 			Server:     true,
 			ServerBody: `=> { user.name, account.plan }`,
-			View:     true,
-			ViewBody: `<main><h1>{user.name}</h1><p>{account.plan}</p></main>`,
+			View:       true,
+			ViewBody:   `<main><h1>{user.name}</h1><p>{account.plan}</p></main>`,
 		},
 	}}}
 
@@ -348,8 +348,8 @@ func TestSSRArtifactsComposePageLoadThroughLayouts(t *testing.T) {
 			Blocks: gwdkir.Blocks{
 				Server:     true,
 				ServerBody: `=> { user.name }`,
-				View:     true,
-				ViewBody: `<main>{user.name}</main>`,
+				View:       true,
+				ViewBody:   `<main>{user.name}</main>`,
 			},
 		}},
 		Layouts: []gwdkir.Layout{{

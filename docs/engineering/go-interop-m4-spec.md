@@ -36,7 +36,7 @@ and what to do next.
 
 ## User Flow
 
-1. User declares a `.gwdk` action, API, `load {}`, build helper, or contract
+1. User declares a `.gwdk` action, API, `server {}`, build helper, or contract
    reference.
 2. User runs `gowdk inspect go-bindings`.
 3. Report shows status, package path, expected symbol, signature/input metadata,

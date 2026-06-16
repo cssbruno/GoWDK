@@ -119,10 +119,9 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `server_requires_request_render`, `spa_disabled`, `ssr_disabled`,
   `missing_page_guard`, `public_guard_exclusive`, and
   `guard_requires_request_render`.
-- Request-time server view directives (`g:each`, `g:when`): `geach_invalid`,
-  `geach_requires_load`, `geach_nested_scope`, `gwhen_requires_load`,
-  `gwhen_nested_scope`, `gfor_over_load_data`, `gif_over_load_data`,
-  `ghtml_over_load_data`.
+- Server-lane view directives (`g:for`/`g:if` over `server {}` data):
+  `server_for_invalid`, `server_for_nested_scope`, `server_if_invalid`,
+  `server_if_nested_scope`, `ghtml_over_load_data`.
 - Backend endpoints: `invalid_backend_handler_name`,
   `invalid_go_endpoint_handler`, `malformed_go_endpoint_comment`,
   `go_endpoint_parse_error`, `duplicate_go_endpoint_comment`,

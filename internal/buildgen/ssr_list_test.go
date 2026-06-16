@@ -66,8 +66,8 @@ func buildSSRRegionArtifact(t *testing.T, loadBody, view string) SSRArtifact {
 		Blocks: gwdkir.Blocks{
 			Server:     true,
 			ServerBody: loadBody,
-			View:     view != "",
-			ViewBody: view,
+			View:       view != "",
+			ViewBody:   view,
 		},
 	}}}
 	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, t.TempDir())

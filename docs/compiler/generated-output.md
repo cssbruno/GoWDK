@@ -148,7 +148,7 @@ Implemented today:
 - Generated apps can serve concrete and dynamic SSR pages in the supported
   generated request-time slice. Dynamic route params are substituted into
   generated SSR placeholders with request-time HTML escaping. Declared
-  `load { => { field } }` pages call same-package Go load functions named
+  `server { => { field } }` pages call same-package Go load functions named
   `Load<PageID>` with `ssr.LoadContext` and replace declared load placeholders
   with escaped returned values. Load errors that wrap `ssr.RedirectError`
   become no-store local redirects; other load failures use generated error-page
@@ -309,7 +309,7 @@ Identity comes from `GOWDK_APP_ID`, `GOWDK_MODULE_NAME`, and
 `GOWDK_INSTANCE_ID`; if no instance ID is provided, the app creates one at
 process start from the module name, hostname, and a random token. It can also
 serve auto-detected POST redirect handlers for the first supported action
-subset and supported SSR/hybrid pages with or without declared `load {}`
+subset and supported SSR/hybrid pages with or without declared `server {}`
 identifier or dotted paths. SSR load functions can return safe local redirects with
 `ssr.RedirectTo`/`ssr.Redirect`, and generated SSR load failures render the
 route-local `error` page when declared or the optional `500.html` when

@@ -865,7 +865,7 @@ func TestValidatePageAllowsSSRWithAddon(t *testing.T) {
 		Render: gowdk.SSR,
 		Blocks: gwdkir.Blocks{
 			Server: true,
-			View: true,
+			View:   true,
 		},
 	}
 
@@ -4808,9 +4808,9 @@ func TestValidatePageRejectsInheritedRestRouteOnAPIEndpoints(t *testing.T) {
 		Route:  "/docs/{path...}",
 		Render: gowdk.SSR,
 		Blocks: gwdkir.Blocks{
-			View: true,
+			View:   true,
 			Server: true,
-			APIs: []gwdkir.API{{Name: "Save", Method: "POST"}},
+			APIs:   []gwdkir.API{{Name: "Save", Method: "POST"}},
 		},
 	}
 
@@ -4831,9 +4831,9 @@ func TestValidateManifestRejectsEndpointInsideRestRouteNamespace(t *testing.T) {
 			{
 				ID: "docs.lookup", Route: "/lookup", Render: gowdk.SSR, Source: "pages/docs-lookup.page.gwdk",
 				Blocks: gwdkir.Blocks{
-					View: true,
+					View:   true,
 					Server: true,
-					APIs: []gwdkir.API{{Name: "Lookup", Method: "GET", Route: "/docs/guides/intro"}},
+					APIs:   []gwdkir.API{{Name: "Lookup", Method: "GET", Route: "/docs/guides/intro"}},
 				},
 			},
 		},
@@ -4856,9 +4856,9 @@ func TestValidateManifestAllowsDifferentMethodEndpointBesideRestRoute(t *testing
 			{
 				ID: "docs.save", Route: "/save", Render: gowdk.SSR, Source: "pages/docs-save.page.gwdk",
 				Blocks: gwdkir.Blocks{
-					View: true,
+					View:   true,
 					Server: true,
-					APIs: []gwdkir.API{{Name: "Save", Method: "POST", Route: "/docs/guides/intro"}},
+					APIs:   []gwdkir.API{{Name: "Save", Method: "POST", Route: "/docs/guides/intro"}},
 				},
 			},
 		},
@@ -4916,7 +4916,7 @@ func TestValidatePageRejectsLoadOnSPAPage(t *testing.T) {
 		Route:  "/newsletter",
 		Render: gowdk.SPA,
 		Blocks: gwdkir.Blocks{
-			View: true,
+			View:   true,
 			Server: true,
 		},
 	}
@@ -4972,7 +4972,7 @@ func TestValidatePageAllowsHybridWithExplicitLoadAndSSRAddon(t *testing.T) {
 		Render: gowdk.Hybrid,
 		Blocks: gwdkir.Blocks{
 			Server: true,
-			View: true,
+			View:   true,
 		},
 	}
 

@@ -3,8 +3,8 @@
 Generated output exists for app-shell HTML, browser runtime assets, generated app
 source, local binaries, Go `js/wasm` artifacts, supported action/API/fragment
 handlers, guards, rate-limit hooks, concrete or dynamic SSR pages with declared
-`load {}` fields, and concrete or dynamic hybrid request-time pages with or
-without declared `load {}` data.
+`server {}` fields, and concrete or dynamic hybrid request-time pages with or
+without declared `server {}` data.
 Hybrid streaming/data refresh, richer generated-client reactivity, and
 production operations policy remain planned. This policy records constraints for
 generated files as that surface grows.

@@ -72,7 +72,7 @@ work.
 - Build-time page lane: full pages default to static SPA/prerender output.
 - Backend endpoint lane: actions, APIs, and fragments run at request time
   without making the page itself request-rendered.
-- Request-time page lane: pages with `load {}` or `go ssr {}` are compiled into
+- Request-time page lane: pages with `server {}` or `go server {}` are compiled into
   generated SSR handlers and run through GOWDK Runtime.
 
 SSR is integrated into the compiler/runtime code path and selected per page. The
@@ -119,7 +119,7 @@ keeping the route, handler, and runtime contracts explicit.
 - Actions and APIs bind to exact exported Go handlers with typed form decoding,
   explicit request context, safe response envelopes, CSRF, and production-safe
   error handling.
-- Request-time SSR pages can execute `load {}`, guards, typed route params,
+- Request-time SSR pages can execute `server {}`, guards, typed route params,
   request-aware layouts, redirects, and error boundaries through generated SSR
   handlers.
 - One-binary and split-binary deployments use the same route and endpoint
@@ -137,7 +137,7 @@ keeping the route, handler, and runtime contracts explicit.
   local UI state, but normal app contracts must not depend on user-written
   JavaScript.
 - Rendering: full pages default to build-time SPA output; request-time page
-  rendering is explicit with `load {}` or `go ssr {}`.
+  rendering is explicit with `server {}` or `go server {}`.
 - Deployment: one-binary production deploy must work with and without
   request-time page rendering.
 - Extensibility: actions, APIs, partials, SSR, embed, CSS processor addons, framework

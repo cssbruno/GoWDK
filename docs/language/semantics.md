@@ -4,7 +4,7 @@
 
 - Default render mode is `spa`.
 - Source pages do not declare render modes.
-- `load {}` or `go ssr {}` selects request-time SSR and requires the SSR addon.
+- `server {}` or `go server {}` selects request-time SSR and requires the SSR addon.
 - Page IDs must be unique within the manifest.
 - Component names must be unique within the manifest.
 - Dynamic build-time routes such as `/blog/{slug}` require a `paths {}` block.
@@ -16,7 +16,7 @@
   `X-GOWDK-Navigate` during navigation, mark `<html data-gowdk-navigating>`,
   dispatch `gowdk:navigate-start` / `gowdk:navigate-end`, and fall back to a
   normal browser navigation on unsupported or failed responses.
-- `load {}` runs at request time.
+- `server {}` runs at request time.
 - SPA pages may declare `act` blocks without SSR.
 
 ## Current Metadata Semantics
@@ -55,7 +55,7 @@
   SPA builds can also execute one imported no-argument Go function call such
   as `=> interop.FeaturedCopyForBuild()` when the page declares
   `import interop "github.com/..."`.
-- `load {}` runs at request time for SSR or request-time hybrid pages.
+- `server {}` runs at request time for SSR or request-time hybrid pages.
   Generated SSR supports `=> { field, user.name }` declarations and
   same-package Go load functions named `Load<PageID>` that receive
   `ssr.LoadContext`.

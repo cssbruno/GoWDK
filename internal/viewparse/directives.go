@@ -15,8 +15,8 @@ var supportedDirectiveNames = map[string]bool{
 	"g:bind:checked": true,
 	"g:bind:value":   true,
 	"g:command":      true,
-	"g:else":    true,
-	"g:else-if": true,
+	"g:else":         true,
+	"g:else-if":      true,
 	// g:event parses so the renderer can explain that domain events are
 	// backend-owned facts instead of emitting a generic unknown-directive error.
 	"g:event": true,

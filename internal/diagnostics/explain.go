@@ -139,6 +139,31 @@ view {
 }
 `,
 	},
+	"ssr_command_no_client": {
+		Details: "A request-time page (server {}, SSR, or hybrid) declares a g:command write form. Generated SPA/static pages ship a small client runtime that intercepts a g:command submit and applies the JSON the contract adapter returns, but request-time pages render live server data and ship no such client for the write path. The generated command adapter answers with application/json, so a plain browser submit navigates to the adapter route and replaces the page with raw JSON. This is a warning, not a build failure: the write path still compiles, it just breaks in the browser.",
+		NextSteps: []string{
+			"Replace g:command with a g:post action handler that calls the same contract and returns a response.Response such as response.RedirectTo, so the write path works without client JavaScript.",
+			"Keep g:command on a build-time SPA/action page, where the generated client runtime applies the adapter response.",
+		},
+		Invalid: `page board
+route "/board"
+server { => { columns } }
+
+view {
+  <form g:command="issues.CreateIssue"><input name="title" /></form>
+}
+`,
+		Fixed: `page board
+route "/board"
+server { => { columns } }
+
+act CreateIssue
+
+view {
+  <form g:post={CreateIssue}><input name="title" /></form>
+}
+`,
+	},
 	"spa_dynamic_route_missing_paths": {
 		Details: "Build-time SPA pages with dynamic route params need concrete paths at build time. Request-time pages can skip paths because params are decoded per request.",
 		NextSteps: []string{

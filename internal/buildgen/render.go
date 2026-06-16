@@ -317,18 +317,28 @@ func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, viewN
 	for _, href := range hrefs {
 		scripts = append(scripts, gowdk.Script{Src: href, Type: "module"})
 	}
+	usesPartial := pageUsesPartialRuntime(page, viewSource)
+	usesRealtime, err := pageUsesRealtimeRuntime(page, viewSource, viewNodes, components, queryTypeNames)
+	if err != nil {
+		return nil, err
+	}
 	if policy != renderModeSPA {
+		// Request-time (SSR/hybrid) pages render live server data but otherwise
+		// ship no client. They still need the client runtime when they declare
+		// partial-update or realtime query regions: without it a g:query region
+		// can never refetch and a g:target fragment form falls back to a full
+		// navigation. Emit the same small runtime here so request-time pages get
+		// progressive enhancement just like SPA pages.
+		if usesPartial || usesRealtime {
+			scripts = append(scripts, gowdk.Script{Src: clientRuntimeHref})
+		}
 		return scripts, nil
 	}
 	usesSPANavigation, err := pageUsesSPANavigationRuntime(config, page, viewSource, viewNodes, components)
 	if err != nil {
 		return nil, err
 	}
-	usesRealtime, err := pageUsesRealtimeRuntime(page, viewSource, viewNodes, components, queryTypeNames)
-	if err != nil {
-		return nil, err
-	}
-	if pageUsesPartialRuntime(page, viewSource) || usesSPANavigation || usesRealtime {
+	if usesPartial || usesSPANavigation || usesRealtime {
 		scripts = append(scripts, gowdk.Script{Src: clientRuntimeHref})
 	}
 	if len(page.Stores) > 0 {

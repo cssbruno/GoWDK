@@ -117,6 +117,16 @@ view {
 }
 ```
 
+`g:command` is a build-time (SPA/action) page feature: the generated client
+runtime applies the JSON the command adapter returns. A request-time page
+(`server {}`, SSR, or hybrid) ships no client for that write path, so a plain
+submit navigates to the adapter route and replaces the page with raw JSON. The
+compiler flags this with the `ssr_command_no_client` warning; on a request-time
+page use a `g:post` action handler that returns a `response.Response` (for
+example `response.RedirectTo`) instead. Request-time pages that declare realtime
+or invalidated `g:query` regions do receive the small client runtime so those
+regions can refetch.
+
 Normal Go owns the contracts and handlers:
 
 ```go

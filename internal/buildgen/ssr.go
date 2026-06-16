@@ -63,6 +63,8 @@ func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string
 	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
 	baseStylesheets = append(baseStylesheets, css.stylesheets...)
 	actionFields := pageActionInputFields(ir)
+	realtimeEventTypeNames := realtimeSubscriptionEventTypeNames(ir.RealtimeSubscriptions)
+	queryTypeNames := queryInvalidationTypeNames(ir.QueryInvalidations)
 
 	var artifacts []SSRArtifact
 	var failures []string
@@ -73,7 +75,7 @@ func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string
 		if !isRequestTimePage(config, page) {
 			continue
 		}
-		artifact, err := ssrArtifact(config, page, components, layouts, append(baseStylesheets, css.pageStylesheets[page.ID]...), actionFields[page.ID])
+		artifact, err := ssrArtifact(config, page, components, layouts, append(baseStylesheets, css.pageStylesheets[page.ID]...), actionFields[page.ID], realtimeEventTypeNames, queryTypeNames)
 		if err != nil {
 			failures = append(failures, err.Error())
 			continue
@@ -86,7 +88,7 @@ func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string
 	return artifacts, nil
 }
 
-func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField) (SSRArtifact, error) {
+func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, realtimeEventTypeNames map[string]string, queryTypeNames map[string]string) (SSRArtifact, error) {
 	render := page.RenderMode(config.Render.DefaultMode())
 	routeData, replacements := ssrRouteData(page)
 	buildData, err := parseBuildDataFromBlocks(page.Blocks, routeData, page.Imports, page.Source)
@@ -104,7 +106,7 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 	for key, value := range loadData {
 		data[key] = value
 	}
-	html, regions, err := renderPage(config, page, components, layouts, stylesheets, actionFields, data, nil, nil, renderModeRequestTime)
+	html, regions, err := renderPage(config, page, components, layouts, stylesheets, actionFields, data, realtimeEventTypeNames, queryTypeNames, renderModeRequestTime)
 	if err != nil {
 		return SSRArtifact{}, err
 	}

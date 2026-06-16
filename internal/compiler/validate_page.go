@@ -21,6 +21,7 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 	diagnostics = append(diagnostics, validateProtectedPageGuardRender(page, mode)...)
 	diagnostics = append(diagnostics, validatePageStores(page)...)
 	diagnostics = append(diagnostics, validatePageCachePolicy(page)...)
+	diagnostics = append(diagnostics, validatePageContractClient(page, mode)...)
 	for _, action := range page.Blocks.Actions {
 		if !isExportedHandlerName(action.Name) {
 			diagnostics = append(diagnostics, ValidationError{

@@ -141,6 +141,83 @@ func TestSSRArtifactsIncludeScopedJSScripts(t *testing.T) {
 	}
 }
 
+func TestSSRArtifactsEmitClientRuntimeForInvalidatedQueryRegions(t *testing.T) {
+	outputDir := t.TempDir()
+	config := gowdk.Config{Addons: []gowdk.Addon{
+		gowdk.NewAddon("ssr", gowdk.FeatureSSR),
+		gowdk.NewAddon("realtime", gowdk.FeatureRealtime),
+	}}
+	program := gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			Source: "pages/board.page.gwdk",
+			ID:     "board",
+			Route:  "/board",
+			Render: gowdk.SSR,
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><section g:query="issues.GetBoard">Board</section></main>`,
+			},
+		}},
+		QueryInvalidations: []gwdkir.QueryInvalidation{{
+			Query:         "issues.GetBoard",
+			QueryType:     "github.com/acme/app/issues.GetBoard",
+			Event:         "github.com/acme/app/issues.IssueCreated",
+			EventType:     "github.com/acme/app/issues.IssueCreated",
+			EventCategory: "domain",
+			Status:        gwdkir.ContractBindingBound,
+			OwnerKind:     gwdkir.SourcePage,
+			OwnerID:       "board",
+			Source:        "pages/board.page.gwdk",
+		}},
+	}
+
+	artifacts, err := SSRArtifactsFromIR(config, program, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected one SSR artifact, got %#v", artifacts)
+	}
+	html := artifacts[0].HTML
+	for _, expected := range []string{
+		`data-gowdk-query="issues.GetBoard"`,
+		`data-gowdk-query-type="github.com/acme/app/issues.GetBoard"`,
+		`<script src="` + clientRuntimeHref + `" defer></script>`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("expected %q in request-time page HTML:\n%s", expected, html)
+		}
+	}
+}
+
+func TestSSRArtifactsOmitClientRuntimeWithoutRuntimeRegions(t *testing.T) {
+	outputDir := t.TempDir()
+	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}
+	program := gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			Source: "pages/board.page.gwdk",
+			ID:     "board",
+			Route:  "/board",
+			Render: gowdk.SSR,
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><h1>Board</h1></main>`,
+			},
+		}},
+	}
+
+	artifacts, err := SSRArtifactsFromIR(config, program, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected one SSR artifact, got %#v", artifacts)
+	}
+	if strings.Contains(artifacts[0].HTML, clientRuntimeHref) {
+		t.Fatalf("did not expect client runtime on a plain request-time page:\n%s", artifacts[0].HTML)
+	}
+}
+
 func TestSSRArtifactsRenderHybridPageWithoutLoad(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{

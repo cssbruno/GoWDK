@@ -70,6 +70,7 @@ func TestReleaseTrustWorkflowCoverage(t *testing.T) {
 		"gowdk endpoints",
 		"inspect tree",
 		"inspect endpoint-graph",
+		"inspect asset-graph",
 	} {
 		if !strings.Contains(exampleReportText, expected) {
 			t.Fatalf("expected %q in check-example-reports.sh:\n%s", expected, exampleReportText)

@@ -128,7 +128,7 @@ func usage() {
 	fmt.Println("  sitemap [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
 	fmt.Println("  routes [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON")
 	fmt.Println("  endpoints [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print endpoint metadata JSON")
-	fmt.Println("  inspect ir|tree|endpoint-graph|go-bindings [--config <file>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...] print validated compiler inspection JSON")
+	fmt.Println("  inspect ir|tree|endpoint-graph|asset-graph|go-bindings [--config <file>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...] print validated compiler inspection JSON")
 	fmt.Println("  generate stubs [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] write missing action/API Go handler stubs")
 	fmt.Println("  explain [--json] <diagnostic-code> explain a diagnostic code and next steps")
 	fmt.Println("  doctor [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...] check local GOWDK environment and project health")

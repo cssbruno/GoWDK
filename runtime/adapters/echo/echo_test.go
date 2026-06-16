@@ -86,3 +86,11 @@ func TestMountOpenAPIRestRouteConformance(t *testing.T) {
 		return engine, err
 	})
 }
+
+func TestMountRoutesRebasesPrefixedRedirect(t *testing.T) {
+	conformance.AssertPrefixedRedirect(t, "/app", func(routes []gowdkadapters.Route, handler http.Handler, prefix string) (http.Handler, error) {
+		engine := echoframework.New()
+		err := MountRoutes(engine, routes, handler, WithPrefix(prefix))
+		return engine, err
+	})
+}

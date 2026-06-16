@@ -18,4 +18,5 @@ if [ "$extended" = true ]; then
 	go run ./cmd/gowdk endpoints --ssr $examples
 	go run ./cmd/gowdk inspect tree --json --ssr $examples
 	go run ./cmd/gowdk inspect endpoint-graph --json --ssr $examples
+	go run ./cmd/gowdk inspect asset-graph --json --ssr $examples
 fi

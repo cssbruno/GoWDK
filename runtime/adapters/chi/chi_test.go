@@ -84,6 +84,14 @@ func TestMountOpenAPIRestRouteConformance(t *testing.T) {
 	})
 }
 
+func TestMountRoutesRebasesPrefixedRedirect(t *testing.T) {
+	conformance.AssertPrefixedRedirect(t, "/app", func(routes []gowdkadapters.Route, handler http.Handler, prefix string) (http.Handler, error) {
+		router := chiframework.NewRouter()
+		err := MountRoutes(router, routes, handler, WithPrefix(prefix))
+		return router, err
+	})
+}
+
 func TestMountRoutesMatchesRestParam(t *testing.T) {
 	router := chiframework.NewRouter()
 	err := MountRoutes(router, []gowdkadapters.Route{

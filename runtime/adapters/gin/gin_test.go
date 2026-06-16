@@ -92,6 +92,15 @@ func TestMountOpenAPIRestRouteConformance(t *testing.T) {
 	})
 }
 
+func TestMountRoutesRebasesPrefixedRedirect(t *testing.T) {
+	ginframework.SetMode(ginframework.TestMode)
+	conformance.AssertPrefixedRedirect(t, "/app", func(routes []gowdkadapters.Route, handler http.Handler, prefix string) (http.Handler, error) {
+		engine := ginframework.New()
+		err := MountRoutes(engine, routes, handler, WithPrefix(prefix))
+		return engine, err
+	})
+}
+
 func TestMountRoutesReturnsGinConflict(t *testing.T) {
 	ginframework.SetMode(ginframework.TestMode)
 	engine := ginframework.New()

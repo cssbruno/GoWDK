@@ -5066,6 +5066,92 @@ func ListPatients(context.Context, *http.Request) (response.Response, error) {
 	}
 }
 
+func TestInspectAssetGraphCommandPrintsAssetEdges(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "pages", "dashboard.page.gwdk")
+	component := filepath.Join(root, "components", "badge.cmp.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, filepath.Join(root, "pages", "dashboard.js"), "export const dashboard = true;\n")
+	writeCLIFile(t, filepath.Join(root, "components", "badge.svg"), "<svg></svg>\n")
+	writeCLIFile(t, filepath.Join(root, "components", "badge.css"), ".badge { display: inline-flex; }\n")
+	writeCLIFile(t, page, `package pages
+
+use widgets "components"
+
+page dashboard
+route "/dashboard"
+
+js "./dashboard.js"
+
+view {
+  <main>
+    <widgets.Badge />
+  </main>
+}
+`)
+	writeCLIFile(t, component, `package components
+
+component Badge
+
+asset "./badge.svg"
+css "./badge.css"
+
+view {
+  <span class="badge">Asset</span>
+}
+`)
+
+	output, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"inspect", "asset-graph", "--json", "--config", config, page, component})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stderr != "" {
+		t.Fatalf("expected no inspect diagnostics on stderr, got:\n%s", stderr)
+	}
+
+	var report endpointGraphGolden
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("invalid asset graph JSON: %v\n%s", err, output)
+	}
+	if report.Version != 1 {
+		t.Fatalf("unexpected asset graph version: %d", report.Version)
+	}
+	pageNode, ok := findGraphNode(report.Nodes, "page", "dashboard")
+	if !ok || pageNode.Source != page {
+		t.Fatalf("expected source-linked dashboard page node, got %#v", pageNode)
+	}
+	componentNode, ok := findGraphNode(report.Nodes, "component", "Badge")
+	if !ok || componentNode.Source != component {
+		t.Fatalf("expected source-linked Badge component node, got %#v", componentNode)
+	}
+	jsNode, ok := findGraphNode(report.Nodes, "asset", "./dashboard.js")
+	if !ok || jsNode.Props["kind"] != "js" || jsNode.Props["ownerKind"] != "page" {
+		t.Fatalf("expected page JS asset node, got %#v", jsNode)
+	}
+	fileNode, ok := findGraphNode(report.Nodes, "asset", "./badge.svg")
+	if !ok || fileNode.Props["kind"] != "asset" || fileNode.Props["ownerKind"] != "component" {
+		t.Fatalf("expected component file asset node, got %#v", fileNode)
+	}
+	cssNode, ok := findGraphNode(report.Nodes, "asset", "./badge.css")
+	if !ok || cssNode.Props["ownerKind"] != "component" || cssNode.Props["scopeId"] == "" {
+		t.Fatalf("expected scoped component CSS asset node, got %#v", cssNode)
+	}
+	if !hasGraphEdgeToKind(report.Edges, report.Nodes, pageNode.ID, "template", "has_template") {
+		t.Fatalf("expected page -> template edge in %#v", report.Edges)
+	}
+	if !hasGraphEdge(report.Edges, pageNode.ID, jsNode.ID, "declares_asset") {
+		t.Fatalf("expected page -> JS asset edge in %#v", report.Edges)
+	}
+	if !hasGraphEdge(report.Edges, componentNode.ID, fileNode.ID, "declares_asset") {
+		t.Fatalf("expected component -> file asset edge in %#v", report.Edges)
+	}
+	if !hasGraphEdge(report.Edges, componentNode.ID, cssNode.ID, "declares_asset") {
+		t.Fatalf("expected component -> CSS asset edge in %#v", report.Edges)
+	}
+}
+
 func TestInspectGoBindingsCommandPrintsBindingReport(t *testing.T) {
 	root := t.TempDir()
 	writeCLITestModule(t, root, "example.com/gowdk-go-bindings")

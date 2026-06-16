@@ -45,6 +45,12 @@ type EndpointGraphReport struct {
 	Edges   []GraphEdge `json:"edges"`
 }
 
+type AssetGraphReport struct {
+	Version int         `json:"version"`
+	Nodes   []GraphNode `json:"nodes"`
+	Edges   []GraphEdge `json:"edges"`
+}
+
 type GraphNode struct {
 	ID     string         `json:"id"`
 	Kind   string         `json:"kind"`
@@ -419,9 +425,95 @@ func BuildEndpointGraph(config gowdk.Config, ir gwdkir.Program) EndpointGraphRep
 	return EndpointGraphReport{Version: 1, Nodes: builder.sortedNodes(), Edges: builder.sortedEdges()}
 }
 
+func BuildAssetGraph(ir gwdkir.Program) AssetGraphReport {
+	builder := graphBuilder{
+		nodes: map[string]GraphNode{},
+		edges: map[string]GraphEdge{},
+	}
+	ownerKinds := map[string]gwdkir.SourceKind{}
+	fallbackOwnerKinds := map[string]gwdkir.SourceKind{}
+	for _, page := range ir.Pages {
+		builder.addOwnerNode(gwdkir.SourcePage, page.Package, page.ID, page.Source, page.Spans.Page)
+		ownerKinds[assetOwnerKey(page.Package, page.ID, page.Source)] = gwdkir.SourcePage
+		fallbackOwnerKinds[assetOwnerFallbackKey(page.Package, page.ID)] = gwdkir.SourcePage
+	}
+	for _, component := range ir.Components {
+		builder.addOwnerNode(gwdkir.SourceComponent, component.Package, component.Name, component.Source, component.Span)
+		ownerKinds[assetOwnerKey(component.Package, component.Name, component.Source)] = gwdkir.SourceComponent
+		fallbackOwnerKinds[assetOwnerFallbackKey(component.Package, component.Name)] = gwdkir.SourceComponent
+	}
+	for _, layout := range ir.Layouts {
+		builder.addOwnerNode(gwdkir.SourceLayout, layout.Package, layout.ID, layout.Source, layout.Span)
+		ownerKinds[assetOwnerKey(layout.Package, layout.ID, layout.Source)] = gwdkir.SourceLayout
+		fallbackOwnerKinds[assetOwnerFallbackKey(layout.Package, layout.ID)] = gwdkir.SourceLayout
+	}
+	for _, template := range ir.Templates {
+		templateID := templateAssetGraphID(template.OwnerKind, template.Package, template.OwnerID)
+		builder.addNode(GraphNode{
+			ID:     templateID,
+			Kind:   "template",
+			Name:   template.OwnerID,
+			Source: template.Source,
+			Span:   sourceSpan(template.Span),
+			Props: props(
+				"ownerKind", string(template.OwnerKind),
+				"package", template.Package,
+				"route", template.Route,
+				"guards", append([]string(nil), template.Guards...),
+			),
+		})
+		builder.addEdge(ownerAssetGraphID(template.OwnerKind, template.Package, template.OwnerID), templateID, "has_template")
+	}
+	assets := append([]gwdkir.Asset(nil), ir.Assets...)
+	sort.Slice(assets, func(i, j int) bool { return assetSortKey(assets[i]) < assetSortKey(assets[j]) })
+	for _, asset := range assets {
+		sourceKind := assetSourceKind(asset, ownerKinds, fallbackOwnerKinds)
+		assetID := assetGraphID(asset, sourceKind)
+		builder.addNode(GraphNode{
+			ID:     assetID,
+			Kind:   "asset",
+			Name:   assetGraphName(asset),
+			Source: asset.Source,
+			Span:   sourceSpan(asset.Span),
+			Props: props(
+				"kind", string(asset.Kind),
+				"package", asset.Package,
+				"ownerId", asset.OwnerID,
+				"ownerKind", string(sourceKind),
+				"path", asset.Path,
+				"name", asset.Name,
+				"useAlias", asset.UseAlias,
+				"usePackage", asset.UsePackage,
+				"scopeId", asset.ScopeID,
+				"hashKey", asset.HashKey,
+				"inline", asset.Inline != "",
+			),
+		})
+		ownerID := ownerAssetGraphID(sourceKind, asset.Package, asset.OwnerID)
+		builder.addEdge(ownerID, assetID, "declares_asset")
+		if asset.UsePackage != "" {
+			packageID := nodeID("package", asset.UsePackage)
+			builder.addNode(GraphNode{ID: packageID, Kind: "package", Name: asset.UsePackage})
+			builder.addEdge(assetID, packageID, "uses_package")
+		}
+	}
+	return AssetGraphReport{Version: 1, Nodes: builder.sortedNodes(), Edges: builder.sortedEdges()}
+}
+
 type graphBuilder struct {
 	nodes map[string]GraphNode
 	edges map[string]GraphEdge
+}
+
+func (builder *graphBuilder) addOwnerNode(kind gwdkir.SourceKind, packageName, ownerID, sourcePath string, span source.SourceSpan) {
+	builder.addNode(GraphNode{
+		ID:     ownerAssetGraphID(kind, packageName, ownerID),
+		Kind:   string(kind),
+		Name:   ownerID,
+		Source: sourcePath,
+		Span:   sourceSpan(span),
+		Props:  props("package", packageName),
+	})
 }
 
 func (builder *graphBuilder) addNode(node GraphNode) {
@@ -570,6 +662,47 @@ func pageGraphID(packageName, pageID string) string {
 
 func guardGraphID(name string) string {
 	return nodeID("guard", name)
+}
+
+func ownerAssetGraphID(kind gwdkir.SourceKind, packageName, ownerID string) string {
+	return nodeID(string(kind), packageName, ownerID)
+}
+
+func templateAssetGraphID(kind gwdkir.SourceKind, packageName, ownerID string) string {
+	return nodeID("template", string(kind), packageName, ownerID)
+}
+
+func assetGraphID(asset gwdkir.Asset, sourceKind gwdkir.SourceKind) string {
+	return nodeID("asset", string(sourceKind), asset.Package, asset.OwnerID, string(asset.Kind), asset.Path, asset.Name)
+}
+
+func assetGraphName(asset gwdkir.Asset) string {
+	if asset.Name != "" {
+		return asset.Name
+	}
+	return asset.Path
+}
+
+func assetSourceKind(asset gwdkir.Asset, ownerKinds map[string]gwdkir.SourceKind, fallbackOwnerKinds map[string]gwdkir.SourceKind) gwdkir.SourceKind {
+	if kind := ownerKinds[assetOwnerKey(asset.Package, asset.OwnerID, asset.Source)]; kind != "" {
+		return kind
+	}
+	if kind := fallbackOwnerKinds[assetOwnerFallbackKey(asset.Package, asset.OwnerID)]; kind != "" {
+		return kind
+	}
+	return gwdkir.SourceComponent
+}
+
+func assetOwnerKey(packageName, ownerID, sourcePath string) string {
+	return strings.Join([]string{packageName, ownerID, sourcePath}, "\x00")
+}
+
+func assetOwnerFallbackKey(packageName, ownerID string) string {
+	return strings.Join([]string{packageName, ownerID}, "\x00")
+}
+
+func assetSortKey(asset gwdkir.Asset) string {
+	return strings.Join([]string{asset.Package, asset.OwnerID, string(asset.Kind), asset.Path, asset.Name}, "\x00")
 }
 
 func nodeID(parts ...string) string {

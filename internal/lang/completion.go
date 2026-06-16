@@ -63,6 +63,7 @@ func Completions() []Completion {
 		{Label: "g:else", Detail: "Fallback branch for a conditional element chain."},
 		{Label: "g:for", Detail: "Render a client/island state slice or array."},
 		{Label: "g:each", Detail: "Render a request-time server list over SSR load {} data."},
+		{Label: "g:when", Detail: "Render a branch when a server load {} field is truthy (or !field)."},
 		{Label: "g:key", Detail: "Declare the stable key for a repeated element."},
 		{Label: "g:ref", Detail: "Bind an element to a declared DOM ref."},
 		{Label: "class:", Detail: "Toggle a CSS class from a bool expression."},

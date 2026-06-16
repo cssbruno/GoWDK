@@ -46,8 +46,8 @@ func interpolateValue(ctx *renderContext, value string) (string, bool, error) {
 		if name == "" {
 			return "", false, fmt.Errorf("empty interpolation")
 		}
-		if ctx.serverList != nil {
-			placeholder, err := ctx.serverList.serverListFieldPlaceholder(name, ctx.idAllocator())
+		if ctx.serverScope != nil {
+			placeholder, err := ctx.serverScope.serverScopeFieldPlaceholder(name, ctx.idAllocator())
 			if err != nil {
 				return "", false, err
 			}

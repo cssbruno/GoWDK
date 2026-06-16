@@ -188,23 +188,24 @@ func ssrLoadStmts(route SSRRoute) []ast.Stmt {
 			)),
 		)
 	}
-	stmts = append(stmts, ssrListRenderStmts(route)...)
+	stmts = append(stmts, ssrRegionRenderStmts(route)...)
 	return stmts
 }
 
-// ssrListRenderStmts emits the request-time call that expands every top-level
-// g:each list in the page HTML from the resolved load data. The recursive
-// rendering and escape-by-default substitution live in the runtime list
-// renderer; generated code only supplies the static spec tree.
-func ssrListRenderStmts(route SSRRoute) []ast.Stmt {
-	if len(route.ListSpecs) == 0 {
+// ssrRegionRenderStmts emits the request-time call that expands every top-level
+// g:each list and g:when conditional in the page HTML from the resolved load
+// data. The recursive rendering and escape-by-default substitution live in the
+// runtime region renderer; generated code only supplies the static spec tree.
+func ssrRegionRenderStmts(route SSRRoute) []ast.Stmt {
+	if len(route.ListSpecs) == 0 && len(route.CondSpecs) == 0 {
 		return nil
 	}
 	return []ast.Stmt{
 		assign([]ast.Expr{id("html")}, call(
-			sel("gowdkssr", "RenderLists"),
+			sel("gowdkssr", "RenderRegions"),
 			id("html"),
 			ssrListSpecsExpr(route.ListSpecs),
+			ssrCondSpecsExpr(route.CondSpecs),
 			id("loadData"),
 		)),
 	}
@@ -230,10 +231,45 @@ func ssrListSpecExpr(spec SSRListSpec) ast.Expr {
 	if len(spec.Fields) > 0 {
 		elts = append(elts, keyValue("Fields", ssrListFieldsExpr(spec.Fields)))
 	}
-	if len(spec.Children) > 0 {
-		elts = append(elts, keyValue("Children", ssrListSpecsExpr(spec.Children)))
+	if len(spec.Lists) > 0 {
+		elts = append(elts, keyValue("Lists", ssrListSpecsExpr(spec.Lists)))
+	}
+	if len(spec.Conds) > 0 {
+		elts = append(elts, keyValue("Conds", ssrCondSpecsExpr(spec.Conds)))
 	}
 	return &ast.CompositeLit{Type: sel("gowdkssr", "ListSpec"), Elts: elts}
+}
+
+func ssrCondSpecsExpr(specs []SSRCondSpec) ast.Expr {
+	elts := make([]ast.Expr, 0, len(specs))
+	for _, spec := range specs {
+		elts = append(elts, ssrCondSpecExpr(spec))
+	}
+	return &ast.CompositeLit{
+		Type: &ast.ArrayType{Elt: sel("gowdkssr", "CondSpec")},
+		Elts: elts,
+	}
+}
+
+func ssrCondSpecExpr(spec SSRCondSpec) ast.Expr {
+	elts := []ast.Expr{
+		keyValue("Placeholder", stringLit(spec.Placeholder)),
+		keyValue("SourcePath", stringLit(spec.SourcePath)),
+	}
+	if spec.Negate {
+		elts = append(elts, keyValue("Negate", id("true")))
+	}
+	elts = append(elts, keyValue("Template", stringLit(spec.Template)))
+	if len(spec.Fields) > 0 {
+		elts = append(elts, keyValue("Fields", ssrListFieldsExpr(spec.Fields)))
+	}
+	if len(spec.Lists) > 0 {
+		elts = append(elts, keyValue("Lists", ssrListSpecsExpr(spec.Lists)))
+	}
+	if len(spec.Conds) > 0 {
+		elts = append(elts, keyValue("Conds", ssrCondSpecsExpr(spec.Conds)))
+	}
+	return &ast.CompositeLit{Type: sel("gowdkssr", "CondSpec"), Elts: elts}
 }
 
 func ssrListFieldsExpr(fields []SSRListField) ast.Expr {

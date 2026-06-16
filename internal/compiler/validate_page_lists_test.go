@@ -97,6 +97,70 @@ func TestValidateRejectsNestedGEachWrongScope(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsGIfOverLoadData(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { hasItems, count }`,
+			View:     true,
+			ViewBody: `<p g:if={hasItems}>You have {count}</p>`,
+		},
+	})
+	diag, ok := findCode(report, "gif_over_load_data")
+	if !ok {
+		t.Fatalf("expected gif_over_load_data diagnostic, got %v", report)
+	}
+	if !strings.Contains(diag.Message, "g:when={hasItems}") {
+		t.Fatalf("diagnostic should suggest g:when: %q", diag.Message)
+	}
+}
+
+func TestValidateAcceptsGWhenOverLoadData(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { hasItems, count }`,
+			View:     true,
+			ViewBody: `<section><p g:when={hasItems}>You have {count}</p><p g:when={!hasItems}>None</p></section>`,
+		},
+	})
+	for _, code := range []string{"gwhen_requires_load", "gwhen_nested_scope", "gif_over_load_data"} {
+		if _, ok := findCode(report, code); ok {
+			t.Fatalf("g:when over a load field should be accepted, got %s: %v", code, report)
+		}
+	}
+}
+
+func TestValidateRejectsGWhenOverNonLoadField(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { hasItems }`,
+			View:     true,
+			ViewBody: `<p g:when={ready}>x</p>`,
+		},
+	})
+	if _, ok := findCode(report, "gwhen_requires_load"); !ok {
+		t.Fatalf("expected gwhen_requires_load diagnostic, got %v", report)
+	}
+}
+
+func TestValidateAcceptsGWhenInsideEachRow(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { issues }`,
+			View:     true,
+			ViewBody: `<ul><li g:each={issue in issues}>{issue.id}<b g:when={issue.urgent}>!</b></li></ul>`,
+		},
+	})
+	for _, code := range []string{"gwhen_requires_load", "gwhen_nested_scope"} {
+		if _, ok := findCode(report, code); ok {
+			t.Fatalf("g:when referencing the row item should be accepted, got %s: %v", code, report)
+		}
+	}
+}
+
 func TestValidateRejectsGHTMLOverLoadData(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{

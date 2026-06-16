@@ -358,6 +358,12 @@ func elementDirectiveValues(node Element) (postDirectives, error) {
 			}
 			continue
 		}
+		if attr.Name == "g:when" {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return postDirectives{}, fmt.Errorf("g:when requires an expression value")
+			}
+			continue
+		}
 		if attr.Name == "g:key" {
 			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
 				return postDirectives{}, fmt.Errorf("g:key requires an expression value")

@@ -30,6 +30,7 @@ type SSRArtifact struct {
 	Replacements     []SSRReplacement
 	LoadReplacements []SSRLoadReplacement
 	ListSpecs        []SSRListSpec
+	CondSpecs        []SSRCondSpec
 }
 
 type SSRReplacement = source.SSRReplacement
@@ -37,6 +38,8 @@ type SSRReplacement = source.SSRReplacement
 type SSRLoadReplacement = source.SSRLoadReplacement
 
 type SSRListSpec = source.SSRListSpec
+
+type SSRCondSpec = source.SSRCondSpec
 
 func SSRArtifacts(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) ([]SSRArtifact, error) {
 	ir, _, err := compiler.AssembleProgram(config, sources)
@@ -100,14 +103,14 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 	for key, value := range loadData {
 		data[key] = value
 	}
-	html, listSpecs, err := renderPage(config, page, components, layouts, stylesheets, actionFields, data, nil, nil, renderModeRequestTime)
+	html, regions, err := renderPage(config, page, components, layouts, stylesheets, actionFields, data, nil, nil, renderModeRequestTime)
 	if err != nil {
 		return SSRArtifact{}, err
 	}
-	if len(listSpecs) > 0 && !page.Blocks.Load {
-		return SSRArtifact{}, fmt.Errorf("%s: g:each requires SSR load {} data", page.ID)
+	if !regions.empty() && !page.Blocks.Load {
+		return SSRArtifact{}, fmt.Errorf("%s: g:each and g:when require SSR load {} data", page.ID)
 	}
-	// A load field consumed only by g:each (resolved by the runtime list
+	// A load field consumed only by g:each/g:when (resolved by the runtime region
 	// renderer) leaves no scalar placeholder in the HTML. Drop those request-time
 	// replacements so the handler does not stringify and substitute a value that
 	// never appears in the output.
@@ -126,7 +129,8 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 		HTML:             html,
 		Replacements:     replacements,
 		LoadReplacements: loadReplacements,
-		ListSpecs:        listSpecs,
+		ListSpecs:        regions.Lists,
+		CondSpecs:        regions.Conds,
 	}, nil
 }
 

@@ -220,6 +220,7 @@ func ssrRoutes(artifacts []buildgen.SSRArtifact) []SSRRoute {
 			Replacements:     append([]SSRReplacement(nil), artifact.Replacements...),
 			LoadReplacements: append([]SSRLoadReplacement(nil), artifact.LoadReplacements...),
 			ListSpecs:        append([]SSRListSpec(nil), artifact.ListSpecs...),
+			CondSpecs:        append([]SSRCondSpec(nil), artifact.CondSpecs...),
 		})
 	}
 	return routes

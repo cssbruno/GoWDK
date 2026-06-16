@@ -80,6 +80,15 @@ func walkPageListNodes(page gwdkir.Page, nodes []viewmodel.Node, loadRoots map[s
 		if attr, has := elementAttr(element, "g:for"); has {
 			validatePageForDirective(page, attr, loadRoots, eachVars, diagnostics)
 		}
+		if attr, has := elementAttr(element, "g:if"); has {
+			validatePageIfDirective(page, attr, loadRoots, eachVars, diagnostics)
+		}
+		if attr, has := elementAttr(element, "g:else-if"); has {
+			validatePageIfDirective(page, attr, loadRoots, eachVars, diagnostics)
+		}
+		if attr, has := elementAttr(element, "g:when"); has {
+			validatePageWhenDirective(page, attr, loadRoots, eachVars, diagnostics)
+		}
 		if attr, has := elementAttr(element, "g:each"); has {
 			pushed, ok := validatePageEachDirective(page, attr, loadRoots, eachVars, diagnostics)
 			if ok {
@@ -87,6 +96,57 @@ func walkPageListNodes(page gwdkir.Page, nodes []viewmodel.Node, loadRoots map[s
 			}
 		}
 		walkPageListNodes(page, element.Children, loadRoots, childVars, diagnostics)
+	}
+}
+
+func validatePageIfDirective(page gwdkir.Page, attr viewmodel.Attr, loadRoots map[string]bool, eachVars []string, diagnostics *[]ValidationError) {
+	expr := strings.TrimSpace(attr.Value)
+	if expr == "" {
+		return
+	}
+	root := exprRoot(expr)
+	if containsString(eachVars, root) {
+		return
+	}
+	if loadRoots[root] {
+		*diagnostics = append(*diagnostics, ValidationError{
+			Code:    "gif_over_load_data",
+			PageID:  page.ID,
+			Source:  page.Source,
+			Span:    firstSpan(page.Blocks.Spans.View, page.Spans.Page),
+			Message: fmt.Sprintf("%s: %s cannot branch on request-time load {} data %q; %s binds client/island state. Render the server-side conditional with g:when={%s} (or g:when={!%s} for the empty branch)", page.ID, attr.Name, expr, attr.Name, expr, expr),
+		})
+	}
+}
+
+func validatePageWhenDirective(page gwdkir.Page, attr viewmodel.Attr, loadRoots map[string]bool, eachVars []string, diagnostics *[]ValidationError) {
+	expr := strings.TrimSpace(attr.Value)
+	expr = strings.TrimSpace(strings.TrimPrefix(expr, "!"))
+	if expr == "" {
+		return
+	}
+	root := exprRoot(expr)
+	if len(eachVars) == 0 {
+		if !loadRoots[root] {
+			*diagnostics = append(*diagnostics, ValidationError{
+				Code:    "gwhen_requires_load",
+				PageID:  page.ID,
+				Source:  page.Source,
+				Span:    firstSpan(page.Blocks.Spans.View, page.Spans.Page),
+				Message: fmt.Sprintf("%s: g:when condition %q must be an SSR load {} field; g:when renders request-time server data — use g:if for client/island state", page.ID, expr),
+			})
+		}
+		return
+	}
+	parent := eachVars[len(eachVars)-1]
+	if root != parent {
+		*diagnostics = append(*diagnostics, ValidationError{
+			Code:    "gwhen_nested_scope",
+			PageID:  page.ID,
+			Source:  page.Source,
+			Span:    firstSpan(page.Blocks.Spans.View, page.Spans.Page),
+			Message: fmt.Sprintf("%s: nested g:when condition %q must reference the enclosing row item %q (for example %s.field)", page.ID, expr, parent, parent),
+		})
 	}
 }
 

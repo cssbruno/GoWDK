@@ -34,8 +34,13 @@ var supportedDirectiveNames = map[string]bool{
 	"g:ref":       true,
 	"g:slot":      true,
 	"g:subscribe": true,
-	"g:swap":      true,
-	"g:target":    true,
+	// g:when is the server-side request-time conditional directive: it renders
+	// its branch only when an SSR load {} bool field is truthy (or, with a
+	// leading !, falsy). It is distinct from g:if, which binds client/island
+	// state.
+	"g:when":   true,
+	"g:swap":   true,
+	"g:target": true,
 }
 
 // supportedMessageDirectives are the g:message:* validation-message rules.
@@ -128,7 +133,7 @@ func validateRawHTMLDirective(name string, attrs []Attr, children []Node) error 
 		return fmt.Errorf("element with g:html must not declare children; the g:html expression provides the element content")
 	}
 	for _, attr := range attrs {
-		if attr.Name == "g:for" || attr.Name == "g:each" || attr.Name == "g:key" || strings.HasPrefix(attr.Name, "g:bind:") {
+		if attr.Name == "g:for" || attr.Name == "g:each" || attr.Name == "g:when" || attr.Name == "g:key" || strings.HasPrefix(attr.Name, "g:bind:") {
 			return fmt.Errorf("g:html cannot combine with %s", attr.Name)
 		}
 	}

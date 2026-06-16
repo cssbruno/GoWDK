@@ -171,6 +171,12 @@ Implemented today:
   a nested `g:each={child in item.children}` resolves its slice per parent row.
   See [ssr.md](ssr.md) for the full server-list contract. Use `g:each` for
   server data and `g:for` for client state; mixing the two is rejected.
+- Page elements can **conditionally render** request-time server data with
+  `g:when={field}` (or `g:when={!field}` for the inverse), the server-side
+  counterpart to `g:if`. The condition must be a declared `load {}` bool field;
+  the branch renders server-side and nests with `g:each`. Branching `load {}`
+  data with `g:if` is rejected at `gowdk check` with a diagnostic pointing at
+  `g:when`. See [ssr.md](ssr.md).
 - Client handlers can mutate state arrays with compiler-owned built-ins:
   `append(Items, { Field: expr })`, `remove(Items, index)`, and
   `move(Items, from, to)`.

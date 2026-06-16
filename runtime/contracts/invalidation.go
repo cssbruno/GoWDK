@@ -53,6 +53,16 @@ func QueryInvalidationCommandEventSink(fanout PresentationFanout, invalidations 
 	})
 }
 
+// InvalidatedQueryTypes returns the query types invalidated by the given command
+// events under the registered invalidation edges. The generated command adapter
+// uses it to tell the submitting client exactly which g:query regions to refresh
+// (the single-flight write path), independent of realtime fanout to other
+// clients. It returns nil when nothing is invalidated.
+func InvalidatedQueryTypes(invalidations []QueryInvalidation, events []EventEnvelope) []string {
+	queries, _ := invalidatedQueries(invalidations, events)
+	return queries
+}
+
 func invalidatedQueries(invalidations []QueryInvalidation, events []EventEnvelope) ([]string, []string) {
 	queries := map[string]bool{}
 	sourceEvents := map[string]bool{}

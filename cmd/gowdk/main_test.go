@@ -5357,12 +5357,12 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 		if err != nil {
 			t.Fatalf("%v\nstderr:\n%s", err, stderr)
 		}
-		// The fixture declares g:command on a request-time (server {}) page,
-		// which ships no client to apply the JSON adapter response, so a
-		// ssr_command_no_client warning is expected. It must stay a warning and
-		// not block the bindings report.
-		if !strings.Contains(stderr, `g:command "patients.CreatePatient"`) {
-			t.Fatalf("expected ssr_command_no_client warning on stderr, got:\n%s", stderr)
+		// The fixture declares g:command alongside a g:query region the command
+		// can refresh, so it has a reactive write path: the page ships the client
+		// runtime and the command's single-flight refresh applies to the region.
+		// ssr_command_no_client must therefore stay silent here.
+		if strings.Contains(stderr, `g:command "patients.CreatePatient"`) {
+			t.Fatalf("did not expect ssr_command_no_client warning for a command with a g:query region, got:\n%s", stderr)
 		}
 		output = stdout
 	})

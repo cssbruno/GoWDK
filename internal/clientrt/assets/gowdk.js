@@ -97,6 +97,97 @@
     return false;
   }
 
+  // submitCommand is the g:command write path. A bare submit of a command form
+  // would natively navigate to the adapter's raw JSON response; instead we post
+  // in the background, then refresh exactly the g:query regions the command
+  // invalidated. The adapter names those regions in the X-GOWDK-Queries response
+  // header (single-flight: the submitter updates without waiting for the realtime
+  // fanout that refreshes every other connected client). The typed result rides
+  // on the gowdk:command-success event so optimistic UI is possible but optional.
+  async function submitCommand(event) {
+    if (event.defaultPrevented) {
+      return;
+    }
+    var form = event.target && event.target.closest && event.target.closest('form[data-gowdk-command]');
+    if (!form) {
+      return;
+    }
+    // A form that also declares a partial target is handled by submitPartial.
+    if (form.hasAttribute('data-gowdk-target')) {
+      return;
+    }
+
+    if (!validateFormBeforeCommandSubmit(form)) {
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
+    form.setAttribute('aria-busy', 'true');
+    try {
+      var response = await traceFetch(form.getAttribute('action') || window.location.href, {
+        method: (form.getAttribute('method') || 'POST').toUpperCase(),
+        body: new FormData(form),
+        headers: {
+          'X-GOWDK-Command': '1'
+        }
+      }, { name: 'command submit', lane: 'command' });
+      if (!response.ok) {
+        throw await partialRequestError(response);
+      }
+      var result = null;
+      try {
+        result = await response.json();
+      } catch (parseError) {
+        result = null;
+      }
+      var queries = parseInvalidatedQueriesHeader(response.headers.get('X-GOWDK-Queries'));
+      form.dispatchEvent(new CustomEvent('gowdk:command-success', {
+        detail: { form: form, command: form.dataset.gowdkCommand || '', result: result, queries: queries }
+      }));
+      if (queries.length) {
+        await refreshInvalidatedQueries(queries, { command: form.dataset.gowdkCommand || '' });
+      }
+    } catch (error) {
+      form.dispatchEvent(new CustomEvent('gowdk:command-error', {
+        detail: {
+          form: form,
+          command: form.dataset.gowdkCommand || '',
+          error: error,
+          status: error && error.status || 0,
+          body: error && error.body || '',
+          response: error && error.response || null
+        }
+      }));
+    } finally {
+      form.removeAttribute('aria-busy');
+    }
+  }
+
+  function validateFormBeforeCommandSubmit(form) {
+    if (typeof form.checkValidity !== 'function' || form.checkValidity()) {
+      return true;
+    }
+    form.dispatchEvent(new CustomEvent('gowdk:validation-blocked', {
+      detail: { form: form }
+    }));
+    if (typeof form.reportValidity === 'function') {
+      form.reportValidity();
+    }
+    return false;
+  }
+
+  function parseInvalidatedQueriesHeader(header) {
+    if (!header) {
+      return [];
+    }
+    return header.split(',').map(function (query) {
+      return query.trim();
+    }).filter(function (query) {
+      return query;
+    });
+  }
+
   var prefetchedDocuments = {};
   var prefetchOrder = [];
   var prefetchLimit = 8;
@@ -110,6 +201,7 @@
 
   installTraceBridge();
   document.addEventListener('submit', submitPartial);
+  document.addEventListener('submit', submitCommand);
   document.addEventListener('click', navigateLink);
   document.addEventListener('mouseover', prefetchLink);
   document.addEventListener('mouseout', cancelHoverPrefetch);

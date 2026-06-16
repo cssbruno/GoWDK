@@ -661,6 +661,37 @@ func TestQueryInvalidationCommandEventSinkSendsGeneratedPresentationEvent(t *tes
 	}
 }
 
+func TestInvalidatedQueryTypesReturnsMatchedQueries(t *testing.T) {
+	invalidations := []QueryInvalidation{{
+		EventCategory: DomainEvent,
+		EventType:     typeName[patientCreated](),
+		QueryType:     typeName[patientPageQuery](),
+	}}
+	queries := InvalidatedQueryTypes(invalidations, []EventEnvelope{{
+		Category: DomainEvent,
+		Type:     typeName[patientCreated](),
+		Value:    patientCreated{ID: "patient-1"},
+	}})
+	if !reflect.DeepEqual(queries, []string{typeName[patientPageQuery]()}) {
+		t.Fatalf("InvalidatedQueryTypes = %#v, want the matched query type", queries)
+	}
+}
+
+func TestInvalidatedQueryTypesReturnsNilWhenNoEdgeMatches(t *testing.T) {
+	invalidations := []QueryInvalidation{{
+		EventCategory: DomainEvent,
+		EventType:     typeName[patientCreated](),
+		QueryType:     typeName[patientPageQuery](),
+	}}
+	queries := InvalidatedQueryTypes(invalidations, []EventEnvelope{{
+		Category: DomainEvent,
+		Type:     "example.com/app/contracts/other.Unrelated",
+	}})
+	if len(queries) != 0 {
+		t.Fatalf("InvalidatedQueryTypes = %#v, want nil for an unrelated event", queries)
+	}
+}
+
 func TestQueryInvalidationCommandEventSinkIgnoresFanoutErrors(t *testing.T) {
 	fanout := &recordingFanout{err: errors.New("offline")}
 	sink := QueryInvalidationCommandEventSink(fanout, []QueryInvalidation{{

@@ -25,7 +25,11 @@ func clientRuntimeArtifacts(config gowdk.Config, ir gwdkir.Program, outputDir st
 		if err != nil {
 			return nil, err
 		}
-		if pageUsesPartialRuntime(page, viewSource) || usesSPANavigation || usesRealtime {
+		usesCommand, err := pageUsesCommandRuntime(page, viewSource, viewNodes, components)
+		if err != nil {
+			return nil, err
+		}
+		if pageUsesPartialRuntime(page, viewSource) || usesSPANavigation || usesRealtime || usesCommand {
 			return []plannedAssetArtifact{{
 				AssetArtifact:        AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(clientRuntimeAssetPath))},
 				contents:             clientrt.Source(),

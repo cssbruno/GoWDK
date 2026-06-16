@@ -140,10 +140,10 @@ view {
 `,
 	},
 	"ssr_command_no_client": {
-		Details: "A request-time page (server {}, SSR, or hybrid) declares a g:command write form. Generated SPA/static pages ship a small client runtime that intercepts a g:command submit and applies the JSON the contract adapter returns, but request-time pages render live server data and ship no such client for the write path. The generated command adapter answers with application/json, so a plain browser submit navigates to the adapter route and replaces the page with raw JSON. This is a warning, not a build failure: the write path still compiles, it just breaks in the browser.",
+		Details: "A request-time page (server {}, SSR, or hybrid) declares a g:command write form but renders no g:query region the command can refresh. Request-time pages now ship the small client runtime, so a g:command submit posts in the background and applies the single-flight region refresh the adapter names in the X-GOWDK-Queries response header. With no reactive read region there is nothing to refresh: the submit only fires a gowdk:command-success event, and with client JavaScript disabled the bare POST navigates to the adapter's raw JSON. This is a warning, not a build failure: the write still compiles, it just has no visible reactive effect and no no-JS fallback.",
 		NextSteps: []string{
-			"Replace g:command with a g:post action handler that calls the same contract and returns a response.Response such as response.RedirectTo, so the write path works without client JavaScript.",
-			"Keep g:command on a build-time SPA/action page, where the generated client runtime applies the adapter response.",
+			"Add a g:query region the command's domain events invalidate, so the single-flight refresh has a region to apply.",
+			"Or replace g:command with a g:post action handler that calls the same contract and returns a response.Response such as response.RedirectTo, so the write path works without client JavaScript.",
 		},
 		Invalid: `page board
 route "/board"
@@ -157,10 +157,9 @@ view {
 route "/board"
 server { => { columns } }
 
-act CreateIssue
-
 view {
-  <form g:post={CreateIssue}><input name="title" /></form>
+  <section g:query="issues.GetBoard">{columns}</section>
+  <form g:command="issues.CreateIssue"><input name="title" /></form>
 }
 `,
 	},

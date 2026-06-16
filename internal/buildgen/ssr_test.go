@@ -190,6 +190,36 @@ func TestSSRArtifactsEmitClientRuntimeForInvalidatedQueryRegions(t *testing.T) {
 	}
 }
 
+func TestSSRArtifactsEmitClientRuntimeForCommandWriteForm(t *testing.T) {
+	outputDir := t.TempDir()
+	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}
+	program := gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			Source: "pages/board.page.gwdk",
+			ID:     "board",
+			Route:  "/board",
+			Render: gowdk.SSR,
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><form g:command="issues.CreateIssue"><input name="title" /></form></main>`,
+			},
+		}},
+	}
+
+	artifacts, err := SSRArtifactsFromIR(config, program, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected one SSR artifact, got %#v", artifacts)
+	}
+	// A g:command write form needs the interceptor so a submit posts in the
+	// background instead of navigating to the adapter's raw JSON.
+	if !strings.Contains(artifacts[0].HTML, `<script src="`+clientRuntimeHref+`" defer></script>`) {
+		t.Fatalf("expected client runtime on a request-time page with a g:command form:\n%s", artifacts[0].HTML)
+	}
+}
+
 func TestSSRArtifactsOmitClientRuntimeWithoutRuntimeRegions(t *testing.T) {
 	outputDir := t.TempDir()
 	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}

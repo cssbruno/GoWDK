@@ -322,14 +322,20 @@ func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, viewN
 	if err != nil {
 		return nil, err
 	}
+	usesCommand, err := pageUsesCommandRuntime(page, viewSource, viewNodes, components)
+	if err != nil {
+		return nil, err
+	}
 	if policy != renderModeSPA {
 		// Request-time (SSR/hybrid) pages render live server data but otherwise
 		// ship no client. They still need the client runtime when they declare
 		// partial-update or realtime query regions: without it a g:query region
 		// can never refetch and a g:target fragment form falls back to a full
-		// navigation. Emit the same small runtime here so request-time pages get
-		// progressive enhancement just like SPA pages.
-		if usesPartial || usesRealtime {
+		// navigation. A g:command write form needs it too, otherwise a bare submit
+		// natively navigates to the adapter's raw JSON response. Emit the same
+		// small runtime here so request-time pages get progressive enhancement
+		// just like SPA pages.
+		if usesPartial || usesRealtime || usesCommand {
 			scripts = append(scripts, gowdk.Script{Src: clientRuntimeHref})
 		}
 		return scripts, nil
@@ -338,7 +344,7 @@ func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, viewN
 	if err != nil {
 		return nil, err
 	}
-	if usesPartial || usesSPANavigation || usesRealtime {
+	if usesPartial || usesSPANavigation || usesRealtime || usesCommand {
 		scripts = append(scripts, gowdk.Script{Src: clientRuntimeHref})
 	}
 	if len(page.Stores) > 0 {
@@ -384,6 +390,40 @@ func pageUsesRealtimeRuntime(page gwdkir.Page, viewSource string, viewNodes []vi
 		}
 	}
 	return false, nil
+}
+
+// pageUsesCommandRuntime reports whether the page (or a component it renders)
+// declares a g:command write form. Such forms need the client interceptor so a
+// submit posts in the background and applies the server's region refresh,
+// instead of natively navigating to the adapter's raw JSON response.
+func pageUsesCommandRuntime(page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component) (bool, error) {
+	if viewHasCommandForm(viewSource, viewNodes) {
+		return true, nil
+	}
+	usages, err := recursiveViewComponentCallUsagesForView(viewSource, viewNodes, components, page.Package, componentUses(page.Uses))
+	if err != nil {
+		return false, err
+	}
+	for _, usage := range usages {
+		if viewHasCommandForm(usage.component.Body, usage.component.Nodes) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func viewHasCommandForm(source string, nodes []view.Node) bool {
+	if !strings.Contains(source, "g:command") && len(nodes) == 0 {
+		return false
+	}
+	var refs []viewanalysis.CommandReference
+	var err error
+	if len(nodes) > 0 {
+		refs, err = viewanalysis.CommandReferencesFromNodes(nodes)
+	} else {
+		refs, err = viewanalysis.CommandReferences(source)
+	}
+	return err == nil && len(refs) > 0
 }
 
 func viewHasRealtimeSubscription(source string, nodes []view.Node) bool {

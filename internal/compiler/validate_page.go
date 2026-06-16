@@ -187,13 +187,14 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 
 	if page.Blocks.Server && mode != gowdk.SSR && mode != gowdk.Hybrid {
 		diagnostics = append(diagnostics, ValidationError{
-			Code:   "load_requires_request_render",
+			Code:   "server_requires_request_render",
 			PageID: page.ID,
 			Source: page.Source,
 			Span:   firstSpan(page.Blocks.Spans.Server, page.Spans.Render, page.Spans.Page),
 			Message: fmt.Sprintf(
-				"%s declares server {}, but load runs at request time and requires the SSR addon",
+				"%s declares server {} but render mode is %s; server {} is the server lane and renders the page per request. Drop the conflicting render mode (server {} alone implies request-time rendering), or remove server {} for a build-time page",
 				page.ID,
+				mode,
 			),
 		})
 	}

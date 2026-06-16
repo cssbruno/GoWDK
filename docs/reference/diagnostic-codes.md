@@ -116,7 +116,7 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `malformed_route`, `duplicate_route_param`, `duplicate_route`,
   `ambiguous_dynamic_route`, `route_method_conflict`, `missing_view_block`,
   `missing_ssr_addon`, `spa_dynamic_route_missing_paths`,
-  `load_requires_request_render`, `spa_disabled`, `ssr_disabled`,
+  `server_requires_request_render`, `spa_disabled`, `ssr_disabled`,
   `missing_page_guard`, `public_guard_exclusive`, and
   `guard_requires_request_render`.
 - Request-time server view directives (`g:each`, `g:when`): `geach_invalid`,

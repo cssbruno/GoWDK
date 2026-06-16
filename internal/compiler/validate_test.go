@@ -4925,7 +4925,7 @@ func TestValidatePageRejectsLoadOnSPAPage(t *testing.T) {
 	if len(diagnostics) != 1 {
 		t.Fatalf("expected 1 diagnostic, got %d", len(diagnostics))
 	}
-	if diagnostics[0].Code != "load_requires_request_render" {
+	if diagnostics[0].Code != "server_requires_request_render" {
 		t.Fatalf("unexpected diagnostic code: %s", diagnostics[0].Code)
 	}
 }

@@ -59,7 +59,7 @@ func TestGenerateWritesServerListRenderer(t *testing.T) {
 	}
 
 	for _, expected := range []string{
-		`gowdkssr "github.com/cssbruno/gowdk/addons/ssr"`,
+		`gowdkssr "github.com/cssbruno/gowdk/runtime/ssr"`,
 		`html = gowdkssr.RenderRegions(html, []gowdkssr.ListSpec{`,
 		`Placeholder: "__GOWDK_SSR_LIST_s1__"`,
 		`SourcePath: "columns"`,
@@ -120,7 +120,7 @@ func TestGeneratedBinaryExecutesServerList(t *testing.T) {
 	}
 	writeTestFile(t, filepath.Join(appDir, "board", "board.go"), `package board
 
-import "github.com/cssbruno/gowdk/addons/ssr"
+import "github.com/cssbruno/gowdk/runtime/ssr"
 
 func LoadBoard(ssr.LoadContext) (map[string]any, error) {
 	return map[string]any{
@@ -219,7 +219,7 @@ func TestGeneratedBinaryExecutesServerConditional(t *testing.T) {
 import (
 	"net/http"
 
-	"github.com/cssbruno/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk/runtime/ssr"
 )
 
 func LoadBoard(ctx ssr.LoadContext) (map[string]any, error) {
@@ -301,7 +301,7 @@ func TestGeneratedBinaryDoesNotExpandRegionTokenInScalar(t *testing.T) {
 	}
 	writeTestFile(t, filepath.Join(appDir, "board", "board.go"), `package board
 
-import "github.com/cssbruno/gowdk/addons/ssr"
+import "github.com/cssbruno/gowdk/runtime/ssr"
 
 func LoadBoard(ssr.LoadContext) (map[string]any, error) {
 	return map[string]any{

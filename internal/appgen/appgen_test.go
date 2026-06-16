@@ -131,6 +131,12 @@ func assertNoOptionalGeneratedAppDependencies(t *testing.T, payloads ...[]byte) 
 	t.Helper()
 
 	forbidden := []string{
+		"github.com/cssbruno/gowdk/addons/actions",
+		"github.com/cssbruno/gowdk/addons/api",
+		"github.com/cssbruno/gowdk/addons/partial",
+		"github.com/cssbruno/gowdk/addons/ratelimit",
+		"github.com/cssbruno/gowdk/addons/realtime",
+		"github.com/cssbruno/gowdk/addons/ssr",
 		"github.com/cssbruno/gowdk/addons/tailwind",
 		"github.com/cssbruno/gowdk/runtime/adapters/chi",
 		"github.com/cssbruno/gowdk/runtime/adapters/echo",
@@ -772,7 +778,7 @@ func TestGenerateWritesRealtimeFanoutForSubscriptions(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`gowdkrealtime "github.com/cssbruno/gowdk/addons/realtime"`,
+		`gowdkrealtime "github.com/cssbruno/gowdk/runtime/realtime"`,
 		`const RealtimeEventsPath = "/_gowdk/realtime/events"`,
 		`mux.Handle(RealtimeEventsPath, realtimeEventsHandler())`,
 		`var realtimeFanout gowdkrealtime.PresentationFanout = gowdkrealtime.NewSSE()`,
@@ -1092,7 +1098,7 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 		`value := os.Getenv("GOWDK_TEST_DATABASE_URL")`,
 		`missing = append(missing, "GOWDK_TEST_DATABASE_URL is required but is not set")`,
 		`func newBackendRouter() (*gowdkruntime.BackendRouter, error)`,
-		`gowdkpartial "github.com/cssbruno/gowdk/addons/partial"`,
+		`gowdkpartial "github.com/cssbruno/gowdk/runtime/partial"`,
 		`gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", Handler: action}`,
 		`gowdkruntime.BackendRoute{Method: http.MethodGet, Path: "/patients/list", Kind: "fragment", Handler: fragment}`,
 		`func fragment(response http.ResponseWriter, request *http.Request) bool`,
@@ -1399,7 +1405,7 @@ func TestGenerateWiresCSRFByDefault(t *testing.T) {
 	source := string(payload)
 	for _, expected := range []string{
 		`errors`,
-		`gowdkactions "github.com/cssbruno/gowdk/addons/actions"`,
+		`gowdkactions "github.com/cssbruno/gowdk/runtime/actions"`,
 		`CSRF: csrfTokenSource,`,
 		`var csrfTokenSource *gowdkactions.CSRF`,
 		`var csrfErr error`,
@@ -1461,7 +1467,7 @@ func TestGenerateWiresCSRFForStateChangingAPIs(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`gowdkactions "github.com/cssbruno/gowdk/addons/actions"`,
+		`gowdkactions "github.com/cssbruno/gowdk/runtime/actions"`,
 		`CSRF: csrfTokenSource,`,
 		`var csrfTokenSource *gowdkactions.CSRF`,
 		`var csrfValidator gowdkactions.CSRFValidator`,
@@ -1564,7 +1570,7 @@ func TestGenerateWiresCSRFForCommandContracts(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`gowdkactions "github.com/cssbruno/gowdk/addons/actions"`,
+		`gowdkactions "github.com/cssbruno/gowdk/runtime/actions"`,
 		`CSRF: csrfTokenSource,`,
 		`var csrfTokenSource *gowdkactions.CSRF`,
 		`var csrfErr error`,
@@ -1745,7 +1751,7 @@ func TestGenerateRunsRateLimitAndGuardsBeforeContractExecution(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`gowdkratelimit "github.com/cssbruno/gowdk/addons/ratelimit"`,
+		`gowdkratelimit "github.com/cssbruno/gowdk/runtime/ratelimit"`,
 		`gowdkauth "github.com/cssbruno/gowdk/runtime/auth"`,
 		`gowdkguard "github.com/cssbruno/gowdk/runtime/guard"`,
 		`func RegisterRateLimiter(limiter *gowdkratelimit.Limiter)`,
@@ -1895,7 +1901,7 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 	if strings.Contains(source, `gowdkresponse.RedirectTo("/dashboard")`) || strings.Contains(source, `<p>ignored</p>`) {
 		t.Fatalf("bound action must keep redirect and fragment policy in the user Go response:\n%s", source)
 	}
-	if strings.Contains(source, `gowdkpartial "github.com/cssbruno/gowdk/addons/partial"`) {
+	if strings.Contains(source, `gowdkpartial "github.com/cssbruno/gowdk/runtime/partial"`) {
 		t.Fatalf("bound action fragments must not import partial helpers when generated partial branches are not emitted:\n%s", source)
 	}
 }
@@ -1966,7 +1972,7 @@ func TestGenerateDoesNotImportMissingOrUnsupportedBackendPackages(t *testing.T) 
 	for _, forbidden := range []string{
 		`"example.com/app/missing"`,
 		`"example.com/app/status"`,
-		`gowdkpartial "github.com/cssbruno/gowdk/addons/partial"`,
+		`gowdkpartial "github.com/cssbruno/gowdk/runtime/partial"`,
 		`missing.Submit(`,
 		`status.Status(`,
 		`<p>ignored</p>`,
@@ -2464,7 +2470,7 @@ func TestGenerateWritesActionFragmentHandler(t *testing.T) {
 	source := string(payload)
 	for _, expected := range []string{
 		`gowdkform "github.com/cssbruno/gowdk/runtime/form"`,
-		`gowdkpartial "github.com/cssbruno/gowdk/addons/partial"`,
+		`gowdkpartial "github.com/cssbruno/gowdk/runtime/partial"`,
 		`gowdkresponse "github.com/cssbruno/gowdk/runtime/response"`,
 		`partial := strings.TrimSpace(request.Header.Get("X-GOWDK-Partial"))`,
 		`fragment := gowdkpartial.Fragment("#patients", "<section><p>Updated patients</p></section>")`,
@@ -2643,7 +2649,7 @@ func TestGenerateWritesSSRLoadHandler(t *testing.T) {
 	source := string(payload)
 	for _, expected := range []string{
 		`dashboard "example.com/app/dashboard"`,
-		`gowdkssr "github.com/cssbruno/gowdk/addons/ssr"`,
+		`gowdkssr "github.com/cssbruno/gowdk/runtime/ssr"`,
 		`"fmt"`,
 		`ErrorPages: gowdkruntime.LoadErrorPagesWith(root, gowdkruntime.ErrorPage{Path: "errors/dashboard.html"})`,
 		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "ssr", ErrorPage: "errors/dashboard.html", Guards: []string{"public"}, HasLoad: true})`,
@@ -3164,7 +3170,7 @@ func TestGenerateWiresRateLimiterWhenEnabled(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`gowdkratelimit "github.com/cssbruno/gowdk/addons/ratelimit"`,
+		`gowdkratelimit "github.com/cssbruno/gowdk/runtime/ratelimit"`,
 		`gowdkguard "github.com/cssbruno/gowdk/runtime/guard"`,
 		`var rateLimiter *gowdkratelimit.Limiter`,
 		`func RegisterRateLimiter(limiter *gowdkratelimit.Limiter)`,
@@ -4048,7 +4054,7 @@ func TestGeneratedBinaryExecutesSSRLoadUserLogic(t *testing.T) {
 	}
 	writeTestFile(t, filepath.Join(appDir, "dashboard", "dashboard.go"), `package dashboard
 
-import "github.com/cssbruno/gowdk/addons/ssr"
+import "github.com/cssbruno/gowdk/runtime/ssr"
 
 func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	type requestData struct {
@@ -4110,7 +4116,7 @@ func TestGeneratedBinaryExecutesInlineSSRScriptLoad(t *testing.T) {
 		Guards:  []string{"public"},
 		Imports: []gwdkir.Import{{
 			Alias: "ssr",
-			Path:  "github.com/cssbruno/gowdk/addons/ssr",
+			Path:  "github.com/cssbruno/gowdk/runtime/ssr",
 		}},
 		Blocks: gwdkir.Blocks{
 			Server:     true,
@@ -4534,7 +4540,7 @@ func TestGeneratedBinaryUsesCustomSSRLoadErrorPage(t *testing.T) {
 import (
 	"errors"
 
-	"github.com/cssbruno/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk/runtime/ssr"
 )
 
 func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
@@ -4610,7 +4616,7 @@ func TestGeneratedBinaryUsesCustomSSRPanicErrorPage(t *testing.T) {
 	}
 	writeTestFile(t, filepath.Join(appDir, "dashboard", "dashboard.go"), `package dashboard
 
-import "github.com/cssbruno/gowdk/addons/ssr"
+import "github.com/cssbruno/gowdk/runtime/ssr"
 
 func LoadDashboard(ctx ssr.LoadContext) map[string]any {
 	panic("secret database detail")
@@ -5818,7 +5824,7 @@ func TestGeneratedBinaryRegisteredGuardsAllowRequestTimeRoutes(t *testing.T) {
 	}
 	writeTestFile(t, filepath.Join(appDir, appPackageDirName, "guards_register.go"), `package gowdkapp
 
-import gowdkssr "github.com/cssbruno/gowdk/addons/ssr"
+import gowdkssr "github.com/cssbruno/gowdk/runtime/ssr"
 
 func GOWDKGuardRegistry() gowdkssr.GuardRegistry {
 	return gowdkssr.GuardRegistry{
@@ -6030,7 +6036,7 @@ func TestGeneratedBinaryAppliesRegisteredRateLimiter(t *testing.T) {
 import (
 	"time"
 
-	gowdkratelimit "github.com/cssbruno/gowdk/addons/ratelimit"
+	gowdkratelimit "github.com/cssbruno/gowdk/runtime/ratelimit"
 )
 
 func init() {

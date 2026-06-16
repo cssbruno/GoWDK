@@ -5,6 +5,17 @@ packages, and tooling contracts may change before 1.0.
 
 ## Unreleased
 
+### Changed
+
+- **Split addon registration from request-time runtime helpers (#428).**
+  Generated apps now import request-time helpers from `runtime/actions`,
+  `runtime/api`, `runtime/partial`, `runtime/ratelimit`, `runtime/realtime`, and
+  `runtime/ssr` instead of the corresponding `addons/*` packages. The addon
+  packages remain the config-facing `Addon()`/`ImportPath` packages and
+  re-export their runtime helpers for 0.x compatibility. The compiler accepts
+  both `addons/ssr.LoadContext` and `runtime/ssr.LoadContext` for load handler
+  signatures during migration.
+
 ## v0.6.0 - 2026-06-16
 
 ### Breaking

@@ -5,10 +5,10 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
-	gowdkssr "github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
+	gowdkssr "github.com/cssbruno/gowdk/runtime/ssr"
 )
 
 func toRuntimeListSpecs(specs []source.SSRListSpec) []gowdkssr.ListSpec {

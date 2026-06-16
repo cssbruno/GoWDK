@@ -531,7 +531,10 @@ func ssrUsesLoad(routes []SSRRoute) bool {
 		if len(route.Guards) == 0 {
 			continue
 		}
-		if route.HasLoad {
+		if route.HasLoad && route.LoadBinding.Status == source.BackendBindingBound {
+			return true
+		}
+		if len(route.ListSpecs) > 0 || len(route.CondSpecs) > 0 {
 			return true
 		}
 	}
@@ -547,7 +550,7 @@ func ssrUsesLoadReplacements(routes []SSRRoute) bool {
 		if len(route.Guards) == 0 {
 			continue
 		}
-		if len(route.LoadReplacements) > 0 {
+		if route.LoadBinding.Status == source.BackendBindingBound && len(route.LoadReplacements) > 0 {
 			return true
 		}
 	}

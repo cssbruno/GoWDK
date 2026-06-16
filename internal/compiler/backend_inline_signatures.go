@@ -140,7 +140,7 @@ func loadSignature(function *ast.FuncType, imports map[string]string) (source.Ba
 	if function == nil || function.Params == nil || function.Results == nil {
 		return "", false
 	}
-	if len(function.Params.List) != 1 || !isSelector(function.Params.List[0].Type, imports, ssrImportPath, "LoadContext") {
+	if len(function.Params.List) != 1 || !isLoadContextSelector(function.Params.List[0].Type, imports) {
 		return "", false
 	}
 	if len(function.Results.List) == 1 && isMapStringAny(function.Results.List[0].Type) {
@@ -166,6 +166,11 @@ func isMapStringAny(expression ast.Expr) bool {
 	}
 	_, ok = mapType.Value.(*ast.InterfaceType)
 	return ok
+}
+
+func isLoadContextSelector(expression ast.Expr, imports map[string]string) bool {
+	return isSelector(expression, imports, ssrImportPath, "LoadContext") ||
+		isSelector(expression, imports, runtimeSSRImportPath, "LoadContext")
 }
 
 func isSelector(expression ast.Expr, imports map[string]string, importPath, name string) bool {

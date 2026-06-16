@@ -128,6 +128,7 @@ func isTypedPointerToNamed(typ types.Type, importPath, name string) bool {
 
 func isTypedLoadContext(typ types.Type) bool {
 	return isTypedNamed(typ, ssrImportPath, "LoadContext") ||
+		isTypedNamed(typ, runtimeSSRImportPath, "LoadContext") ||
 		isTypedNamed(typ, guardImportPath, "Context")
 }
 

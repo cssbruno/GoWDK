@@ -4,21 +4,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/cssbruno/gowdk"
 )
 
-func TestAddonRegistersAPIFeature(t *testing.T) {
-	addon := Addon()
-	if addon.Name() != "api" {
-		t.Fatalf("unexpected addon name: %q", addon.Name())
-	}
-	if !(gowdk.Config{Addons: []gowdk.Addon{addon}}).HasFeature(gowdk.FeatureAPI) {
-		t.Fatal("expected api feature")
-	}
-}
-
-func TestRuntimeReExports(t *testing.T) {
+func TestRegistryStoresHTTPHandlers(t *testing.T) {
 	registry := Registry{
 		"health": func(writer http.ResponseWriter, request *http.Request) {
 			writer.WriteHeader(http.StatusNoContent)

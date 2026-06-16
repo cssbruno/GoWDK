@@ -5,6 +5,39 @@ packages, and tooling contracts may change before 1.0.
 
 ## Unreleased
 
+### Breaking
+
+- **The lane model: name the three execution lanes and infer directive lanes.**
+  GOWDK has three execution lanes — build-time, request-time on the server, and
+  the browser — and they are now named consistently. The server lane is no longer
+  split across two unrelated keywords:
+  - `load {}` → **`server {}`** (request-time server-lane data).
+  - `go ssr {}` → **`go server {}`** (request-time server-lane Go behavior).
+  - `go build {}` is accepted as the explicit form of the default `go {}`
+    build-lane block.
+  - Declaring a `server {}` block now implies request-time rendering, so a page no
+    longer also declares a render mode.
+
+  The directive twins are folded into one directive each, with the lane inferred
+  from the operand's data source:
+  - `g:each` → **`g:for`**, `g:when` → **`g:if`**. Over a `server {}` field they
+    render server-side (the former `g:each`/`g:when`); over client `state`/`store`
+    they bind a reactive island. A top-level server `g:if` now accepts a full bool
+    expression (`g:if={count > 0 && status == "open"}`) evaluated at request time.
+
+  All removed keywords (`load`, `go ssr`, `g:each`, `g:when`) parse to a precise
+  migration nudge pointing at the new name — there are no silent aliases.
+
+  **Migration:** rename `load {}`→`server {}`, `go ssr {}`→`go server {}`,
+  `g:each={x in xs}`→`g:for={x in xs}`, and `g:when={f}`→`g:if={f}` in `.gwdk`
+  sources. The `Load<PageID>` handler convention and `ssr.LoadContext` are
+  unchanged. Internal SSR naming (the `addons/ssr` package, the `"ssr"` addon, the
+  `gowdk.SSR` render mode) is unchanged — SSR remains the rendering technique that
+  powers the server lane. Diagnostic codes `geach_*`/`gwhen_*`/`gfor_over_load_data`/
+  `gif_over_load_data` are replaced by `server_for_*`/`server_if_*`; `load`/`go ssr`
+  errors became `server_requires_request_render`/`go_server_requires_request_render`
+  with a `go_ssr_renamed_to_server` nudge.
+
 ### Implemented
 
 - **OS-level playground sandbox (#459).** `gowdk playground run

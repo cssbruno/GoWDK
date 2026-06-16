@@ -65,6 +65,7 @@ func ConstructStabilities() []ConstructStability {
 		{Name: "g:else-if", Kind: ConstructDirective, Tier: TierStable},
 		{Name: "g:else", Kind: ConstructDirective, Tier: TierStable},
 		{Name: "g:for", Kind: ConstructDirective, Tier: TierStable},
+		{Name: "g:each", Kind: ConstructDirective, Tier: TierStable},
 		{Name: "g:key", Kind: ConstructDirective, Tier: TierStable},
 		{Name: "g:html", Kind: ConstructDirective, Tier: TierStable},
 		{Name: "g:bind:value", Kind: ConstructDirective, Tier: TierPartial},

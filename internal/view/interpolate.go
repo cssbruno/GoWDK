@@ -46,6 +46,16 @@ func interpolateValue(ctx *renderContext, value string) (string, bool, error) {
 		if name == "" {
 			return "", false, fmt.Errorf("empty interpolation")
 		}
+		if ctx.serverList != nil {
+			placeholder, err := ctx.serverList.serverListFieldPlaceholder(name, ctx.idAllocator())
+			if err != nil {
+				return "", false, err
+			}
+			tainted = true
+			out.write(placeholder)
+			value = value[end+1:]
+			continue
+		}
 		if ctx.templateLoop != nil {
 			out.write(loopTemplateValue(name))
 			value = value[end+1:]

@@ -107,6 +107,7 @@ func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) Val
 	diagnostics = append(diagnostics, validateRealtimeSubscriptions(config, ir.RealtimeSubscriptions)...)
 	for _, page := range ir.Pages {
 		diagnostics = append(diagnostics, ValidatePage(config, page)...)
+		diagnostics = append(diagnostics, validatePageServerLists(page)...)
 	}
 	return normalizeValidationErrors(diagnostics)
 }

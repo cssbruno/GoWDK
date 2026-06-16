@@ -162,7 +162,15 @@ Implemented today:
   `g:for={item in Items}` or `g:for={item, i in Items}` and a required scalar
   `g:key={item.ID}`. The first slice supports item field interpolation such as
   `{item.Name}`, index interpolation such as `{i}`, and keyed row reuse/reorder
-  during island render passes.
+  during island render passes. `g:for` binds **client/island state only**; it
+  cannot iterate request-time `load {}` data.
+- Page elements can render a **request-time server list** over SSR `load {}`
+  data with `g:each={item in field}` (or `g:each={item, i in field}`). The
+  collection must be a declared `load {}` field; rows render server-side with
+  escape-by-default interpolation (`{item.Name}`, `{i}`). `g:each` lists nest —
+  a nested `g:each={child in item.children}` resolves its slice per parent row.
+  See [ssr.md](ssr.md) for the full server-list contract. Use `g:each` for
+  server data and `g:for` for client state; mixing the two is rejected.
 - Client handlers can mutate state arrays with compiler-owned built-ins:
   `append(Items, { Field: expr })`, `remove(Items, index)`, and
   `move(Items, from, to)`.

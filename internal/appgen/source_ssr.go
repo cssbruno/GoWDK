@@ -188,7 +188,69 @@ func ssrLoadStmts(route SSRRoute) []ast.Stmt {
 			)),
 		)
 	}
+	stmts = append(stmts, ssrListRenderStmts(route)...)
 	return stmts
+}
+
+// ssrListRenderStmts emits the request-time call that expands every top-level
+// g:each list in the page HTML from the resolved load data. The recursive
+// rendering and escape-by-default substitution live in the runtime list
+// renderer; generated code only supplies the static spec tree.
+func ssrListRenderStmts(route SSRRoute) []ast.Stmt {
+	if len(route.ListSpecs) == 0 {
+		return nil
+	}
+	return []ast.Stmt{
+		assign([]ast.Expr{id("html")}, call(
+			sel("gowdkssr", "RenderLists"),
+			id("html"),
+			ssrListSpecsExpr(route.ListSpecs),
+			id("loadData"),
+		)),
+	}
+}
+
+func ssrListSpecsExpr(specs []SSRListSpec) ast.Expr {
+	elts := make([]ast.Expr, 0, len(specs))
+	for _, spec := range specs {
+		elts = append(elts, ssrListSpecExpr(spec))
+	}
+	return &ast.CompositeLit{
+		Type: &ast.ArrayType{Elt: sel("gowdkssr", "ListSpec")},
+		Elts: elts,
+	}
+}
+
+func ssrListSpecExpr(spec SSRListSpec) ast.Expr {
+	elts := []ast.Expr{
+		keyValue("Placeholder", stringLit(spec.Placeholder)),
+		keyValue("SourcePath", stringLit(spec.SourcePath)),
+		keyValue("RowTemplate", stringLit(spec.RowTemplate)),
+	}
+	if len(spec.Fields) > 0 {
+		elts = append(elts, keyValue("Fields", ssrListFieldsExpr(spec.Fields)))
+	}
+	if len(spec.Children) > 0 {
+		elts = append(elts, keyValue("Children", ssrListSpecsExpr(spec.Children)))
+	}
+	return &ast.CompositeLit{Type: sel("gowdkssr", "ListSpec"), Elts: elts}
+}
+
+func ssrListFieldsExpr(fields []SSRListField) ast.Expr {
+	elts := make([]ast.Expr, 0, len(fields))
+	for _, field := range fields {
+		fieldElts := []ast.Expr{keyValue("Placeholder", stringLit(field.Placeholder))}
+		if field.Index {
+			fieldElts = append(fieldElts, keyValue("Index", id("true")))
+		} else {
+			fieldElts = append(fieldElts, keyValue("Path", stringLit(field.Path)))
+		}
+		elts = append(elts, &ast.CompositeLit{Type: sel("gowdkssr", "ListField"), Elts: fieldElts})
+	}
+	return &ast.CompositeLit{
+		Type: &ast.ArrayType{Elt: sel("gowdkssr", "ListField")},
+		Elts: elts,
+	}
 }
 
 func ssrLoadErrorStmts() []ast.Stmt {
@@ -412,6 +474,22 @@ func ssrUsesLoad(routes []SSRRoute) bool {
 			continue
 		}
 		if route.HasLoad {
+			return true
+		}
+	}
+	return false
+}
+
+// ssrUsesLoadReplacements reports whether any served route substitutes a scalar
+// load field placeholder, which is what pulls in the strings/gowdkhtml/fmt
+// helpers. A page whose load data feeds only g:each lists renders entirely
+// through the runtime list renderer and needs none of them.
+func ssrUsesLoadReplacements(routes []SSRRoute) bool {
+	for _, route := range routes {
+		if len(route.Guards) == 0 {
+			continue
+		}
+		if len(route.LoadReplacements) > 0 {
 			return true
 		}
 	}

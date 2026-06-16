@@ -297,6 +297,12 @@ func elementDirectiveValues(node viewmodel.Element) (viewDirectives, error) {
 			}
 			continue
 		}
+		if attr.Name == "g:each" {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return viewDirectives{}, fmt.Errorf("g:each requires an expression value")
+			}
+			continue
+		}
 		if attr.Name == "g:key" {
 			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
 				return viewDirectives{}, fmt.Errorf("g:key requires an expression value")

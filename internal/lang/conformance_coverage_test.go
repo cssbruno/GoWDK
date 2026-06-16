@@ -40,6 +40,7 @@ var integrationCoverage = map[string]string{
 	"g:else-if": "../view/view_test.go",
 	"g:else":    "../view/view_test.go",
 	"g:for":     "../view/view_test.go",
+	"g:each":    "../view/server_list_test.go",
 	"g:key":     "../view/view_test.go",
 	"g:html":    "../view/view_test.go",
 	"g:on:*":    "../view/view_test.go",

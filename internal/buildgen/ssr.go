@@ -29,11 +29,14 @@ type SSRArtifact struct {
 	HTML             string
 	Replacements     []SSRReplacement
 	LoadReplacements []SSRLoadReplacement
+	ListSpecs        []SSRListSpec
 }
 
 type SSRReplacement = source.SSRReplacement
 
 type SSRLoadReplacement = source.SSRLoadReplacement
+
+type SSRListSpec = source.SSRListSpec
 
 func SSRArtifacts(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) ([]SSRArtifact, error) {
 	ir, _, err := compiler.AssembleProgram(config, sources)
@@ -97,10 +100,18 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 	for key, value := range loadData {
 		data[key] = value
 	}
-	html, err := renderPage(config, page, components, layouts, stylesheets, actionFields, data, nil, nil, renderModeRequestTime)
+	html, listSpecs, err := renderPage(config, page, components, layouts, stylesheets, actionFields, data, nil, nil, renderModeRequestTime)
 	if err != nil {
 		return SSRArtifact{}, err
 	}
+	if len(listSpecs) > 0 && !page.Blocks.Load {
+		return SSRArtifact{}, fmt.Errorf("%s: g:each requires SSR load {} data", page.ID)
+	}
+	// A load field consumed only by g:each (resolved by the runtime list
+	// renderer) leaves no scalar placeholder in the HTML. Drop those request-time
+	// replacements so the handler does not stringify and substitute a value that
+	// never appears in the output.
+	loadReplacements = usedLoadReplacements(html, loadReplacements)
 	return SSRArtifact{
 		PageID:           page.ID,
 		Route:            page.Route,
@@ -115,7 +126,25 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 		HTML:             html,
 		Replacements:     replacements,
 		LoadReplacements: loadReplacements,
+		ListSpecs:        listSpecs,
 	}, nil
+}
+
+// usedLoadReplacements keeps only the scalar load replacements whose placeholder
+// still appears in the rendered HTML. A placeholder is absent when its load field
+// is consumed solely by g:each, whose rows are expanded by the runtime list
+// renderer rather than by request-time string substitution.
+func usedLoadReplacements(html string, replacements []SSRLoadReplacement) []SSRLoadReplacement {
+	if len(replacements) == 0 {
+		return replacements
+	}
+	used := make([]SSRLoadReplacement, 0, len(replacements))
+	for _, replacement := range replacements {
+		if strings.Contains(html, replacement.Placeholder) {
+			used = append(used, replacement)
+		}
+	}
+	return used
 }
 
 func ssrRouteData(page gwdkir.Page) (map[string]string, []SSRReplacement) {

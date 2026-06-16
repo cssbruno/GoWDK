@@ -51,6 +51,10 @@ type Options struct {
 	Tainted                map[string]bool
 	RealtimeEventTypeNames map[string]string
 	QueryTypeNames         map[string]string
+	// ServerListSink, when non-nil, receives the top-level g:each list specs
+	// discovered while rendering a request-time page. The caller serializes them
+	// for the runtime list renderer.
+	ServerListSink *[]SSRListReplacement
 }
 
 // ActionInputField describes Go action input metadata available while rendering
@@ -120,7 +124,8 @@ func RenderNodesWithOptions(nodes []Node, components map[string]Component, data 
 			readFields:   map[string]bool{},
 			bindFields:   map[string]bool{},
 		},
-		ids: &renderIDAllocator{},
+		ids:   &renderIDAllocator{},
+		lists: options.ServerListSink,
 	})
 }
 

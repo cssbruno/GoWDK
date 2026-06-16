@@ -12,6 +12,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/view"
 	"github.com/cssbruno/gowdk/internal/viewanalysis"
 	gowhtml "github.com/cssbruno/gowdk/runtime/html"
@@ -24,30 +25,31 @@ const (
 	renderModeRequestTime renderModePolicy = "request-time"
 )
 
-func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, data map[string]string, realtimeEventTypeNames map[string]string, queryTypeNames map[string]string, policy renderModePolicy) (string, error) {
+func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, data map[string]string, realtimeEventTypeNames map[string]string, queryTypeNames map[string]string, policy renderModePolicy) (string, []source.SSRListSpec, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
 	if policy == renderModeSPA && mode != gowdk.SPA && mode != gowdk.Action {
-		return "", fmt.Errorf("%s: SPA build cannot emit request-time %s pages yet", page.ID, mode)
+		return "", nil, fmt.Errorf("%s: SPA build cannot emit request-time %s pages yet", page.ID, mode)
 	}
 	if policy == renderModeRequestTime && mode != gowdk.SSR && mode != gowdk.Hybrid {
-		return "", fmt.Errorf("%s: request-time build cannot emit %s pages", page.ID, mode)
+		return "", nil, fmt.Errorf("%s: request-time build cannot emit %s pages", page.ID, mode)
 	}
 	if !page.Blocks.View {
-		return "", fmt.Errorf("%s: missing view {}", page.ID)
+		return "", nil, fmt.Errorf("%s: missing view {}", page.ID)
 	}
 	if strings.TrimSpace(page.Blocks.ViewBody) == "" {
-		return "", fmt.Errorf("%s: view {} is empty", page.ID)
+		return "", nil, fmt.Errorf("%s: view {} is empty", page.ID)
 	}
 	viewSource, err := composePageViewSource(page, layouts)
 	if err != nil {
-		return "", fmt.Errorf("%s: %w", page.ID, err)
+		return "", nil, fmt.Errorf("%s: %w", page.ID, err)
 	}
 	viewNodes := composedPageViewNodes(page)
 	if err := validateViewParamReferences(page, viewSource, viewNodes); err != nil {
-		return "", fmt.Errorf("%s: %w", page.ID, err)
+		return "", nil, fmt.Errorf("%s: %w", page.ID, err)
 	}
 
 	pageComponents := componentRegistryForPage(page, components)
+	var lists []view.SSRListReplacement
 	body, err := renderPageView(viewSource, viewNodes, pageComponents, data, view.Options{
 		Actions:                actionRoutes(page, data),
 		ActionInputFields:      actionFields,
@@ -55,19 +57,47 @@ func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]vie
 		Tainted:                requestTimeTaintedFields(page, policy),
 		RealtimeEventTypeNames: realtimeEventTypeNames,
 		QueryTypeNames:         queryTypeNames,
+		ServerListSink:         &lists,
 	})
 	if err != nil {
-		return "", fmt.Errorf("%s: %w", page.ID, err)
+		return "", nil, fmt.Errorf("%s: %w", page.ID, err)
 	}
 	storeSeeds, err := pageStoreSeeds(page)
 	if err != nil {
-		return "", fmt.Errorf("%s: %w", page.ID, err)
+		return "", nil, fmt.Errorf("%s: %w", page.ID, err)
 	}
 	scripts, err := pageScripts(config, page, viewSource, viewNodes, pageComponents, queryTypeNames, policy)
 	if err != nil {
-		return "", fmt.Errorf("%s: %w", page.ID, err)
+		return "", nil, fmt.Errorf("%s: %w", page.ID, err)
 	}
-	return document(config, page, body, stylesheets, storeSeeds, scripts), nil
+	return document(config, page, body, stylesheets, storeSeeds, scripts), convertSSRListSpecs(lists), nil
+}
+
+// convertSSRListSpecs lowers the view layer's collected g:each lists into the
+// source representation carried through the app generator to the runtime list
+// renderer.
+func convertSSRListSpecs(lists []view.SSRListReplacement) []source.SSRListSpec {
+	if len(lists) == 0 {
+		return nil
+	}
+	specs := make([]source.SSRListSpec, 0, len(lists))
+	for _, list := range lists {
+		spec := source.SSRListSpec{
+			Placeholder: list.Placeholder,
+			SourcePath:  list.SourcePath,
+			RowTemplate: list.RowTemplate,
+			Children:    convertSSRListSpecs(list.Children),
+		}
+		for _, field := range list.Fields {
+			spec.Fields = append(spec.Fields, source.SSRListField{
+				Placeholder: field.Placeholder,
+				Path:        field.Path,
+				Index:       field.Index,
+			})
+		}
+		specs = append(specs, spec)
+	}
+	return specs
 }
 
 func composedPageViewNodes(page gwdkir.Page) []view.Node {

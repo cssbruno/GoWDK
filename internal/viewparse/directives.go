@@ -17,6 +17,10 @@ var supportedDirectiveNames = map[string]bool{
 	"g:command":      true,
 	"g:else":         true,
 	"g:else-if":      true,
+	// g:each is the server-side request-time list directive: it iterates SSR
+	// load {} slice data and renders rows server-side with escape-by-default
+	// interpolation. It is distinct from g:for, which binds client/island state.
+	"g:each": true,
 	// g:event parses so the renderer can explain that domain events are
 	// backend-owned facts instead of emitting a generic unknown-directive error.
 	"g:event":     true,
@@ -124,7 +128,7 @@ func validateRawHTMLDirective(name string, attrs []Attr, children []Node) error 
 		return fmt.Errorf("element with g:html must not declare children; the g:html expression provides the element content")
 	}
 	for _, attr := range attrs {
-		if attr.Name == "g:for" || attr.Name == "g:key" || strings.HasPrefix(attr.Name, "g:bind:") {
+		if attr.Name == "g:for" || attr.Name == "g:each" || attr.Name == "g:key" || strings.HasPrefix(attr.Name, "g:bind:") {
 			return fmt.Errorf("g:html cannot combine with %s", attr.Name)
 		}
 	}

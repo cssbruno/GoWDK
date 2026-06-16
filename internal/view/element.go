@@ -14,6 +14,9 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 	if node.Name == "slot" {
 		return renderSlotElement(node, ctx, out)
 	}
+	if elementHasEach(node) {
+		return renderServerListElement(node, ctx, out)
+	}
 	if loop, keyExpr, ok, err := elementForDirective(node, ctx); err != nil {
 		return err
 	} else if ok {
@@ -162,7 +165,7 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 			}
 			return fmt.Errorf("%s must follow a sibling g:if or g:else-if", attr.Name)
 		}
-		if attr.Name == "g:for" || attr.Name == "g:key" {
+		if attr.Name == "g:for" || attr.Name == "g:each" || attr.Name == "g:key" {
 			continue
 		}
 		if attr.Name == "g:bind:value" {

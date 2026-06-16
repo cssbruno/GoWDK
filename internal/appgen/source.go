@@ -150,11 +150,11 @@ func runtimeImportMap(options Options) map[string]string {
 	if ssrUsesDynamicRoutes(ssr) {
 		imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
 	}
-	if ssrUsesReplacements(ssr) || ssrUsesLoad(ssr) {
+	if ssrUsesReplacements(ssr) || ssrUsesLoadReplacements(ssr) {
 		imports["gowdkhtml"] = "github.com/cssbruno/gowdk/runtime/html"
 		imports["strings"] = "strings"
 	}
-	if ssrUsesLoad(ssr) {
+	if ssrUsesLoadReplacements(ssr) {
 		imports["fmt"] = "fmt"
 	}
 	if generatedUsesRateLimit(options) {

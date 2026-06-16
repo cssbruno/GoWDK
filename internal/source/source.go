@@ -128,6 +128,26 @@ type SSRLoadReplacement struct {
 	Placeholder string
 }
 
+// SSRListSpec describes one server-rendered g:each list for a request-time
+// page. The runtime list renderer resolves SourcePath against load data (or, for
+// nested lists, against a parent row element), then substitutes Fields and
+// Children into RowTemplate once per element. It mirrors view.SSRListReplacement
+// and ssr.ListSpec.
+type SSRListSpec struct {
+	Placeholder string
+	SourcePath  string
+	RowTemplate string
+	Fields      []SSRListField
+	Children    []SSRListSpec
+}
+
+// SSRListField is one per-row scalar substitution inside a server list row.
+type SSRListField struct {
+	Placeholder string
+	Path        string
+	Index       bool
+}
+
 // InlineScript records browser module code declared directly inside a .gwdk
 // source file. Path-based script declarations should remain preferred.
 type InlineScript struct {

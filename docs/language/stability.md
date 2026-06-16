@@ -79,7 +79,8 @@ Supported exact-name directives (the closed set in
 | Directive | Tier | Notes |
 | --- | --- | --- |
 | `g:if` / `g:else-if` / `g:else` | Stable | Conditional flow. |
-| `g:for` / `g:key` | Stable | List rendering. |
+| `g:for` / `g:key` | Stable | Client/island list rendering. |
+| `g:each` | Stable | Server-side request-time list rendering over SSR `load {}` data. |
 | `g:bind:value` / `g:bind:checked` | Partial | Two-way bindings. |
 | `g:on:*` | Partial | Event handlers with `.prevent`/`.stop`/`.once`/`.capture`/`.debounce`/`.throttle`. |
 | `g:post` / `g:target` / `g:swap` | Partial | Progressive form/fragment submission. |

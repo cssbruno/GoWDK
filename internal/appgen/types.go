@@ -125,8 +125,13 @@ type SSRRoute struct {
 	HTML             string
 	Replacements     []SSRReplacement
 	LoadReplacements []SSRLoadReplacement
+	ListSpecs        []SSRListSpec
 }
 
 type SSRReplacement = source.SSRReplacement
 
 type SSRLoadReplacement = source.SSRLoadReplacement
+
+type SSRListSpec = source.SSRListSpec
+
+type SSRListField = source.SSRListField

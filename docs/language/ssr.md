@@ -128,3 +128,54 @@ package to avoid import cycles.
 Native RBAC guards are a defense-in-depth redundancy layer for generated
 route/page access. They must never replace backend authorization for protected
 resources in normal Go handlers and services.
+
+## Server-rendered lists (`g:each`)
+
+Request-time pages render collection data — board columns, chat logs, activity
+feeds, search results, inboxes — declaratively with `g:each`, the server-side
+counterpart to the client-only `g:for`. The list is rendered server-side at
+request time with escape-by-default interpolation: no HTML is built in Go, no
+client island is involved, and every interpolated value is HTML-escaped.
+
+```gwdk
+page board
+route "/board"
+guard public
+load { => { columns } }
+view {
+  <section class="board">
+    <div class="column" g:each={col in columns}>
+      <h2>{col.title}</h2>
+      <article class="card" g:each={issue in col.issues}>
+        <span>{issue.id}</span> {issue.title}
+      </article>
+    </div>
+  </section>
+}
+```
+
+```go
+func LoadBoard(ssr.LoadContext) (map[string]any, error) {
+	b := issues.Board()
+	return map[string]any{"columns": b.Columns}, nil
+}
+```
+
+Contract:
+
+- A top-level `g:each` collection must be a declared `load {}` field. Iterating
+  client/island state belongs to `g:for`; iterating request-time `load {}` data
+  with `g:for` is rejected at `gowdk check` with a diagnostic pointing at
+  `g:each`.
+- Rows interpolate the item with `{item.Field}` (dotted paths such as
+  `{item.author.name}` are supported) and the optional index with
+  `g:each={item, i in field}` then `{i}`. Field values are matched against map
+  keys, exported Go struct fields, or json tags, and are always escaped.
+- `g:each` lists nest. A nested `g:each={child in item.children}` must reference
+  the enclosing row item; its slice is resolved per parent row.
+- Rows support static markup, item interpolation, and nested `g:each` only.
+  Components, client directives (`g:on:*`, `g:if`, `g:bind:*`, islands), and
+  `g:html` are not part of a server row. Request-time (tainted) values remain
+  rejected in URL, event-handler, `style`, and `srcdoc` attributes.
+- `g:each` requires the SSR addon and a request-time page; it has no SPA/static
+  output form.

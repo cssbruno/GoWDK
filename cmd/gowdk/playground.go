@@ -149,7 +149,13 @@ func playgroundRun(args []string) error {
 		MaxCPUSeconds:        60,        // 60 CPU-seconds
 		MaxFileSizeBytes:     256 << 20, // 256 MiB per file
 		MaxOpenFiles:         4096,
-		MaxProcesses:         256, // cap fork bombs; RLIMIT_NPROC is per-userns here
+		// RLIMIT_NPROC caps the per-uid process count. It is enforced against the
+		// build's exec'd subprocesses (which run capless after the bounding-set
+		// drop) only when gowdk runs as a non-root host user; when gowdk runs as
+		// host root the build maps to global uid 0, which the kernel exempts, so a
+		// hosted runner must add an outer pids cgroup. See the threat model.
+		MaxProcesses:  256,
+		MaxTmpfsBytes: 2 << 30, // 2 GiB per writable tmpfs; outer cgroup bounds total memory
 	}
 	encoded, err := playground.EncodeSandboxSpec(spec)
 	if err != nil {

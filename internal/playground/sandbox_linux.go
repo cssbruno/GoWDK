@@ -279,7 +279,9 @@ func confine(spec SandboxSpec) error {
 			}
 		}()
 	}
-	if err := syscall.Mount("tmpfs", newRoot, "tmpfs", syscall.MS_NOSUID|syscall.MS_NODEV, ""); err != nil {
+	// The root tmpfs also backs the module-cache overlay's writable upper, so its
+	// size cap bounds those writes too.
+	if err := syscall.Mount("tmpfs", newRoot, "tmpfs", syscall.MS_NOSUID|syscall.MS_NODEV, tmpfsSizeOptions(spec.MaxTmpfsBytes)); err != nil {
 		return fmt.Errorf("mount sandbox root tmpfs: %w", err)
 	}
 
@@ -321,10 +323,10 @@ func confine(spec SandboxSpec) error {
 	if err := bindMount(spec.OutputDir, in(SandboxOutputPath), false); err != nil {
 		return fmt.Errorf("bind output: %w", err)
 	}
-	if err := mountTmpfs(in(SandboxGoCachePath)); err != nil {
+	if err := mountTmpfs(in(SandboxGoCachePath), spec.MaxTmpfsBytes); err != nil {
 		return err
 	}
-	if err := mountTmpfs(in(SandboxTmpPath)); err != nil {
+	if err := mountTmpfs(in(SandboxTmpPath), spec.MaxTmpfsBytes); err != nil {
 		return err
 	}
 
@@ -428,8 +430,20 @@ func bindMount(source, target string, readOnly bool) error {
 	return nil
 }
 
-func mountTmpfs(target string) error {
-	return syscall.Mount("tmpfs", target, "tmpfs", syscall.MS_NOSUID|syscall.MS_NODEV, "")
+func mountTmpfs(target string, sizeBytes uint64) error {
+	return syscall.Mount("tmpfs", target, "tmpfs", syscall.MS_NOSUID|syscall.MS_NODEV, tmpfsSizeOptions(sizeBytes))
+}
+
+// tmpfsSizeOptions builds the size=/nr_inodes= mount options that bound a tmpfs.
+// tmpfs is backed by page cache, so an unbounded instance lets a build exhaust
+// host memory (and inodes) regardless of RLIMIT_AS/RLIMIT_FSIZE, which are
+// per-process and per-file. A zero size yields no options (host default).
+func tmpfsSizeOptions(sizeBytes uint64) string {
+	if sizeBytes == 0 {
+		return ""
+	}
+	// Roughly one inode per 4 KiB caps the file count alongside the byte size.
+	return fmt.Sprintf("size=%d,nr_inodes=%d", sizeBytes, sizeBytes/4096+1)
 }
 
 // mountModCacheOverlay mounts the host module cache (read-only lower) under a
@@ -459,7 +473,9 @@ func mountModCacheOverlay(lower, target, scratchRoot string) error {
 // escape sequences); the toolchain only needs the standard streams plus the
 // null/zero/random pseudo-devices.
 func mountMinimalDev(target string) error {
-	if err := syscall.Mount("tmpfs", target, "tmpfs", syscall.MS_NOSUID, "mode=0755"); err != nil {
+	// /dev only holds a few device nodes, so a tiny fixed cap is plenty and keeps
+	// it from being abused as extra scratch space.
+	if err := syscall.Mount("tmpfs", target, "tmpfs", syscall.MS_NOSUID, "mode=0755,size=1048576,nr_inodes=64"); err != nil {
 		return err
 	}
 	for _, node := range []string{"null", "zero", "full", "random", "urandom"} {

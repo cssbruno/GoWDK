@@ -106,6 +106,7 @@ func TestSandboxIsolation(t *testing.T) {
 		GoRoot:        runtime.GOROOT(),
 		GoModCache:    modcache,
 		MaxOpenFiles:  4096,
+		MaxTmpfsBytes: 64 << 20, // exercise the size-bounded tmpfs mount path
 	}
 	encoded, err := EncodeSandboxSpec(spec)
 	if err != nil {

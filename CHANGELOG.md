@@ -13,8 +13,9 @@ packages, and tooling contracts may change before 1.0.
   namespaces, `pivot_root`s into a minimal tree (read-only toolchain + throwaway
   module-cache overlay + the staged workspace and output only; no host `/dev/tty`),
   drops privileges (`no_new_privs`, emptied capability bounding/ambient sets),
-  caps resources with rlimits (including a process cap), and runs with a
-  synthesized environment (`GOPROXY=off`, `GOSUMDB=off`, `GOWORK=off`). The
+  caps resources with rlimits (including a process cap) and size-bounded tmpfs
+  mounts, and runs with a synthesized environment (`GOPROXY=off`, `GOSUMDB=off`,
+  `GOWORK=off`). The
   result: the build has no network, cannot read host data, and cannot escalate —
   even though it executes the Go toolchain. Confinement is gated to the launched
   namespaces (a direct invocation of the internal build target refuses), the

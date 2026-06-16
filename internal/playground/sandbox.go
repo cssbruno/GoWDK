@@ -46,6 +46,12 @@ type SandboxSpec struct {
 	// MaxProcesses caps processes for the sandboxed user (RLIMIT_NPROC). Zero
 	// leaves it unset.
 	MaxProcesses uint64 `json:"maxProcesses"`
+	// MaxTmpfsBytes caps the size of each writable tmpfs mounted inside the
+	// sandbox (the root, build cache, and /tmp). tmpfs is page-cache backed, so
+	// without this a build could write until host memory is exhausted. Zero
+	// leaves the tmpfs unbounded (host default). It is a per-mount cap, not an
+	// aggregate one; total memory is the outer cgroup boundary's responsibility.
+	MaxTmpfsBytes uint64 `json:"maxTmpfsBytes"`
 }
 
 // Fixed in-sandbox mount points. The build always runs against these paths after

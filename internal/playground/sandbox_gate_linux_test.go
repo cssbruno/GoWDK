@@ -5,8 +5,19 @@ package playground
 import (
 	"errors"
 	"os"
+	"strings"
 	"testing"
 )
+
+func TestTmpfsSizeOptions(t *testing.T) {
+	if got := tmpfsSizeOptions(0); got != "" {
+		t.Fatalf("zero size must yield no options, got %q", got)
+	}
+	got := tmpfsSizeOptions(1 << 20)
+	if !strings.Contains(got, "size=1048576") || !strings.Contains(got, "nr_inodes=") {
+		t.Fatalf("expected size and nr_inodes options, got %q", got)
+	}
+}
 
 func TestIsInitialUserNS(t *testing.T) {
 	cases := []struct {

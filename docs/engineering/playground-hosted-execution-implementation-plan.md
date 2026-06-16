@@ -106,7 +106,21 @@ complete substitute for a hardened hosting boundary:
 - There is no seccomp syscall filter yet, so the kernel attack surface remains.
   A seccomp-bpf allowlist and Landlock rules are tracked as hardening follow-ups
   (see issue #459).
-- Resource enforcement is per-process rlimits, not cgroup-level memory/pids caps.
+- Resource enforcement is per-process rlimits plus per-mount tmpfs `size=` caps,
+  not cgroup-level *aggregate* memory/pids caps. Three exhaustion vectors are only
+  partially bounded inside the sandbox and need the outer boundary:
+  - **Output disk.** `/out` is a writable host bind. `RLIMIT_FSIZE` caps any single
+    file, but not the total, so a build can still fill the host filesystem with
+    many files. The runner must place `--out` on a quota'd/size-limited filesystem
+    (or its own cgroup/io limit).
+  - **tmpfs memory.** Each writable tmpfs is now mounted with a `size=`/`nr_inodes=`
+    cap, but those are per-mount; the sum across mounts is bounded only by an outer
+    memory cgroup.
+  - **Process count.** `RLIMIT_NPROC` is enforced against the build's exec'd
+    subprocesses (capless after the bounding-set drop) when gowdk runs as a
+    non-root host user. When gowdk runs as **host root**, the build maps to global
+    uid 0, which the kernel exempts from `RLIMIT_NPROC`; an outer pids cgroup is
+    then the only cap.
 - The module cache is exposed read-only, but its lower layer is readable by the
   submitted build, so its contents must not be sensitive. `run` therefore fails
   closed unless the caller chooses a cache explicitly: `--module-cache <dir>` for

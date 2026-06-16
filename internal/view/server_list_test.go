@@ -67,6 +67,29 @@ func TestServerConditionalRejectsCompoundExpression(t *testing.T) {
 	}
 }
 
+func TestServerListRejectsDirectiveOnRowElement(t *testing.T) {
+	// A disallowed directive on the repeated row element itself (not a child)
+	// must be rejected, matching the documented server-row contract.
+	_, err := RenderWithOptions(`<li g:each={item in items} g:if={item.show} g:key={item.id}>{item.name}</li>`, nil, nil, Options{
+		Tainted:        map[string]bool{"items": true},
+		ServerListSink: &[]SSRListReplacement{},
+		ServerCondSink: &[]SSRCondReplacement{},
+	})
+	if err == nil || !strings.Contains(err.Error(), "g:if") {
+		t.Fatalf("want row-element g:if rejection, got %v", err)
+	}
+}
+
+func TestServerListRejectedOutsidePageContext(t *testing.T) {
+	// Without a page region sink (e.g. a component/fragment render), g:each must
+	// be rejected rather than silently dropping the spec and emitting an
+	// unconsumed placeholder.
+	_, err := RenderWithData(`<li g:each={item in items}>{item.name}</li>`, nil, map[string]string{})
+	if err == nil || !strings.Contains(err.Error(), "only supported in a request-time page view") {
+		t.Fatalf("want page-only rejection, got %v", err)
+	}
+}
+
 func TestServerConditionalInsideEachRow(t *testing.T) {
 	source := `<ul><li g:each={issue in issues}>{issue.id}<b g:when={issue.urgent}>!</b></li></ul>`
 	_, lists, conds := renderServerRegions(t, source, map[string]bool{"issues": true})

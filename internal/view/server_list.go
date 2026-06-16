@@ -91,6 +91,9 @@ func elementHasAttr(node Element, name string) bool {
 // row template in which item interpolations become per-row field placeholders;
 // nested g:each and g:when recurse into child specs.
 func renderServerListElement(node Element, ctx *renderContext, out *renderOutput) error {
+	if ctx.serverScope == nil && ctx.lists == nil {
+		return fmt.Errorf("g:each is only supported in a request-time page view; it cannot be used inside a component, layout, or fragment. Move the load {} data and g:each onto the page")
+	}
 	if elementHasWhen(node) {
 		return fmt.Errorf("element cannot combine g:each with g:when; place g:when on a child or wrapping element")
 	}
@@ -103,7 +106,7 @@ func renderServerListElement(node Element, ctx *renderContext, out *renderOutput
 		return err
 	}
 	templateNode := elementWithoutAttrs(node, "g:each", "g:key")
-	if err := validateServerRegionSubtree(templateNode.Children); err != nil {
+	if err := validateServerRegionSubtree([]Node{templateNode}); err != nil {
 		return err
 	}
 
@@ -145,6 +148,9 @@ func renderServerListElement(node Element, ctx *renderContext, out *renderOutput
 // placeholder plus a collected SSRCondReplacement. The element's subtree is
 // rendered once into a branch template in the enclosing container scope.
 func renderServerConditionalElement(node Element, ctx *renderContext, out *renderOutput) error {
+	if ctx.serverScope == nil && ctx.conds == nil {
+		return fmt.Errorf("g:when is only supported in a request-time page view; it cannot be used inside a component, layout, or fragment. Move the load {} data and g:when onto the page")
+	}
 	condition, negate, err := elementWhenDirective(node)
 	if err != nil {
 		return err
@@ -154,7 +160,7 @@ func renderServerConditionalElement(node Element, ctx *renderContext, out *rende
 		return err
 	}
 	templateNode := elementWithoutAttrs(node, "g:when")
-	if err := validateServerRegionSubtree(templateNode.Children); err != nil {
+	if err := validateServerRegionSubtree([]Node{templateNode}); err != nil {
 		return err
 	}
 

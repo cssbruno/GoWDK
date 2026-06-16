@@ -264,3 +264,75 @@ var _ = http.StatusOK
 		t.Fatalf("unconsumed placeholder remains")
 	}
 }
+
+// TestGeneratedBinaryDoesNotExpandRegionTokenInScalar proves the ordering fix:
+// a load scalar whose value equals a generated list placeholder must NOT be
+// expanded into rows. The handler expands regions before substituting scalars,
+// so the malicious value appears literally and the list renders exactly once.
+func TestGeneratedBinaryDoesNotExpandRegionTokenInScalar(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:  "board",
+		Route:   "/board",
+		Guards:  []string{"public"},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "gowdk-generated-app/board",
+			PackageName:  "board",
+			FunctionName: "LoadBoard",
+			Signature:    source.BackendSignatureLoadError,
+		},
+		HTML:             `<main><span>__GOWDK_SSR_LOAD_x__</span><ul>__GOWDK_SSR_LIST_s1__</ul></main>`,
+		LoadReplacements: []SSRLoadReplacement{{Path: "x", Placeholder: "__GOWDK_SSR_LOAD_x__"}},
+		ListSpecs: []SSRListSpec{{
+			Placeholder: "__GOWDK_SSR_LIST_s1__",
+			SourcePath:  "items",
+			RowTemplate: `<li>__GOWDK_SSR_FIELD_1__</li>`,
+			Fields:      []SSRListField{{Placeholder: "__GOWDK_SSR_FIELD_1__", Path: "name"}},
+		}},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "board", "board.go"), `package board
+
+import "github.com/cssbruno/gowdk/addons/ssr"
+
+func LoadBoard(ssr.LoadContext) (map[string]any, error) {
+	return map[string]any{
+		"x":     "__GOWDK_SSR_LIST_s1__",
+		"items": []any{map[string]any{"name": "a"}, map[string]any{"name": "b"}},
+	}, nil
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, _, err := waitForHTTPResponse("http://" + addr + "/board")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(body, "<li>"); got != 2 {
+		t.Fatalf("list should render exactly twice (not expanded inside the scalar), got %d:\n%s", got, body)
+	}
+	if !strings.Contains(body, "<span>__GOWDK_SSR_LIST_s1__</span>") {
+		t.Fatalf("malicious scalar value should appear literally, not be expanded:\n%s", body)
+	}
+}

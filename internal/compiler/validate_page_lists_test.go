@@ -161,6 +161,58 @@ func TestValidateAcceptsGWhenInsideEachRow(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsGEachOverNonExactLoadPath(t *testing.T) {
+	// load declares only user.name; g:each over user.posts must fail at check,
+	// matching the build, which requires the exact declared path to be tainted.
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { user.name }`,
+			View:     true,
+			ViewBody: `<li g:each={post in user.posts}>{post.title}</li>`,
+		},
+	})
+	if _, ok := findCode(report, "geach_requires_load"); !ok {
+		t.Fatalf("expected geach_requires_load for an undeclared dotted path, got %v", report)
+	}
+}
+
+func TestValidateRejectsGForInsideEachRow(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { columns }`,
+			View:     true,
+			ViewBody: `<div g:each={col in columns}><span g:for={issue in col.issues} g:key={issue.id}>{issue.id}</span></div>`,
+		},
+	})
+	diag, ok := findCode(report, "gfor_over_load_data")
+	if !ok {
+		t.Fatalf("expected gfor_over_load_data for g:for inside a g:each row, got %v", report)
+	}
+	if !strings.Contains(diag.Message, "nested g:each") {
+		t.Fatalf("row diagnostic should suggest a nested g:each: %q", diag.Message)
+	}
+}
+
+func TestValidateRejectsNestedGEachOverParentItem(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { columns }`,
+			View:     true,
+			ViewBody: `<div g:each={col in columns}><span g:each={issue in col} g:key={issue.id}>{issue.id}</span></div>`,
+		},
+	})
+	diag, ok := findCode(report, "geach_nested_scope")
+	if !ok {
+		t.Fatalf("expected geach_nested_scope when iterating the parent item itself, got %v", report)
+	}
+	if !strings.Contains(diag.Message, "itself") {
+		t.Fatalf("diagnostic should explain it cannot be the parent item itself: %q", diag.Message)
+	}
+}
+
 func TestValidateRejectsGHTMLOverLoadData(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{

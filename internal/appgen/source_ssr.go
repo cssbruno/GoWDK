@@ -91,6 +91,12 @@ func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool, csrf 
 	body = append(body, rateLimitStmts(rateLimit)...)
 	body = append(body, guardStmts(route.Guards)...)
 	body = append(body, define([]ast.Expr{id("html")}, stringLit(route.HTML)))
+	// Fetch load data and expand g:each/g:when regions BEFORE substituting any
+	// attacker-influenceable scalar (route params, load fields). Otherwise a
+	// scalar value equal to a generated region placeholder would be expanded
+	// into row/branch markup, violating escape-by-default for request-time data.
+	body = append(body, ssrLoadFetchStmts(route)...)
+	body = append(body, ssrRegionRenderStmts(route)...)
 	for _, replacement := range route.Replacements {
 		body = append(body, assign([]ast.Expr{id("html")}, call(
 			sel("strings", "ReplaceAll"),
@@ -99,7 +105,7 @@ func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool, csrf 
 			call(sel("gowdkhtml", "Escape"), &ast.IndexExpr{X: id("params"), Index: stringLit(replacement.Param)}),
 		)))
 	}
-	body = append(body, ssrLoadStmts(route)...)
+	body = append(body, ssrLoadScalarReplaceStmts(route)...)
 	if csrf {
 		body = append(body, ssrCSRFHTMLStmts()...)
 	}
@@ -143,7 +149,9 @@ func ssrRoutePanicBoundaryStmt() ast.Stmt {
 	})}
 }
 
-func ssrLoadStmts(route SSRRoute) []ast.Stmt {
+// ssrLoadFetchStmts fetches the request-time load {} data into loadData and
+// handles load errors. It does not yet substitute anything into the HTML.
+func ssrLoadFetchStmts(route SSRRoute) []ast.Stmt {
 	if !route.HasLoad {
 		return nil
 	}
@@ -168,6 +176,18 @@ func ssrLoadStmts(route SSRRoute) []ast.Stmt {
 	default:
 		stmts = append(stmts, define([]ast.Expr{id("loadData")}, loadCall))
 	}
+	return stmts
+}
+
+// ssrLoadScalarReplaceStmts substitutes the scalar load {} field placeholders
+// with their escaped request-time values. It runs after region expansion so an
+// attacker-influenceable scalar value that happens to equal a generated region
+// placeholder cannot be expanded into row/branch markup.
+func ssrLoadScalarReplaceStmts(route SSRRoute) []ast.Stmt {
+	if route.LoadBinding.Status != source.BackendBindingBound {
+		return nil
+	}
+	var stmts []ast.Stmt
 	for index, replacement := range route.LoadReplacements {
 		valueName := id("loadValue" + intIdentSuffix(index))
 		okName := id("loadOK" + intIdentSuffix(index))
@@ -188,7 +208,6 @@ func ssrLoadStmts(route SSRRoute) []ast.Stmt {
 			)),
 		)
 	}
-	stmts = append(stmts, ssrRegionRenderStmts(route)...)
 	return stmts
 }
 

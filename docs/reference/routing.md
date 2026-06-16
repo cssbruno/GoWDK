@@ -383,26 +383,26 @@ gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partia
 gowdk endpoints --ssr examples/actions/*.gwdk examples/api/*.gwdk
 ```
 
-The current JSON schema is version `1`. `routes` contains only page/file route
-kinds such as `static`, `spa`, `ssr`, and `hybrid`. Route records include the
-HTTP method/path, page ID, `.gwdk` package, effective render mode, cache policy
-when declared, dynamic route params, layouts, guards, source file, source span,
-and planned handler. Static generated-output paths stay in `gowdk-routes.json`
-because dynamic SPA paths can expand one source route into multiple concrete
-files.
+The current JSON schema is version `1`. `routes` is the generated route table:
+it includes page/file route kinds such as `static`, `spa`, `ssr`, and `hybrid`,
+plus generated endpoint route rows for actions, APIs, fragments, and routable
+`g:command`/`g:query` contract references. Route records include the HTTP
+method/path, page ID, `.gwdk` package, guards, source file, source span, and
+planned handler. Page rows also include effective render mode, layouts, dynamic
+route params, and cache policy when declared. Endpoint rows include
+`endpointSource`, `directive` (`act`, `api`, `fragment`, `g:command`, or
+`g:query`), symbol/contract name, no-store backend cache policy, CSRF
+applicability, route params when declared, and binding status when known.
 
-`endpoints` contains one framework-neutral endpoint record per action, API,
-fragment declaration, and routable `g:command`/`g:query` contract reference.
-Endpoint records include `endpointSource` (`gwdk`, `go`, or `contract`), source
-file and source span, `.gwdk` package, Go package path/name when known, exact
-declared symbol or contract reference, method, path, no-store backend cache
-policy, inherited guards, CSRF applicability, route params when declared,
-planned adapter handler information, and binding status/message. Backend
-binding details repeat the Go package name, import path when known, handler
-symbol, and supported signature/input metadata when the handler is bound.
-Contract binding details include the contract kind, reference name, binding
-status, local input type, result type, roles, handler, register function, and
-message when known. The
+`endpoints` contains the detailed framework-neutral backend endpoint records
+for the same action, API, fragment, and contract adapter routes. Endpoint
+records repeat the route table fields and add Go package path/name when known,
+backend binding details, and contract binding details. Backend binding details
+repeat the Go package name, import path when known, handler symbol, and
+supported signature/input metadata when the handler is bound. Contract binding
+details include the contract kind, reference name, binding status, local input
+type, result type, roles, handler, register function, and message when known.
+The
 `info` list reports disabled route-mode lanes, for example SSR disabled on a
 SPA route.
 

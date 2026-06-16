@@ -138,6 +138,10 @@ func siteMapJSON(args []string) error {
 }
 
 func routesJSON(args []string) error {
+	if projectCommandHelp(args) {
+		fmt.Println(projectCommandUsage("routes", false))
+		return nil
+	}
 	metadata, err := routeMetadataForCommand(args, "routes")
 	if err != nil {
 		return err
@@ -152,6 +156,10 @@ func routesJSON(args []string) error {
 }
 
 func endpointsJSONCommand(args []string) error {
+	if projectCommandHelp(args) {
+		fmt.Println(projectCommandUsage("endpoints", false))
+		return nil
+	}
 	metadata, err := routeMetadataForCommand(args, "endpoints")
 	if err != nil {
 		return err
@@ -183,6 +191,10 @@ func routeMetadataForCommand(args []string, command string) (compiler.RouteMetad
 	}
 	metadata := compiler.BuildRouteMetadataFromIR(options.Config, ir)
 	return metadata, nil
+}
+
+func projectCommandHelp(args []string) bool {
+	return len(args) == 1 && (args[0] == "-h" || args[0] == "--help")
 }
 
 func printRouteInfos(infos []compiler.RouteInfo) {

@@ -158,8 +158,11 @@ binding details for command/query references.
 
 `gowdk build` also writes a separate SPA route manifest named
 `gowdk-routes.json` in the selected output directory. That generated file records
-emitted page IDs, declared routes, and relative build output paths.
-Dynamic SPA routes are recorded once for each generated concrete route.
+emitted page IDs, declared routes, and relative build output paths under
+`routes`. Dynamic SPA routes are recorded once for each generated concrete
+route. The same file also records generated request-time backend route metadata
+under `endpoints` for actions, APIs, fragments, and routable command/query
+adapters.
 
 SPA builds also write `gowdk-assets.json` in the selected output directory:
 

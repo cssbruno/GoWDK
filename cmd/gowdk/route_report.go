@@ -18,20 +18,27 @@ type endpointMetadataReport struct {
 }
 
 type routeBindingJSON struct {
-	Kind          compiler.RouteKind `json:"kind"`
-	Method        string             `json:"method"`
-	Route         string             `json:"route"`
-	PageID        string             `json:"pageId"`
-	Package       string             `json:"package,omitempty"`
-	Render        string             `json:"render,omitempty"`
-	Cache         string             `json:"cache,omitempty"`
-	DynamicParams []string           `json:"dynamicParams,omitempty"`
-	RouteParams   []routeParamJSON   `json:"routeParams,omitempty"`
-	Layouts       []string           `json:"layouts,omitempty"`
-	Guards        []string           `json:"guards,omitempty"`
-	Source        string             `json:"source,omitempty"`
-	SourceSpan    *sourceSpanJSON    `json:"sourceSpan,omitempty"`
-	Handler       string             `json:"handler"`
+	Kind           compiler.RouteKind `json:"kind"`
+	EndpointSource string             `json:"endpointSource,omitempty"`
+	Directive      string             `json:"directive,omitempty"`
+	Method         string             `json:"method"`
+	Route          string             `json:"route"`
+	PageID         string             `json:"pageId"`
+	Package        string             `json:"package,omitempty"`
+	PackagePath    string             `json:"packagePath,omitempty"`
+	PackageName    string             `json:"packageName,omitempty"`
+	Symbol         string             `json:"symbol,omitempty"`
+	Render         string             `json:"render,omitempty"`
+	Cache          string             `json:"cache,omitempty"`
+	DynamicParams  []string           `json:"dynamicParams,omitempty"`
+	RouteParams    []routeParamJSON   `json:"routeParams,omitempty"`
+	Layouts        []string           `json:"layouts,omitempty"`
+	Guards         []string           `json:"guards,omitempty"`
+	CSRF           bool               `json:"csrf,omitempty"`
+	Source         string             `json:"source,omitempty"`
+	SourceSpan     *sourceSpanJSON    `json:"sourceSpan,omitempty"`
+	Handler        string             `json:"handler"`
+	BindingStatus  string             `json:"bindingStatus,omitempty"`
 }
 
 type routeParamJSON struct {
@@ -42,6 +49,7 @@ type routeParamJSON struct {
 type endpointBindingJSON struct {
 	Kind           compiler.EndpointKind `json:"kind"`
 	EndpointSource string                `json:"endpointSource,omitempty"`
+	Directive      string                `json:"directive,omitempty"`
 	Source         string                `json:"source,omitempty"`
 	SourceSpan     *sourceSpanJSON       `json:"sourceSpan,omitempty"`
 	Package        string                `json:"package,omitempty"`
@@ -106,7 +114,7 @@ type routeInfoJSON struct {
 }
 
 func routeMetadataJSON(metadata compiler.RouteMetadata) routeMetadataReport {
-	routes := make([]routeBindingJSON, 0, len(metadata.Routes))
+	routes := make([]routeBindingJSON, 0, len(metadata.Routes)+len(metadata.Endpoints))
 	for _, binding := range metadata.Routes {
 		routes = append(routes, routeBindingJSON{
 			Kind:          binding.Kind,
@@ -126,6 +134,9 @@ func routeMetadataJSON(metadata compiler.RouteMetadata) routeMetadataReport {
 		})
 	}
 	endpoints := endpointsJSON(metadata.Endpoints)
+	for _, endpoint := range endpoints {
+		routes = append(routes, endpointRouteJSON(endpoint))
+	}
 	info := make([]routeInfoJSON, 0, len(metadata.Info))
 	for _, item := range metadata.Info {
 		info = append(info, routeInfoJSON{
@@ -156,6 +167,7 @@ func endpointsJSON(bindings []compiler.EndpointBinding) []endpointBindingJSON {
 		item := endpointBindingJSON{
 			Kind:           binding.Kind,
 			EndpointSource: binding.EndpointSource,
+			Directive:      endpointDirective(binding.Kind),
 			Source:         binding.Source,
 			SourceSpan:     endpointSourceSpanJSON(binding.SourceSpan),
 			Package:        binding.Package,
@@ -204,6 +216,47 @@ func endpointsJSON(bindings []compiler.EndpointBinding) []endpointBindingJSON {
 		endpoints = append(endpoints, item)
 	}
 	return endpoints
+}
+
+func endpointRouteJSON(endpoint endpointBindingJSON) routeBindingJSON {
+	return routeBindingJSON{
+		Kind:           compiler.RouteKind(endpoint.Kind),
+		EndpointSource: endpoint.EndpointSource,
+		Directive:      endpoint.Directive,
+		Method:         endpoint.Method,
+		Route:          endpoint.Route,
+		PageID:         endpoint.PageID,
+		Package:        endpoint.Package,
+		PackagePath:    endpoint.PackagePath,
+		PackageName:    endpoint.PackageName,
+		Symbol:         endpoint.Symbol,
+		Cache:          endpoint.Cache,
+		DynamicParams:  append([]string(nil), endpoint.DynamicParams...),
+		RouteParams:    append([]routeParamJSON(nil), endpoint.RouteParams...),
+		Guards:         append([]string(nil), endpoint.Guards...),
+		CSRF:           endpoint.CSRF,
+		Source:         endpoint.Source,
+		SourceSpan:     endpoint.SourceSpan,
+		Handler:        endpoint.Handler,
+		BindingStatus:  endpoint.BindingStatus,
+	}
+}
+
+func endpointDirective(kind compiler.EndpointKind) string {
+	switch kind {
+	case compiler.EndpointAction:
+		return "act"
+	case compiler.EndpointAPI:
+		return "api"
+	case compiler.EndpointFragment:
+		return "fragment"
+	case compiler.EndpointCommand:
+		return "g:command"
+	case compiler.EndpointQuery:
+		return "g:query"
+	default:
+		return ""
+	}
 }
 
 func routeParamsJSON(params []source.RouteParam) []routeParamJSON {

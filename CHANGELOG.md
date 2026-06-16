@@ -5,6 +5,8 @@ packages, and tooling contracts may change before 1.0.
 
 ## Unreleased
 
+## v0.6.0 - 2026-06-16
+
 ### Breaking
 
 - **The lane model: name the three execution lanes and infer directive lanes.**

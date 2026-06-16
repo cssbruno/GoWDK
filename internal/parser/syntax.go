@@ -293,6 +293,12 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 		}
 		if match := goBlockPattern.FindStringSubmatch(line); match != nil {
 			target := strings.TrimSpace(match[1])
+			// go build {} is the explicit form of the default build lane; both
+			// canonicalize to the empty target so the IR has one representation
+			// and mixing them is caught as a duplicate.
+			if target == "build" {
+				target = ""
+			}
 			if span, exists := seenGoBlocks[target]; exists {
 				label := "go"
 				if target != "" {

@@ -252,6 +252,53 @@ view {
 	}
 }
 
+func TestParseSyntaxGoBuildIsDefaultBuildLane(t *testing.T) {
+	file, err := ParseSyntax([]byte(`page home
+route "/"
+
+go build {
+func HomePageForBuild() string { return "home" }
+}
+
+view {
+  <main>Home</main>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var goBlocks []gwdkast.Block
+	for _, block := range file.Blocks {
+		if block.Kind == "go" {
+			goBlocks = append(goBlocks, block)
+		}
+	}
+	if len(goBlocks) != 1 || goBlocks[0].Name != "" {
+		t.Fatalf("go build {} should canonicalize to the default (empty) build target, got %#v", goBlocks)
+	}
+}
+
+func TestParseSyntaxRejectsGoBuildDuplicatingDefault(t *testing.T) {
+	_, err := ParseSyntax([]byte(`page home
+route "/"
+
+go {
+func One() {}
+}
+
+go build {
+func Two() {}
+}
+
+view {
+  <main>Home</main>
+}
+`))
+	if err == nil || !strings.Contains(err.Error(), "duplicate go block") {
+		t.Fatalf("go {} and go build {} are the same lane and must collide, got %v", err)
+	}
+}
+
 func TestParseSyntaxReturnsGOWDKAST(t *testing.T) {
 	var _ gwdkast.File = mustParseSyntax(t, []byte(`package ui
 component Counter

@@ -10,6 +10,14 @@ import (
 // never fall back to running the build unconfined.
 var ErrSandboxUnsupported = errors.New("playground sandbox is not supported on this platform")
 
+// SandboxUnsupportedExitCode is the exit status the re-executed child uses to
+// tell the parent that confinement could not be established here (e.g. the
+// kernel denied a required mount inside the namespace). The parent maps this
+// code back to ErrSandboxUnsupported so hosted execution fails closed cleanly
+// instead of surfacing an opaque non-zero exit. It is outside the range the Go
+// toolchain or the build itself returns.
+const SandboxUnsupportedExitCode = 99
+
 // SandboxSpec describes a confined build execution. All paths are absolute host
 // paths; the sandbox remaps them to fixed locations inside the confined root.
 type SandboxSpec struct {
@@ -21,6 +29,9 @@ type SandboxSpec struct {
 	GoRoot string `json:"goRoot"`
 	// GoModCache is the host module cache exposed through a throwaway writable
 	// overlay so offline builds resolve cached modules without persisting writes.
+	// Its lower layer is readable by the sandboxed build, so a hosted runner must
+	// point this at a per-session cache holding only the submitted project's
+	// dependencies, never a shared cache with other tenants' private modules.
 	GoModCache string `json:"goModCache"`
 	// MaxAddressSpaceBytes caps the virtual address space (RLIMIT_AS). Zero
 	// leaves the limit unset.
@@ -81,6 +92,9 @@ func SandboxEnvironment() []string {
 		"GOPATH=" + SandboxTmpPath + "/gopath",
 		"GOPROXY=off",
 		"GOSUMDB=off",
+		// GOWORK=off so a submitted go.work cannot pull in modules outside the
+		// staged project copy, matching the documented isolation contract.
+		"GOWORK=off",
 		"GOFLAGS=-mod=mod",
 		"GOTOOLCHAIN=local",
 		"CGO_ENABLED=0",

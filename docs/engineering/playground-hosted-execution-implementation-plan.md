@@ -85,8 +85,9 @@ build code runs (`internal/playground/sandbox_linux.go`):
   bind-mounts only a read-only GOROOT, a throwaway module-cache overlay
   (read-only host lower, tmpfs upper that is discarded), the staged workspace,
   the output directory, a fresh build cache, a private `/tmp`, a private `/proc`,
-  and a minimal `/dev`. The host filesystem is detached, so host data is
-  unreadable.
+  and a minimal `/dev`. The host filesystem is detached, so host data outside
+  these explicitly mounted paths is unreadable (see the module-cache caveat under
+  residual risk).
 - **PID, IPC, and UTS namespaces** isolate the process tree.
 - **rlimits** cap address space, CPU time, file size, and open files; the
   wall-clock timeout kills the namespace's init, which reaps the whole tree.
@@ -106,6 +107,13 @@ complete substitute for a hardened hosting boundary:
   A seccomp-bpf allowlist and Landlock rules are tracked as hardening follow-ups
   (see issue #459).
 - Resource enforcement is per-process rlimits, not cgroup-level memory/pids caps.
+- The module cache is exposed read-only, but its **lower layer is the whole host
+  `GOMODCACHE`**: submitted build code can read every module source cached there.
+  This is safe only when that cache holds nothing sensitive. A hosted runner
+  **must** point `GOMODCACHE` at a per-session/throwaway cache populated with just
+  the submitted project's dependencies, never a shared cache that may contain
+  other tenants' private modules. Populating that per-session cache automatically
+  is a tracked follow-up (see issue #459).
 
 A hosted playground service must still run this sandboxed execution **inside an
 outer VM or container boundary** with its own network egress controls, cgroup

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -141,6 +142,7 @@ func playgroundRun(args []string) error {
 		MaxCPUSeconds:        60,        // 60 CPU-seconds
 		MaxFileSizeBytes:     256 << 20, // 256 MiB per file
 		MaxOpenFiles:         4096,
+		MaxProcesses:         256, // cap fork bombs; RLIMIT_NPROC is per-userns here
 	}
 	encoded, err := playground.EncodeSandboxSpec(spec)
 	if err != nil {
@@ -172,6 +174,13 @@ func playgroundSandboxBuild(args []string) error {
 		return err
 	}
 	if err := playground.ConfineToSandbox(spec); err != nil {
+		// Confinement was denied by the environment (e.g. a blocked mount inside
+		// the namespace). Signal the parent with the sentinel exit code so it
+		// fails closed as "sandbox unavailable" rather than an opaque error; the
+		// build never runs unconfined because it is sequenced after this point.
+		if errors.Is(err, playground.ErrSandboxUnsupported) {
+			os.Exit(playground.SandboxUnsupportedExitCode)
+		}
 		return fmt.Errorf("sandbox confinement failed: %w", err)
 	}
 
@@ -197,17 +206,23 @@ func playgroundSandboxBuild(args []string) error {
 
 // resolveGoToolchainPaths returns the host GOROOT and module cache to expose
 // (read-only / overlay) inside the sandbox so the toolchain can run offline.
+//
+// GOROOT comes from runtime.GOROOT(), which is baked into this binary at build
+// time and so cannot be redirected by an attacker-controlled PATH. The go binary
+// used to read GOMODCACHE is then resolved from that trusted GOROOT rather than
+// looked up on PATH: a hosted wrapper may start in the submitted project (or
+// otherwise have an attacker-writable directory on PATH), and this runs before
+// any namespace/pivot confinement, so a PATH lookup could execute a planted go.
 func resolveGoToolchainPaths() (string, string, error) {
-	goRoot := runtime.GOROOT()
-	if strings.TrimSpace(goRoot) == "" {
-		if out, err := exec.Command("go", "env", "GOROOT").Output(); err == nil {
-			goRoot = strings.TrimSpace(string(out))
-		}
-	}
-	if strings.TrimSpace(goRoot) == "" {
+	goRoot := strings.TrimSpace(runtime.GOROOT())
+	if goRoot == "" {
 		return "", "", fmt.Errorf("could not resolve GOROOT for the sandbox toolchain")
 	}
-	out, err := exec.Command("go", "env", "GOMODCACHE").Output()
+	goBin := filepath.Join(goRoot, "bin", "go")
+	if _, err := os.Stat(goBin); err != nil {
+		return "", "", fmt.Errorf("go toolchain not found at %s: %w", goBin, err)
+	}
+	out, err := exec.Command(goBin, "env", "GOMODCACHE").Output()
 	if err != nil {
 		return "", "", fmt.Errorf("could not resolve GOMODCACHE for the sandbox: %w", err)
 	}

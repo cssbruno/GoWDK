@@ -3,6 +3,7 @@
 package playground
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -33,6 +34,13 @@ func runSandboxProbe() int {
 		return 1
 	}
 	if err := ConfineToSandbox(spec); err != nil {
+		// The environment created the namespaces but denied confinement (e.g. a
+		// blocked mount). That is "sandbox unavailable", not a test failure: exit
+		// with the sentinel so the parent skips instead of failing.
+		if errors.Is(err, ErrSandboxUnsupported) {
+			fmt.Println("SANDBOX_UNSUPPORTED:", err)
+			return SandboxUnsupportedExitCode
+		}
 		fmt.Println("FAIL confine:", err)
 		return 1
 	}
@@ -112,6 +120,13 @@ func TestSandboxIsolation(t *testing.T) {
 	}
 	// Run the probe with no test selected; TestMain exits before the suite runs.
 	err = LaunchSandbox(spec, os.Args[0], []string{"-test.run=^$"}, env, &out, &out, 30*time.Second)
+	// Some environments (e.g. CI runners with AppArmor's
+	// kernel.apparmor_restrict_unprivileged_userns) report a positive
+	// max_user_namespaces yet still deny the namespace clone at launch. That is a
+	// "sandbox unavailable" condition, not a test failure: skip rather than fail.
+	if errors.Is(err, ErrSandboxUnsupported) {
+		t.Skip("sandbox cannot be created in this environment: " + err.Error())
+	}
 	if err != nil {
 		t.Fatalf("sandbox probe failed: %v\noutput:\n%s", err, out.String())
 	}

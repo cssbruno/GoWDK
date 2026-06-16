@@ -36,9 +36,11 @@ pattern.
 
 ## User Flow
 
-1. Configure `auth.Addon()` and request-time rendering for a guarded page.
+1. Configure `auth.Addon(auth.Options{...})` and request-time rendering for a
+   guarded page.
 2. Provide runtime session and CSRF secrets through environment variables.
-3. Register generated app guard hooks from app-owned Go.
+3. Let generated app startup register the default session provider and
+   `auth.required` guard.
 4. Log in through a generated action, receive a signed session cookie, access a
    guarded SSR page, and log out through a protected action.
 

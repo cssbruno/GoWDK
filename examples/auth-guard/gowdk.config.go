@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/cssbruno/gowdk"
 	authaddon "github.com/cssbruno/gowdk/addons/auth"
 	"github.com/cssbruno/gowdk/addons/ssr"
@@ -39,7 +41,12 @@ var Config = gowdk.Config{
 		},
 	},
 	Addons: []gowdk.Addon{
-		authaddon.Addon(),
+		authaddon.Addon(authaddon.Options{
+			SecretEnv:  "GOWDK_AUTH_SESSION_SECRET",
+			CookieName: "gowdk_auth_guard_session",
+			TTL:        12 * time.Hour,
+			Insecure:   true,
+		}),
 		ssr.Addon(),
 	},
 }

@@ -1,7 +1,6 @@
 ROOT := ../..
 CONFIG := examples/auth-guard/gowdk.config.go
 APP_DIR := examples/auth-guard/.gowdk/app
-HOOK_FILE := $(APP_DIR)/gowdkapp/auth_guard_hooks.go
 GOWDK_AUTH_SESSION_SECRET ?= development-auth-session-secret-32bytes
 GOWDK_CSRF_SECRET ?= development-auth-csrf-secret-32bytes
 
@@ -17,11 +16,7 @@ check:
 routes:
 	cd $(ROOT) && go run ./cmd/gowdk routes --config $(CONFIG)
 
-$(HOOK_FILE): apphooks/auth_guard_hooks.go.txt
-	mkdir -p $(ROOT)/$(APP_DIR)/gowdkapp
-	cp apphooks/auth_guard_hooks.go.txt $(ROOT)/$(HOOK_FILE)
-
-build: $(HOOK_FILE)
+build:
 	cd $(ROOT) && go run ./cmd/gowdk build --config $(CONFIG) --target auth-guard
 
 serve: build

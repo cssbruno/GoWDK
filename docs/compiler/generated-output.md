@@ -64,6 +64,11 @@ Implemented today:
   `RegisterMiddleware(runtime/app.Middleware)`. Registered middleware wraps the
   full generated app handler chain in registration order before static serving,
   health checks, generated headers, and request-time route dispatch.
+- When `auth.Addon(auth.Options{...})` is configured, generated embedded and
+  backend-only app startup configures `addons/auth` sessions, registers the
+  default `auth.required` guard, and wires the session provider for native
+  `role:` / `permission:` guards. App login/logout handlers can use
+  `auth.DefaultSessions()` to issue or clear the same signed session cookie.
 - `gowdk inspect go-bindings` reports Go binding status for actions, APIs,
   fragments, SSR load functions, build-time Go calls, and web command/query
   references. `gowdk generate stubs` can write missing action/API handler

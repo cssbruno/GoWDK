@@ -26,6 +26,9 @@ func backendRuntimeImportMap(options Options) map[string]string {
 		imports["os"] = "os"
 		imports["strings"] = "strings"
 	}
+	if generatedUsesAuthAddon(options) {
+		imports["gowdkauthaddon"] = "github.com/cssbruno/gowdk/addons/auth"
+	}
 	if envRuntimeValidationRequired(options.Config.Env) {
 		imports["errors"] = "errors"
 		imports["os"] = "os"

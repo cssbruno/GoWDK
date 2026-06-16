@@ -74,11 +74,14 @@ SSR is optional and must not become the default framework identity.
   `runtime/auth.Provider`.
 
 Generated app packages that include at least one guarded SSR, action, API, or
-fragment route require backing functions in the generated app package:
+fragment route require backing functions in the generated app package unless
+`auth.Addon` supplies them. With `auth.Addon(auth.Options{...})`, generated
+startup configures the session manager, registers `auth.required`, and uses that
+session manager for native `role:` / `permission:` guards.
 
 ```go
 func GOWDKGuardRegistry() gowdkguard.Registry // required when custom guard IDs are used
-func GOWDKAuthProvider() auth.Provider        // required when role:/permission: IDs are used
+func GOWDKAuthProvider() auth.Provider        // required when role:/permission: IDs are used without auth.Addon
 ```
 
 Define custom guards in app startup code that is compiled with the generated app

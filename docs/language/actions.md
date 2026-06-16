@@ -105,10 +105,12 @@ Current behavior:
   during generated app action endpoint extraction. Uploads belong in user-owned
   API/server handlers where body limits, storage, validation, cleanup, auth, and
   logging policy are explicit.
-- Actions declared on guarded pages share the generated app guard hooks with
-  SSR pages and APIs. Custom guards require `GOWDKGuardRegistry`; native RBAC
-  guard IDs such as `role:admin` and `permission:posts.write` require
-  `GOWDKAuthProvider`. Missing backing hooks fail the generated app Go build.
+- Actions declared on guarded pages share generated app guard backing with SSR
+  pages and APIs. `auth.Addon` supplies `auth.required` and native RBAC session
+  guard backing when configured. Custom guards require `GOWDKGuardRegistry`;
+  native RBAC guard IDs such as `role:admin` and `permission:posts.write`
+  require `GOWDKAuthProvider` only without `auth.Addon`. Missing backing hooks
+  fail the generated app Go build.
   Generated action handlers run guards before CSRF checks, form decoding, and
   user handler calls. Treat these as defense-in-depth redundancy for generated
   route/page access, never as backend resource authorization. If the page

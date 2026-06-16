@@ -53,11 +53,14 @@ time until access is stated. Use `guard public` to serve the page on purpose.
 `public` is a compile-time marker, must be the only guard on that page, and does
 not require runtime backing code.
 
-Routes with non-public `guard` IDs require backing code in the generated app
-package. A guarded generated app will not compile until the required hook
-exists. Non-public page guards also require request-time page rendering for the
-page GET route; build-time SPA pages emit static HTML and cannot enforce
-frontend access.
+Routes with non-public `guard` IDs require backing code unless the auth addon
+provides it. `auth.Addon(auth.Options{...})` configures signed-cookie sessions,
+registers the default `auth.required` guard, and supplies the provider used by
+native `role:` / `permission:` guard IDs. Non-public page guards also require
+request-time page rendering for the page GET route; build-time SPA pages emit
+static HTML and cannot enforce frontend access.
+
+Custom guard IDs still belong in generated app startup code:
 
 ```go
 import gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
@@ -80,7 +83,11 @@ Native RBAC guards reuse `guard` IDs:
 guard role:admin, permission:patients.read
 ```
 
-Generated app packages with native RBAC guard IDs require:
+With `auth.Addon`, generated startup resolves those IDs through the configured
+session manager. App handlers can issue or clear the same session cookie through
+`auth.DefaultSessions()`.
+
+Without `auth.Addon`, generated app packages with native RBAC guard IDs require:
 
 ```go
 func GOWDKAuthProvider() auth.Provider
@@ -112,9 +119,9 @@ RBAC guard behavior:
 - `permission:<name>` requires the principal to have that permission.
 - Multiple guard IDs are enforced in declaration order, so multiple RBAC guards
   are an AND check.
-- A missing `GOWDKAuthProvider` function fails at Go compile time. A nil
-  principal, provider error, or missing role/permission fails closed with HTTP
-  403.
+- A missing `GOWDKAuthProvider` function fails at Go compile time when no auth
+  addon provider is configured. A nil principal, provider error, or missing
+  role/permission fails closed with HTTP 403.
 - GOWDK does not manage users, passwords, OAuth, sessions, tenants, or storage.
   The auth provider adapts application-owned identity into `auth.Principal`.
 - Native RBAC guards are a defense-in-depth redundancy layer for generated

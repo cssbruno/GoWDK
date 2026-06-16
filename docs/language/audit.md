@@ -99,9 +99,9 @@ headers but installs no auth provider, so it rejects actor expectations rather
 than pass or fail them for the wrong reason.
 
 For `gowdk audit --run`, native RBAC actor expectations use a test-only provider
-inside the temporary generated app. Production generated apps still require the
-app-owned `GOWDKAuthProvider` / `GOWDKGuardRegistry` hooks documented for
-guarded routes.
+inside the temporary generated app. Production generated apps use `auth.Addon`
+defaults when configured, or the app-owned `GOWDKAuthProvider` /
+`GOWDKGuardRegistry` hooks documented for guarded routes.
 
 ## Built-In Baseline
 

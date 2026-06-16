@@ -31,6 +31,41 @@ func TestFormatGoldenPreservesCommentsAndNestedMarkup(t *testing.T) {
 	}
 }
 
+func TestFormatPreservesNestedViewMarkupDepth(t *testing.T) {
+	source := []byte(`view {
+<main class="shell">
+<section class="panel">
+<p>FlowBoard</p>
+<form g:post={Login}>
+<div g:if={Count > 0}>
+<label for="email">Email</label>
+<input id="email" />
+</div>
+</form>
+</section>
+</main>
+}
+`)
+	got := string(Format(source))
+	want := `view {
+  <main class="shell">
+    <section class="panel">
+      <p>FlowBoard</p>
+      <form g:post={Login}>
+        <div g:if={Count > 0}>
+          <label for="email">Email</label>
+          <input id="email" />
+        </div>
+      </form>
+    </section>
+  </main>
+}
+`
+	if got != want {
+		t.Fatalf("nested view markup was flattened:\n--- got ---\n%s--- want ---\n%s", got, want)
+	}
+}
+
 func TestFormatPreservesLinesLongerThanScannerLimit(t *testing.T) {
 	longLine := "<p>" + strings.Repeat("x", 70_000) + "</p>"
 	source := []byte("page home\nroute \"/\"\n\nview {\n" + longLine + "\n}\n")

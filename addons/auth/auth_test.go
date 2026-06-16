@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/cssbruno/gowdk"
+	gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
 )
 
 func TestAddonEnablesAuthFeature(t *testing.T) {
@@ -21,6 +22,34 @@ func TestAddonEnablesAuthFeature(t *testing.T) {
 	config := gowdk.Config{Addons: []gowdk.Addon{addon}}
 	if !config.HasFeature(gowdk.FeatureAuth) {
 		t.Fatal("expected auth feature to be enabled")
+	}
+}
+
+func TestAddonExposesGeneratedSessionOptions(t *testing.T) {
+	addon := Addon(Options{
+		SecretEnv:  "GOWDK_TEST_AUTH_SECRET",
+		CookieName: "site_session",
+		TTL:        2 * time.Hour,
+		Insecure:   true,
+	})
+	provider, ok := addon.(gowdk.AuthSessionProvider)
+	if !ok {
+		t.Fatalf("expected auth addon to implement AuthSessionProvider, got %T", addon)
+	}
+	options := provider.AuthSessionOptions()
+	if options.SecretEnv != "GOWDK_TEST_AUTH_SECRET" || options.CookieName != "site_session" || options.TTL != 2*time.Hour || !options.Insecure {
+		t.Fatalf("unexpected auth session options: %#v", options)
+	}
+}
+
+func TestAddonDefaultSessionOptionsUseDefaultSecretEnv(t *testing.T) {
+	provider, ok := Addon().(gowdk.AuthSessionProvider)
+	if !ok {
+		t.Fatalf("expected auth addon to implement AuthSessionProvider")
+	}
+	options := provider.AuthSessionOptions()
+	if options.SecretEnv != DefaultSessionSecretEnv {
+		t.Fatalf("expected default secret env %q, got %#v", DefaultSessionSecretEnv, options)
 	}
 }
 
@@ -170,6 +199,42 @@ func TestSessionIssueAndResolve(t *testing.T) {
 	}
 	if got.ID != want.ID || !got.HasRole("admin") || !got.HasPermission("posts.write") {
 		t.Fatalf("resolved principal = %+v, want %+v", got, want)
+	}
+}
+
+func TestConfigureExposesSessionsAndRequiredGuard(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	configured, err := Configure(Options{
+		Secret:   []byte(strings.Repeat("s", MinSessionSecretBytes)),
+		Insecure: true,
+		Now:      fixedClock(now),
+	})
+	if err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+	sessions, err := DefaultSessions()
+	if err != nil {
+		t.Fatalf("DefaultSessions: %v", err)
+	}
+	if sessions != configured {
+		t.Fatalf("Sessions returned a different manager")
+	}
+
+	recorder := httptest.NewRecorder()
+	if err := sessions.Issue(recorder, Principal{ID: "user-1"}); err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	authed := httptest.NewRequest(http.MethodGet, "/", nil)
+	for _, cookie := range recorder.Result().Cookies() {
+		authed.AddCookie(cookie)
+	}
+	if err := RequireAuthenticated(nil)(gowdkguard.NewContext(authed, nil)); err != nil {
+		t.Fatalf("RequireAuthenticated rejected signed session: %v", err)
+	}
+
+	anonymous := httptest.NewRequest(http.MethodGet, "/", nil)
+	if err := RequireAuthenticated(sessions.Provider())(gowdkguard.NewContext(anonymous, nil)); err == nil {
+		t.Fatal("RequireAuthenticated accepted anonymous request")
 	}
 }
 

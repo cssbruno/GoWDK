@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/subtle"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -13,13 +12,11 @@ import (
 	gowdkauth "github.com/cssbruno/gowdk/addons/auth"
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/runtime/form"
-	"github.com/cssbruno/gowdk/runtime/guard"
 	"github.com/cssbruno/gowdk/runtime/response"
 )
 
 const (
-	sessionSecretEnv = "GOWDK_AUTH_SESSION_SECRET"
-	sessionCookie    = "gowdk_auth_guard_session"
+	sessionCookie = "gowdk_auth_guard_session"
 )
 
 var passwordHasher gowdkauth.PasswordHasher = gowdkauth.PBKDF2Hasher{}
@@ -28,12 +25,6 @@ type DashboardData struct {
 	Email     string `json:"email"`
 	Role      string `json:"role"`
 	ExpiresAt string `json:"expiresAt"`
-}
-
-var sessionState struct {
-	sync.Mutex
-	manager *gowdkauth.Sessions
-	err     error
 }
 
 var passwordState struct {
@@ -55,7 +46,7 @@ func Login(_ context.Context, values form.Values) (response.Response, error) {
 		return response.RedirectTo("/?login=failed"), nil
 	}
 
-	sessions, err := Sessions()
+	sessions, err := gowdkauth.DefaultSessions()
 	if err != nil {
 		return response.Response{}, err
 	}
@@ -71,7 +62,7 @@ func Login(_ context.Context, values form.Values) (response.Response, error) {
 }
 
 func Logout(context.Context, form.Values) (response.Response, error) {
-	sessions, err := Sessions()
+	sessions, err := gowdkauth.DefaultSessions()
 	if err != nil {
 		return response.Response{}, err
 	}
@@ -79,7 +70,7 @@ func Logout(context.Context, form.Values) (response.Response, error) {
 }
 
 func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
-	sessions, err := Sessions()
+	sessions, err := gowdkauth.DefaultSessions()
 	if err != nil {
 		return nil, err
 	}
@@ -97,53 +88,6 @@ func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 			ExpiresAt: time.Now().Add(12 * time.Hour).Format(time.RFC822),
 		},
 	}, nil
-}
-
-func RequireSession(ctx guard.Context) error {
-	sessions, err := Sessions()
-	if err != nil {
-		return err
-	}
-	principal, err := sessions.Principal(ctx.Request)
-	if err != nil {
-		return err
-	}
-	if principal == nil {
-		return guard.RedirectTo("/?login=required")
-	}
-	return nil
-}
-
-// AuthProvider returns a Provider that resolves the session manager lazily on
-// the first request. The generated app registers the provider from its init()
-// hook, which runs before the app's env-contract validation. Building Sessions
-// here (as the previous MustAuthProvider did) would panic on a missing or
-// too-short GOWDK_AUTH_SESSION_SECRET and crash with a stack trace instead of
-// the clean startup error. Deferring construction to Principal keeps secret
-// misconfiguration on the normal validation path.
-func AuthProvider() gowdkauth.Provider {
-	return gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
-		sessions, err := Sessions()
-		if err != nil {
-			return nil, err
-		}
-		return sessions.Principal(request)
-	})
-}
-
-func Sessions() (*gowdkauth.Sessions, error) {
-	sessionState.Lock()
-	defer sessionState.Unlock()
-	if sessionState.manager != nil || sessionState.err != nil {
-		return sessionState.manager, sessionState.err
-	}
-	sessionState.manager, sessionState.err = gowdkauth.New(gowdkauth.Options{
-		SecretEnv:  sessionSecretEnv,
-		CookieName: sessionCookie,
-		TTL:        12 * time.Hour,
-		Insecure:   true,
-	})
-	return sessionState.manager, sessionState.err
 }
 
 func demoPasswordHash() (string, error) {

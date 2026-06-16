@@ -150,6 +150,7 @@ type SSRCondSpec struct {
 	Placeholder string
 	SourcePath  string
 	Negate      bool
+	Expr        string
 	Template    string
 	Fields      []SSRListField
 	Lists       []SSRListSpec

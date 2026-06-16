@@ -119,6 +119,7 @@ func convertSSRCondSpecs(conds []view.SSRCondReplacement) []source.SSRCondSpec {
 			Placeholder: cond.Placeholder,
 			SourcePath:  cond.SourcePath,
 			Negate:      cond.Negate,
+			Expr:        cond.Expr,
 			Template:    cond.Template,
 			Fields:      convertSSRListFields(cond.Fields),
 			Lists:       convertSSRListSpecs(cond.Lists),

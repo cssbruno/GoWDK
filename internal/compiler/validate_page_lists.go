@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/viewmodel"
 	"github.com/cssbruno/gowdk/internal/viewparse"
@@ -150,17 +151,18 @@ func validatePageServerForDirective(page gwdkir.Page, attr viewmodel.Attr, loads
 
 func validatePageServerIfDirective(page gwdkir.Page, attr viewmodel.Attr, loads pageLoads, eachVars []string, diagnostics *[]ValidationError) {
 	raw := strings.TrimSpace(attr.Value)
-	condition := strings.TrimSpace(strings.TrimPrefix(raw, "!"))
-	if condition == "" {
+	if raw == "" {
 		return
 	}
+	if !simpleConditionField(raw) {
+		// Compound expression: server-lane only at the top level, and every
+		// referenced root must be a declared server {} field.
+		validatePageServerCondExpr(page, raw, loads, eachVars, diagnostics)
+		return
+	}
+	condition := strings.TrimSpace(strings.TrimPrefix(raw, "!"))
 	if !serverLaneForCondition(condition, loads, eachVars) {
 		// Client lane: validated by the island validator.
-		return
-	}
-	if strings.ContainsAny(condition, "!&|=<>(){}") {
-		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "server_if_invalid",
-			fmt.Sprintf("%s: server-lane g:if condition %q must be a single server {} field, optionally negated with a leading !; compute compound conditions in Go and expose a bool server {} field", page.ID, condition)))
 		return
 	}
 	if len(eachVars) == 0 {
@@ -176,6 +178,55 @@ func validatePageServerIfDirective(page gwdkir.Page, attr viewmodel.Attr, loads 
 		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "server_if_nested_scope",
 			fmt.Sprintf("%s: nested g:if condition %q must reference the enclosing row item %q (for example %s.field)", page.ID, condition, parent, parent)))
 	}
+}
+
+// validatePageServerCondExpr mirrors the renderer's compound server g:if rule: a
+// compound expression is the server lane only when it references a server {}
+// field, is rejected inside a row, and must parse with all roots declared.
+func validatePageServerCondExpr(page gwdkir.Page, raw string, loads pageLoads, eachVars []string, diagnostics *[]ValidationError) {
+	fields, err := clientlang.ExprFields(raw)
+	if err != nil {
+		// Unparseable: only our concern when it is clearly the server lane; leave
+		// client-lane syntax errors to the island validator.
+		return
+	}
+	references := false
+	for _, field := range fields {
+		if loads.roots[exprRoot(field)] {
+			references = true
+			break
+		}
+	}
+	if !references {
+		return
+	}
+	if len(eachVars) > 0 {
+		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "server_if_invalid",
+			fmt.Sprintf("%s: a nested server-lane g:if supports a single row field, not a compound expression %q; compute compound conditions in Go and expose a bool server {} field", page.ID, raw)))
+		return
+	}
+	if _, err := clientlang.ParseExpr(raw); err != nil {
+		*diagnostics = append(*diagnostics, pageListDiagnostic(page, "server_if_invalid",
+			fmt.Sprintf("%s: server-lane g:if condition %q is not a valid expression: %v", page.ID, raw, err)))
+		return
+	}
+	for _, field := range fields {
+		if !loads.roots[exprRoot(field)] {
+			*diagnostics = append(*diagnostics, pageListDiagnostic(page, "server_if_invalid",
+				fmt.Sprintf("%s: server-lane g:if condition %q references %q, which is not a declared server {} field", page.ID, raw, field)))
+			return
+		}
+	}
+}
+
+// simpleConditionField reports whether a g:if value is a bare field path,
+// optionally negated with a single leading !.
+func simpleConditionField(raw string) bool {
+	stripped := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(raw), "!"))
+	if stripped == "" {
+		return false
+	}
+	return !strings.ContainsAny(stripped, "!&|=<>(){}\"' \t")
 }
 
 func validatePageRawHTMLDirective(page gwdkir.Page, attr viewmodel.Attr, loads pageLoads, inRow bool, diagnostics *[]ValidationError) {

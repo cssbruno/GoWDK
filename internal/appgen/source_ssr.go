@@ -278,6 +278,9 @@ func ssrCondSpecExpr(spec SSRCondSpec) ast.Expr {
 	if spec.Negate {
 		elts = append(elts, keyValue("Negate", id("true")))
 	}
+	if spec.Expr != "" {
+		elts = append(elts, keyValue("Expr", stringLit(spec.Expr)))
+	}
 	elts = append(elts, keyValue("Template", stringLit(spec.Template)))
 	if len(spec.Fields) > 0 {
 		elts = append(elts, keyValue("Fields", ssrListFieldsExpr(spec.Fields)))

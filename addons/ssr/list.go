@@ -1,11 +1,13 @@
 package ssr
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 
+	"github.com/cssbruno/gowdk/internal/clientlang"
 	gowdkhtml "github.com/cssbruno/gowdk/runtime/html"
 )
 
@@ -39,12 +41,18 @@ type ListSpec struct {
 // conditional itself.
 type CondSpec struct {
 	Placeholder string
-	SourcePath  string
-	Negate      bool
-	Template    string
-	Fields      []ListField
-	Lists       []ListSpec
-	Conds       []CondSpec
+	// SourcePath is the dotted field path for a simple field/!field condition,
+	// resolved against the enclosing container. Empty when Expr is set.
+	SourcePath string
+	Negate     bool
+	// Expr is a full bool expression (comparisons, logic, literals) evaluated
+	// against the enclosing container at request time. When set it takes
+	// precedence over SourcePath/Negate; used for top-level server g:if.
+	Expr     string
+	Template string
+	Fields   []ListField
+	Lists    []ListSpec
+	Conds    []CondSpec
 }
 
 // ListField is one per-row scalar substitution inside a region template.
@@ -97,12 +105,55 @@ func renderListRows(list ListSpec, slice []any) string {
 }
 
 func condHolds(container any, cond CondSpec) bool {
+	if cond.Expr != "" {
+		// A compound condition is evaluated as a bool expression against the
+		// container's fields. Evaluation failure fails closed (branch hidden) so a
+		// malformed condition never renders attacker-influenceable markup.
+		result, err := clientlang.EvalBool(cond.Expr, flattenEvalValues(container))
+		return err == nil && result
+	}
 	value, ok := ElementPath(container, cond.SourcePath)
 	show := ok && truthy(value)
 	if cond.Negate {
 		return !show
 	}
 	return show
+}
+
+// flattenEvalValues converts a container (the request-time load data map or a
+// row element) into the scalar string map the expression evaluator consumes.
+// Scalars stringify directly; composite values are JSON-encoded so member and
+// index access resolve after the evaluator re-parses them.
+func flattenEvalValues(container any) map[string]string {
+	out := map[string]string{}
+	fields, ok := container.(map[string]any)
+	if !ok {
+		return out
+	}
+	for key, value := range fields {
+		out[key] = evalScalarString(value)
+	}
+	return out
+}
+
+func evalScalarString(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return typed
+	case bool:
+		return strconv.FormatBool(typed)
+	case json.Number:
+		return typed.String()
+	}
+	switch reflect.ValueOf(value).Kind() {
+	case reflect.Map, reflect.Slice, reflect.Array, reflect.Struct, reflect.Pointer:
+		if encoded, err := json.Marshal(value); err == nil {
+			return string(encoded)
+		}
+	}
+	return fmt.Sprint(value)
 }
 
 func listFieldValue(field ListField, container any, index int) string {

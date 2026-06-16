@@ -42,6 +42,7 @@ func toRuntimeCondSpecs(specs []source.SSRCondSpec) []gowdkssr.CondSpec {
 			Placeholder: spec.Placeholder,
 			SourcePath:  spec.SourcePath,
 			Negate:      spec.Negate,
+			Expr:        spec.Expr,
 			Template:    spec.Template,
 			Fields:      toRuntimeListFields(spec.Fields),
 			Lists:       toRuntimeListSpecs(spec.Lists),
@@ -171,5 +172,27 @@ func TestSSRArtifactServerConditionalEndToEnd(t *testing.T) {
 	}
 	if strings.Contains(empty, "__GOWDK_SSR_") {
 		t.Fatalf("unconsumed placeholder remains:\n%s", empty)
+	}
+}
+
+// TestSSRArtifactServerConditionalExpressionEndToEnd proves a top-level server
+// g:if compound expression is built into a CondSpec.Expr and flips per request
+// through the runtime evaluator.
+func TestSSRArtifactServerConditionalExpressionEndToEnd(t *testing.T) {
+	view := `<section><p g:if={count > 0 && status == "open"}>Active: {count}</p></section>`
+	artifact := buildSSRRegionArtifact(t, `=> { count, status }`, view)
+	if len(artifact.CondSpecs) != 1 || artifact.CondSpecs[0].Expr == "" {
+		t.Fatalf("expected one expression conditional, got %#v", artifact.CondSpecs)
+	}
+	render := func(data map[string]any) string {
+		return gowdkssr.RenderRegions(artifact.HTML, toRuntimeListSpecs(artifact.ListSpecs), toRuntimeCondSpecs(artifact.CondSpecs), data)
+	}
+	on := render(map[string]any{"count": 4, "status": "open"})
+	if !strings.Contains(on, "Active: 4") {
+		t.Fatalf("expression branch should render when true:\n%s", on)
+	}
+	off := render(map[string]any{"count": 0, "status": "open"})
+	if strings.Contains(off, "Active:") {
+		t.Fatalf("expression branch should be hidden when false:\n%s", off)
 	}
 }

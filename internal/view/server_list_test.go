@@ -61,13 +61,39 @@ func TestConditionalUnknownSourceRejected(t *testing.T) {
 	}
 }
 
-func TestServerConditionalRejectsCompoundExpression(t *testing.T) {
-	_, err := RenderWithOptions(`<p g:if={a && b}>x</p>`, nil, nil, Options{
-		Tainted:        map[string]bool{"a": true, "b": true},
+func TestServerConditionalCompoundExpression(t *testing.T) {
+	// A top-level server g:if accepts a full bool expression over server {} fields;
+	// it is stored as Expr and evaluated at request time, not as a field path.
+	_, _, conds := renderServerRegions(t, `<p g:if={count > 0}>has</p>`, map[string]bool{"count": true})
+	if len(conds) != 1 {
+		t.Fatalf("want 1 conditional, got %d", len(conds))
+	}
+	if conds[0].Expr != "count > 0" {
+		t.Fatalf("compound g:if should store the expression, got %+v", conds[0])
+	}
+	if conds[0].SourcePath != "" {
+		t.Fatalf("compound g:if should not set SourcePath, got %q", conds[0].SourcePath)
+	}
+}
+
+func TestServerConditionalCompoundRejectsUnknownField(t *testing.T) {
+	_, err := RenderWithOptions(`<p g:if={count > limit}>x</p>`, nil, nil, Options{
+		Tainted:        map[string]bool{"count": true},
 		ServerCondSink: &[]SSRCondReplacement{},
 	})
-	if err == nil || !strings.Contains(err.Error(), "single server {} field") {
-		t.Fatalf("want compound-expression error, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "not a declared server {} field") {
+		t.Fatalf("want unknown-field error for compound g:if, got %v", err)
+	}
+}
+
+func TestServerConditionalCompoundRejectedInRow(t *testing.T) {
+	_, err := RenderWithOptions(`<ul><li g:for={item in items}><b g:if={item.count > 0}>!</b></li></ul>`, nil, nil, Options{
+		Tainted:        map[string]bool{"items": true},
+		ServerListSink: &[]SSRListReplacement{},
+		ServerCondSink: &[]SSRCondReplacement{},
+	})
+	if err == nil || !strings.Contains(err.Error(), "single row field") {
+		t.Fatalf("want nested-compound rejection, got %v", err)
 	}
 }
 

@@ -100,6 +100,30 @@ func TestRenderRegionsConditionalTopLevel(t *testing.T) {
 	}
 }
 
+func TestRenderRegionsConditionalExpression(t *testing.T) {
+	conds := []CondSpec{
+		{Placeholder: "@SHOW@", Expr: "count > 0 && status == \"open\"", Template: "<p>open</p>"},
+	}
+	on := RenderRegions("<div>@SHOW@</div>", nil, conds, map[string]any{"count": 3, "status": "open"})
+	if on != "<div><p>open</p></div>" {
+		t.Fatalf("expression branch should render when true: %q", on)
+	}
+	off := RenderRegions("<div>@SHOW@</div>", nil, conds, map[string]any{"count": 0, "status": "open"})
+	if off != "<div></div>" {
+		t.Fatalf("expression branch should be hidden when false: %q", off)
+	}
+}
+
+func TestRenderRegionsConditionalExpressionFailsClosed(t *testing.T) {
+	// A condition that cannot evaluate (missing field) must hide the branch
+	// rather than render attacker-influenceable markup.
+	conds := []CondSpec{{Placeholder: "@SHOW@", Expr: "missing > 0", Template: "<p>x</p>"}}
+	got := RenderRegions("<div>@SHOW@</div>", nil, conds, map[string]any{"count": 3})
+	if got != "<div></div>" {
+		t.Fatalf("unevaluable condition should fail closed: %q", got)
+	}
+}
+
 func TestRenderRegionsConditionalInsideRow(t *testing.T) {
 	specs := []ListSpec{{
 		Placeholder: "@LIST@",

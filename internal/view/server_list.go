@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/clientlang"
 )
 
 // SSRListReplacement is a build-time description of one server-rendered g:each
@@ -30,10 +32,13 @@ type SSRCondReplacement struct {
 	Placeholder string
 	SourcePath  string
 	Negate      bool
-	Template    string
-	Fields      []SSRListField
-	Lists       []SSRListReplacement
-	Conds       []SSRCondReplacement
+	// Expr is a full bool expression for a top-level server g:if; when set the
+	// runtime evaluates it against the load data instead of SourcePath/Negate.
+	Expr     string
+	Template string
+	Fields   []SSRListField
+	Lists    []SSRListReplacement
+	Conds    []SSRCondReplacement
 }
 
 // SSRListField is one per-render scalar substitution inside a region template.
@@ -204,13 +209,26 @@ func renderServerConditionalElement(node Element, ctx *renderContext, out *rende
 	if ctx.serverScope == nil && ctx.conds == nil {
 		return fmt.Errorf("server-lane g:if is only supported in a request-time page view; it cannot be used inside a component, layout, or fragment. Move the server {} data and g:if onto the page")
 	}
-	condition, negate, err := elementServerIfDirective(node)
+	condition, negate, expr, err := elementServerIfDirective(node)
 	if err != nil {
 		return err
 	}
-	sourcePath, err := serverSourcePath(condition, ctx, "g:if")
-	if err != nil {
-		return err
+	var sourcePath string
+	if expr != "" {
+		// A compound expression is evaluated at request time against the load
+		// data; it is only supported at the top level (not inside a row), and its
+		// referenced roots must be declared server {} fields.
+		if parent := ctx.serverScope; parent != nil && parent.itemVar != "" {
+			return fmt.Errorf("a nested server-lane g:if supports a single row field, not a compound expression %q; compute compound conditions in Go and expose a bool server {} field", expr)
+		}
+		if err := validateServerCondExpr(expr, ctx); err != nil {
+			return err
+		}
+	} else {
+		sourcePath, err = serverSourcePath(condition, ctx, "g:if")
+		if err != nil {
+			return err
+		}
 	}
 	templateNode := elementWithoutAttrs(node, "g:if")
 	if err := validateServerRegionSubtree([]Node{templateNode}); err != nil {
@@ -247,6 +265,7 @@ func renderServerConditionalElement(node Element, ctx *renderContext, out *rende
 		Placeholder: "__GOWDK_SSR_COND_" + ctx.idAllocator().nextCondGroup() + "__",
 		SourcePath:  sourcePath,
 		Negate:      negate,
+		Expr:        expr,
 		Template:    branchOut.string(),
 		Fields:      fields,
 		Lists:       lists,
@@ -303,10 +322,10 @@ func elementServerForDirective(node Element) (ForDirective, error) {
 }
 
 // elementServerIfDirective parses the g:if condition on a server-lane
-// conditional element. In the lane model the server condition is a single
-// server {} field, optionally negated with a leading !; richer comparison and
-// logic grammar is evaluated server-side (see the server expression evaluator).
-func elementServerIfDirective(node Element) (string, bool, error) {
+// conditional element. A simple field (optionally negated with a leading !) is
+// returned as (field, negate, ""); a compound bool expression (comparisons,
+// logic, literals) is returned as ("", false, expr) for request-time evaluation.
+func elementServerIfDirective(node Element) (field string, negate bool, expr string, err error) {
 	hasIf := false
 	var raw string
 	for _, attr := range node.Attrs {
@@ -314,31 +333,65 @@ func elementServerIfDirective(node Element) (string, bool, error) {
 			continue
 		}
 		if hasIf {
-			return "", false, fmt.Errorf("element declares multiple g:if directives")
+			return "", false, "", fmt.Errorf("element declares multiple g:if directives")
 		}
 		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
-			return "", false, fmt.Errorf("g:if requires an expression value such as g:if={field} or g:if={!field}")
+			return "", false, "", fmt.Errorf("g:if requires an expression value such as g:if={field} or g:if={count > 0}")
 		}
 		raw = strings.TrimSpace(attr.Value)
 		hasIf = true
 	}
 	for _, attr := range node.Attrs {
 		if attr.Name == "g:else-if" || attr.Name == "g:else" {
-			return "", false, fmt.Errorf("%s is a client-lane directive and cannot follow a server-lane g:if; use a sibling g:if={!field} for the server empty branch", attr.Name)
+			return "", false, "", fmt.Errorf("%s is a client-lane directive and cannot follow a server-lane g:if; use a sibling g:if={!field} for the server empty branch", attr.Name)
 		}
 	}
-	negate := false
-	if strings.HasPrefix(raw, "!") {
+	if !isSimpleCondition(raw) {
+		return "", false, raw, nil
+	}
+	stripped := raw
+	if strings.HasPrefix(stripped, "!") {
 		negate = true
-		raw = strings.TrimSpace(raw[1:])
+		stripped = strings.TrimSpace(stripped[1:])
 	}
-	if raw == "" {
-		return "", false, fmt.Errorf("g:if requires a field after %q", "!")
+	if stripped == "" {
+		return "", false, "", fmt.Errorf("g:if requires a field after %q", "!")
 	}
-	if strings.ContainsAny(raw, "!&|=<>(){}") {
-		return "", false, fmt.Errorf("server-lane g:if condition %q must be a single server {} field, optionally negated with a leading !; compute compound conditions in Go and expose a bool server {} field", raw)
+	return stripped, negate, "", nil
+}
+
+// validateServerCondExpr checks a top-level server g:if compound expression: it
+// must parse as a bool expression and every identifier it references must be a
+// declared server {} field (tracked in the load scope's taint set).
+func validateServerCondExpr(expr string, ctx *renderContext) error {
+	if _, err := clientlang.ParseExpr(expr); err != nil {
+		return fmt.Errorf("server-lane g:if condition %q is not a valid expression: %w", expr, err)
 	}
-	return raw, negate, nil
+	fields, err := clientlang.ExprFields(expr)
+	if err != nil {
+		return fmt.Errorf("server-lane g:if condition %q is invalid: %w", expr, err)
+	}
+	tainted := ctx.tainted
+	if ctx.serverScope != nil {
+		tainted = ctx.serverScope.tainted
+	}
+	for _, field := range fields {
+		if !tainted[exprRootName(field)] {
+			return fmt.Errorf("server-lane g:if condition %q references %q, which is not a declared server {} field", expr, field)
+		}
+	}
+	return nil
+}
+
+// isSimpleCondition reports whether a g:if value is a bare field path, optionally
+// negated with a single leading !. Anything with operators, comparisons,
+// parentheses, quotes, or whitespace is a compound expression.
+func isSimpleCondition(raw string) bool {
+	stripped := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(raw), "!"))
+	if stripped == "" {
+		return false
+	}
+	return !strings.ContainsAny(stripped, "!&|=<>(){}\"' \t")
 }
 
 // serverSourcePath resolves the load path for a g:each collection or g:when

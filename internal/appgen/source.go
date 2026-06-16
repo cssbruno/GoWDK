@@ -152,6 +152,9 @@ func runtimeImportMap(options Options) map[string]string {
 	if ssrUsesLoad(ssr) {
 		imports["gowdkssr"] = "github.com/cssbruno/gowdk/runtime/ssr"
 	}
+	if commandPatchRenderingEnabled(options) {
+		imports["gowdkssr"] = "github.com/cssbruno/gowdk/runtime/ssr"
+	}
 	if generatedUsesGuards(options) {
 		imports["gowdkauth"] = "github.com/cssbruno/gowdk/runtime/auth"
 	}
@@ -291,7 +294,7 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	decls := actionHandlerDecls(adapter.Actions, csrfEnabled(direct), generatedUsesRateLimit(direct))
 	decls = append(decls, apiFuncDecl(adapter.APIs, csrfEnabled(direct), generatedUsesRateLimit(direct)))
 	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(direct)))
-	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(direct), generatedUsesRateLimit(direct), generatedRealtimeQueryInvalidationsEnabled(direct))...)
+	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(direct), generatedUsesRateLimit(direct), generatedRealtimeQueryInvalidationsEnabled(direct), commandPatchRenderingEnabled(direct))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
 	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures, generatedRealtimeEnabled(direct), generatedRealtimeQueryInvalidationsEnabled(direct))...)
 	decls = append(decls, contractRegistryDecls(adapter.ContractExposures)...)
@@ -316,6 +319,9 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	decls = append(decls, rateLimitDecls(full)...)
 	decls = append(decls, guardDecls(full)...)
 	decls = append(decls, ssrExactDecl(full.SSR, generatedUsesRateLimit(full), csrf), ssrDynamicDecl(full.SSR, generatedUsesRateLimit(full), csrf))
+	if generatedRealtimeQueryInvalidationsEnabled(direct) {
+		decls = append(decls, ssrRegionRegistrationDecls(full.SSR)...)
+	}
 	return decls
 }
 
@@ -324,7 +330,7 @@ func backendGeneratedDecls(options Options) []ast.Decl {
 	decls := actionHandlerDecls(adapter.Actions, csrfEnabled(options), generatedUsesRateLimit(options))
 	decls = append(decls, apiFuncDecl(adapter.APIs, csrfEnabled(options), generatedUsesRateLimit(options)))
 	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(options)))
-	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(options), generatedUsesRateLimit(options), generatedRealtimeQueryInvalidationsEnabled(options))...)
+	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(options), generatedUsesRateLimit(options), generatedRealtimeQueryInvalidationsEnabled(options), false)...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
 	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures, generatedRealtimeEnabled(options), generatedRealtimeQueryInvalidationsEnabled(options))...)
 	decls = append(decls, contractRegistryDecls(adapter.ContractExposures)...)

@@ -42,6 +42,11 @@ func runtimeImportMap(options Options) map[string]string {
 		"gowdkruntime": "github.com/cssbruno/gowdk/runtime/app",
 		"sync":         "sync",
 	}
+	if generatedEnvFileLoadRequired(options) {
+		imports["gowdkenvfile"] = "github.com/cssbruno/gowdk/runtime/envfile"
+		imports["os"] = "os"
+		imports["strings"] = "strings"
+	}
 	if envRuntimeValidationRequired(options.Config.Env) {
 		imports["errors"] = "errors"
 		imports["os"] = "os"
@@ -254,6 +259,7 @@ func appShellDecls(options Options) []ast.Decl {
 		handlerDecl(),
 		serveMuxDecl(options, true),
 	)
+	decls = append(decls, loadEnvFileDecl(options)...)
 	decls = append(decls, validateEnvContractDecl(options.Config.Env)...)
 	return decls
 }
@@ -268,6 +274,7 @@ func backendShellDecls(options Options) []ast.Decl {
 		handlerDecl(),
 		serveMuxDecl(options, false),
 	)
+	decls = append(decls, loadEnvFileDecl(options)...)
 	decls = append(decls, validateEnvContractDecl(options.Config.Env)...)
 	return decls
 }
@@ -391,6 +398,7 @@ func handlerDecl() ast.Decl {
 
 func serveMuxDecl(options Options, embedded bool) ast.Decl {
 	stmts := []ast.Stmt{}
+	stmts = append(stmts, loadEnvFileStmt(options)...)
 	stmts = append(stmts, validateEnvContractStmt(options.Config.Env)...)
 	if embedded {
 		stmts = append(stmts,

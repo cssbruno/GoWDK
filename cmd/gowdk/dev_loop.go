@@ -59,7 +59,7 @@ func buildIncrementalSPALoaded(plan buildOptions, change inputChange) (bool, err
 	if strings.TrimSpace(plan.AppDir) != "" || strings.TrimSpace(plan.BinaryPath) != "" || strings.TrimSpace(plan.WASMPath) != "" || strings.TrimSpace(plan.BackendAppDir) != "" || strings.TrimSpace(plan.BackendBinaryPath) != "" {
 		return false, nil
 	}
-	if inputChangeTouchesConfig(change, plan.ConfigPath) {
+	if inputChangeTouchesConfig(change, plan.ConfigPath) || inputChangeTouchesEnvFile(change, plan.Options.EnvFilePath) {
 		return false, nil
 	}
 	options := plan.Options
@@ -176,15 +176,36 @@ func inputChangeTouchesConfig(change inputChange, configPath string) bool {
 	return false
 }
 
+func inputChangeTouchesEnvFile(change inputChange, envFilePath string) bool {
+	envAbs, ok := devAbsolutePath(envFilePath)
+	if !ok {
+		return false
+	}
+	for _, paths := range [][]string{change.Changed, change.Added, change.Removed} {
+		for _, changedPath := range paths {
+			if samePath(changedPath, envAbs) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func devConfigPath(configPath string) (string, bool) {
 	if strings.TrimSpace(configPath) != "" {
-		abs, err := filepath.Abs(configPath)
-		return filepath.Clean(abs), err == nil
+		return devAbsolutePath(configPath)
 	}
 	if _, err := os.Stat("gowdk.config.go"); err != nil {
 		return "", false
 	}
-	abs, err := filepath.Abs("gowdk.config.go")
+	return devAbsolutePath("gowdk.config.go")
+}
+
+func devAbsolutePath(path string) (string, bool) {
+	if strings.TrimSpace(path) == "" {
+		return "", false
+	}
+	abs, err := filepath.Abs(path)
 	return filepath.Clean(abs), err == nil
 }
 
@@ -849,6 +870,10 @@ func buildInputPaths(plan buildOptions) (devInputPaths, error) {
 			inputs.addFiles(configPath)
 			inputs.addParentDirs(configPath)
 		}
+	}
+	if strings.TrimSpace(options.EnvFilePath) != "" {
+		inputs.addFiles(options.EnvFilePath)
+		inputs.addParentDirs(options.EnvFilePath)
 	}
 	return inputs, nil
 }

@@ -20,7 +20,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/securitymanifest"
 )
 
-const auditUsage = "usage: gowdk audit [--config <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--run] [files...]"
+const auditUsage = "usage: gowdk audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--run] [files...]"
 
 // auditReport is the gowdk audit result: the derived security posture plus the
 // findings from evaluating the built-in baseline and declared policies against

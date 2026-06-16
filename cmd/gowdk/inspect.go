@@ -10,7 +10,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/lang"
 )
 
-const inspectUsage = "usage: gowdk inspect ir|tree|endpoint-graph|go-bindings [--config <file>] [--module <name>] [--json] [--ssr] [files...]"
+const inspectUsage = "usage: gowdk inspect ir|tree|endpoint-graph|go-bindings [--config <file>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...]"
 
 func inspect(args []string) error {
 	if len(args) == 0 {

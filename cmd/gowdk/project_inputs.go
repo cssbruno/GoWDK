@@ -11,6 +11,7 @@ import (
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/internal/discover"
 	"github.com/cssbruno/gowdk/internal/project"
+	"github.com/cssbruno/gowdk/runtime/envfile"
 )
 
 func loadBuildConfig(options *cliOptions, configPath string) error {
@@ -22,6 +23,9 @@ func loadProjectConfig(options *cliOptions, configPath string) error {
 	obfuscateAssets := options.ObfuscateAssets
 	projectRoot, err := resolveProjectRoot(configPath)
 	if err != nil {
+		return err
+	}
+	if err := loadProjectEnvFile(options, projectRoot); err != nil {
 		return err
 	}
 	config, err := project.LoadConfig(configPath)
@@ -40,6 +44,26 @@ func loadProjectConfig(options *cliOptions, configPath string) error {
 	options.ProjectRoot = projectRoot
 	options.AllowMissingBackend = allowMissingBackend
 	options.ObfuscateAssets = obfuscateAssets
+	return nil
+}
+
+func loadProjectEnvFile(options *cliOptions, projectRoot string) error {
+	path, explicit, err := envfile.LookupPath(projectRoot, options.EnvFilePath)
+	if err != nil {
+		return err
+	}
+	result, err := envfile.LoadIntoEnv(path, explicit)
+	if err != nil {
+		if explicit {
+			return fmt.Errorf("load env file %q: %w", path, err)
+		}
+		return fmt.Errorf("load discovered env file %q: %w", path, err)
+	}
+	options.EnvFilePath = result.Path
+	options.EnvFileLoaded = result.Loaded
+	options.EnvFileExplicit = result.Explicit
+	options.EnvFileApplied = append([]string(nil), result.Applied...)
+	options.EnvFileSkipped = append([]string(nil), result.Skipped...)
 	return nil
 }
 
@@ -232,6 +256,7 @@ func outputExcludePattern(root, outputDir string) string {
 func parseProjectOptions(args []string, command string, allowJSON bool) (cliOptions, string, []string, []string, error) {
 	var options cliOptions
 	var configPath string
+	var envFilePath string
 	var moduleNames []string
 	var paths []string
 	usage := projectCommandUsage(command, allowJSON)
@@ -257,6 +282,16 @@ func parseProjectOptions(args []string, command string, allowJSON bool) (cliOpti
 			configPath = args[i]
 		case strings.HasPrefix(arg, "--config="):
 			configPath = strings.TrimPrefix(arg, "--config=")
+		case arg == "--env-file":
+			i++
+			if i >= len(args) {
+				return options, "", nil, nil, errors.New(usage)
+			}
+			envFilePath = args[i]
+			options.EnvFilePath = envFilePath
+		case strings.HasPrefix(arg, "--env-file="):
+			envFilePath = strings.TrimPrefix(arg, "--env-file=")
+			options.EnvFilePath = envFilePath
 		case arg == "--module":
 			i++
 			if i >= len(args) {
@@ -271,6 +306,7 @@ func parseProjectOptions(args []string, command string, allowJSON bool) (cliOpti
 			paths = append(paths, arg)
 		}
 	}
+	options.EnvFilePath = envFilePath
 	return options, configPath, moduleNames, paths, nil
 }
 
@@ -280,7 +316,7 @@ func projectCommandUsage(command string, allowJSON bool) string {
 		if command == "check" {
 			warningsFlag = " [--warnings-as-errors]"
 		}
-		return fmt.Sprintf("usage: gowdk %s [--config <file>] [--module <name>] [--json]%s [--ssr] [files...]", command, warningsFlag)
+		return fmt.Sprintf("usage: gowdk %s [--config <file>] [--env-file <file>] [--module <name>] [--json]%s [--ssr] [files...]", command, warningsFlag)
 	}
-	return fmt.Sprintf("usage: gowdk %s [--config <file>] [--module <name>] [--ssr] [files...]", command)
+	return fmt.Sprintf("usage: gowdk %s [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]", command)
 }

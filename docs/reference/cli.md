@@ -13,22 +13,22 @@ gowdk add <addon> [--config <file>] [--base-url <url>]
 gowdk add --list [--registry] [--json]
 gowdk tokens <file.gwdk>
 gowdk fmt [--write] <files>
-gowdk check [--config <file>] [--module <name>] [--json] [--warnings-as-errors] [--ssr] [files...]
-gowdk fix [--dry-run] [--code <diagnostic-code>] [--config <file>] [--module <name>] [--ssr] [files...]
-gowdk manifest [--config <file>] [--module <name>] [--ssr] [files...]
-gowdk sitemap [--config <file>] [--module <name>] [--ssr] [files...]
-gowdk routes [--config <file>] [--module <name>] [--ssr] [files...]
-gowdk endpoints [--config <file>] [--module <name>] [--ssr] [files...]
-gowdk inspect ir|tree|endpoint-graph|go-bindings [--config <file>] [--module <name>] [--json] [--ssr] [files...]
-gowdk generate stubs [--config <file>] [--module <name>] [--ssr] [files...]
+gowdk check [--config <file>] [--env-file <file>] [--module <name>] [--json] [--warnings-as-errors] [--ssr] [files...]
+gowdk fix [--dry-run] [--code <diagnostic-code>] [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
+gowdk manifest [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
+gowdk sitemap [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
+gowdk routes [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
+gowdk endpoints [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
+gowdk inspect ir|tree|endpoint-graph|go-bindings [--config <file>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...]
+gowdk generate stubs [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
-gowdk doctor [--config <file>] [--module <name>] [--ssr] [--json] [files...]
-gowdk audit [--config <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--run] [files...]
+gowdk doctor [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...]
+gowdk audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--run] [files...]
 gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
 gowdk list commands|queries|events|jobs [--json] [dir]
-gowdk build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
+gowdk build [--config <file>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
 gowdk clean [--config <file>] [--target <name>] [--out <dir>] [--dry-run] [--json]
 gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
 gowdk preview [--addr <addr>] [--hot] [build flags...]
@@ -86,6 +86,15 @@ gowdk lsp [--ssr]
   `routes`, `endpoints`, `inspect`, `generate stubs`, and `build`; selects the
   config file. Compile commands load a literal config subset from the given
   path instead of the required default `gowdk.config.go`.
+- `--env-file`: supported by project-aware compile/report commands that load
+  `gowdk.config.go`, including `check`, `doctor`, `audit`, `manifest`,
+  `sitemap`, `routes`, `endpoints`, `inspect`, `generate stubs`, and `build`;
+  forwarded through `dev` and `preview` as a build flag. Values from the file
+  are applied only when the process environment does not already define the
+  name. Without the flag, commands auto-load `.env.<GOWDK_ENV>` from the
+  project root when `GOWDK_ENV` is set and that file exists, otherwise `.env`
+  when present. Secret values are never printed; `doctor --json` reports only
+  the env-file path and variable names for file/process sources.
 - `--debug`: supported by `build` and forwarded by `dev`; prints the structured SPA build report to stderr while generated paths remain on stdout.
 - `--timings[=<file>]`: supported by `build`; writes a separate versioned JSON
   timing report. Without an explicit file, the report is written to
@@ -147,6 +156,7 @@ go run ./cmd/gowdk add ssr actions partial
 go run ./cmd/gowdk add seo --base-url https://example.com
 go run ./cmd/gowdk check examples/pages/home.page.gwdk
 go run ./cmd/gowdk check --config gowdk.config.go
+go run ./cmd/gowdk check --env-file .env.dev --config gowdk.config.go
 go run ./cmd/gowdk check --warnings-as-errors --config gowdk.config.go
 go run ./cmd/gowdk fix --dry-run --code old_action_block_syntax --config gowdk.config.go
 go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk

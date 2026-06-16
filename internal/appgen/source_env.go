@@ -22,6 +22,38 @@ func envRuntimeValidationRequired(config gowdk.EnvConfig) bool {
 	return false
 }
 
+func generatedEnvFileLoadRequired(options Options) bool {
+	return envRuntimeValidationRequired(options.Config.Env) || csrfEnabled(options)
+}
+
+func loadEnvFileDecl(options Options) []ast.Decl {
+	if !generatedEnvFileLoadRequired(options) {
+		return nil
+	}
+	stmts := []ast.Stmt{
+		define([]ast.Expr{id("explicit")}, call(sel("strings", "TrimSpace"), call(sel("os", "Getenv"), stringLit("GOWDK_ENV_FILE")))),
+		define([]ast.Expr{id("path"), id("_"), id("err")}, call(sel("gowdkenvfile", "LookupPath"), stringLit(""), id("explicit"))),
+		&ast.IfStmt{
+			Cond: notNil("err"),
+			Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("err")}}),
+		},
+		assign([]ast.Expr{id("_"), id("err")}, call(sel("gowdkenvfile", "LoadIntoEnv"), id("path"), &ast.BinaryExpr{X: id("explicit"), Op: token.NEQ, Y: stringLit("")})),
+		&ast.ReturnStmt{Results: []ast.Expr{id("err")}},
+	}
+	return []ast.Decl{funcDecl("loadEnvFile", nil, []*ast.Field{{Type: id("error")}}, stmts)}
+}
+
+func loadEnvFileStmt(options Options) []ast.Stmt {
+	if !generatedEnvFileLoadRequired(options) {
+		return nil
+	}
+	return []ast.Stmt{&ast.IfStmt{
+		Init: define([]ast.Expr{id("err")}, call(id("loadEnvFile"))),
+		Cond: notNil("err"),
+		Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil"), id("err")}}),
+	}}
+}
+
 func validateEnvContractDecl(config gowdk.EnvConfig) []ast.Decl {
 	if !envRuntimeValidationRequired(config) {
 		return nil

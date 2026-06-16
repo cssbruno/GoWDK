@@ -122,22 +122,22 @@ func usage() {
 	fmt.Println("  add <addon> [--config <file>] [--base-url <url>] | add --list [--registry] [--json]  wire or list addons")
 	fmt.Println("  tokens <file.gwdk>       print language tokens")
 	fmt.Println("  fmt [--write] <files>    format .gwdk files")
-	fmt.Println("  check [--config <file>] [--module <name>] [--json] [--warnings-as-errors] [--ssr] [files...] parse and validate .gwdk files")
-	fmt.Println("  fix [--dry-run] [--code <diagnostic-code>] [--config <file>] [--module <name>] [--ssr] [files...] apply registered safe diagnostic fixes")
-	fmt.Println("  manifest [--config <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON")
-	fmt.Println("  sitemap [--config <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
-	fmt.Println("  routes [--config <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON")
-	fmt.Println("  endpoints [--config <file>] [--module <name>] [--ssr] [files...] print endpoint metadata JSON")
-	fmt.Println("  inspect ir|tree|endpoint-graph|go-bindings [--config <file>] [--module <name>] [--json] [--ssr] [files...] print validated compiler inspection JSON")
-	fmt.Println("  generate stubs [--config <file>] [--module <name>] [--ssr] [files...] write missing action/API Go handler stubs")
+	fmt.Println("  check [--config <file>] [--env-file <file>] [--module <name>] [--json] [--warnings-as-errors] [--ssr] [files...] parse and validate .gwdk files")
+	fmt.Println("  fix [--dry-run] [--code <diagnostic-code>] [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] apply registered safe diagnostic fixes")
+	fmt.Println("  manifest [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON")
+	fmt.Println("  sitemap [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
+	fmt.Println("  routes [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON")
+	fmt.Println("  endpoints [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print endpoint metadata JSON")
+	fmt.Println("  inspect ir|tree|endpoint-graph|go-bindings [--config <file>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...] print validated compiler inspection JSON")
+	fmt.Println("  generate stubs [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] write missing action/API Go handler stubs")
 	fmt.Println("  explain [--json] <diagnostic-code> explain a diagnostic code and next steps")
-	fmt.Println("  doctor [--config <file>] [--module <name>] [--ssr] [--json] [files...] check local GOWDK environment and project health")
-	fmt.Println("  audit [--config <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--run] [files...] check security posture and optional runtime tests")
+	fmt.Println("  doctor [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...] check local GOWDK environment and project health")
+	fmt.Println("  audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--run] [files...] check security posture and optional runtime tests")
 	fmt.Println("  contracts [--json] [dir]  print Go contract registration metadata")
 	fmt.Println("  graph [--json] [dir]      print command/event contract graph")
 	fmt.Println("  trace <contract> [--json] [dir] print one command/query/event/job contract trace")
 	fmt.Println("  list commands|queries|events|jobs [--json] [dir] print filtered contract metadata")
-	fmt.Println("  build [--config <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...] compile .gwdk files into build output")
+	fmt.Println("  build [--config <file>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...] compile .gwdk files into build output")
 	fmt.Println("  clean [--config <file>] [--target <name>] [--out <dir>] [--dry-run] [--json] remove configured build outputs")
 	fmt.Println("  dev [--addr <addr>] [--interval <duration>] [build flags...] build, serve, rebuild, and live reload")
 	fmt.Println("  preview [--addr <addr>] [--hot] [build flags...] build and serve a local deploy preview")
@@ -155,6 +155,11 @@ type cliOptions struct {
 	AllowInsecure       bool
 	ObfuscateAssets     bool
 	WarningsAsErrors    bool
+	EnvFilePath         string
+	EnvFileLoaded       bool
+	EnvFileExplicit     bool
+	EnvFileApplied      []string
+	EnvFileSkipped      []string
 }
 
 func appendModuleNames(moduleNames []string, value string) []string {

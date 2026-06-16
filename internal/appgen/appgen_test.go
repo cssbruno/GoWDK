@@ -1631,8 +1631,14 @@ func TestGenerateWiresEnvContractValidation(t *testing.T) {
 	source := string(payload)
 	for _, expected := range []string{
 		`errors`,
+		`gowdkenvfile "github.com/cssbruno/gowdk/runtime/envfile"`,
 		`os`,
 		`strings`,
+		`if err := loadEnvFile(); err != nil {`,
+		`func loadEnvFile() error`,
+		`explicit := strings.TrimSpace(os.Getenv("GOWDK_ENV_FILE"))`,
+		`path, _, err := gowdkenvfile.LookupPath("", explicit)`,
+		`_, err = gowdkenvfile.LoadIntoEnv(path, explicit != "")`,
 		`if err := validateEnvContract(); err != nil {`,
 		`func validateEnvContract() error`,
 		`value := os.Getenv("GOWDK_TEST_BACKEND_ORIGIN")`,
@@ -3711,6 +3717,55 @@ func TestGeneratedBinaryFailsFastWhenRequiredEnvIsMissing(t *testing.T) {
 		if !strings.Contains(string(output), expected) {
 			t.Fatalf("expected generated binary output to contain %q:\n%s", expected, output)
 		}
+	}
+}
+
+func TestGeneratedBinaryLoadsExplicitEnvFile(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Env: gowdk.EnvConfig{
+			Vars: []gowdk.EnvVar{
+				{Name: "GOWDK_TEST_BACKEND_ORIGIN", Required: true},
+			},
+			Secrets: []gowdk.SecretEnv{
+				{Name: "GOWDK_TEST_DATABASE_URL", Required: true, MinBytes: 32},
+			},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+	envPath := filepath.Join(root, ".env.runtime")
+	writeTestFile(t, envPath, "GOWDK_TEST_BACKEND_ORIGIN=http://backend.test\nGOWDK_TEST_DATABASE_URL=runtime-secret-value-32-bytes-long\n")
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(
+		withoutEnv(os.Environ(), "GOWDK_TEST_BACKEND_ORIGIN", "GOWDK_TEST_DATABASE_URL"),
+		"GOWDK_ADDR="+addr,
+		"GOWDK_ENV_FILE="+envPath,
+	)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if command.Process != nil {
+			_ = command.Process.Kill()
+			_, _ = command.Process.Wait()
+		}
+	}()
+	body, err := waitForHTTP("http://" + addr + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(body) != "<main>Home</main>" {
+		t.Fatalf("unexpected response body:\n%s", body)
 	}
 }
 

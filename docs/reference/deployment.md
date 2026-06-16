@@ -220,7 +220,9 @@ binaries, and all Dockerfile generation rejects non-ELF binaries with guidance
 to build with `GOOS=linux`.
 
 Pass app secrets, CSRF secrets, database URLs, and service credentials as
-runtime environment variables owned by your deployment platform.
+runtime environment variables owned by your deployment platform. For local
+generated-binary runs, `GOWDK_ENV_FILE=/path/to/.env` can point the binary at a
+dotenv file; host environment values still take precedence over file values.
 
 ## CSRF Secret Rotation
 

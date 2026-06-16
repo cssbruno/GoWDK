@@ -21,6 +21,11 @@ func backendRuntimeImportMap(options Options) map[string]string {
 	contractExposures := adapter.ContractExposures
 	routableContracts := routableContractExposures(contractExposures)
 	executableContracts := executableContractExposures(contractExposures)
+	if generatedEnvFileLoadRequired(options) {
+		imports["gowdkenvfile"] = "github.com/cssbruno/gowdk/runtime/envfile"
+		imports["os"] = "os"
+		imports["strings"] = "strings"
+	}
 	if envRuntimeValidationRequired(options.Config.Env) {
 		imports["errors"] = "errors"
 		imports["os"] = "os"

@@ -375,6 +375,39 @@ func TestHandlerDoesNotServeSecurityManifest(t *testing.T) {
 	}
 }
 
+func TestHandlerRejectsUnsafeStaticRequestPaths(t *testing.T) {
+	handler := Handler{
+		Root: fstest.MapFS{
+			"admin/index.html":     {Data: []byte("<main>Admin</main>")},
+			"assets/app/main.css":  {Data: []byte("body{}")},
+			"blog/post/index.html": {Data: []byte("<main>Post</main>")},
+		},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
+	}
+	for _, requestPath := range []string{
+		"/blog/%2e%2e/admin",
+		"/blog/../admin",
+		"/blog/./post",
+		"/assets/app/../app/main.css",
+		"/blog//post",
+	} {
+		t.Run(requestPath, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, requestPath, nil)
+
+			handler.ServeHTTP(recorder, request)
+
+			if recorder.Code != http.StatusNotFound {
+				t.Fatalf("expected unsafe path to 404, got %d with body %s", recorder.Code, recorder.Body.String())
+			}
+			if strings.Contains(recorder.Body.String(), "Admin") || strings.Contains(recorder.Body.String(), "Post") || strings.Contains(recorder.Body.String(), "body{}") {
+				t.Fatalf("unsafe path resolved to generated asset: %s", recorder.Body.String())
+			}
+		})
+	}
+}
+
 func TestHandlerRedirectsTrailingSlashGETToCanonicalPath(t *testing.T) {
 	handler := Handler{
 		Root:     fstest.MapFS{"blog/hello/index.html": {Data: []byte("<main>Hello</main>")}},

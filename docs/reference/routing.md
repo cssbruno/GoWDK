@@ -36,6 +36,10 @@ Current route rules:
 - Duplicate page route patterns are rejected. `/blog/{slug}` and `/blog/{id}`
   are the same route pattern, and `/docs/{path...}` and `/docs/{rest...}` are
   the same route pattern.
+- Generated app request matching and SPA file lookup reject request paths that
+  contain empty, `.`, or `..` segments before cleaning. Encoded dot segments
+  such as `%2e%2e` therefore return 404 instead of resolving to a different
+  generated route or asset.
 
 ### Rest Params
 
@@ -324,9 +328,11 @@ HTML escaping. Dynamic fragment endpoint params are attached to fragment hook
 contexts. Params can be declared as `{name}`, `{name:type}`, or — as the final
 segment only — `{name...}` (always a string). Supported types are `string`,
 `int`, `int64`, `uint`, `uint64`, `bool`, and `float64`. Generated SSR handlers
-attach route metadata through `runtime/app.Route(ctx)`. Generated SSR and
-fragment handlers attach raw dynamic params through `runtime/app.Params(ctx)`
-and decoded typed params through `runtime/app.TypedParams(ctx)`.
+attach route metadata through `runtime/app.Route(ctx)`, including render mode,
+guard IDs, dynamic params, typed route-param metadata, and declared layouts.
+Generated SSR and fragment handlers attach raw dynamic params through
+`runtime/app.Params(ctx)` and decoded typed params through
+`runtime/app.TypedParams(ctx)`.
 
 There are no generated per-route param struct types yet. Request-time user code
 should use `app.Params(ctx)`, `app.TypedParams(ctx)`, or the `runtime/route`

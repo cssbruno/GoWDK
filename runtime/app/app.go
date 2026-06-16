@@ -719,6 +719,9 @@ func (handler Handler) SPAFile(requestPath string) ([]byte, fs.FileInfo, string,
 }
 
 func SPACandidates(requestPath string) []string {
+	if unsafeRequestPath(requestPath) {
+		return nil
+	}
 	clean := path.Clean("/" + requestPath)
 	if strings.HasSuffix(requestPath, "/") {
 		return []string{strings.TrimPrefix(path.Join(clean, "index.html"), "/")}
@@ -758,4 +761,17 @@ func readSPAFile(root fs.FS, name string) ([]byte, fs.FileInfo, bool) {
 
 func unsafeSPAFile(name string) bool {
 	return strings.EqualFold(path.Base(name), "gowdk-security.json")
+}
+
+func unsafeRequestPath(requestPath string) bool {
+	trimmed := strings.Trim(requestPath, "/")
+	if trimmed == "" {
+		return false
+	}
+	for _, segment := range strings.Split(trimmed, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return true
+		}
+	}
+	return false
 }

@@ -153,6 +153,9 @@ Implemented today:
   with escaped returned values. Load errors that wrap `ssr.RedirectError`
   become no-store local redirects; other load failures use generated error-page
   output.
+- Request-time SSR and hybrid pages compose declared layouts before rendering
+  the generated response, and load placeholders are shared across page and
+  layout markup. Generated route metadata records the layout stack.
 - Generated embedded apps load optional `404.html` and `500.html` from the
   embedded build output and use those pages for not-found responses and
   generated SSR load failures. SSR routes can also declare

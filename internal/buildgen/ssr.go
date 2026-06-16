@@ -23,6 +23,7 @@ type SSRArtifact struct {
 	ErrorPage        string
 	DynamicParams    []string
 	RouteParams      []source.RouteParam
+	Layouts          []string
 	Guards           []string
 	HasLoad          bool
 	LoadBinding      source.BackendBinding
@@ -123,6 +124,7 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 		ErrorPage:        page.ErrorPage,
 		DynamicParams:    page.DynamicParams(),
 		RouteParams:      append([]source.RouteParam(nil), page.TypedRouteParams()...),
+		Layouts:          append([]string(nil), page.Layouts...),
 		Guards:           append([]string(nil), page.Guards...),
 		HasLoad:          page.Blocks.Server,
 		LoadBinding:      sourceBackendBinding(page.LoadBinding),

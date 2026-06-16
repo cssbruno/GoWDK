@@ -357,6 +357,9 @@ func ssrRouteContextStmts(route SSRRoute, includeParams bool) []ast.Stmt {
 	if len(route.RouteParams) > 0 {
 		metadata = append(metadata, keyValue("RouteParams", routeParamMetadataExpr(route.RouteParams)))
 	}
+	if len(route.Layouts) > 0 {
+		metadata = append(metadata, keyValue("Layouts", stringSliceExpr(route.Layouts)))
+	}
 	if len(route.Guards) > 0 {
 		metadata = append(metadata, keyValue("Guards", stringSliceExpr(route.Guards)))
 	}

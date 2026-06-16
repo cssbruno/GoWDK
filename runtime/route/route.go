@@ -11,6 +11,9 @@ import (
 // final "{name...}" rest segment matches one or more remaining request
 // segments; the captured value is those segments joined with "/".
 func Match(pattern, requestPath string) (map[string]string, bool) {
+	if hasUnsafeRequestSegment(requestPath) {
+		return nil, false
+	}
 	patternParts := splitPath(pattern)
 	requestParts := splitPath(requestPath)
 	rest := len(patternParts) > 0 && isRestSegment(patternParts[len(patternParts)-1])
@@ -61,6 +64,19 @@ func Match(pattern, requestPath string) (map[string]string, bool) {
 		}
 	}
 	return params, true
+}
+
+func hasUnsafeRequestSegment(requestPath string) bool {
+	trimmed := strings.Trim(requestPath, "/")
+	if trimmed == "" {
+		return false
+	}
+	for _, value := range strings.Split(trimmed, "/") {
+		if value == "" || value == "." || value == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 func isRestSegment(part string) bool {

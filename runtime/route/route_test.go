@@ -127,6 +127,18 @@ func TestMatchRejectsUnsafeParamValues(t *testing.T) {
 	}
 }
 
+func TestMatchRejectsNonCanonicalDynamicPaths(t *testing.T) {
+	for _, requestPath := range []string{
+		"/blog/a/../b",
+		"/blog/./b",
+		"/blog//b",
+	} {
+		if _, ok := Match("/blog/{slug}", requestPath); ok {
+			t.Fatalf("expected non-canonical dynamic path %q not to match", requestPath)
+		}
+	}
+}
+
 func TestTypedParamHelpersDecodeScalars(t *testing.T) {
 	params := map[string]string{
 		"slug":  "hello",

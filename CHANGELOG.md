@@ -5,6 +5,10 @@ packages, and tooling contracts may change before 1.0.
 
 ## Unreleased
 
+_No changes yet._
+
+## v0.6.1 - 2026-06-16
+
 ### Changed
 
 - **Split addon registration from request-time runtime helpers (#428).**

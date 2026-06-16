@@ -33,7 +33,12 @@ tooling contracts may change before 1.0.
 
 ## Changed
 
-- `gowdk version` and the VS Code extension metadata report `0.6.0`.
+- `gowdk version` and the VS Code extension metadata report `0.6.1`.
+- Generated apps import request-time helpers from `runtime/actions`,
+  `runtime/api`, `runtime/partial`, `runtime/ratelimit`, `runtime/realtime`, and
+  `runtime/ssr` instead of the corresponding `addons/*` packages. The addon
+  packages remain the config-facing packages and re-export their runtime helpers
+  for 0.x compatibility.
 
 ## Implemented
 

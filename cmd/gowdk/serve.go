@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	gowdkroute "github.com/cssbruno/gowdk/runtime/route"
 )
 
 func serve(args []string) error {
@@ -137,22 +139,27 @@ func staticEndpointForRequest(root string, request *http.Request) (staticRouteEn
 	}
 	method := strings.ToUpper(strings.TrimSpace(request.Method))
 	requestPath := request.URL.Path
-	var fallback staticRouteEndpoint
 	for _, endpoint := range manifest.Endpoints {
 		if strings.ToUpper(strings.TrimSpace(endpoint.Method)) != method {
 			continue
 		}
-		if endpoint.Route == requestPath {
+		if staticEndpointRouteMatches(endpoint.Route, requestPath) {
 			return endpoint, true
 		}
-		if fallback.Route == "" {
-			fallback = endpoint
-		}
-	}
-	if fallback.Route != "" {
-		return fallback, true
 	}
 	return staticRouteEndpoint{}, false
+}
+
+func staticEndpointRouteMatches(endpointRoute string, requestPath string) bool {
+	endpointRoute = strings.TrimSpace(endpointRoute)
+	if endpointRoute == requestPath {
+		return true
+	}
+	if !strings.Contains(endpointRoute, "{") {
+		return false
+	}
+	_, ok := gowdkroute.Match(endpointRoute, requestPath)
+	return ok
 }
 
 func readStaticRouteManifest(root string) (staticRouteManifest, bool) {

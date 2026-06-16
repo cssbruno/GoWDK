@@ -118,7 +118,7 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 	reporter.info("manifest", "asset_manifest_written", "asset manifest written", BuildEvent{Path: eventPath(outputDir, assetManifestPath)})
 	reportCachePolicies(reporter, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	reportAssetSizes(reporter, outputDir, result.AssetArtifacts)
-	openAPIPath, err := writeOpenAPI(outputDir, ir)
+	openAPIPath, err := writeOpenAPI(outputDir, config, ir)
 	if err != nil {
 		return Result{}, reporter.fail("report", err)
 	}
@@ -295,7 +295,7 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 	reporter.info("manifest", "asset_manifest_collected", "asset manifest collected", BuildEvent{Path: assetManifestFile})
 	reportCachePolicies(reporter, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	reportAssetSizes(reporter, outputDir, result.AssetArtifacts)
-	openAPI, err := openAPIPayload(ir)
+	openAPI, err := openAPIPayload(config, ir)
 	if err != nil {
 		return MemoryResult{}, reporter.fail("report", err)
 	}
@@ -778,7 +778,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, backendBindi
 	reporter.info("manifest", "asset_manifest_written", "asset manifest written", BuildEvent{Path: eventPath(outputDir, assetManifestPath)})
 	reportCachePolicies(reporter, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	reportAssetSizes(reporter, outputDir, result.AssetArtifacts)
-	openAPIPath, err := writeOpenAPI(outputDir, ir)
+	openAPIPath, err := writeOpenAPI(outputDir, config, ir)
 	if err != nil {
 		return Result{}, reporter.fail("report", err)
 	}

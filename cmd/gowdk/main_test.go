@@ -7022,6 +7022,63 @@ func TestOutputFileHandlerUnsupportedMethodMentionsGeneratedEndpointManifest(t *
 	}
 }
 
+func TestOutputFileHandlerUnsupportedMethodDoesNotMentionUnmatchedGeneratedEndpoint(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "index.html"), `<main>Home</main>`)
+	writeCLIFile(t, filepath.Join(root, "gowdk-routes.json"), `{
+  "version": 1,
+  "routes": [
+    {"page": "login", "route": "/", "path": "index.html"}
+  ],
+  "endpoints": [
+    {"kind": "action", "directive": "act", "method": "POST", "route": "/login", "page": "login", "symbol": "Login", "handler": "actions.LoginLogin", "csrf": true}
+  ]
+}`)
+
+	response := httptest.NewRecorder()
+	outputFileHandler(root).ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/typo", nil))
+
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", response.Code)
+	}
+	body := response.Body.String()
+	if !strings.Contains(body, "method not allowed: POST /typo") {
+		t.Fatalf("expected request path in 405 body, got:\n%s", body)
+	}
+	for _, unexpected := range []string{"POST /login is a generated endpoint", "act Login", "generated endpoint"} {
+		if strings.Contains(body, unexpected) {
+			t.Fatalf("did not expect unmatched endpoint text %q in 405 body:\n%s", unexpected, body)
+		}
+	}
+}
+
+func TestOutputFileHandlerUnsupportedMethodMatchesGeneratedEndpointPattern(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "index.html"), `<main>Home</main>`)
+	writeCLIFile(t, filepath.Join(root, "gowdk-routes.json"), `{
+  "version": 1,
+  "routes": [
+    {"page": "patients", "route": "/", "path": "index.html"}
+  ],
+  "endpoints": [
+    {"kind": "action", "directive": "act", "method": "POST", "route": "/patients/{id:int}/vitals", "page": "patients", "symbol": "SaveVitals", "handler": "actions.PatientsSaveVitals", "csrf": true}
+  ]
+}`)
+
+	response := httptest.NewRecorder()
+	outputFileHandler(root).ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/patients/1/vitals", nil))
+
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", response.Code)
+	}
+	body := response.Body.String()
+	for _, expected := range []string{"method not allowed: POST /patients/1/vitals", "POST /patients/{id:int}/vitals is a generated endpoint", "act SaveVitals"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected %q in 405 body, got:\n%s", expected, body)
+		}
+	}
+}
+
 func TestOutputFileHandlerDoesNotListDirectories(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "assets"), 0o755); err != nil {

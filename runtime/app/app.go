@@ -325,21 +325,27 @@ func (handler Handler) loadRouteManifest() (generatedRouteManifest, bool) {
 
 func (manifest generatedRouteManifest) endpointForRequest(method string, path string) (generatedRouteEndpoint, bool) {
 	method = strings.ToUpper(strings.TrimSpace(method))
-	var fallback generatedRouteEndpoint
 	for _, endpoint := range manifest.Endpoints {
-		if strings.ToUpper(strings.TrimSpace(endpoint.Method)) == method {
-			if endpoint.Route == path {
-				return endpoint, true
-			}
-			if fallback.Route == "" {
-				fallback = endpoint
-			}
+		if strings.ToUpper(strings.TrimSpace(endpoint.Method)) != method {
+			continue
+		}
+		if generatedEndpointRouteMatches(endpoint.Route, path) {
+			return endpoint, true
 		}
 	}
-	if fallback.Route != "" {
-		return fallback, true
-	}
 	return generatedRouteEndpoint{}, false
+}
+
+func generatedEndpointRouteMatches(endpointRoute string, requestPath string) bool {
+	endpointRoute = strings.TrimSpace(endpointRoute)
+	if endpointRoute == requestPath {
+		return true
+	}
+	if !strings.Contains(endpointRoute, "{") {
+		return false
+	}
+	_, ok := route.Match(endpointRoute, requestPath)
+	return ok
 }
 
 // isDeniedPath reports whether requestPath resolves to a guardless page that is

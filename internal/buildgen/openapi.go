@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -95,8 +96,8 @@ type openAPIGOWDKExtension struct {
 	Roles          []string `json:"roles,omitempty"`
 }
 
-func writeOpenAPI(outputDir string, ir gwdkir.Program) (string, error) {
-	payload, err := openAPIPayload(ir)
+func writeOpenAPI(outputDir string, config gowdk.Config, ir gwdkir.Program) (string, error) {
+	payload, err := openAPIPayload(config, ir)
 	if err != nil {
 		return "", err
 	}
@@ -107,8 +108,8 @@ func writeOpenAPI(outputDir string, ir gwdkir.Program) (string, error) {
 	return path, nil
 }
 
-func openAPIPayload(ir gwdkir.Program) ([]byte, error) {
-	spec := buildOpenAPISpec(ir)
+func openAPIPayload(config gowdk.Config, ir gwdkir.Program) ([]byte, error) {
+	spec := buildOpenAPISpec(config, ir)
 	payload, err := json.MarshalIndent(spec, "", "  ")
 	if err != nil {
 		return nil, err
@@ -116,7 +117,7 @@ func openAPIPayload(ir gwdkir.Program) ([]byte, error) {
 	return append(payload, '\n'), nil
 }
 
-func buildOpenAPISpec(ir gwdkir.Program) openAPISpec {
+func buildOpenAPISpec(config gowdk.Config, ir gwdkir.Program) openAPISpec {
 	components := map[string]openAPISchema{}
 	spec := openAPISpec{
 		OpenAPI: "3.1.0",
@@ -144,7 +145,7 @@ func buildOpenAPISpec(ir gwdkir.Program) openAPISpec {
 		if !contractRefIsWebRoutable(ref) {
 			continue
 		}
-		addOpenAPIContractOperation(spec.Paths, components, seenOperationIDs, ref)
+		addOpenAPIContractOperation(spec.Paths, components, seenOperationIDs, config, ref)
 	}
 	if len(components) > 0 {
 		spec.Components = openAPIComponents{Schemas: components}
@@ -185,7 +186,7 @@ func addOpenAPIEndpointOperation(paths map[string]openAPIPath, components map[st
 	addOpenAPIOperation(paths, openAPIPathFromGOWDK(endpoint.Path), method, operation)
 }
 
-func addOpenAPIContractOperation(paths map[string]openAPIPath, components map[string]openAPISchema, seen map[string]int, ref gwdkir.ContractReference) {
+func addOpenAPIContractOperation(paths map[string]openAPIPath, components map[string]openAPISchema, seen map[string]int, config gowdk.Config, ref gwdkir.ContractReference) {
 	method := strings.ToLower(strings.TrimSpace(ref.Method))
 	if method == "" || strings.TrimSpace(ref.Path) == "" {
 		return
@@ -207,6 +208,7 @@ func addOpenAPIContractOperation(paths map[string]openAPIPath, components map[st
 			EndpointSource: "contract",
 			Cache:          "no-store",
 			Guards:         append([]string(nil), ref.Guards...),
+			CSRF:           config.Build.CSRF.EnabledForGeneratedEndpoints() && ref.Kind == gwdkir.ContractCommand,
 			BindingStatus:  string(ref.Status),
 			InputType:      ref.Type,
 			Roles:          append([]string(nil), ref.Roles...),
@@ -330,8 +332,14 @@ func pathParameters(path string, routeParams []source.RouteParam) []openAPIParam
 
 func schemaForRouteParam(paramType string) openAPISchema {
 	switch strings.TrimSpace(paramType) {
-	case "int":
+	case "int", "int64":
 		return openAPISchema{Type: "integer", Format: "int64"}
+	case "uint", "uint64":
+		return openAPISchema{Type: "integer", Format: "uint64"}
+	case "bool":
+		return openAPISchema{Type: "boolean"}
+	case "float64":
+		return openAPISchema{Type: "number", Format: "double"}
 	default:
 		return openAPISchema{Type: "string"}
 	}

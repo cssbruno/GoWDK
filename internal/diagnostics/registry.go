@@ -119,6 +119,7 @@ var Registry = []Code{
 	{Code: "geach_requires_load", Area: "pages", Stability: StabilityStable, Severity: SeverityError, Summary: "g:each collection is not an SSR load {} field"},
 	{Code: "generated_app_import_cycle", Area: "generated-go", Stability: StabilityStable, Severity: SeverityError, Summary: "generated app would import itself through user code"},
 	{Code: "gfor_over_load_data", Area: "pages", Stability: StabilityStable, Severity: SeverityError, Summary: "g:for iterates request-time load {} data instead of client state; use g:each"},
+	{Code: "ghtml_over_load_data", Area: "pages", Stability: StabilityStable, Severity: SeverityError, Summary: "g:html renders request-time load {} data as raw HTML, bypassing escape-by-default"},
 	{Code: "go_client_requires_page", Area: "go-block", Stability: StabilityExperimental, Severity: SeverityError, Summary: "go client block was declared outside a page"},
 	{Code: "go_endpoint_parse_error", Area: "backend", Stability: StabilityStable, Severity: SeverityError, Summary: "Go endpoint comment scan failed to parse a Go file"},
 	{Code: "go_endpoint_read_error", Area: "backend", Stability: StabilityStable, Severity: SeverityError, Summary: "Go endpoint scan failed to read a source directory"},

@@ -437,9 +437,23 @@ func elementRawHTMLContent(node Element, ctx *renderContext) (string, bool, erro
 		return "", false, fmt.Errorf("g:html: %w", err)
 	}
 	if tainted {
-		return "", false, fmt.Errorf("route param interpolation is not allowed in g:html")
+		if ctx.tainted[expr] || ctx.tainted[taintedExprRoot(expr)] {
+			return "", false, fmt.Errorf("g:html cannot render %q: it comes from request-time load {} data, which is attacker-influenceable and bypasses escape-by-default. Render request-time text with escape-by-default interpolation (e.g. inside g:each) instead of raw HTML", expr)
+		}
+		return "", false, fmt.Errorf("g:html cannot render %q: route param interpolation is attacker-influenceable and not allowed as raw HTML", expr)
 	}
 	return value, true, nil
+}
+
+// taintedExprRoot returns the leading identifier of a dotted/indexed
+// interpolation expression so a tainted source can be matched against declared
+// load field roots.
+func taintedExprRoot(expr string) string {
+	expr = strings.TrimSpace(expr)
+	if cut := strings.IndexAny(expr, ".[ "); cut >= 0 {
+		return expr[:cut]
+	}
+	return expr
 }
 
 // voidElements are HTML elements that have no end tag; emitting one (for

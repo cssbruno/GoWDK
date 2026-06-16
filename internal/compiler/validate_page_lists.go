@@ -74,6 +74,9 @@ func walkPageListNodes(page gwdkir.Page, nodes []viewmodel.Node, loadRoots map[s
 			continue
 		}
 		childVars := eachVars
+		if attr, has := elementAttr(element, "g:html"); has {
+			validatePageHTMLDirective(page, attr, loadRoots, eachVars, diagnostics)
+		}
 		if attr, has := elementAttr(element, "g:for"); has {
 			validatePageForDirective(page, attr, loadRoots, eachVars, diagnostics)
 		}
@@ -84,6 +87,26 @@ func walkPageListNodes(page gwdkir.Page, nodes []viewmodel.Node, loadRoots map[s
 			}
 		}
 		walkPageListNodes(page, element.Children, loadRoots, childVars, diagnostics)
+	}
+}
+
+func validatePageHTMLDirective(page gwdkir.Page, attr viewmodel.Attr, loadRoots map[string]bool, eachVars []string, diagnostics *[]ValidationError) {
+	expr := strings.TrimSpace(attr.Value)
+	if expr == "" {
+		return
+	}
+	root := exprRoot(expr)
+	if containsString(eachVars, root) {
+		return
+	}
+	if loadRoots[root] {
+		*diagnostics = append(*diagnostics, ValidationError{
+			Code:    "ghtml_over_load_data",
+			PageID:  page.ID,
+			Source:  page.Source,
+			Span:    firstSpan(page.Blocks.Spans.View, page.Spans.Page),
+			Message: fmt.Sprintf("%s: g:html cannot render request-time load {} data %q; load fields are attacker-influenceable and bypass escape-by-default. Render request-time text with escape-by-default interpolation (e.g. inside g:each) instead of raw HTML", page.ID, expr),
+		})
 	}
 }
 

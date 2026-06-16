@@ -97,6 +97,27 @@ func TestValidateRejectsNestedGEachWrongScope(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsGHTMLOverLoadData(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Load:     true,
+			LoadBody: `=> { bodyHTML }`,
+			View:     true,
+			ViewBody: `<article g:html={bodyHTML}></article>`,
+		},
+	})
+	diag, ok := findCode(report, "ghtml_over_load_data")
+	if !ok {
+		t.Fatalf("expected ghtml_over_load_data diagnostic, got %v", report)
+	}
+	if strings.Contains(diag.Message, "route param") {
+		t.Fatalf("diagnostic must not misname the cause as a route param: %q", diag.Message)
+	}
+	if !strings.Contains(diag.Message, "load {}") {
+		t.Fatalf("diagnostic should name load {} as the source: %q", diag.Message)
+	}
+}
+
 func TestValidateAcceptsNestedGEach(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{

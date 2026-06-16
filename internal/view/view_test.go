@@ -2435,8 +2435,21 @@ func TestRawHTMLDirectiveRejectsRouteParamInterpolation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected route param rejection")
 	}
-	if !strings.Contains(err.Error(), "route param interpolation is not allowed in g:html") {
+	if !strings.Contains(err.Error(), "route param interpolation is attacker-influenceable and not allowed as raw HTML") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRawHTMLDirectiveRejectsLoadFieldWithLoadMessage(t *testing.T) {
+	_, err := RenderWithOptions(`<article g:html={bodyHTML}></article>`, nil, map[string]string{"bodyHTML": "<p>x</p>"}, Options{Tainted: map[string]bool{"bodyHTML": true}})
+	if err == nil {
+		t.Fatal("expected load field rejection")
+	}
+	if strings.Contains(err.Error(), "route param") {
+		t.Fatalf("load field must not be reported as a route param: %v", err)
+	}
+	if !strings.Contains(err.Error(), "load {}") {
+		t.Fatalf("expected load {} wording: %v", err)
 	}
 }
 

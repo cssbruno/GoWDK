@@ -29,6 +29,17 @@ type testRouteManifest struct {
 		Route  string `json:"route"`
 		Path   string `json:"path"`
 	} `json:"routes"`
+	Endpoints []struct {
+		Kind      string   `json:"kind"`
+		Directive string   `json:"directive"`
+		Method    string   `json:"method"`
+		Route     string   `json:"route"`
+		PageID    string   `json:"page"`
+		Symbol    string   `json:"symbol"`
+		Handler   string   `json:"handler"`
+		Guards    []string `json:"guards"`
+		CSRF      bool     `json:"csrf"`
+	} `json:"endpoints"`
 }
 
 func readRouteManifest(t *testing.T, outputDir string) testRouteManifest {

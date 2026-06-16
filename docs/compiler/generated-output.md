@@ -358,6 +358,19 @@ adapters import user feature packages and call exported handlers.
       "route": "/",
       "path": "index.html"
     }
+  ],
+  "endpoints": [
+    {
+      "kind": "action",
+      "directive": "act",
+      "method": "POST",
+      "route": "/login",
+      "page": "login",
+      "symbol": "Login",
+      "handler": "actions.LoginLogin",
+      "guards": ["public"],
+      "csrf": true
+    }
   ]
 }
 ```
@@ -365,7 +378,9 @@ adapters import user feature packages and call exported handlers.
 The `path` field is slash-separated and relative to the selected output
 directory. Dynamic app routes are recorded once for each generated concrete
 route, for example `/blog/{slug}` with `=> { slug: "hello-gowdk" }` is recorded
-as `/blog/hello-gowdk`.
+as `/blog/hello-gowdk`. The optional `endpoints` array records generated
+request-time action, API, fragment, command, and query adapter routes; it does
+not point at static files.
 
 ## Current App Asset Manifest
 

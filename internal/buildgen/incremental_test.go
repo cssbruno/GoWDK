@@ -192,6 +192,16 @@ func Subscribe(context.Context) (response.Response, error) {
 	if event.Data["block"] != "Subscribe" || event.Data["status"] != "bound" {
 		t.Fatalf("expected bound Subscribe event, got %#v", event)
 	}
+	routes := readRouteManifest(t, outputDir)
+	if len(routes.Endpoints) != 1 {
+		t.Fatalf("expected action endpoint route in route manifest, got %#v", routes.Endpoints)
+	}
+	endpoint := routes.Endpoints[0]
+	if endpoint.Kind != "action" || endpoint.Directive != "act" || endpoint.Method != "POST" || endpoint.Route != "/newsletter" ||
+		endpoint.PageID != "newsletter" || endpoint.Symbol != "Subscribe" || endpoint.Handler != "actions.NewsletterSubscribe" ||
+		!endpoint.CSRF || len(endpoint.Guards) != 1 || endpoint.Guards[0] != "public" {
+		t.Fatalf("unexpected endpoint route manifest entry: %#v", endpoint)
+	}
 }
 
 func TestBuildIncrementalFromIRRendersChangedPageSources(t *testing.T) {

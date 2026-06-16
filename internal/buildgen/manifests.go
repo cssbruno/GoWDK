@@ -10,12 +10,14 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cssbruno/gowdk/internal/compiler"
 	runtimeasset "github.com/cssbruno/gowdk/runtime/asset"
 )
 
 type routeManifest struct {
-	Version int                  `json:"version"`
-	Routes  []routeManifestEntry `json:"routes"`
+	Version   int                          `json:"version"`
+	Routes    []routeManifestEntry         `json:"routes"`
+	Endpoints []routeManifestEndpointEntry `json:"endpoints,omitempty"`
 }
 
 type routeManifestEntry struct {
@@ -24,8 +26,20 @@ type routeManifestEntry struct {
 	Path   string `json:"path"`
 }
 
-func writeRouteManifest(outputDir string, artifacts []Artifact) (string, error) {
-	payload, err := routeManifestPayload(outputDir, artifacts)
+type routeManifestEndpointEntry struct {
+	Kind      compiler.EndpointKind `json:"kind"`
+	Directive string                `json:"directive,omitempty"`
+	Method    string                `json:"method"`
+	Route     string                `json:"route"`
+	PageID    string                `json:"page"`
+	Symbol    string                `json:"symbol,omitempty"`
+	Handler   string                `json:"handler"`
+	Guards    []string              `json:"guards,omitempty"`
+	CSRF      bool                  `json:"csrf,omitempty"`
+}
+
+func writeRouteManifest(outputDir string, artifacts []Artifact, endpoints []compiler.EndpointBinding) (string, error) {
+	payload, err := routeManifestPayload(outputDir, artifacts, endpoints)
 	if err != nil {
 		return "", err
 	}
@@ -37,7 +51,7 @@ func writeRouteManifest(outputDir string, artifacts []Artifact) (string, error) 
 	return manifestPath, nil
 }
 
-func routeManifestPayload(outputDir string, artifacts []Artifact) ([]byte, error) {
+func routeManifestPayload(outputDir string, artifacts []Artifact, endpoints []compiler.EndpointBinding) ([]byte, error) {
 	routes := make([]routeManifestEntry, 0, len(artifacts))
 	for _, artifact := range artifacts {
 		rel, err := relativeOutputPath(outputDir, artifact.Path)
@@ -57,12 +71,60 @@ func routeManifestPayload(outputDir string, artifacts []Artifact) ([]byte, error
 		return routes[i].Route < routes[j].Route
 	})
 
-	payload, err := json.MarshalIndent(routeManifest{Version: 1, Routes: routes}, "", "  ")
+	endpointRoutes := routeManifestEndpointEntries(endpoints)
+	payload, err := json.MarshalIndent(routeManifest{Version: 1, Routes: routes, Endpoints: endpointRoutes}, "", "  ")
 	if err != nil {
 		return nil, err
 	}
 	payload = append(payload, '\n')
 	return payload, nil
+}
+
+func routeManifestEndpointEntries(endpoints []compiler.EndpointBinding) []routeManifestEndpointEntry {
+	if len(endpoints) == 0 {
+		return nil
+	}
+	routes := make([]routeManifestEndpointEntry, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		routes = append(routes, routeManifestEndpointEntry{
+			Kind:      endpoint.Kind,
+			Directive: routeManifestEndpointDirective(endpoint.Kind),
+			Method:    endpoint.Method,
+			Route:     endpoint.Route,
+			PageID:    endpoint.PageID,
+			Symbol:    endpoint.Symbol,
+			Handler:   endpoint.Handler,
+			Guards:    append([]string(nil), endpoint.Guards...),
+			CSRF:      endpoint.CSRF,
+		})
+	}
+	sort.Slice(routes, func(i, j int) bool {
+		if routes[i].Route == routes[j].Route {
+			if routes[i].Method == routes[j].Method {
+				return routes[i].Kind < routes[j].Kind
+			}
+			return routes[i].Method < routes[j].Method
+		}
+		return routes[i].Route < routes[j].Route
+	})
+	return routes
+}
+
+func routeManifestEndpointDirective(kind compiler.EndpointKind) string {
+	switch kind {
+	case compiler.EndpointAction:
+		return "act"
+	case compiler.EndpointAPI:
+		return "api"
+	case compiler.EndpointFragment:
+		return "fragment"
+	case compiler.EndpointCommand:
+		return "g:command"
+	case compiler.EndpointQuery:
+		return "g:query"
+	default:
+		return ""
+	}
 }
 
 func readRouteManifestIfExists(outputDir string) (routeManifest, error) {

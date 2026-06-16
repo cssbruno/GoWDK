@@ -81,7 +81,8 @@ func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []sourc
 		})
 		result.Artifacts = append(result.Artifacts, artifact.Artifact)
 	}
-	manifestPath, err := writeRouteManifest(outputDir, result.Artifacts)
+	endpoints := compiler.BuildRouteMetadataFromIR(config, ir).Endpoints
+	manifestPath, err := writeRouteManifest(outputDir, result.Artifacts, endpoints)
 	if err != nil {
 		return Result{}, reporter.fail("manifest", err)
 	}
@@ -263,7 +264,8 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 		})
 	}
 
-	routeManifest, err := routeManifestPayload(outputDir, result.Artifacts)
+	endpoints := compiler.BuildRouteMetadataFromIR(config, ir).Endpoints
+	routeManifest, err := routeManifestPayload(outputDir, result.Artifacts, endpoints)
 	if err != nil {
 		return MemoryResult{}, reporter.fail("manifest", err)
 	}
@@ -739,7 +741,8 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, backendBindi
 		Data: map[string]string{"changedPages": fmt.Sprint(len(changedPageIDs))},
 	})
 
-	manifestPath, err := writeRouteManifest(outputDir, result.Artifacts)
+	endpoints := compiler.BuildRouteMetadataFromIR(config, ir).Endpoints
+	manifestPath, err := writeRouteManifest(outputDir, result.Artifacts, endpoints)
 	if err != nil {
 		return Result{}, reporter.fail("manifest", err)
 	}

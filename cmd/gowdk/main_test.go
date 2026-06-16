@@ -3751,6 +3751,18 @@ func TestRunWithoutArgsPrintsUsage(t *testing.T) {
 	}
 }
 
+func TestRoutesCommandHelpPrintsUsage(t *testing.T) {
+	output, err := captureCLIStdout(t, func() error {
+		return run([]string{"routes", "--help"})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output, "usage: gowdk routes") || strings.Contains(output, "unknown routes flag") {
+		t.Fatalf("expected routes usage output, got:\n%s", output)
+	}
+}
+
 func TestContractsCommandReportsGoRegistrations(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "patients.go"), `package patients
@@ -4428,8 +4440,8 @@ view {
 	if report.Version != 1 {
 		t.Fatalf("unexpected routes version: %d", report.Version)
 	}
-	if len(report.Routes) != 1 {
-		t.Fatalf("expected only page routes, got %#v", report.Routes)
+	if len(report.Routes) != 2 {
+		t.Fatalf("expected page and action route rows, got %#v", report.Routes)
 	}
 	if len(report.Endpoints) != 1 {
 		t.Fatalf("expected one action endpoint, got %#v", report.Endpoints)
@@ -4441,9 +4453,22 @@ view {
 		PageID:  "newsletter",
 		Handler: `embedded.SPA("pages/newsletter.html")`,
 	})
+	assertRouteBinding(t, report.Routes, routeBindingJSON{
+		Kind:           "action",
+		EndpointSource: "gwdk",
+		Directive:      "act",
+		Method:         "POST",
+		Route:          "/newsletter",
+		PageID:         "newsletter",
+		Symbol:         "Subscribe",
+		CSRF:           true,
+		Handler:        "actions.NewsletterSubscribe",
+		BindingStatus:  "missing",
+	})
 	assertEndpointBinding(t, report.Endpoints, endpointBindingJSON{
 		Kind:           "action",
 		EndpointSource: "gwdk",
+		Directive:      "act",
 		Source:         page,
 		Package:        "app",
 		PackageName:    "app",
@@ -4518,6 +4543,7 @@ view {
 	assertEndpointBinding(t, report.Endpoints, endpointBindingJSON{
 		Kind:           "action",
 		EndpointSource: "gwdk",
+		Directive:      "act",
 		Source:         page,
 		Package:        "app",
 		PackageName:    "app",
@@ -4750,15 +4776,25 @@ view {
 	if err := json.Unmarshal([]byte(output), &report); err != nil {
 		t.Fatalf("invalid routes JSON: %v\n%s", err, output)
 	}
-	if len(report.Routes) != 1 {
-		t.Fatalf("expected status page route only, got %#v", report.Routes)
+	if len(report.Routes) != 2 {
+		t.Fatalf("expected status page and API route rows, got %#v", report.Routes)
 	}
 	if len(report.Endpoints) != 1 {
 		t.Fatalf("expected one API endpoint, got %#v", report.Endpoints)
 	}
+	assertRouteBinding(t, report.Routes, routeBindingJSON{
+		Kind:      "api",
+		Directive: "api",
+		Method:    "GET",
+		Route:     "/api/health",
+		PageID:    "status",
+		Symbol:    "Health",
+		Handler:   "api.StatusHealth",
+	})
 	assertEndpointBinding(t, report.Endpoints, endpointBindingJSON{
 		Kind:           "api",
 		EndpointSource: "gwdk",
+		Directive:      "api",
 		Source:         page,
 		Package:        "app",
 		PackageName:    "app",
@@ -5676,6 +5712,7 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 	assertEndpointBinding(t, report.Endpoints, endpointBindingJSON{
 		Kind:           "command",
 		EndpointSource: "contract",
+		Directive:      "g:command",
 		Source:         page,
 		Package:        "pages",
 		PackagePath:    "",
@@ -5698,6 +5735,17 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 			Handler:     "HandleCreatePatient",
 			Register:    "Register",
 		},
+	})
+	assertRouteBinding(t, report.Routes, routeBindingJSON{
+		Kind:           "command",
+		EndpointSource: "contract",
+		Directive:      "g:command",
+		Method:         "POST",
+		Route:          "/patients",
+		PageID:         "patients",
+		Symbol:         "patients.CreatePatient",
+		CSRF:           true,
+		Handler:        "contracts.command.patients.CreatePatient",
 	})
 	if len(report.Endpoints) != 1 {
 		t.Fatalf("expected one contract endpoint, got %#v", report.Endpoints)
@@ -5763,6 +5811,7 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 	assertEndpointBinding(t, report.Endpoints, endpointBindingJSON{
 		Kind:           "command",
 		EndpointSource: "contract",
+		Directive:      "g:command",
 		Source:         page,
 		Package:        "pages",
 		Symbol:         "patients.CreatePatient",
@@ -5855,6 +5904,35 @@ view {
 	}
 	if _, err := os.Stat(runtimePath); err != nil {
 		t.Fatalf("expected runtime asset to exist: %v", err)
+	}
+	routeManifest, err := os.ReadFile(filepath.Join(outputDir, "gowdk-routes.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var routes struct {
+		Endpoints []struct {
+			Kind      string   `json:"kind"`
+			Directive string   `json:"directive"`
+			Method    string   `json:"method"`
+			Route     string   `json:"route"`
+			PageID    string   `json:"page"`
+			Symbol    string   `json:"symbol"`
+			Handler   string   `json:"handler"`
+			Guards    []string `json:"guards"`
+			CSRF      bool     `json:"csrf"`
+		} `json:"endpoints"`
+	}
+	if err := json.Unmarshal(routeManifest, &routes); err != nil {
+		t.Fatalf("invalid route manifest JSON: %v\n%s", err, routeManifest)
+	}
+	if len(routes.Endpoints) != 1 {
+		t.Fatalf("expected action route in route manifest, got:\n%s", routeManifest)
+	}
+	endpoint := routes.Endpoints[0]
+	if endpoint.Kind != "action" || endpoint.Directive != "act" || endpoint.Method != "POST" || endpoint.Route != "/patients" ||
+		endpoint.PageID != "patients" || endpoint.Symbol != "Refresh" || endpoint.Handler != "actions.PatientsRefresh" ||
+		!endpoint.CSRF || len(endpoint.Guards) != 1 || endpoint.Guards[0] != "public" {
+		t.Fatalf("unexpected route manifest endpoint: %#v", endpoint)
 	}
 }
 
@@ -7264,10 +7342,17 @@ func assertRouteBinding(t *testing.T, routes []routeBindingJSON, expected routeB
 	t.Helper()
 	for _, route := range routes {
 		if route.Kind != expected.Kind ||
+			(expected.EndpointSource != "" && route.EndpointSource != expected.EndpointSource) ||
+			(expected.Directive != "" && route.Directive != expected.Directive) ||
 			route.Method != expected.Method ||
 			route.Route != expected.Route ||
 			route.PageID != expected.PageID ||
+			(expected.Symbol != "" && route.Symbol != expected.Symbol) ||
+			(expected.CSRF && !route.CSRF) ||
 			route.Handler != expected.Handler {
+			continue
+		}
+		if expected.BindingStatus != "" && route.BindingStatus != expected.BindingStatus {
 			continue
 		}
 		return
@@ -7280,6 +7365,7 @@ func assertEndpointBinding(t *testing.T, endpoints []endpointBindingJSON, expect
 	for _, endpoint := range endpoints {
 		if endpoint.Kind != expected.Kind ||
 			endpoint.EndpointSource != expected.EndpointSource ||
+			endpoint.Directive != expected.Directive ||
 			endpoint.Source != expected.Source ||
 			endpoint.Package != expected.Package ||
 			endpoint.PackagePath != expected.PackagePath ||

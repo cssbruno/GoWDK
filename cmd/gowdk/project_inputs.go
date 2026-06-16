@@ -263,6 +263,8 @@ func parseProjectOptions(args []string, command string, allowJSON bool) (cliOpti
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
+		case arg == "-h" || arg == "--help":
+			return options, "", nil, nil, errors.New(usage)
 		case arg == "--ssr":
 			options.Config.Addons = append(options.Config.Addons, ssr.Addon())
 		case arg == "--json" && allowJSON:

@@ -353,15 +353,18 @@ which modules were embedded. Embedded module composition is fixed at build time
 by `Build.Targets` or the selected `--module` flags.
 
 `gowdk routes` prints validated route and endpoint metadata as JSON. The current
-schema is version `1`. The `routes` list is limited to page/file route kinds
-such as `static`, `spa`, `ssr`, and `hybrid`; route records include package,
-render/cache metadata, route params, layouts, guards, source file, source span,
-and planned handler. Backend actions, APIs, fragments, and routable command or
-query contracts appear in the separate `endpoints` list with source path,
-source span, `.gwdk` package, method, path, page ID, route params when
-declared, no-store backend cache policy, inherited guards, CSRF applicability,
-planned adapter handler, and backend or contract binding metadata. Backend
-binding metadata includes the Go
+schema is version `1`. The `routes` list is the generated method/path table:
+it includes page/file route kinds such as `static`, `spa`, `ssr`, and `hybrid`,
+plus generated endpoint rows for actions, APIs, fragments, and routable command
+or query contracts. Route records include package, guards, source file, source
+span, and planned handler. Page rows include render/cache metadata, route
+params, and layouts. Endpoint rows include `endpointSource`, `directive`,
+symbol or contract name, no-store backend cache policy, route params when
+declared, CSRF applicability, and binding status when known.
+
+Backend actions, APIs, fragments, and routable command/query contracts also
+appear in the separate `endpoints` list with detailed backend or contract
+binding metadata. Backend binding metadata includes the Go
 package name, import path when known, handler symbol, signature/input metadata
 when bound, status, and binding message. Non-fatal route-mode notes, such as
 request-time page rendering disabled on a SPA route or static SPA output

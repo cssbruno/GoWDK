@@ -39,8 +39,8 @@ Rules:
 - OpenTelemetry compatibility is represented by semantic-convention attribute
   keys and an OTLP-like exporter interface/value shape. Concrete OTLP
   transports must remain optional and outside the root dependency graph.
-- Generated app auto-instrumentation is later work and must consume this
-  runtime API rather than creating a parallel tracing model.
+- Generated app auto-instrumentation consumes this runtime API rather than
+  creating a parallel tracing model.
 
 ## Consequences
 
@@ -62,4 +62,3 @@ Rules:
 - Concrete OpenTelemetry export can be added later as a nested optional module.
 - Trace names and attribute keys can be shared by compiler/runtime code without
   adopting an external SDK in core.
-

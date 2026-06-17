@@ -8,7 +8,7 @@ Generated JavaScript does not own page loading policy.
 | Construct | Runs | Owns | Current contract |
 | --- | --- | --- | --- |
 | `paths {}` | build time | concrete dynamic SPA routes | Literal records only. Required for dynamic SPA pages unless the page uses request-time rendering. |
-| `build {}` | build time | static page data | Literal records plus imported or same-package no-argument Go functions. |
+| `build {}` | build time | static page data | Literal records plus imported or same-package Go functions, with optional `gowdk.BuildParams` route params. |
 | `server {}` | request time | SSR page data | One same-package `Load<PageID>` function returns `map[string]any` data. |
 | `act` | request time | POST/action endpoint behavior | Same-package Go handler returns `runtime/response.Response`. |
 | `api` | request time | API endpoint behavior | Same-package Go handler returns `runtime/response.Response`. |

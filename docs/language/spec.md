@@ -169,7 +169,9 @@ paths {
 ```
 
 `build {}` supports literal records, references to earlier fields, route
-params, and no-argument Go function calls from imported or same-package Go:
+params, and Go function calls from imported or same-package Go. Dynamic
+`paths {}` output can pass route params to helpers that declare one
+`gowdk.BuildParams` argument:
 
 ```gwdk
 build {

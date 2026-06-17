@@ -879,6 +879,44 @@ func TestQueryAndJobDispatch(t *testing.T) {
 	}
 }
 
+func TestContractTracingRecordsCommandQueryEventAndJobSpans(t *testing.T) {
+	ring := gowdktrace.NewRingSink(8)
+	tracer := gowdktrace.NewTracer(gowdktrace.WithSink(ring))
+	ctx := gowdktrace.ContextWithTracer(context.Background(), tracer)
+	registry := NewRegistry()
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		return nil
+	}, RoleWorker))
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		if err := EmitDomain(ctx, patientCreated{ID: "patient-1"}); err != nil {
+			return createPatientResult{}, err
+		}
+		return createPatientResult{ID: "patient-1"}, nil
+	}, RoleWeb))
+	must(t, RegisterQuery[patientPageQuery, patientPage](registry, func(ctx context.Context, query patientPageQuery) (patientPage, error) {
+		return patientPage{Name: "Ada"}, nil
+	}, RoleWeb))
+	must(t, RegisterJob[syncPatientsJob](registry, func(ctx context.Context, job syncPatientsJob) error {
+		return nil
+	}, RoleCron))
+
+	if _, err := ExecuteCommandForRole[createPatient, createPatientResult](ctx, registry, RoleWeb, createPatient{Name: "Ada"}); err != nil {
+		t.Fatalf("execute command: %v", err)
+	}
+	if _, err := ExecuteQueryForRole[patientPageQuery, patientPage](ctx, registry, RoleWeb, patientPageQuery{ID: "patient-1"}); err != nil {
+		t.Fatalf("execute query: %v", err)
+	}
+	if err := ExecuteJobForRole(ctx, registry, RoleCron, syncPatientsJob{Limit: 10}); err != nil {
+		t.Fatalf("execute job: %v", err)
+	}
+
+	spans := ring.Spans()
+	assertContractSpan(t, spans, string(ObservationExecuteCommand), gowdktrace.LaneContract, string(Command))
+	assertContractSpan(t, spans, string(ObservationPublishEvent), gowdktrace.LaneContract, string(Event))
+	assertContractSpan(t, spans, string(ObservationExecuteQuery), gowdktrace.LaneContract, string(Query))
+	assertContractSpan(t, spans, string(ObservationExecuteJob), gowdktrace.LaneJob, string(Job))
+}
+
 func TestRoleSpecificCommandDispatchSkipsOtherRoleSubscribers(t *testing.T) {
 	registry := NewRegistry()
 	var webHandled, workerHandled, rolelessHandled int
@@ -1191,6 +1229,32 @@ func TestExecuteRoleAnyContractAllowsConcreteRole(t *testing.T) {
 	if _, err := ExecuteQueryForRole[patientPageQuery, patientPage](context.Background(), registry, RoleWeb, patientPageQuery{}); err != nil {
 		t.Fatalf("RoleAny query for web: %v", err)
 	}
+}
+
+func assertContractSpan(t *testing.T, spans []gowdktrace.Snapshot, name string, lane gowdktrace.Lane, kind string) {
+	t.Helper()
+	for _, span := range spans {
+		if span.Name != name {
+			continue
+		}
+		if span.Surface != gowdktrace.SurfaceBackend || span.Lane != lane || span.Status.Code != gowdktrace.StatusOK {
+			t.Fatalf("span %q = %#v", name, span)
+		}
+		if got := contractSpanAttr(span, "gowdk.contract.kind"); got != kind {
+			t.Fatalf("span %q kind attr = %#v, want %q", name, got, kind)
+		}
+		return
+	}
+	t.Fatalf("missing span %q in %#v", name, spans)
+}
+
+func contractSpanAttr(span gowdktrace.Snapshot, key string) any {
+	for _, attr := range span.Attributes {
+		if attr.Key == key {
+			return attr.Value
+		}
+	}
+	return nil
 }
 
 func must(t *testing.T, err error) {

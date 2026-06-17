@@ -3,6 +3,8 @@ package gointerop
 import (
 	"fmt"
 	"os"
+
+	"github.com/cssbruno/gowdk"
 )
 
 type FeaturedCopy struct {
@@ -30,4 +32,17 @@ func FeaturedCopyWithErrorForBuild() (FeaturedCopy, error) {
 		Title:   "Checked Go data",
 		Tagline: "Build helpers can return a value and error.",
 	}, nil
+}
+
+type PostCopy struct {
+	Title     string `json:"title"`
+	Canonical string `json:"canonical"`
+}
+
+func PostCopyForBuild(params gowdk.BuildParams) PostCopy {
+	slug, _ := params.Param("slug")
+	return PostCopy{
+		Title:     "Post " + slug,
+		Canonical: "/go-post/" + slug,
+	}
 }

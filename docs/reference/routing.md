@@ -204,7 +204,8 @@ Generated output:
 /tmp/gowdk-dynamic/blog/compile-first/index.html
 ```
 
-Imported Go build functions do not receive route params yet.
+Imported and same-package Go build functions can receive the current
+`paths {}` route params by declaring one `gowdk.BuildParams` argument.
 
 ## Action Endpoints
 

@@ -2166,6 +2166,63 @@ func TestWASMIslandLoaderRunsInBrowser(t *testing.T) {
 	}
 }
 
+func TestWASMIslandsSharePageStoreInBrowser(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	chromium, err := lookupChromium()
+	if err != nil {
+		t.Skip(err)
+	}
+	requireNodePlaywright(t, node)
+
+	outputDir := t.TempDir()
+	component := counterComponent()
+	component.Blocks.Client = true
+	component.Blocks.ClientBody = `use cart`
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:      "counter",
+			Route:   "/counter",
+			Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+			Stores: []gwdkir.Store{{
+				Name:    "cart",
+				Type:    gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+				Init:    gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
+				Persist: "local",
+			}},
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Counter g:island="wasm" /><Counter g:island="wasm" /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{component},
+	}
+	if _, err := Build(gowdk.Config{}, app, outputDir); err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(http.FileServer(http.Dir(outputDir)))
+	defer server.Close()
+
+	script := filepath.Join(t.TempDir(), "gowdk-wasm-store-browser-test.cjs")
+	if err := os.WriteFile(script, []byte(wasmIslandStoreBrowserHarness()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, node, script, server.URL, chromium)
+	command.Dir = mustWorkingDir(t)
+	output, err := command.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("browser WASM store test timed out:\n%s", output)
+	}
+	if err != nil {
+		t.Fatalf("browser WASM store test failed: %v\n%s", err, output)
+	}
+}
+
 func TestWASMIslandLoaderReportsInvalidPatchInBrowser(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
@@ -2888,6 +2945,132 @@ async function waitForCall(calls, kind) {
   assert.deepEqual(consoleErrors, []);
   await browser.close();
 })().catch(async (error) => {
+  console.error(error && error.stack || error);
+  process.exit(1);
+});
+`
+}
+
+func wasmIslandStoreBrowserHarness() string {
+	return `
+"use strict";
+
+const assert = require("node:assert/strict");
+const nodeModule = require("node:module");
+
+const baseURL = process.argv[2];
+const executablePath = process.argv[3];
+const { chromium } = nodeModule.createRequire(process.cwd() + "/gowdk-test.js")("playwright");
+
+async function waitForButtonTexts(page, expected) {
+  await page.waitForFunction((expected) => {
+    const values = Array.from(document.querySelectorAll("gowdk-island button")).map((node) => node.textContent);
+    return values.length === expected.length && values.every((value, index) => value === expected[index]);
+  }, expected);
+}
+
+async function assertPayloadCleared(page) {
+  assert.equal(await page.evaluate(() => Object.prototype.hasOwnProperty.call(window, "__gowdkWASMIslandPayload")), false);
+}
+
+let page;
+
+(async () => {
+  const browser = await chromium.launch({
+    executablePath,
+    headless: true,
+    args: ["--no-sandbox"]
+  });
+  const context = await browser.newContext();
+  page = await context.newPage();
+  page.setDefaultTimeout(5000);
+  const consoleErrors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("GOWDK")) consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => {
+    consoleErrors.push(error && error.stack || String(error));
+  });
+  await page.addInitScript(() => {
+    const memory = new WebAssembly.Memory({ initial: 1 });
+    let offset = 1024;
+    function writeResult(result) {
+      const bytes = new TextEncoder().encode(JSON.stringify(result) + "\0");
+      if (offset + bytes.length >= memory.buffer.byteLength) throw new Error("test result exceeded wasm memory");
+      new Uint8Array(memory.buffer).set(bytes, offset);
+      const pointer = offset;
+      offset += bytes.length + 16;
+      return pointer;
+    }
+    function currentStore(payload) {
+      return {
+        Count: Number(payload && payload.state && payload.state.Count || 0),
+        Open: Boolean(payload && payload.state && payload.state.Open)
+      };
+    }
+    function textBinding(payload) {
+      const text = payload && payload.bindings && payload.bindings.text;
+      if (Array.isArray(text) && text.length > 0) return text[0].id;
+      const match = String(payload && payload.binding || "").match(/^b(\d+)$/);
+      return match ? "b" + (Number(match[1]) + 1) : "b2";
+    }
+    const exports = {
+      memory,
+      GOWDKMountCounter(payload) {
+        const store = currentStore(payload);
+        return writeResult({
+          patches: [{ type: "setText", target: textBinding(payload), value: String(store.Count) }],
+          stores: { cart: store }
+        });
+      },
+      GOWDKHandleCounter(payload) {
+        const store = currentStore(payload);
+        store.Count += 1;
+        return writeResult({
+          patches: [{ type: "setText", target: textBinding(payload), value: String(store.Count) }],
+          stores: { cart: store }
+        });
+      },
+      GOWDKDestroyCounter(payload) {
+        return writeResult({ patches: [], stores: null });
+      }
+    };
+    WebAssembly.instantiateStreaming = async () => ({ instance: { exports } });
+    WebAssembly.instantiate = async () => ({ instance: { exports } });
+  });
+
+  await page.goto(baseURL + "/counter/", { waitUntil: "networkidle" });
+  await waitForButtonTexts(page, ["1", "1"]);
+  assert.equal(await page.evaluate(() => window.__gowdkStores.get("cart").Count), 1);
+  await assertPayloadCleared(page);
+
+  await page.evaluate(() => document.querySelectorAll("gowdk-island button")[0].click());
+  await waitForButtonTexts(page, ["2", "2"]);
+  assert.equal(await page.evaluate(() => window.__gowdkStores.get("cart").Count), 2);
+  await assertPayloadCleared(page);
+
+  await page.evaluate(() => document.querySelectorAll("gowdk-island button")[1].click());
+  await waitForButtonTexts(page, ["3", "3"]);
+  assert.equal(await page.evaluate(() => window.__gowdkStores.get("cart").Count), 3);
+
+  const stored = await page.evaluate(() => window.localStorage.getItem("gowdk:store:cart"));
+  const blob = JSON.parse(stored);
+  assert.equal(blob.s.Count, 3, "WASM island store write persisted to localStorage");
+  assert.ok(typeof blob.v === "string" && blob.v.length > 0, "persisted blob carries a version");
+
+  await page.goto(baseURL + "/counter/", { waitUntil: "networkidle" });
+  await waitForButtonTexts(page, ["3", "3"]);
+  assert.equal(await page.evaluate(() => window.__gowdkStores.get("cart").Count), 3, "WASM island store hydrated after reload");
+  await assertPayloadCleared(page);
+
+  assert.deepEqual(consoleErrors, []);
+  await browser.close();
+})().catch(async (error) => {
+  if (typeof page !== "undefined") {
+    try {
+      console.error(await page.content());
+    } catch (_) {}
+  }
   console.error(error && error.stack || error);
   process.exit(1);
 });

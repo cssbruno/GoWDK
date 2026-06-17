@@ -1,0 +1,21 @@
+package gointerop
+
+page go.routeparams
+route "/go-post/{slug:int}"
+guard public
+
+import interop "github.com/cssbruno/gowdk/examples/go-interop"
+
+paths {
+  => { slug: "123" }
+}
+
+build {
+  => interop.PostCopyForBuild()
+}
+
+view {
+  <main data-slug="{slug}" data-canonical="{canonical}">
+    <h1>{title}</h1>
+  </main>
+}

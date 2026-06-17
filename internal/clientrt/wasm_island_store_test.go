@@ -47,24 +47,43 @@ func wasmIslandStoreHarness() string {
 "use strict";
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const { TextEncoder } = require("node:util");
 
 const loaderSrc = fs.readFileSync(process.argv[2], "utf8");
 
 const mountPayloads = [];
 const handlePayloads = [];
+const memory = { buffer: new ArrayBuffer(65536) };
+const encoder = new TextEncoder();
+let resultOffset = 1024;
+
+function currentPayload() {
+  return JSON.parse(global.window.__gowdkWASMIslandPayload || "{}");
+}
+
+function writeResult(value) {
+  const bytes = encoder.encode(JSON.stringify(value) + "\0");
+  const offset = resultOffset;
+  new Uint8Array(memory.buffer).set(bytes, offset);
+  resultOffset += bytes.length + 16;
+  return offset;
+}
 
 // A WASM island whose exports echo the mount/handle state into the cart store
 // (write-back) after reading it from the payload (read).
 const exportsObj = {
-  GOWDKMountCounter(payload) {
+  mem: memory,
+  GOWDKMountCounter() {
+    const payload = currentPayload();
     mountPayloads.push(payload);
-    return { patches: [], stores: { cart: { Count: payload.state.Count, Open: payload.state.Open } } };
+    return writeResult({ patches: [], stores: { cart: { Count: payload.state.Count, Open: payload.state.Open } } });
   },
-  GOWDKHandleCounter(payload) {
+  GOWDKHandleCounter() {
+    const payload = currentPayload();
     handlePayloads.push(payload);
-    return { patches: [], stores: { cart: { Count: payload.state.Count + 1, Open: payload.state.Open } } };
+    return writeResult({ patches: [], stores: { cart: { Count: payload.state.Count + 1, Open: payload.state.Open } } });
   },
-  GOWDKDestroyCounter(payload) { destroyPayloads.push(payload); return []; }
+  GOWDKDestroyCounter() { destroyPayloads.push(currentPayload()); return writeResult([]); }
 };
 const destroyPayloads = [];
 
@@ -125,6 +144,7 @@ new Function(loaderSrc)();
   assert.equal(mountPayloads.length, 1, "island mounted once");
   assert.equal(mountPayloads[0].state.Count, 5, "store value reached the mount payload (read)");
   assert.deepEqual(mountPayloads[0].stores, ["cart"], "mount payload lists the used store");
+  assert.equal(Object.prototype.hasOwnProperty.call(global.window, "__gowdkWASMIslandPayload"), false, "loader clears the payload global after mount");
 
   // WRITE: the mount result's stores map was written back to the registry.
   assert.ok(registry.sets.includes("cart"), "returned store state was written back (write)");
@@ -138,6 +158,7 @@ new Function(loaderSrc)();
   assert.equal(handlePayloads.length, 1, "the handle export ran for the click");
   assert.equal(registry.store.cart.Count, 6, "the handler wrote its store value back");
   assert.equal(mountPayloads.length, mountsBeforeClick, "the island's own store write does not re-invoke its mount");
+  assert.equal(Object.prototype.hasOwnProperty.call(global.window, "__gowdkWASMIslandPayload"), false, "loader clears the payload global after handle");
 
   // SYNC: an external store change re-invokes the island, and the re-render does
   // not echo back into the registry (guarded write-back).
@@ -156,6 +177,7 @@ new Function(loaderSrc)();
   assert.equal(typeof cleanup, "function", "loader registered a cleanup in the island registry");
   cleanup();
   assert.equal(destroyPayloads.length, 1, "cleanup runs the destroy export");
+  assert.equal(Object.prototype.hasOwnProperty.call(global.window, "__gowdkWASMIslandPayload"), false, "loader clears the payload global after destroy");
   const mountsAfterCleanup = mountPayloads.length;
   registry.store.cart = { Count: 11, Open: false };
   registry.notify("cart");

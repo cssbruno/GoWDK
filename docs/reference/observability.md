@@ -27,6 +27,9 @@ supplies an explicit `TraceAccess` function.
 Current generated instrumentation:
 
 - Backend request route spans extract incoming `traceparent`.
+- Generated SSR route and `load {}` spans record route IDs, render lane,
+  source refs, response status, and load errors without storing raw request
+  bodies or headers.
 - Generated action, API, fragment, command, and query routes record handler
   spans with `.gwdk` source refs when debug metadata is enabled.
 - Guards and contract command/query/job/event/worker operations record child
@@ -37,6 +40,11 @@ Current generated instrumentation:
   `traceparent`, and posts frontend spans to the local collector.
 - JS islands, WASM island loaders, and page-level client Go WASM loaders reuse
   `window.__gowdkTrace`.
+
+The generated local collector keeps a bounded in-memory ring of 1024 completed
+spans. Generated code records stable route/endpoint IDs and source metadata, and
+uses runtime redaction helpers for query strings, error messages, and app-owned
+trace events.
 
 For app-owned Go handlers, record a user event on the active span:
 

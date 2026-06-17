@@ -1778,3 +1778,108 @@ func TestTracedBackendRouteMarksServerStatusError(t *testing.T) {
 		t.Fatalf("endpoint span status = %q, want error", spans[0].Status.Code)
 	}
 }
+
+func TestTracedBackendRouteRecordsEndpointLanes(t *testing.T) {
+	tests := []struct {
+		kind string
+		lane gowdktrace.Lane
+	}{
+		{kind: "action", lane: gowdktrace.LaneAction},
+		{kind: "api", lane: gowdktrace.LaneAPI},
+		{kind: "fragment", lane: gowdktrace.LaneFragment},
+	}
+	for _, tt := range tests {
+		t.Run(tt.kind, func(t *testing.T) {
+			ring := gowdktrace.NewRingSink(4)
+			tracer := gowdktrace.NewTracer(gowdktrace.WithSink(ring))
+			source := gowdktrace.SourceRef{File: "patients.page.gwdk", Line: 12, Column: 3, OwnerKind: tt.kind, OwnerID: "patients"}
+			handler := traceBackendRoute(tt.kind, "/patients", source, func(writer http.ResponseWriter, request *http.Request) bool {
+				writer.WriteHeader(http.StatusNoContent)
+				return true
+			})
+			request := httptest.NewRequest(http.MethodGet, "/patients", nil)
+			request = request.WithContext(gowdktrace.ContextWithTracer(request.Context(), tracer))
+			recorder := httptest.NewRecorder()
+
+			if !handler(recorder, request) {
+				t.Fatal("expected backend handler to handle request")
+			}
+
+			spans := ring.Spans()
+			if len(spans) != 1 {
+				t.Fatalf("spans = %d, want 1", len(spans))
+			}
+			span := spans[0]
+			if span.Name != tt.kind+" /patients" || span.Lane != tt.lane || span.Surface != gowdktrace.SurfaceBackend {
+				t.Fatalf("unexpected span identity: %#v", span)
+			}
+			if span.Source != source {
+				t.Fatalf("source = %#v, want %#v", span.Source, source)
+			}
+			if got := spanAttr(span, "gowdk.endpoint.kind"); got != tt.kind {
+				t.Fatalf("endpoint kind attr = %#v, want %q", got, tt.kind)
+			}
+			if got := spanAttr(span, gowdktrace.AttrHTTPRoute); got != "/patients" {
+				t.Fatalf("route attr = %#v, want /patients", got)
+			}
+		})
+	}
+}
+
+func TestTracedBackendRouteRecordsPanicAsRedactedError(t *testing.T) {
+	ring := gowdktrace.NewRingSink(4)
+	tracer := gowdktrace.NewTracer(gowdktrace.WithSink(ring))
+	handler := traceBackendRoute("action", "/panic", gowdktrace.SourceRef{}, func(writer http.ResponseWriter, request *http.Request) bool {
+		panic("database password=hunter2")
+	})
+	request := httptest.NewRequest(http.MethodPost, "/panic", nil)
+	request = request.WithContext(gowdktrace.ContextWithTracer(request.Context(), tracer))
+	recorder := httptest.NewRecorder()
+
+	func() {
+		defer func() {
+			if recovered := recover(); recovered == nil {
+				t.Fatal("expected traced backend route to re-panic")
+			}
+		}()
+		_ = handler(recorder, request)
+	}()
+
+	spans := ring.Spans()
+	if len(spans) != 1 {
+		t.Fatalf("spans = %d, want 1", len(spans))
+	}
+	if spans[0].Status.Code != gowdktrace.StatusError {
+		t.Fatalf("span status = %#v, want error", spans[0].Status)
+	}
+	if strings.Contains(spans[0].Status.Message, "hunter2") {
+		t.Fatalf("span status leaked secret: %#v", spans[0].Status)
+	}
+}
+
+func spanAttr(span gowdktrace.Snapshot, key string) any {
+	for _, attr := range span.Attributes {
+		if attr.Key == key {
+			return attr.Value
+		}
+	}
+	return nil
+}
+
+func TestFinishHTTPTraceMarksServerStatusError(t *testing.T) {
+	ring := gowdktrace.NewRingSink(4)
+	tracer := gowdktrace.NewTracer(gowdktrace.WithSink(ring))
+	ctx, span := tracer.Start(context.Background(), "ssr /fail")
+	_ = ctx
+	recorder := &traceResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusInternalServerError}
+
+	FinishHTTPTrace(recorder, span)
+
+	spans := ring.Spans()
+	if len(spans) != 1 {
+		t.Fatalf("spans = %d, want 1", len(spans))
+	}
+	if spans[0].Status.Code != gowdktrace.StatusError || spans[0].Status.Message != http.StatusText(http.StatusInternalServerError) {
+		t.Fatalf("span status = %#v, want 500 error", spans[0].Status)
+	}
+}

@@ -24,10 +24,8 @@ Sentry, or a hosted observability backend.
 
 ## Non-Goals
 
-- Auto-instrument generated handlers in this phase.
 - Add OpenTelemetry SDK or OTLP dependencies to the root module.
 - Persist traces durably.
-- Provide a browser viewer or dev overlay in this phase.
 - Define `.gwdk` tracing syntax.
 
 ## Users
@@ -70,9 +68,9 @@ Sentry, or a hosted observability backend.
 
 ## Current Limits
 
-- Generated app routes are not auto-instrumented yet.
+- Generated instrumentation is debug-gated through `addons/observability`;
+  production sampling, access policy, and durable storage remain app-owned.
 - Collector data is in-memory only and process-local.
 - The SSE stream is a local inspection aid, not a durable delivery channel.
-- OTLP export is an interface and value shape only; concrete OTLP transport
-  belongs in a later nested optional module.
-
+- Concrete OTLP transport lives in the nested optional `runtime/trace/otel`
+  module.

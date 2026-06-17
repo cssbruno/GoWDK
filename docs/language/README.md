@@ -9,8 +9,8 @@ detection, the first typed action input/redirect/fragment-metadata subset, the
 first API method/route metadata subset, minimal literal `view {}` markup parsing,
 metadata capture for `go {}` inline Go authoring blocks,
 first-slice `g:post`, `g:target`, and `g:swap` lowering, literal dynamic SPA
-route expansion, literal build data, imported no-argument Go build data
-functions, default `go {}` build-data functions, package
+route expansion, literal build data, imported Go build data functions with
+optional `gowdk.BuildParams` route params, default `go {}` build-data functions, package
 type-checking for saved default `go {}` blocks, generated
 `gowdk_go/` packages for default `go {}` and `go server {}` blocks,
 same-page action/API/fragment handlers from default `go {}` blocks,

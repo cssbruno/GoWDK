@@ -10,16 +10,17 @@ The parser records whether these top-level blocks are present:
   `parse_error` diagnostic instead of running arbitrary build-time code.
 - `build {}`: build-time data block. Presence and raw body text are recorded.
   SPA builds support the first literal subset, `=> { title: "Hello" }`, and
-  the first imported or same-package no-argument Go function subset,
+  the first imported or same-package Go function subset,
   `=> interop.FeaturedCopyForBuild()` or `=> FeaturedCopyForBuild()`. The Go
-  function can return `T` or `(T, error)`. Other statement forms are rejected
-  with a `parse_error` diagnostic; arbitrary build-time statements remain
-  planned.
+  function can return `T` or `(T, error)` and can optionally accept one
+  `gowdk.BuildParams` argument for dynamic `paths {}` route params. Other
+  statement forms are rejected with a `parse_error` diagnostic; arbitrary
+  build-time statements remain planned.
 - `server {}`: request-time data block. Presence and raw body text are recorded,
   then rejected on SPA/action pages.
 - `go {}` and `go target {}`: optional inline Go authoring blocks.
   Presence, target, raw body text, and source span are recorded. Default
-  `go {}` can provide no-argument build-data functions called by
+  `go {}` can provide build-data functions called by
   `build { => LocalFunc() }` and same-page action, API, or fragment handlers.
   Page-level `go client {}` can opt into client-side execution by exporting
   `GOWDKMount<PageID>` with
@@ -47,7 +48,8 @@ api Health GET "/api/health"
 - Build-time Go function calls can use an explicit imported alias such as
   `interop.FeaturedCopyForBuild()` or a bare same-package function such as
   `FeaturedCopyForBuild()` when the page directory is a buildable Go package.
-  Passing route params into Go build functions is not supported yet.
+  Dynamic `paths {}` output passes route params into helpers that declare one
+  `gowdk.BuildParams` argument.
 - `server {}` is request-time behavior and must not make SPA pages implicitly SSR.
 - `go {}` is parsed as Go and can run static build-time helpers for
   `build {}`. Saved default `go {}` blocks are also type-checked with
@@ -128,8 +130,9 @@ style {
 }
 ```
 
-The compiler parses the go block body as Go and runs the referenced no-argument
-function during build. Returned JSON object fields become build data.
+The compiler parses the go block body as Go and runs the referenced build-data
+function during build. Dynamic `paths {}` output can pass one
+`gowdk.BuildParams` argument. Returned JSON object fields become build data.
 
 When generated app source is emitted, default `go {}` blocks are also written
 under `gowdk_go/<package>/go.go` so `go test ./...` in the generated app can

@@ -12,8 +12,12 @@ The browser Go package is a normal `package main` compiled with
 `//go:wasmexport`:
 
 ```go
+import gowdkwasm "github.com/cssbruno/gowdk/runtime/wasm"
+
 //go:wasmexport GOWDKMountWasmCounter
-func GOWDKMountWasmCounter() uint32 { return 0 }
+func GOWDKMountWasmCounter() uint32 {
+	return gowdkwasm.ReturnResult(gowdkwasm.Result{Patches: []any{}})
+}
 ```
 
 ## Build It
@@ -29,9 +33,10 @@ test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/wasm_exec.js
 ```
 
 The current ABI validates required exports and browser-safe imports, emits the
-host loader, and reports unsupported patch operations in the browser console.
-User Go patch-memory decoding beyond the current `uint32` return contract is
-still planned.
+host loader, decodes Go-style `uint32` JSON result pointers, and reports
+unsupported patch operations in the browser console. Use `runtime/wasm` to read
+the current mount/event/destroy payload and return either a legacy patch array or
+the extended `{ "patches": [...], "stores": { ... } }` result shape.
 
 ## Page stores
 
@@ -50,5 +55,5 @@ page stores like a JS island. The host loader:
   returned patches, without echoing the update back into the registry.
 
 Surfacing serialized state from the `uint32` export contract (so a Go island can
-return the `stores` map) is the remaining Go-side ABI work tracked alongside the
-patch-memory decoding above.
+return the `stores` map) is implemented by the `runtime/wasm` helper and host
+loader pointer decoding.

@@ -13,8 +13,8 @@ func ssrHandlerSource(routes []SSRRoute) (source string, err error) {
 
 	sorted := sortedSSRRoutes(routes)
 	return printActionDecls([]ast.Decl{
-		ssrExactDecl(sorted, false, false),
-		ssrDynamicDecl(sorted, false, false),
+		ssrExactDecl(sorted, false, false, false),
+		ssrDynamicDecl(sorted, false, false, false),
 	})
 }
 
@@ -29,7 +29,7 @@ func sortedSSRRoutes(routes []SSRRoute) []SSRRoute {
 	return sorted
 }
 
-func ssrExactDecl(routes []SSRRoute, rateLimit bool, csrf bool) *ast.FuncDecl {
+func ssrExactDecl(routes []SSRRoute, rateLimit bool, csrf bool, trace bool) *ast.FuncDecl {
 	clauses := []ast.Stmt{}
 	for _, route := range routes {
 		if len(ssrRoutePatternParams(route.Route)) > 0 {
@@ -37,7 +37,7 @@ func ssrExactDecl(routes []SSRRoute, rateLimit bool, csrf bool) *ast.FuncDecl {
 		}
 		clauses = append(clauses, &ast.CaseClause{
 			List: []ast.Expr{stringLit(route.Route)},
-			Body: ssrRouteBodyStmts(route, false, rateLimit, csrf),
+			Body: ssrRouteBodyStmts(route, false, rateLimit, csrf, trace),
 		})
 	}
 	return funcDecl("ssrExact", actionParams(), namedBoolResults("handled"), []ast.Stmt{
@@ -49,19 +49,19 @@ func ssrExactDecl(routes []SSRRoute, rateLimit bool, csrf bool) *ast.FuncDecl {
 	})
 }
 
-func ssrDynamicDecl(routes []SSRRoute, rateLimit bool, csrf bool) *ast.FuncDecl {
+func ssrDynamicDecl(routes []SSRRoute, rateLimit bool, csrf bool, trace bool) *ast.FuncDecl {
 	body := []ast.Stmt{}
 	for _, route := range routes {
 		if len(ssrRoutePatternParams(route.Route)) == 0 {
 			continue
 		}
-		body = append(body, ssrDynamicIfStmt(route, rateLimit, csrf))
+		body = append(body, ssrDynamicIfStmt(route, rateLimit, csrf, trace))
 	}
 	body = append(body, returnBool(false))
 	return funcDecl("ssrDynamic", actionParams(), namedBoolResults("handled"), body)
 }
 
-func ssrDynamicIfStmt(route SSRRoute, rateLimit bool, csrf bool) ast.Stmt {
+func ssrDynamicIfStmt(route SSRRoute, rateLimit bool, csrf bool, trace bool) ast.Stmt {
 	// A guardless route is denied before rendering, so its matched params are
 	// unused; bind them to _ to keep the generated code free of unused vars.
 	paramsName := ast.Expr(id("params"))
@@ -69,7 +69,7 @@ func ssrDynamicIfStmt(route SSRRoute, rateLimit bool, csrf bool) ast.Stmt {
 		paramsName = id("_")
 	}
 	names := []ast.Expr{paramsName, id("ok")}
-	body := ssrRouteBodyStmts(route, true, rateLimit, csrf)
+	body := ssrRouteBodyStmts(route, true, rateLimit, csrf, trace)
 	return &ast.IfStmt{
 		Init: define(names, call(sel("gowdkroute", "Match"), stringLit(route.Route), selExpr(selExpr(id("request"), "URL"), "Path"))),
 		Cond: id("ok"),
@@ -77,16 +77,23 @@ func ssrDynamicIfStmt(route SSRRoute, rateLimit bool, csrf bool) ast.Stmt {
 	}
 }
 
-func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool, csrf bool) []ast.Stmt {
+func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool, csrf bool, trace bool) []ast.Stmt {
 	if len(route.Guards) == 0 {
 		// No guard declared: deny by default (403). There is nothing to render,
-		// so the route returns before any context, load, or HTML statements.
-		return []ast.Stmt{
+		// so the route returns before load or HTML statements.
+		body := []ast.Stmt{}
+		if trace {
+			body = append(body, ssrRouteTraceStmts(route)...)
+		}
+		return append(body,
 			writeNoStoreErrorStmt(sel("http", "StatusForbidden"), "403 forbidden"),
 			returnBool(true),
-		}
+		)
 	}
 	body := ssrRouteContextStmts(route, includeParams)
+	if trace {
+		body = append(body, ssrRouteTraceStmts(route)...)
+	}
 	body = append(body, ssrRoutePanicBoundaryStmt())
 	body = append(body, rateLimitStmts(rateLimit)...)
 	body = append(body, guardStmts(route.Guards)...)
@@ -95,7 +102,7 @@ func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool, csrf 
 	// attacker-influenceable scalar (route params, load fields). Otherwise a
 	// scalar value equal to a generated region placeholder would be expanded
 	// into row/branch markup, violating escape-by-default for request-time data.
-	body = append(body, ssrLoadFetchStmts(route)...)
+	body = append(body, ssrLoadFetchStmts(route, trace)...)
 	body = append(body, ssrRegionRenderStmts(route)...)
 	for _, replacement := range route.Replacements {
 		body = append(body, assign([]ast.Expr{id("html")}, call(
@@ -111,6 +118,29 @@ func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool, csrf 
 	}
 	body = append(body, ssrWriteHTMLStmts(id("html"), route.Cache)...)
 	return body
+}
+
+func ssrRouteTraceStmts(route SSRRoute) []ast.Stmt {
+	args := []ast.Expr{
+		call(selExpr(id("request"), "Context")),
+		stringLit("ssr " + route.Route),
+		call(sel("gowdktrace", "WithSurface"), sel("gowdktrace", "SurfaceBackend")),
+		call(sel("gowdktrace", "WithLane"), sel("gowdktrace", "LaneSSR")),
+	}
+	if source := traceSourceRefExpr(route.Source, "page", route.PageID, route.SourceSpan); source != nil {
+		args = append(args, call(sel("gowdktrace", "WithSource"), source))
+	}
+	args = append(args, call(sel("gowdktrace", "WithAttributes"), traceAttributesExpr([]ast.Expr{
+		traceAttributeExpr(sel("gowdktrace", "AttrHTTPRoute"), stringLit(route.Route)),
+		traceAttributeExpr(sel("gowdktrace", "AttrHTTPRequestMethod"), stringLit("GET")),
+		traceAttributeExpr(stringLit("gowdk.page"), stringLit(route.PageID)),
+		traceAttributeExpr(stringLit("gowdk.render"), stringLit(ssrRouteRender(route))),
+	})))
+	return []ast.Stmt{
+		define([]ast.Expr{id("ctx"), id("ssrSpan")}, call(sel("gowdktrace", "Start"), args...)),
+		assign([]ast.Expr{id("request")}, call(selExpr(id("request"), "WithContext"), id("ctx"))),
+		&ast.DeferStmt{Call: call(sel("gowdkruntime", "FinishHTTPTrace"), id("response"), id("ssrSpan"))},
+	}
 }
 
 func ssrCSRFHTMLStmts() []ast.Stmt {
@@ -151,7 +181,7 @@ func ssrRoutePanicBoundaryStmt() ast.Stmt {
 
 // ssrLoadFetchStmts fetches the request-time load {} data into loadData and
 // handles load errors. It does not yet substitute anything into the HTML.
-func ssrLoadFetchStmts(route SSRRoute) []ast.Stmt {
+func ssrLoadFetchStmts(route SSRRoute, trace bool) []ast.Stmt {
 	if !route.HasLoad {
 		return nil
 	}
@@ -160,9 +190,13 @@ func ssrLoadFetchStmts(route SSRRoute) []ast.Stmt {
 		stmts = append(stmts, returnBool(true))
 		return stmts
 	}
-	stmts := []ast.Stmt{
-		define([]ast.Expr{id("loadContext")}, call(sel("gowdkssr", "NewLoadContext"), id("request"), id("nil"))),
+	stmts := []ast.Stmt{}
+	loadRequest := ast.Expr(id("request"))
+	if trace {
+		stmts = append(stmts, ssrLoadTraceStartStmts(route)...)
+		loadRequest = id("loadRequest")
 	}
+	stmts = append(stmts, define([]ast.Expr{id("loadContext")}, call(sel("gowdkssr", "NewLoadContext"), loadRequest, id("nil"))))
 	loadCall := call(sel(route.LoadBackendAlias, route.LoadBinding.FunctionName), id("loadContext"))
 	switch route.LoadBinding.Signature {
 	case source.BackendSignatureLoadError:
@@ -170,13 +204,59 @@ func ssrLoadFetchStmts(route SSRRoute) []ast.Stmt {
 			define([]ast.Expr{id("loadData"), id("err")}, loadCall),
 			&ast.IfStmt{
 				Cond: notNil("err"),
-				Body: block(ssrLoadErrorStmts()...),
+				Body: block(append(ssrLoadTraceFinishStmts(trace, id("err")), ssrLoadErrorStmts()...)...),
 			},
 		)
 	default:
 		stmts = append(stmts, define([]ast.Expr{id("loadData")}, loadCall))
 	}
+	stmts = append(stmts, ssrLoadTraceFinishStmts(trace, id("nil"))...)
 	return stmts
+}
+
+func ssrLoadTraceStartStmts(route SSRRoute) []ast.Stmt {
+	args := []ast.Expr{
+		call(selExpr(id("request"), "Context")),
+		stringLit("load " + route.Route),
+		call(sel("gowdktrace", "WithSurface"), sel("gowdktrace", "SurfaceBackend")),
+		call(sel("gowdktrace", "WithLane"), sel("gowdktrace", "LaneSSR")),
+	}
+	ownerKind := route.LoadBinding.Kind
+	if ownerKind == "" {
+		ownerKind = "load"
+	}
+	if source := traceSourceRefExpr(route.LoadBinding.Source, ownerKind, route.PageID, route.LoadBinding.Span); source != nil {
+		args = append(args, call(sel("gowdktrace", "WithSource"), source))
+	}
+	args = append(args, call(sel("gowdktrace", "WithAttributes"), traceAttributesExpr([]ast.Expr{
+		traceAttributeExpr(sel("gowdktrace", "AttrHTTPRoute"), stringLit(route.Route)),
+		traceAttributeExpr(stringLit("gowdk.page"), stringLit(route.PageID)),
+		traceAttributeExpr(stringLit("gowdk.load.function"), stringLit(route.LoadBinding.FunctionName)),
+	})))
+	return []ast.Stmt{
+		define([]ast.Expr{id("ctx"), id("loadSpan")}, call(sel("gowdktrace", "Start"), args...)),
+		define([]ast.Expr{id("loadRequest")}, call(selExpr(id("request"), "WithContext"), id("ctx"))),
+	}
+}
+
+func ssrLoadTraceFinishStmts(trace bool, err ast.Expr) []ast.Stmt {
+	if !trace {
+		return nil
+	}
+	return []ast.Stmt{
+		exprStmt(call(sel("gowdkruntime", "FinishTrace"), id("loadSpan"), err)),
+	}
+}
+
+func traceAttributesExpr(elts []ast.Expr) ast.Expr {
+	return &ast.CompositeLit{
+		Type: &ast.MapType{Key: id("string"), Value: id("any")},
+		Elts: elts,
+	}
+}
+
+func traceAttributeExpr(key ast.Expr, value ast.Expr) ast.Expr {
+	return &ast.KeyValueExpr{Key: key, Value: value}
 }
 
 // ssrLoadScalarReplaceStmts substitutes the scalar load {} field placeholders

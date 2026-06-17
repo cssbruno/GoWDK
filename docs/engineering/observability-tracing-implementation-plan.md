@@ -12,7 +12,8 @@ by plain Go programs before any compiler or generated-app integration lands.
 ## Assumptions
 
 - The root module must not add production dependencies.
-- Generated route/contract/job auto-instrumentation is later work.
+- Generated route, SSR load, contract, and job instrumentation is debug-gated
+  through `addons/observability`; durable production storage remains app-owned.
 - Local collection is process-local and best-effort.
 - OpenTelemetry compatibility means stable names, attributes, and an OTLP-like
   export shape without importing the OTel SDK.
@@ -86,4 +87,3 @@ git diff --check
   production trace storage.
 - Concrete OTLP export must remain out of the root module unless it is placed
   in a nested optional module.
-

@@ -116,23 +116,29 @@ the component-scoped ABI entrypoints with the current `func() uint32`
 signature:
 
 ```go
+import gowdkwasm "github.com/cssbruno/gowdk/runtime/wasm"
+
 //go:wasmexport GOWDKMountCounter
-func GOWDKMountCounter() uint32 { return 0 }
+func GOWDKMountCounter() uint32 {
+	return gowdkwasm.ReturnResult(gowdkwasm.Result{Patches: []any{}})
+}
 
 //go:wasmexport GOWDKHandleCounter
-func GOWDKHandleCounter() uint32 { return 0 }
+func GOWDKHandleCounter() uint32 { return gowdkwasm.ReturnPatches([]any{}) }
 
 //go:wasmexport GOWDKDestroyCounter
-func GOWDKDestroyCounter() uint32 { return 0 }
+func GOWDKDestroyCounter() uint32 { return gowdkwasm.ReturnPatches([]any{}) }
 ```
 
 The generated loader passes a `gowdk-wasm-island-v1` bootstrap object containing
-component name, state, props, emits, refs, and compiler-owned binding metadata.
-Event and destroy payloads carry the same ABI version. Returned patch lists may
-use `setText`, `setAttr`, `removeAttr`, `toggleClass`, `setStyle`,
-`setHidden`, `replaceList`, and `emit`; unsupported patch operations are
-rejected with a console error. Missing required exports and startup failures are
-reported to the browser console instead of silently disabling the island.
+component name, state, props, emits, refs, compiler-owned binding metadata, and
+the current values of any page stores declared with `use`. Event and destroy
+payloads carry the same ABI version. Go exports can read the current payload and
+return JSON through `runtime/wasm`; the loader accepts either a legacy patch
+array or `{ patches, stores }`, writes returned store values back to page stores,
+and rejects unsupported patch operations with a console error. Missing required
+exports and startup failures are reported to the browser console instead of
+silently disabling the island.
 
 Normal calls to a component with `wasm` use the WASM island runtime. If a
 component is called with `g:island="wasm"` and no `wasm` package is declared,

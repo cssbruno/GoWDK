@@ -9,6 +9,7 @@
   const destroyExport = "GOWDKDestroy" + component;
   const bindingTargetAttributes = ["data-gowdk-binding-text", "data-gowdk-binding-if", "data-gowdk-binding-list", "data-gowdk-binding-value", "data-gowdk-binding-checked"];
   const roots = document.querySelectorAll("gowdk-island[data-gowdk-component-id=\"" + componentID + "\"][data-gowdk-runtime=\"wasm\"],gowdk-island:not([data-gowdk-component-id])[data-gowdk-component=\"" + componentID + "\"][data-gowdk-runtime=\"wasm\"]");
+  const maxResultBytes = 1 << 20;
   if (roots.length === 0 || typeof WebAssembly === "undefined") return;
 
   function tracedFetch(url, options, name) {
@@ -40,6 +41,25 @@
     } catch (_error) {
       return fallback;
     }
+  }
+
+  function decodePointerResult(exports, pointer) {
+    const address = Number(pointer);
+    if (!Number.isFinite(address) || address <= 0) return null;
+    const memory = exports && (exports.mem || exports.memory);
+    if (!memory || !memory.buffer) return null;
+    const bytes = new Uint8Array(memory.buffer);
+    if (address >= bytes.length) return null;
+    let end = address;
+    const limit = Math.min(bytes.length, address + maxResultBytes);
+    while (end < limit && bytes[end] !== 0) end++;
+    if (end >= limit) {
+      if (typeof console !== "undefined") console.error("GOWDK WASM island result exceeded maximum size");
+      return null;
+    }
+    const slice = bytes.subarray(address, end);
+    const text = typeof TextDecoder === "function" ? new TextDecoder("utf-8").decode(slice) : Array.from(slice).map((byte) => String.fromCharCode(byte)).join("");
+    return parseJSON(text, null);
   }
 
   function ownsNode(root, node) {
@@ -161,8 +181,10 @@
   // string) or an extended { patches, stores } object. The stores map lets a
   // WASM island surface its current store-bound state so the loader can write it
   // back to window.__gowdkStores, completing store participation (read + write).
-  function normalizeResult(result) {
-    const value = typeof result === "string" ? parseJSON(result, null) : result;
+  function normalizeResult(exports, result) {
+    let value = result;
+    if (typeof result === "number" || typeof result === "bigint") value = decodePointerResult(exports, result);
+    else if (typeof result === "string") value = parseJSON(result, null);
     if (Array.isArray(value)) return { patches: value, stores: null };
     if (value && typeof value === "object") {
       return {
@@ -179,7 +201,15 @@
       if (typeof console !== "undefined") console.error("GOWDK WASM island missing export", name);
       return undefined;
     }
-    return fn(payload);
+    const hadPayload = Object.prototype.hasOwnProperty.call(window, "__gowdkWASMIslandPayload");
+    const previousPayload = window.__gowdkWASMIslandPayload;
+    window.__gowdkWASMIslandPayload = JSON.stringify(payload || {});
+    try {
+      return fn(payload);
+    } finally {
+      if (hadPayload) window.__gowdkWASMIslandPayload = previousPayload;
+      else delete window.__gowdkWASMIslandPayload;
+    }
   }
 
   function missingExports(exports) {
@@ -255,7 +285,7 @@
       // islands subscribed to the same store are still notified).
       let publishingStores = false;
       const processResult = (result) => {
-        const normalized = normalizeResult(result);
+        const normalized = normalizeResult(exports, result);
         if (normalized.stores && registry && !applyingStoreUpdate) {
           publishingStores = true;
           try {

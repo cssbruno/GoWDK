@@ -51,6 +51,9 @@ Implemented today:
   interpolation subset.
 - Literal `build {}` data can render in the current literal `view {}`
   interpolation subset.
+- Imported and same-package Go build functions can return `T` or `(T, error)`;
+  dynamic `paths {}` output can pass route params through one
+  `gowdk.BuildParams` argument.
 - SPA page output composes declared layouts by replacing each applied
   layout's single `<slot />` placeholder before rendering the combined view
   source once.
@@ -150,11 +153,12 @@ Implemented today:
   placeholder module for the loader-shape slice and do not ship `wasm_exec.js`.
   The loader discovers matching island roots, builds the ADR-defined bootstrap
   object from ABI version `gowdk-wasm-island-v1`, state, props, emits, refs,
-  and binding metadata, calls component-scoped WASM exports when present,
-  captures host DOM events, and applies the supported validated patch commands
-  for text, visibility, attribute, class, style, and emitted-event updates. The
-  build report records the Go toolchain version used for generated
-  `wasm_exec.js` runtime assets.
+  binding metadata, and current page-store values, calls component-scoped WASM
+  exports when present, decodes Go-style `uint32` JSON result pointers, captures
+  host DOM events, writes returned store values back to page stores, and applies
+  the supported validated patch commands for text, visibility, attribute, class,
+  style, and emitted-event updates. The build report records the Go toolchain
+  version used for generated `wasm_exec.js` runtime assets.
 - Generated apps can serve concrete and dynamic SSR pages in the supported
   generated request-time slice. Dynamic route params are substituted into
   generated SSR placeholders with request-time HTML escaping. Declared
@@ -219,13 +223,11 @@ Implemented today:
 
 Not implemented yet:
 
-- Route params passed into imported Go `build {}` functions.
 - Full page-aware third-party CSS processor selection beyond the current
   processor stylesheet and generated CSS asset support.
 - Non-string props in inline `props {}` blocks.
 - Arbitrary build-time statements beyond literal expression records and
-  imported/same-package no-argument build data functions returning `T` or
-  `(T, error)`.
+  imported/same-package build data functions returning `T` or `(T, error)`.
 - Broader user Go type resolution beyond typed action decoders, user action
   logic, API handlers, and general fragment routes.
 - Generated handlers beyond the supported action, API, fragment, and SSR load

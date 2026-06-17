@@ -28,8 +28,9 @@ emits app-shell HTML, `gowdk-routes.json`, `gowdk-assets.json`, generated embedd
 app source, and an optional binary for the selected
 source set. The current rendered page subset covers simple `spa` and
 `action` pages with non-dynamic routes or literal `paths {}` dynamic routes,
-literal `build {}` data, imported or same-package no-argument Go build data
-functions, lowercase HTML markup in `view {}`, and `.cmp.gwdk` component files.
+literal `build {}` data, imported or same-package Go build data functions with
+optional `gowdk.BuildParams`, lowercase HTML markup in `view {}`, and
+`.cmp.gwdk` component files.
 
 `internal/syntax` owns the shared tokenizer. `internal/parser.ParseSyntax` uses
 that token stream to recover a typed `internal/gwdkast.File` for the current

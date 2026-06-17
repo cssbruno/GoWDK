@@ -52,9 +52,10 @@
 - `build {}` records block presence and raw body text internally. SPA builds
   can execute one literal string declaration such as
   `=> { title: "Hello" }` and expose those values to `view {}` interpolation.
-  SPA builds can also execute one imported no-argument Go function call such
-  as `=> interop.FeaturedCopyForBuild()` when the page declares
-  `import interop "github.com/..."`.
+  SPA builds can also execute one imported Go function call such as
+  `=> interop.FeaturedCopyForBuild()` when the page declares
+  `import interop "github.com/..."`; dynamic `paths {}` builds pass route
+  params to helpers that declare one `gowdk.BuildParams` argument.
 - `server {}` runs at request time for SSR or request-time hybrid pages.
   Generated SSR supports `=> { field, user.name }` declarations and
   same-package Go load functions named `Load<PageID>` that receive

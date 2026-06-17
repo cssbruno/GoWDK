@@ -41,6 +41,33 @@ type RenderConfig struct {
 	Default RenderMode
 }
 
+// BuildParams carries compile-time route values into Go build helpers.
+type BuildParams struct {
+	Route map[string]string `json:"route,omitempty"`
+}
+
+// Param returns a declared dynamic route param by name.
+func (params BuildParams) Param(name string) (string, bool) {
+	name = strings.TrimSpace(name)
+	if name == "" || params.Route == nil {
+		return "", false
+	}
+	value, ok := params.Route[name]
+	return value, ok
+}
+
+// RouteParams returns a copy of the declared route params.
+func (params BuildParams) RouteParams() map[string]string {
+	if len(params.Route) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(params.Route))
+	for name, value := range params.Route {
+		out[name] = value
+	}
+	return out
+}
+
 // DefaultMode returns SPA when no explicit default render mode is set.
 func (config RenderConfig) DefaultMode() RenderMode {
 	if config.Default == "" {

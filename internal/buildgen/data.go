@@ -51,7 +51,7 @@ func parseBuildData(body string, routeParams map[string]string, imports []gwdkir
 			return nil, err
 		}
 		if ok {
-			return runBuildDataCallRef(call, imports, scripts, source)
+			return runBuildDataCallRef(call, imports, scripts, source, routeParams)
 		}
 	}
 	data := map[string]buildValue{}
@@ -87,7 +87,7 @@ func parseBuildData(body string, routeParams map[string]string, imports []gwdkir
 
 func parseBuildDataFromBlocks(blocks gwdkir.Blocks, routeParams map[string]string, imports []gwdkir.Import, source string) (map[string]string, error) {
 	if blocks.BuildCall != nil {
-		return runBuildDataCallRef(buildCallRef{Alias: blocks.BuildCall.Alias, Function: blocks.BuildCall.Function}, imports, blocks.GoBlocks, source)
+		return runBuildDataCallRef(buildCallRef{Alias: blocks.BuildCall.Alias, Function: blocks.BuildCall.Function}, imports, blocks.GoBlocks, source, routeParams)
 	}
 	if len(blocks.BuildRecords) == 0 {
 		return parseBuildData(blocks.BuildBody, routeParams, imports, blocks.GoBlocks, source)

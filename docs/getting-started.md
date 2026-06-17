@@ -315,7 +315,8 @@ Implemented today:
 
 - Build output for simple `.gwdk` pages and components.
 - Literal `paths {}` expansion for dynamic SPA routes.
-- Literal `build {}` data and imported no-argument Go build data functions.
+- Literal `build {}` data and imported Go build data functions with optional
+  `gowdk.BuildParams` route params.
 - Config-based discovery, module selection, and named build targets.
 - Generated embedded app source, local binaries, and Go `js/wasm` deploy
   artifacts.

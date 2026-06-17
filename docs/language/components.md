@@ -408,9 +408,9 @@ WASM islands participate in page stores too. The host loader merges every used
 store's current (and persisted) value into the mount/handle/destroy payload's
 `state`, writes back any store values an export returns in the extended
 `{ patches, stores }` result shape, and re-invokes the island when another island
-changes a used store. Surfacing serialized state from the Go `uint32` export
-contract — so a Go island can return that `stores` map — is the remaining Go-side
-ABI work; see `examples/components/wasm/README.md`.
+changes a used store. Go WASM exports can use `runtime/wasm` to decode the
+current payload and return either a patch array or `{ patches, stores }` through
+the required `func() uint32` ABI; see `examples/components/wasm/README.md`.
 
 Current limits. Invalid persist scopes are reported but not auto-fixed, because
 choosing `local` vs `session` is a deliberate decision.

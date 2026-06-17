@@ -1119,6 +1119,66 @@ func TestGenerateRegistersSingleFlightRegionRenderers(t *testing.T) {
 	}
 }
 
+func TestGenerateObservabilityTracesSSRRouteAndLoad(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "dashboard", "index.html"), "<main>Dashboard</main>")
+
+	config := csrfDisabledConfig()
+	config.Addons = []gowdk.Addon{gowdk.NewAddon("observability", gowdk.FeatureObservability)}
+	ssrRoute := SSRRoute{
+		PageID:     "dashboard",
+		Route:      "/dashboard",
+		Render:     gowdk.SSR,
+		Guards:     []string{"public"},
+		HasLoad:    true,
+		Source:     "dashboard.page.gwdk",
+		SourceSpan: source.SourceSpan{Start: source.SourcePosition{Line: 3, Column: 1}},
+		LoadBinding: source.BackendBinding{
+			Kind:         "load",
+			PageID:       "dashboard",
+			Source:       "dashboard.page.gwdk",
+			Span:         source.SourceSpan{Start: source.SourcePosition{Line: 6, Column: 1}},
+			Status:       source.BackendBindingBound,
+			ImportPath:   "example.com/app/dashboard",
+			PackageName:  "dashboard",
+			FunctionName: "LoadDashboard",
+			Signature:    source.BackendSignatureLoadError,
+		},
+		HTML: "<main>Dashboard</main>",
+	}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Config: config, SSR: []SSRRoute{ssrRoute}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdktrace "github.com/cssbruno/gowdk/runtime/trace"`,
+		`Tracer: traceTracer,`,
+		`ctx, ssrSpan := gowdktrace.Start(request.Context(), "ssr /dashboard"`,
+		`gowdktrace.WithLane(gowdktrace.LaneSSR)`,
+		`gowdktrace.WithSource(gowdktrace.SourceRef{File: "dashboard.page.gwdk", Line: 3, Column: 1, OwnerKind: "page", OwnerID: "dashboard"})`,
+		`gowdktrace.AttrHTTPRoute: "/dashboard"`,
+		`defer gowdkruntime.FinishHTTPTrace(response, ssrSpan)`,
+		`ctx, loadSpan := gowdktrace.Start(request.Context(), "load /dashboard"`,
+		`loadRequest := request.WithContext(ctx)`,
+		`loadContext := gowdkssr.NewLoadContext(loadRequest, nil)`,
+		`loadData, err := dashboard.LoadDashboard(loadContext)`,
+		`gowdkruntime.FinishTrace(loadSpan, err)`,
+		`gowdkruntime.FinishTrace(loadSpan, nil)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated observability source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
 func TestGenerateSkipsSingleFlightRegionRenderersForGuardedRoutes(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

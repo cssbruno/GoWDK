@@ -388,6 +388,81 @@ func TestBuildUsesImportedGoBuildData(t *testing.T) {
 	}
 }
 
+func TestBuildUsesImportedGoBuildDataWithEmptyBuildParams(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:    "go.static.params",
+		Route: "/go-static-params",
+		Imports: []gwdkir.Import{{
+			Alias: "interop",
+			Path:  "github.com/cssbruno/gowdk/examples/go-interop",
+		}},
+		Blocks: gwdkir.Blocks{
+			Build:     true,
+			BuildBody: `=> interop.StaticCopyWithParamsForBuild()`,
+			View:      true,
+			ViewBody:  `<main><h1>{title}</h1><p>{tagline}</p></main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "go-static-params", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	for _, expected := range []string{
+		`<h1>Static Go params</h1>`,
+		`<p>Static pages receive empty BuildParams.</p>`,
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected %q in static BuildParams output:\n%s", expected, output)
+		}
+	}
+}
+
+func TestBuildUsesNoArgImportedGoBuildDataOnDynamicRoute(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:    "go.imported.dynamic",
+		Route: "/go-imported/{slug}",
+		Imports: []gwdkir.Import{{
+			Alias: "interop",
+			Path:  "github.com/cssbruno/gowdk/examples/go-interop",
+		}},
+		Blocks: gwdkir.Blocks{
+			Paths:     true,
+			PathsBody: `=> { slug: "legacy" }`,
+			Build:     true,
+			BuildBody: `=> interop.FeaturedCopyForBuild()`,
+			View:      true,
+			ViewBody:  `<main data-slug="{slug}"><h1>{title}</h1><p>{tagline}</p></main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "go-imported", "legacy", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	for _, expected := range []string{
+		`data-slug="legacy"`,
+		`<h1>Imported Go data</h1>`,
+		`<p>This page rendered data from a Go package imported directly in .gwdk.</p>`,
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected %q in dynamic no-arg build data output:\n%s", expected, output)
+		}
+	}
+}
+
 func TestBuildUsesImportedGoBuildDataWhenFunctionWritesStderr(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
@@ -457,6 +532,77 @@ func TestBuildUsesImportedGoBuildDataReturningError(t *testing.T) {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected %q in imported build data output:\n%s", expected, output)
 		}
+	}
+}
+
+func TestBuildPassesRouteParamsToImportedGoBuildData(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:    "go.post",
+		Route: "/go-post/{slug:int}",
+		Imports: []gwdkir.Import{{
+			Alias: "interop",
+			Path:  "github.com/cssbruno/gowdk/examples/go-interop",
+		}},
+		Blocks: gwdkir.Blocks{
+			Paths: true,
+			PathsRecords: []gwdkir.LiteralRecord{
+				{Fields: map[string]string{"slug": "123"}},
+				{Fields: map[string]string{"slug": "456"}},
+			},
+			Build:     true,
+			BuildBody: `=> interop.PostCopyForBuild()`,
+			View:      true,
+			ViewBody:  `<main data-slug="{slug}" data-canonical="{canonical}"><h1>{title}</h1></main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, slug := range []string{"123", "456"} {
+		payload, err := os.ReadFile(filepath.Join(outputDir, "go-post", slug, "index.html"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected := fmt.Sprintf(`<main data-slug="%s" data-canonical="/go-post/%s"><h1>Post %s</h1></main>`, slug, slug, slug)
+		if !strings.Contains(string(payload), expected) {
+			t.Fatalf("expected route params in imported build data output for %s:\n%s", slug, payload)
+		}
+	}
+}
+
+func TestBuildRejectsUnsupportedRouteParamGoBuildSignature(t *testing.T) {
+	outputDir := t.TempDir()
+	source := filepath.Join("..", "..", "examples", "go-interop", "bad-signature.page.gwdk")
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:     "go.bad",
+		Source: source,
+		Route:  "/bad/{slug}",
+		Blocks: gwdkir.Blocks{
+			Paths:     true,
+			PathsBody: `=> { slug: "nope" }`,
+			Build:     true,
+			BuildBody: `=> BadForBuild()`,
+			GoBlocks: []gwdkir.GoBlock{{
+				Body: `func BadForBuild(params int) map[string]string {
+	return map[string]string{"title": "bad"}
+}`,
+			}},
+			View:     true,
+			ViewBody: `<main>{title}</main>`,
+		},
+	}}}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err == nil {
+		t.Fatal("expected unsupported Go build signature error")
+	}
+	message := err.Error()
+	if !strings.Contains(message, "BadForBuild") ||
+		(!strings.Contains(message, "not enough arguments in call") && !strings.Contains(message, "cannot use gowdkbuildparams.BuildParams")) {
+		t.Fatalf("unexpected unsupported signature error: %v", err)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 
 	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
 	gowdkresponse "github.com/cssbruno/gowdk/runtime/response"
+	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 )
 
 func TestNewContextCarriesRequestContext(t *testing.T) {
@@ -57,6 +58,28 @@ func TestRunGuardsReportsMissingAndFailedGuards(t *testing.T) {
 	})
 	if !errors.Is(err, expected) || !strings.Contains(err.Error(), `guard "auth.required" failed`) {
 		t.Fatalf("expected wrapped guard error, got %v", err)
+	}
+}
+
+func TestRunGuardsRecordsFailedGuardSpan(t *testing.T) {
+	ring := gowdktrace.NewRingSink(4)
+	tracer := gowdktrace.NewTracer(gowdktrace.WithSink(ring))
+	request := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	request = request.WithContext(gowdktrace.ContextWithTracer(request.Context(), tracer))
+	expected := errors.New("denied")
+
+	err := RunGuards(NewContext(request, nil), []string{"auth.required"}, Registry{
+		"auth.required": func(Context) error { return expected },
+	})
+	if !errors.Is(err, expected) {
+		t.Fatalf("expected failed guard error, got %v", err)
+	}
+	spans := ring.Spans()
+	if len(spans) != 1 {
+		t.Fatalf("spans = %d, want 1", len(spans))
+	}
+	if spans[0].Name != "guard auth.required" || spans[0].Lane != gowdktrace.LaneGuard || spans[0].Status.Code != gowdktrace.StatusError {
+		t.Fatalf("unexpected guard span: %#v", spans[0])
 	}
 }
 

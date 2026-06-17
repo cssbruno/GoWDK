@@ -4,7 +4,7 @@ GOWDK source declares web surface. Normal Go packages own behavior.
 
 ## Build Data
 
-`build {}` can call one no-argument Go function:
+`build {}` can call one Go function:
 
 ```gwdk
 import interop "github.com/acme/site/content"
@@ -28,6 +28,8 @@ Supported return shapes:
 ```go
 func HomePage() HomeCopy
 func HomePage() (HomeCopy, error)
+func HomePage(gowdk.BuildParams) HomeCopy
+func HomePage(gowdk.BuildParams) (HomeCopy, error)
 ```
 
 The returned value must JSON-encode to a non-empty object. Scalar object fields
@@ -35,8 +37,16 @@ become string interpolation data for `view {}`. Build-helper stderr is kept
 separate from the JSON payload; successful logging does not corrupt build data,
 and failed helpers include stderr in the error message.
 
-Route params can be used in literal `build {}` expressions with
-`param("name")`. Passing route params into Go build functions remains deferred.
+For dynamic SPA routes expanded by `paths {}`, route params can be used in
+literal `build {}` expressions with `param("name")` or passed to Go build
+functions with `gowdk.BuildParams`:
+
+```go
+func PostPage(params gowdk.BuildParams) PostCopy {
+	slug, _ := params.Param("slug")
+	return PostCopy{Title: "Post " + slug}
+}
+```
 
 ## Actions And APIs
 

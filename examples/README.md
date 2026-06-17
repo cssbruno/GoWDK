@@ -258,18 +258,20 @@ test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/wasm_exec.js
   method/route metadata line, and `load` bodies are still not parsed beyond
   top-level block detection.
 - `.gwdk` page imports currently support the first build-time data slice:
-  `build { => alias.Func() }` for a no-argument Go function returning a JSON
-  object. Generated action, API, partial, and `load {}` user handler wiring is
-  implemented for the supported first request-time signatures.
+  `build { => alias.Func() }` for a Go function returning a JSON object.
+  Dynamic `paths {}` builds can pass route params to helpers that declare one
+  `gowdk.BuildParams` argument. Generated action, API, partial, and `load {}`
+  user handler wiring is implemented for the supported first request-time
+  signatures.
 - `guard` is enforced by generated SSR/action/API handlers. Custom guarded
   routes require `GOWDKGuardRegistry` unless an addon supplies the guard;
   native RBAC guard IDs such as `role:admin` require `GOWDKAuthProvider` only
   without `auth.Addon`.
 - Route params from literal `paths {}` are available to the current
-  `view {}` interpolation subset and to literal `build {}` string
-  interpolation. Imported build functions do not receive route params yet.
+  `view {}` interpolation subset, literal `build {}` string interpolation, and
+  route-aware Go build functions.
 - Literal `build {}` string data and scalar fields returned by imported
-  no-argument Go build functions are available to the current `view {}`
+  Go build functions are available to the current `view {}`
   interpolation subset.
 - Rich local client-side reactivity beyond the documented component subset is
   planned.

@@ -85,6 +85,11 @@ func (handler Handler) startRequestTrace(response http.ResponseWriter, request *
 }
 
 func finishRequestTrace(response http.ResponseWriter, span *gowdktrace.Span) {
+	FinishHTTPTrace(response, span)
+}
+
+// FinishHTTPTrace completes a generated route span with the response status.
+func FinishHTTPTrace(response http.ResponseWriter, span *gowdktrace.Span) {
 	if span == nil {
 		return
 	}
@@ -95,6 +100,19 @@ func finishRequestTrace(response http.ResponseWriter, span *gowdktrace.Span) {
 	span.Set(gowdktrace.AttrHTTPResponseStatusCode, status)
 	if status >= 500 {
 		span.SetStatus(gowdktrace.StatusError, http.StatusText(status))
+	} else {
+		span.SetStatus(gowdktrace.StatusOK, "")
+	}
+	span.End()
+}
+
+// FinishTrace completes a generated non-HTTP child span with an optional error.
+func FinishTrace(span *gowdktrace.Span, err error) {
+	if span == nil {
+		return
+	}
+	if err != nil {
+		span.SetStatus(gowdktrace.StatusError, redactSecrets(strings.TrimSpace(err.Error())))
 	} else {
 		span.SetStatus(gowdktrace.StatusOK, "")
 	}

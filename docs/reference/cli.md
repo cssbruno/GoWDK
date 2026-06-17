@@ -454,8 +454,8 @@ Current `build` limitations: it emits app-shell HTML files,
 `gowdk-build-report.json`, generated embedded app source, and an optional
 generated binary for build-time pages with non-dynamic routes or literal
 `paths {}` dynamic routes, literal `build {}` data, lowercase HTML markup,
-imported or same-package no-argument Go build data functions returning `T` or
-`(T, error)`,
+imported or same-package Go build data functions returning `T`, `(T, error)`,
+or the equivalent `gowdk.BuildParams` route-aware signatures,
 component files with string props, supported action redirect handlers with form
 decoder wrappers and required-field validation, and supported action fragment
 responses for partial requests.

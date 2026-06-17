@@ -32,6 +32,7 @@ type SSRArtifact struct {
 	LoadReplacements []SSRLoadReplacement
 	ListSpecs        []SSRListSpec
 	CondSpecs        []SSRCondSpec
+	QueryRegions     []SSRQueryRegion
 }
 
 type SSRReplacement = source.SSRReplacement
@@ -118,6 +119,7 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 	// replacements so the handler does not stringify and substitute a value that
 	// never appears in the output.
 	loadReplacements = usedLoadReplacements(html, loadReplacements)
+	queryRegions := ssrQueryRegions(html, regions.Lists, regions.Conds, loadReplacements, replacements, len(page.DynamicParams()) > 0)
 	return SSRArtifact{
 		PageID:           page.ID,
 		Route:            page.Route,
@@ -135,6 +137,7 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 		LoadReplacements: loadReplacements,
 		ListSpecs:        regions.Lists,
 		CondSpecs:        regions.Conds,
+		QueryRegions:     queryRegions,
 	}, nil
 }
 

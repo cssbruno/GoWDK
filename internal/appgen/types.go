@@ -128,6 +128,7 @@ type SSRRoute struct {
 	LoadReplacements []SSRLoadReplacement
 	ListSpecs        []SSRListSpec
 	CondSpecs        []SSRCondSpec
+	QueryRegions     []SSRQueryRegion
 }
 
 type SSRReplacement = source.SSRReplacement
@@ -139,3 +140,5 @@ type SSRListSpec = source.SSRListSpec
 type SSRCondSpec = source.SSRCondSpec
 
 type SSRListField = source.SSRListField
+
+type SSRQueryRegion = source.SSRQueryRegion

@@ -10,12 +10,12 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func contractHandlerDecls(exposures []BackendContractExposure, csrf bool, rateLimit bool, queryInvalidations bool) []ast.Decl {
+func contractHandlerDecls(exposures []BackendContractExposure, csrf bool, rateLimit bool, queryInvalidations bool, commandPatches bool) []ast.Decl {
 	routable := routableContractExposures(exposures)
 	decls := make([]ast.Decl, 0, len(routable))
 	for _, exposure := range routable {
 		if contractExposureExecutable(exposure) {
-			decls = append(decls, executableContractHandlerDecl(exposure, csrf, rateLimit, queryInvalidations))
+			decls = append(decls, executableContractHandlerDecl(exposure, csrf, rateLimit, queryInvalidations, commandPatches))
 			continue
 		}
 		decls = append(decls, fallbackContractHandlerDecl(exposure))
@@ -23,7 +23,7 @@ func contractHandlerDecls(exposures []BackendContractExposure, csrf bool, rateLi
 	return decls
 }
 
-func executableContractHandlerDecl(exposure BackendContractExposure, csrf bool, rateLimit bool, queryInvalidations bool) *ast.FuncDecl {
+func executableContractHandlerDecl(exposure BackendContractExposure, csrf bool, rateLimit bool, queryInvalidations bool, commandPatches bool) *ast.FuncDecl {
 	return funcDecl(contractHandlerName(exposure), []*ast.Field{
 		{Names: []*ast.Ident{id("contractRegistry")}, Type: &ast.StarExpr{X: sel("gowdkcontracts", "Registry")}},
 	}, []*ast.Field{{Type: sel("gowdkruntime", "BackendHandler")}}, []ast.Stmt{
@@ -32,12 +32,12 @@ func executableContractHandlerDecl(exposure BackendContractExposure, csrf bool, 
 				Params:  &ast.FieldList{List: actionParams()},
 				Results: &ast.FieldList{List: boolResults()},
 			},
-			Body: block(executableContractHandlerStmts(exposure, csrf, rateLimit, queryInvalidations)...),
+			Body: block(executableContractHandlerStmts(exposure, csrf, rateLimit, queryInvalidations, commandPatches)...),
 		}}},
 	})
 }
 
-func executableContractHandlerStmts(exposure BackendContractExposure, csrf bool, rateLimit bool, queryInvalidations bool) []ast.Stmt {
+func executableContractHandlerStmts(exposure BackendContractExposure, csrf bool, rateLimit bool, queryInvalidations bool, commandPatches bool) []ast.Stmt {
 	stmts := endpointContextStmts(
 		string(exposure.Endpoint.Kind),
 		exposure.Endpoint.PageID,
@@ -51,7 +51,7 @@ func executableContractHandlerStmts(exposure BackendContractExposure, csrf bool,
 	stmts = append(stmts, contractInputStmts(exposure, csrf)...)
 	if exposure.Endpoint.Kind == BackendEndpointCommand {
 		stmts = append(stmts, executableCommandContractStmts(exposure)...)
-		stmts = append(stmts, commandInvalidationHeaderStmts(queryInvalidations)...)
+		stmts = append(stmts, commandInvalidationHeaderStmts(queryInvalidations, commandPatches)...)
 	} else {
 		stmts = append(stmts, executableQueryContractStmts(exposure)...)
 	}
@@ -100,38 +100,84 @@ func executableCommandContractStmts(exposure BackendContractExposure) []ast.Stmt
 // commandInvalidationHeaderStmts emit the single-flight write path: after a
 // command's events are captured and dispatched, the adapter computes which
 // g:query regions those events invalidate and tells the submitting client via
-// the X-GOWDK-Queries response header. The client uses the header for fallback
-// refreshes when no realtime stream is active; otherwise the generated realtime
-// invalidation owns the refresh. X-GOWDK-Events gives both paths the same event
-// IDs so the browser can dedupe in-flight or already-handled refreshes. The
-// headers ride alongside the unchanged JSON result body, so non-browser callers
-// are unaffected. Only emitted when the build wires query invalidations
-// (realtimeQueryInvalidations exists).
-func commandInvalidationHeaderStmts(queryInvalidations bool) []ast.Stmt {
+// the X-GOWDK-Queries response header. X-GOWDK-Events gives both the direct
+// response and realtime paths the same event IDs so the browser can dedupe
+// in-flight or already-handled refreshes.
+//
+// Browser-enhanced g:command submits identify themselves with X-GOWDK-Command.
+// Only those requests can receive a gowdkssr.CommandEnvelope ({result, patches})
+// signalled by X-GOWDK-Patches; ordinary callers always keep the raw command
+// result JSON. Regions without a standalone renderer remain in X-GOWDK-Queries
+// only and fall back to the client refetch.
+func commandInvalidationHeaderStmts(queryInvalidations bool, commandPatches bool) []ast.Stmt {
 	if !queryInvalidations {
 		return nil
+	}
+	body := []ast.Stmt{
+		exprStmt(call(
+			selExpr(call(selExpr(id("response"), "Header")), "Set"),
+			stringLit("X-GOWDK-Queries"),
+			call(sel("strings", "Join"), id("invalidatedQueries"), stringLit(",")),
+		)),
+		define([]ast.Expr{id("invalidatedEventIDs")}, call(sel("gowdkcontracts", "InvalidatedEventIDs"), id("realtimeQueryInvalidations"), id("events"))),
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: call(id("len"), id("invalidatedEventIDs")), Op: token.GTR, Y: intLit(0)},
+			Body: block(exprStmt(call(
+				selExpr(call(selExpr(id("response"), "Header")), "Set"),
+				stringLit("X-GOWDK-Events"),
+				call(sel("strings", "Join"), id("invalidatedEventIDs"), stringLit(",")),
+			))),
+		},
+	}
+	if commandPatches {
+		body = append(body, commandPatchEnvelopeStmt())
 	}
 	return []ast.Stmt{
 		define([]ast.Expr{id("invalidatedQueries")}, call(sel("gowdkcontracts", "InvalidatedQueryTypes"), id("realtimeQueryInvalidations"), id("events"))),
 		&ast.IfStmt{
 			Cond: &ast.BinaryExpr{X: call(id("len"), id("invalidatedQueries")), Op: token.GTR, Y: intLit(0)},
-			Body: block(
-				exprStmt(call(
-					selExpr(call(selExpr(id("response"), "Header")), "Set"),
-					stringLit("X-GOWDK-Queries"),
-					call(sel("strings", "Join"), id("invalidatedQueries"), stringLit(",")),
-				)),
-				define([]ast.Expr{id("invalidatedEventIDs")}, call(sel("gowdkcontracts", "InvalidatedEventIDs"), id("realtimeQueryInvalidations"), id("events"))),
-				&ast.IfStmt{
-					Cond: &ast.BinaryExpr{X: call(id("len"), id("invalidatedEventIDs")), Op: token.GTR, Y: intLit(0)},
-					Body: block(exprStmt(call(
-						selExpr(call(selExpr(id("response"), "Header")), "Set"),
-						stringLit("X-GOWDK-Events"),
-						call(sel("strings", "Join"), id("invalidatedEventIDs"), stringLit(",")),
-					))),
-				},
-			),
+			Body: block(body...),
 		},
+	}
+}
+
+func commandPatchEnvelopeStmt() ast.Stmt {
+	return &ast.IfStmt{
+		Cond: &ast.BinaryExpr{
+			X:  call(selExpr(selExpr(id("request"), "Header"), "Get"), stringLit("X-GOWDK-Command")),
+			Op: token.EQL,
+			Y:  stringLit("1"),
+		},
+		Body: block(
+			define([]ast.Expr{id("singleFlightPatches")}, call(sel("gowdkssr", "RenderInvalidatedRegions"), id("request"), id("invalidatedQueries"))),
+			&ast.IfStmt{
+				Cond: &ast.BinaryExpr{X: call(id("len"), id("singleFlightPatches")), Op: token.GTR, Y: intLit(0)},
+				Body: block(
+					exprStmt(call(
+						selExpr(call(selExpr(id("response"), "Header")), "Set"),
+						stringLit("X-GOWDK-Patches"),
+						stringLit("1"),
+					)),
+					define([]ast.Expr{id("singleFlightResult"), id("singleFlightErr")}, call(
+						sel("gowdkresponse", "JSONValue"),
+						sel("http", "StatusOK"),
+						&ast.CompositeLit{Type: sel("gowdkssr", "CommandEnvelope"), Elts: []ast.Expr{
+							keyValue("Result", id("result")),
+							keyValue("Patches", id("singleFlightPatches")),
+						}},
+					)),
+					&ast.IfStmt{
+						Cond: notNil("singleFlightErr"),
+						Body: block(
+							writeNoStoreHandlerJSONErrorExprStmt(id("singleFlightErr"), sel("http", "StatusInternalServerError")),
+							returnBool(true),
+						),
+					},
+					writeNoStoreHTTPStmt(id("singleFlightResult")),
+					returnBool(true),
+				),
+			},
+		),
 	}
 }
 

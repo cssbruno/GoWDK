@@ -164,6 +164,22 @@ type SSRListField struct {
 	Index       bool
 }
 
+// SSRQueryRegion is the standalone render recipe for one request-time g:query
+// region: the region element's template (with placeholders) plus the subset of
+// the page's g:for/g:if specs and scalar load substitutions that fall inside it.
+// The app generator lowers each into a runtime region renderer keyed by
+// QueryType so a g:command can render exactly the regions it invalidated inline
+// in its response (single-flight) instead of forcing the client to refetch the
+// whole page. Only regions renderable without route context the command request
+// lacks are emitted.
+type SSRQueryRegion struct {
+	QueryType        string
+	Template         string
+	ListSpecs        []SSRListSpec
+	CondSpecs        []SSRCondSpec
+	LoadReplacements []SSRLoadReplacement
+}
+
 // InlineScript records browser module code declared directly inside a .gwdk
 // source file. Path-based script declarations should remain preferred.
 type InlineScript struct {

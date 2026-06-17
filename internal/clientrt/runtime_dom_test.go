@@ -266,6 +266,13 @@ invalidatedRegion.id = 'invalidated-patients';
 invalidatedRegion.innerHTML = '<p>Stale</p>';
 invalidatedRegion.setAttribute('data-gowdk-query', 'patients.GetPatientPage');
 invalidatedRegion.setAttribute('data-gowdk-query-type', 'gowdk-generated-app/patients.GetPatientPage');
+invalidatedRegion.outerHTMLValue = '<section id="invalidated-patients" data-gowdk-query="patients.GetPatientPage" data-gowdk-query-type="gowdk-generated-app/patients.GetPatientPage"><p>Stale</p></section>';
+const duplicateInvalidatedRegion = new Element('section');
+duplicateInvalidatedRegion.id = 'invalidated-patients-copy';
+duplicateInvalidatedRegion.innerHTML = '<p>Duplicate stale</p>';
+duplicateInvalidatedRegion.setAttribute('data-gowdk-query', 'patients.GetPatientPage');
+duplicateInvalidatedRegion.setAttribute('data-gowdk-query-type', 'gowdk-generated-app/patients.GetPatientPage');
+duplicateInvalidatedRegion.outerHTMLValue = '<section id="invalidated-patients-copy" data-gowdk-query="patients.GetPatientPage" data-gowdk-query-type="gowdk-generated-app/patients.GetPatientPage"><p>Duplicate stale</p></section>';
 const input = new Element('input');
 input.id = 'email';
 
@@ -308,6 +315,20 @@ global.fetch = async function(url, options) {
         status: 200,
         headers: new Headers({ 'Content-Type': 'text/html; charset=utf-8' }),
         text: async () => '<main>Login</main>'
+      };
+    }
+    if (commandMode === 'patch') {
+      return {
+        ok: true,
+        redirected: false,
+        status: 200,
+        headers: new Headers({
+          'Content-Type': 'application/json; charset=utf-8',
+          'X-GOWDK-Queries': 'gowdk-generated-app/patients.GetPatientPage',
+          'X-GOWDK-Events': 'event-patch',
+          'X-GOWDK-Patches': '1'
+        }),
+        text: async () => '{"result":{"id":"patient-1"},"patches":[{"query":"gowdk-generated-app/patients.GetPatientPage","html":"<section id=\\"invalidated-patients\\" data-gowdk-query=\\"patients.GetPatientPage\\" data-gowdk-query-type=\\"gowdk-generated-app/patients.GetPatientPage\\"><p>Patched</p></section>"}]}'
       };
     }
     return {
@@ -456,6 +477,9 @@ async function submit(target = form, submitter = null) {
     requestCount = 0;
     invalidatedRegion.replacedWith = '';
     invalidatedRegion.outerHTMLValue = '';
+    duplicateInvalidatedRegion.replacedWith = '';
+    duplicateInvalidatedRegion.outerHTMLValue = '<section id="invalidated-patients-copy" data-gowdk-query="patients.GetPatientPage" data-gowdk-query-type="gowdk-generated-app/patients.GetPatientPage"><p>Duplicate stale</p></section>';
+    document.queryRegions = [liveRegion, invalidatedRegion];
   }
 
   let commandSubmit = await submit(commandForm, commandSubmitter);
@@ -475,6 +499,36 @@ async function submit(target = form, submitter = null) {
   assert.deepEqual(commandSuccess.queries, ['gowdk-generated-app/patients.GetPatientPage']);
   assert.equal(commandError, null);
   assert.equal(invalidatedRegion.replacedWith, '');
+
+  resetCommandHarness();
+  commandMode = 'patch';
+  await submit(commandForm, commandSubmitter);
+  assert.equal(commandSuccess.result.id, 'patient-1');
+  assert.deepEqual(commandSuccess.eventIDs, ['event-patch']);
+  assert.equal(commandError, null);
+  assert.equal(requestCount, 1);
+  assert.equal(invalidatedRegion.replacedWith, '<section id="invalidated-patients" data-gowdk-query="patients.GetPatientPage" data-gowdk-query-type="gowdk-generated-app/patients.GetPatientPage"><p>Patched</p></section>');
+  assert.deepEqual(islandLifecycle.shift(), ['destroy', 'invalidated-patients', true]);
+  assert.deepEqual(islandLifecycle.shift(), ['mount']);
+  request = null;
+  eventSources[0].emit('gowdk-presentation', {
+    Category: 'presentation',
+    Type: 'gowdk.query.invalidate',
+    Value: {
+      queries: ['gowdk-generated-app/patients.GetPatientPage'],
+      eventIDs: ['event-patch']
+    }
+  });
+  await flushRuntime();
+  assert.equal(request, null);
+
+  resetCommandHarness();
+  commandMode = 'patch';
+  document.queryRegions = [liveRegion, invalidatedRegion, duplicateInvalidatedRegion];
+  await submit(commandForm, commandSubmitter);
+  assert.equal(commandSuccess.result.id, 'patient-1');
+  assert.equal(invalidatedRegion.replacedWith, '');
+  assert.equal(duplicateInvalidatedRegion.replacedWith, '');
 
   resetCommandHarness();
   commandMode = 'html';

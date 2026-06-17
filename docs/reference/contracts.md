@@ -124,9 +124,22 @@ applies a single-flight region refresh: the generated adapter computes which
 `g:query` regions the command's domain events invalidate and names them in the
 `X-GOWDK-Queries` response header, so the submitter's regions update immediately
 without waiting for the realtime fanout that refreshes every other connected
-client. The typed result rides on the `gowdk:command-success` event for optional
+client.
+
+For a parameterless region whose data comes from the page's `load {}`, the
+adapter goes one step further and renders the invalidated region inline — true
+single-flight. It returns a `{ result, patches: [{ query, html }] }` envelope
+(signalled by the `X-GOWDK-Patches` response header) and the client swaps the
+region HTML directly, with no second page fetch. Regions that need route context
+the command request lacks (a dynamic route param) stay in the `X-GOWDK-Queries`
+header only and the client refetches them — the same path used when JavaScript
+re-runs the page render. The raw command result body is preserved whenever no
+region renders, so non-browser callers are unaffected.
+
+The typed result rides on the `gowdk:command-success` event for optional
 optimistic UI. With realtime configured, the same invalidation also fans out over
-SSE to other clients (`g:subscribe` / invalidated `g:query` regions).
+SSE to other clients (`g:subscribe` / invalidated `g:query` regions), reusing the
+client's region-swap routine so the embedded and fanned-out paths converge.
 
 Two caveats the `ssr_command_no_client` warning surfaces. First, with client
 JavaScript disabled a bare submit still navigates to the adapter's JSON — use a

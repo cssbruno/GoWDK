@@ -852,10 +852,178 @@ func TestGenerateWritesRealtimeQueryInvalidationFanout(t *testing.T) {
 		// client which g:query regions to refresh via the X-GOWDK-Queries header.
 		`invalidatedQueries := gowdkcontracts.InvalidatedQueryTypes(realtimeQueryInvalidations, events)`,
 		`response.Header().Set("X-GOWDK-Queries", strings.Join(invalidatedQueries, ","))`,
+		`invalidatedEventIDs := gowdkcontracts.InvalidatedEventIDs(realtimeQueryInvalidations, events)`,
+		`response.Header().Set("X-GOWDK-Events", strings.Join(invalidatedEventIDs, ","))`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated invalidation source to contain %q:\n%s", expected, source)
 		}
+	}
+	for _, unexpected := range []string{
+		`gowdkssr.RenderInvalidatedRegions`,
+		`X-GOWDK-Patches`,
+		`gowdkssr.CommandEnvelope`,
+	} {
+		if strings.Contains(source, unexpected) {
+			t.Fatalf("did not expect inline patch source without an eligible SSR region %q:\n%s", unexpected, source)
+		}
+	}
+}
+
+func TestGenerateRegistersSingleFlightRegionRenderers(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "board", "index.html"), "<main>Board</main>")
+
+	program := &gwdkir.Program{
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			ImportPath:  "example.com/app/contracts/patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			Method:      http.MethodPost,
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		}},
+		QueryInvalidations: []gwdkir.QueryInvalidation{{
+			Query:         "patients.GetPatientPage",
+			QueryType:     "example.com/app/board.GetPatientPage",
+			Event:         "example.com/app/contracts/patients.PatientCreated",
+			EventType:     "example.com/app/contracts/patients.PatientCreated",
+			EventCategory: "domain",
+			Status:        gwdkir.ContractBindingBound,
+			OwnerKind:     gwdkir.SourcePage,
+			OwnerID:       "patients",
+		}},
+	}
+	ssrRoute := SSRRoute{
+		PageID:  "board",
+		Route:   "/board",
+		Render:  gowdk.SSR,
+		Guards:  []string{"public"},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "example.com/app/board",
+			PackageName:  "board",
+			FunctionName: "LoadBoard",
+			Signature:    source.BackendSignatureLoad,
+		},
+		HTML: `<main><section data-gowdk-query-type="example.com/app/board.GetPatientPage"><ul>__GOWDK_SSR_LIST_board__</ul></section></main>`,
+		QueryRegions: []SSRQueryRegion{{
+			QueryType: "example.com/app/board.GetPatientPage",
+			Template:  `<section data-gowdk-query-type="example.com/app/board.GetPatientPage"><ul>__GOWDK_SSR_LIST_board__</ul></section>`,
+			ListSpecs: []SSRListSpec{{Placeholder: "__GOWDK_SSR_LIST_board__", SourcePath: "patients"}},
+		}},
+	}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program, SSR: []SSRRoute{ssrRoute}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`func init() {`,
+		`gowdkssr.RegisterRegion(gowdkssr.RegionRenderer{QueryType: "example.com/app/board.GetPatientPage"`,
+		`Load: func(request *http.Request) (map[string]any, error)`,
+		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "board", Method: "GET", Path: "/board", Render: "ssr", Guards: []string{"public"}, HasLoad: true})`,
+		`pageRequest.Method = http.MethodGet`,
+		`loadContext := gowdkssr.NewLoadContext(request, nil)`,
+		`if request.Header.Get("X-GOWDK-Command") == "1"`,
+		`singleFlightPatches := gowdkssr.RenderInvalidatedRegions(request, invalidatedQueries)`,
+		`response.Header().Set("X-GOWDK-Patches", "1")`,
+		`gowdkssr.CommandEnvelope{Result: result, Patches: singleFlightPatches}`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated region registration to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateSkipsSingleFlightRegionRenderersForGuardedRoutes(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "dashboard", "index.html"), "<main>Dashboard</main>")
+
+	program := &gwdkir.Program{
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			ImportPath:  "example.com/app/contracts/patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			Method:      http.MethodPost,
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		}},
+		QueryInvalidations: []gwdkir.QueryInvalidation{{
+			Query:         "patients.GetPatientPage",
+			QueryType:     "example.com/app/dashboard.GetPatientPage",
+			Event:         "example.com/app/contracts/patients.PatientCreated",
+			EventType:     "example.com/app/contracts/patients.PatientCreated",
+			EventCategory: "domain",
+			Status:        gwdkir.ContractBindingBound,
+			OwnerKind:     gwdkir.SourcePage,
+			OwnerID:       "patients",
+		}},
+	}
+	ssrRoute := SSRRoute{
+		PageID:  "dashboard",
+		Route:   "/dashboard",
+		Render:  gowdk.SSR,
+		Guards:  []string{"auth.required"},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "example.com/app/dashboard",
+			PackageName:  "dashboard",
+			FunctionName: "LoadDashboard",
+			Signature:    source.BackendSignatureLoad,
+		},
+		HTML: `<main><section data-gowdk-query-type="example.com/app/dashboard.GetPatientPage"></section></main>`,
+		QueryRegions: []SSRQueryRegion{{
+			QueryType: "example.com/app/dashboard.GetPatientPage",
+			Template:  `<section data-gowdk-query-type="example.com/app/dashboard.GetPatientPage"></section>`,
+		}},
+	}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program, SSR: []SSRRoute{ssrRoute}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, unexpected := range []string{
+		`gowdkssr.RegisterRegion`,
+		`gowdkssr.RenderInvalidatedRegions`,
+		`X-GOWDK-Patches`,
+	} {
+		if strings.Contains(source, unexpected) {
+			t.Fatalf("guarded SSR route must not emit inline region patch code %q:\n%s", unexpected, source)
+		}
+	}
+	if !strings.Contains(source, `response.Header().Set("X-GOWDK-Queries", strings.Join(invalidatedQueries, ","))`) {
+		t.Fatalf("guarded route should keep invalidation header fallback:\n%s", source)
 	}
 }
 
@@ -5511,6 +5679,193 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 		t.Fatal("expected X-GOWDK-Events to name the invalidating event ID")
 	} else if parts := strings.Split(got, ","); len(parts) != 1 || strings.TrimSpace(parts[0]) == "" {
 		t.Fatalf("expected one X-GOWDK-Events event ID, got %q", got)
+	}
+}
+
+func TestGeneratedBinaryCommandEmbedsSingleFlightRegionHTML(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "board", "index.html"), "<main>Board page</main>")
+
+	program := &gwdkir.Program{
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			ImportPath:  "gowdk-generated-app/patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			InputFields: []source.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
+			Method:      http.MethodPost,
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		}},
+		QueryInvalidations: []gwdkir.QueryInvalidation{{
+			Query:         "patients.GetPatientPage",
+			QueryType:     "gowdk-generated-app/patients.GetPatientPage",
+			Event:         "gowdk-generated-app/patients.PatientCreated",
+			EventType:     "gowdk-generated-app/patients.PatientCreated",
+			EventCategory: "domain",
+			Status:        gwdkir.ContractBindingBound,
+			OwnerKind:     gwdkir.SourcePage,
+			OwnerID:       "patients",
+		}},
+	}
+	// The board page renders a parameterless g:query region bound to
+	// GetPatientPage. Its standalone render recipe lets the command adapter embed
+	// the refreshed region HTML in its response (true single-flight).
+	ssrRoute := SSRRoute{
+		PageID:  "board",
+		Route:   "/board",
+		Render:  gowdk.SSR,
+		Guards:  []string{"public"},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "gowdk-generated-app/board",
+			PackageName:  "board",
+			FunctionName: "LoadBoard",
+			Signature:    source.BackendSignatureLoad,
+		},
+		HTML: `<main><section data-gowdk-query-type="gowdk-generated-app/patients.GetPatientPage"><ul>__GOWDK_SSR_LIST_board__</ul></section></main>`,
+		ListSpecs: []SSRListSpec{{
+			Placeholder: "__GOWDK_SSR_LIST_board__",
+			SourcePath:  "patients",
+			RowTemplate: "<li>__GOWDK_SSR_FIELD_name__</li>",
+			Fields:      []SSRListField{{Placeholder: "__GOWDK_SSR_FIELD_name__", Path: "Name"}},
+		}},
+		QueryRegions: []SSRQueryRegion{{
+			QueryType: "gowdk-generated-app/patients.GetPatientPage",
+			Template:  `<section data-gowdk-query-type="gowdk-generated-app/patients.GetPatientPage"><ul>__GOWDK_SSR_LIST_board__</ul></section>`,
+			ListSpecs: []SSRListSpec{{
+				Placeholder: "__GOWDK_SSR_LIST_board__",
+				SourcePath:  "patients",
+				RowTemplate: "<li>__GOWDK_SSR_FIELD_name__</li>",
+				Fields:      []SSRListField{{Placeholder: "__GOWDK_SSR_FIELD_name__", Path: "Name"}},
+			}},
+		}},
+	}
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program, SSR: []SSRRoute{ssrRoute}}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "patients", "patients.go"), `package patients
+
+import (
+	"context"
+
+	"github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct {
+	Name string
+}
+
+type CreatePatientResult struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+type PatientCreated struct {
+	ID string
+}
+
+func Register(registry *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient, contracts.RoleWeb)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	if err := contracts.EmitDomain(ctx, PatientCreated{ID: "patient-1"}); err != nil {
+		return CreatePatientResult{}, err
+	}
+	return CreatePatientResult{ID: "patient-1"}, nil
+}
+`)
+	writeTestFile(t, filepath.Join(appDir, "board", "board.go"), `package board
+
+import "github.com/cssbruno/gowdk/runtime/ssr"
+
+func LoadBoard(ctx ssr.LoadContext) map[string]any {
+	return map[string]any{"patients": []map[string]any{{"Name": "Ada"}, {"Name": "Linus"}}}
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/patients", http.MethodPost, "name=Ada")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bodyBytes, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected command response status 200, got %d", response.StatusCode)
+	}
+	if got := response.Header.Get("X-GOWDK-Queries"); got != "gowdk-generated-app/patients.GetPatientPage" {
+		t.Fatalf("expected X-GOWDK-Queries to name the invalidated query, got %q", got)
+	}
+	if got := response.Header.Get("X-GOWDK-Patches"); got != "" {
+		t.Fatalf("non-browser command callers must keep raw JSON, got X-GOWDK-Patches=%q", got)
+	}
+	if body := strings.TrimSpace(string(bodyBytes)); body != `{"id":"patient-1"}` {
+		t.Fatalf("non-browser command callers must keep raw result JSON, got %s", body)
+	}
+
+	browserResponse, err := waitForHTTPStatusWithHeaders("http://"+addr+"/patients", http.MethodPost, "name=Ada", map[string]string{
+		"X-GOWDK-Command": "1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	browserBodyBytes, err := io.ReadAll(browserResponse.Body)
+	_ = browserResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if browserResponse.StatusCode != http.StatusOK {
+		t.Fatalf("expected browser command response status 200, got %d", browserResponse.StatusCode)
+	}
+	if got := browserResponse.Header.Get("X-GOWDK-Queries"); got != "gowdk-generated-app/patients.GetPatientPage" {
+		t.Fatalf("expected browser X-GOWDK-Queries to name the invalidated query, got %q", got)
+	}
+	// The adapter rendered the invalidated region standalone and returned it
+	// inline, signalled by X-GOWDK-Patches. The body is a {result, patches}
+	// envelope carrying the refreshed rows, so the client applies them with no
+	// second page fetch.
+	if got := browserResponse.Header.Get("X-GOWDK-Patches"); got != "1" {
+		t.Fatalf("expected X-GOWDK-Patches header, got %q", got)
+	}
+	body := string(browserBodyBytes)
+	if !strings.Contains(body, `"patches"`) || !strings.Contains(body, `"result"`) {
+		t.Fatalf("expected single-flight envelope body, got %s", body)
+	}
+	if !strings.Contains(body, "gowdk-generated-app/patients.GetPatientPage") {
+		t.Fatalf("expected patch to name the query, got %s", body)
+	}
+	if !strings.Contains(body, "Ada") || !strings.Contains(body, "Linus") {
+		t.Fatalf("expected rendered region rows in patch HTML, got %s", body)
+	}
+	if !strings.Contains(body, `"id":"patient-1"`) {
+		t.Fatalf("expected command result in envelope, got %s", body)
 	}
 }
 

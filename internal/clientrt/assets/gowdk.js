@@ -143,15 +143,30 @@
       if (!responseIsJSON(response)) {
         throw await commandResponseError(response, 'command response was not JSON');
       }
-      var result = await parseCommandResult(response);
+      var body = await parseCommandResult(response);
       var queries = parseInvalidatedQueriesHeader(response.headers.get('X-GOWDK-Queries'));
       var eventIDs = parseHeaderList(response.headers.get('X-GOWDK-Events'));
+      // True single-flight: when the adapter rendered the invalidated regions, the
+      // body is a { result, patches } envelope (signalled by X-GOWDK-Patches) and
+      // we apply the region HTML directly. The typed command result is unwrapped so
+      // the success event detail stays identical to the header-only path.
+      var embedded = response.headers.get('X-GOWDK-Patches') === '1' && body && Array.isArray(body.patches);
+      var result = embedded ? body.result : body;
+      var patches = embedded ? body.patches : [];
       form.dispatchEvent(new CustomEvent('gowdk:command-success', {
         detail: { form: form, command: command, result: result, queries: queries, eventIDs: eventIDs }
       }));
+      var refreshEnvelope = { form: form, command: command, eventIDs: eventIDs };
+      var applied = applyCommandPatches(patches, refreshEnvelope);
       if (queries.length) {
-        var refreshEnvelope = { form: form, command: command, eventIDs: eventIDs };
-        refreshInvalidatedQueriesAfterCommand(queries, refreshEnvelope);
+        var remaining = queries.filter(function (query) {
+          return applied.indexOf(query) < 0;
+        });
+        if (!remaining.length) {
+          rememberHandledQueryRefreshEventIDs(eventIDs);
+        } else {
+          refreshInvalidatedQueriesAfterCommand(remaining, refreshEnvelope);
+        }
       }
     } catch (error) {
       form.dispatchEvent(new CustomEvent('gowdk:command-error', {
@@ -298,6 +313,31 @@
       parseError.response = response;
       throw parseError;
     }
+  }
+
+  // applyCommandPatches applies the inline region HTML a single-flight g:command
+  // response carries, reusing the realtime apply routine so the embedded path and
+  // the SSE fanout converge on one swap-and-remount. It returns the query types it
+  // actually applied so the caller can refetch only the regions left uncovered.
+  function applyCommandPatches(patches, envelope) {
+    var applied = [];
+    if (!Array.isArray(patches) || !patches.length) {
+      return applied;
+    }
+    patches.forEach(function (patch) {
+      if (!patch || typeof patch.query !== 'string' || typeof patch.html !== 'string') {
+        return;
+      }
+      var regions = queryRegionsForInvalidation(document, [patch.query]);
+      if (regions.length !== 1) {
+        return;
+      }
+      applyRealtimePatch(regions[0], { op: 'replaceHTML', html: patch.html, swap: 'outerHTML' }, envelope);
+      if (applied.indexOf(patch.query) < 0) {
+        applied.push(patch.query);
+      }
+    });
+    return applied;
   }
 
   var prefetchedDocuments = {};

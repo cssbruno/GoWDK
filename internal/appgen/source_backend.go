@@ -20,7 +20,7 @@ func newBackendRouterDecl(adapter BackendAdapterIR, trace bool) *ast.FuncDecl {
 	stmts := []ast.Stmt{}
 	if len(executableContractExposures(adapter.ContractExposures)) > 0 {
 		stmts = append(stmts,
-			define([]ast.Expr{id("contractRegistry")}, call(id("NewContractRegistry"))),
+			define([]ast.Expr{id("contractRegistry")}, call(id("ContractRegistry"))),
 		)
 	}
 	stmts = append(stmts, &ast.ReturnStmt{Results: []ast.Expr{call(sel("gowdkruntime", "NewBackendRouter"), routes...)}})

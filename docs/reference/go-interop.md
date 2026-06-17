@@ -128,9 +128,12 @@ Generated apps expose ordinary `net/http` entry points:
 gowdkapp.RegisterMiddleware(middleware)
 handler, err := gowdkapp.Handler()
 mux, err := gowdkapp.ServeMux()
+application, err := gowdkapp.App()
 ```
 
 Register app-wide middleware before calling `Handler()` or `ServeMux()`, or
-wrap the returned handler in startup code. Generated route rewriting, response
-transformation hooks, and fetch/navigation interception hooks are not part of
-the current contract.
+wrap the returned handler in startup code. `App()` is the generated-binary
+startup shape used with `runtime/app.Run`; it includes the mux, handler,
+identity, configured lifecycle services, and lifecycle values. Generated route
+rewriting, response transformation hooks, and fetch/navigation interception
+hooks are not part of the current contract.

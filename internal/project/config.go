@@ -68,19 +68,29 @@ func LoadConfigFile(path string) (gowdk.Config, error) {
 					if err != nil {
 						return gowdk.Config{}, fmt.Errorf("%s contains config expressions outside the AST-only subset: %w", path, err)
 					}
-					if err := config.Env.Validate(os.LookupEnv); err != nil {
-						return gowdk.Config{}, fmt.Errorf("%s env contract: %w", path, err)
+					if err := validateLoadedConfig(path, config); err != nil {
+						return gowdk.Config{}, err
 					}
 					return config, nil
 				}
-				if err := config.Env.Validate(os.LookupEnv); err != nil {
-					return gowdk.Config{}, fmt.Errorf("%s env contract: %w", path, err)
+				if err := validateLoadedConfig(path, config); err != nil {
+					return gowdk.Config{}, err
 				}
 				return config, nil
 			}
 		}
 	}
 	return gowdk.Config{}, fmt.Errorf("%s missing Config variable", path)
+}
+
+func validateLoadedConfig(path string, config gowdk.Config) error {
+	if err := config.Env.Validate(os.LookupEnv); err != nil {
+		return fmt.Errorf("%s env contract: %w", path, err)
+	}
+	if err := config.Lifecycle.Validate(); err != nil {
+		return fmt.Errorf("%s lifecycle contract: %w", path, err)
+	}
+	return nil
 }
 
 // LoadConfig loads an explicitly requested config file, or the required default
@@ -158,6 +168,12 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 			if err != nil {
 				return gowdk.Config{}, false, false, err
 			}
+		case "Lifecycle":
+			if needsConfigExpressionEvaluation(field.Value) {
+				needsExecutableLoad = true
+				continue
+			}
+			config.Lifecycle = parseLifecycleConfig(field.Value)
 		case "Addons":
 			addons, addonsNeedExecutableLoad := parseAddons(field.Value, imports)
 			config.Addons = addons
@@ -171,14 +187,15 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 
 func supportedConfigLiteralFields() map[string]bool {
 	return map[string]bool{
-		"AppName": true,
-		"Source":  true,
-		"Modules": true,
-		"Render":  true,
-		"Env":     true,
-		"Build":   true,
-		"CSS":     true,
-		"Addons":  true,
+		"AppName":   true,
+		"Source":    true,
+		"Modules":   true,
+		"Render":    true,
+		"Env":       true,
+		"Lifecycle": true,
+		"Build":     true,
+		"CSS":       true,
+		"Addons":    true,
 	}
 }
 
@@ -467,6 +484,56 @@ func parseSecretEnv(expression ast.Expr) (gowdk.SecretEnv, bool, error) {
 		}
 	}
 	return secret, true, nil
+}
+
+func parseLifecycleConfig(expression ast.Expr) gowdk.LifecycleConfig {
+	fields, ok := configLiteralFields(expression)
+	if !ok {
+		return gowdk.LifecycleConfig{}
+	}
+
+	var lifecycle gowdk.LifecycleConfig
+	for _, field := range fields {
+		if field.Name == "Services" {
+			lifecycle.Services = parseServiceRefs(field.Value)
+		}
+	}
+	return lifecycle
+}
+
+func parseServiceRefs(expression ast.Expr) []gowdk.ServiceRef {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return nil
+	}
+
+	services := make([]gowdk.ServiceRef, 0, len(literal.Elts))
+	for _, element := range literal.Elts {
+		service, ok := parseServiceRef(element)
+		if !ok {
+			continue
+		}
+		services = append(services, service)
+	}
+	return services
+}
+
+func parseServiceRef(expression ast.Expr) (gowdk.ServiceRef, bool) {
+	fields, ok := configLiteralFields(expression)
+	if !ok {
+		return gowdk.ServiceRef{}, false
+	}
+
+	var service gowdk.ServiceRef
+	for _, field := range fields {
+		switch field.Name {
+		case "ImportPath":
+			service.ImportPath = parseString(field.Value)
+		case "Function":
+			service.Function = parseString(field.Value)
+		}
+	}
+	return service, true
 }
 
 func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {

@@ -69,6 +69,11 @@ Implemented today:
   default `auth.required` guard, and wires the session provider for native
   `role:` / `permission:` guards. App login/logout handlers can use
   `auth.DefaultSessions()` to issue or clear the same signed session cookie.
+- Generated embedded and backend-only app packages expose
+  `App() (*runtime/app.Application, error)` for full generated-binary startup.
+  `App()` shares one generated identity across the web handler and lifecycle
+  service context, collects configured lifecycle services, and exposes the
+  generated mux to service `Mount` hooks.
 - `gowdk inspect go-bindings` reports Go binding status for actions, APIs,
   fragments, SSR load functions, build-time Go calls, and web command/query
   references. `gowdk generate stubs` can write missing action/API handler
@@ -240,7 +245,8 @@ The stable compatibility surface for v0.1 is intentionally narrow:
 
 - `gowdk-routes.json`, `gowdk-assets.json`, and `gowdk-build-report.json`
   include explicit `version` fields.
-- Generated app entrypoints expose standard `net/http` handlers through
+- Generated app entrypoints expose full process startup through
+  `gowdkapp.App()` plus standard request-only `net/http` handlers through
   `gowdkapp.Handler()` and `gowdkapp.ServeMux()`.
 - Generated binaries serve selected embedded output and request-time routes from
   the same build metadata used by `gowdk build --out`.
@@ -290,17 +296,19 @@ The target output can include:
 `gowdk build --out dist --app .gowdk/app --bin dist/site` then runs `go build`
 for `.gowdk/app/cmd/server` and writes `dist/site`.
 
-The generated `gowdkapp` package exposes `Handler() (http.Handler, error)` and
-`ServeMux() (*http.ServeMux, error)` for `net/http`, Chi, Echo, Gin, and other
-router integrations. It also exposes `RegisterMiddleware` for app-owned
-`net/http` middleware that should be installed before `Handler()` or
+The generated `gowdkapp` package exposes `App() (*runtime/app.Application,
+error)` for generated binary startup plus `Handler() (http.Handler, error)` and
+`ServeMux() (*http.ServeMux, error)` for request-only `net/http`, Chi, Echo,
+Gin, and other router integrations. It also exposes `RegisterMiddleware` for
+app-owned `net/http` middleware that should be installed before `Handler()` or
 `ServeMux()` constructs the generated handler. The generated `cmd/server`
-entrypoint uses that same handler, reads `GOWDK_ADDR`, defaults to
-`127.0.0.1:8080`, serves GET and HEAD requests, applies `http.Server` defaults
-of `ReadHeaderTimeout: 5s`,
-`ReadTimeout: 10s`, `WriteTimeout: 30s`, `IdleTimeout: 60s`, and
-`MaxHeaderBytes: 1 MiB`, maps extensionless routes to nested `index.html`
-files, and does not list directories. It exposes `/_gowdk/health` and adds
+entrypoint calls `App()`, reads `GOWDK_ADDR`, defaults to `127.0.0.1:8080`,
+serves GET and HEAD requests, applies `http.Server` defaults of
+`ReadHeaderTimeout: 5s`, `ReadTimeout: 10s`, `WriteTimeout: 30s`,
+`IdleTimeout: 60s`, and `MaxHeaderBytes: 1 MiB`, and hands the server to
+`runtime/app.Run` for service supervision, SIGINT/SIGTERM handling, and
+graceful shutdown. It maps extensionless routes to nested `index.html` files
+and does not list directories. It exposes `/_gowdk/health` and adds
 `X-GOWDK-App`, `X-GOWDK-Module`, and `X-GOWDK-Instance-ID` headers to responses.
 When `Build.SecurityHeaders.Enabled` is true, generated apps also pass the
 configured header map into `runtime/app` so every response path emits those

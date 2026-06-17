@@ -8,11 +8,13 @@ GOWDK's current hook model is small and `net/http`-first.
 | --- | --- | --- |
 | Generated app handler | `http.Handler` | Wrap with normal Go middleware in app startup. |
 | Generated app middleware | `runtime/app.Middleware` | Register ordered app-wide middleware before building the generated handler. |
+| Generated binary lifecycle | `runtime/app.Service` | Mount routes or run app-owned background services when the generated binary starts. |
 | Guards | `runtime/guard.Registry`, `runtime/auth.Provider` | Generated action, API, fragment, and SSR routes with `guard`. |
 | Rate limiting | `*ratelimit.Limiter` | Generated action, API, fragment, SSR, and split-backend proxy routes when the addon is enabled. |
 | Handler context | `context.Context` | User handlers read request metadata, raw route params, and typed route params through `runtime/app` helpers. |
 
-Generated apps expose `Handler() (http.Handler, error)` and
+Generated apps expose `App() (*runtime/app.Application, error)` for generated
+binary startup, plus request-only `Handler() (http.Handler, error)` and
 `ServeMux() (*http.ServeMux, error)`. They also expose
 `RegisterMiddleware(runtime/app.Middleware)` for app-owned middleware that
 should wrap the full generated app dispatch chain:
@@ -44,6 +46,51 @@ if err != nil {
 wrapped := myMiddleware(handler)
 http.ListenAndServe(":8080", wrapped)
 ```
+
+## Lifecycle Services
+
+Generated binaries call `gowdkapp.App()` and `runtime/app.Run`. Services
+declared in `gowdk.Config.Lifecycle.Services` are imported by the generated app
+and started with the binary:
+
+```go
+package services
+
+import (
+	"context"
+	"net/http"
+
+	gowdkapp "github.com/cssbruno/gowdk/runtime/app"
+)
+
+func Services() ([]gowdkapp.Service, error) {
+	return []gowdkapp.Service{
+		gowdkapp.ServiceHooks{
+			ServiceName: "metrics",
+			MountFunc: func(ctx gowdkapp.ServiceContext) error {
+				ctx.Mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusNoContent)
+				})
+				return nil
+			},
+			RunFunc: func(ctx context.Context, _ gowdkapp.ServiceContext) error {
+				<-ctx.Done()
+				return nil
+			},
+		},
+	}, nil
+}
+```
+
+`Mount` runs before the HTTP server starts. `Run` receives the same
+cancellation context used for SIGINT/SIGTERM, service errors, and generated
+HTTP shutdown. Services that only mount routes can omit `RunFunc`; services
+that only run a worker can omit `MountFunc`.
+
+When executable contract registrations exist, generated apps expose a shared
+`ContractRegistry()` and put it in `ServiceContext.Values` under
+`runtime/app.ServiceValueContractRegistry`. `NewContractRegistry()` still
+creates a fresh isolated registry.
 
 ## Guards
 
@@ -215,6 +262,8 @@ Guard failures use the guard response contract; CSRF failures return HTTP 403
 - No generated route rewriting hook.
 - No generated response transform hook.
 - No generated fetch/navigation interception hook.
+- No core MCP protocol implementation. MCP adapters belong in app code or an
+  external lifecycle service provider.
 - No custom GOWDK context type; user code receives `context.Context`.
 - No framework-specific middleware in generated core. Chi, Echo, Gin, and Fiber
   adapters wrap the same `http.Handler`.

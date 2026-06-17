@@ -23,7 +23,7 @@ contracts. For task-oriented examples, start with the
 - [Manifest](manifest.md): current manifest JSON.
 - [Go interop](go-interop.md): Go binding, build-data, typed param, and
   stub-generation behavior.
-- [Hooks](hooks.md): middleware, guard, and rate-limit ordering.
+- [Hooks](hooks.md): lifecycle services, middleware, guard, and rate-limit ordering.
 - [Errors](errors.md): error pages, panic boundaries, and cache policy.
 - [Diagnostics](diagnostics.md): diagnostic output formats.
 - [Diagnostic codes](diagnostic-codes.md): diagnostic registry, stability, and

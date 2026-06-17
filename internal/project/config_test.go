@@ -135,6 +135,12 @@ var Config = gowdk.Config{
 			{Name: "GOWDK_TEST_DATABASE_URL", Required: true},
 		},
 	},
+	Lifecycle: gowdk.LifecycleConfig{
+		Services: []gowdk.ServiceRef{
+			{ImportPath: "example.com/site/services", Function: "Services"},
+			{ImportPath: "example.com/site/workers", Function: "Workers"},
+		},
+	},
 	CSS: gowdk.CSSConfig{
 		Include: []string{"styles/**/*.css"},
 		Exclude: []string{"styles/old.css"},
@@ -235,6 +241,9 @@ var Config = gowdk.Config{
 	}
 	if len(config.Env.Secrets) != 1 || config.Env.Secrets[0].Name != "GOWDK_TEST_DATABASE_URL" || !config.Env.Secrets[0].Required {
 		t.Fatalf("unexpected env secrets: %#v", config.Env.Secrets)
+	}
+	if len(config.Lifecycle.Services) != 2 || config.Lifecycle.Services[0].ImportPath != "example.com/site/services" || config.Lifecycle.Services[0].Function != "Services" || config.Lifecycle.Services[1].ImportPath != "example.com/site/workers" || config.Lifecycle.Services[1].Function != "Workers" {
+		t.Fatalf("unexpected lifecycle services: %#v", config.Lifecycle.Services)
 	}
 	if len(config.CSS.Include) != 1 || config.CSS.Include[0] != "styles/**/*.css" {
 		t.Fatalf("unexpected css includes: %#v", config.CSS.Include)
@@ -374,6 +383,30 @@ var Config = gowdk.Config{
 	}
 }
 
+func TestLoadConfigFileValidatesLifecycleServiceRefs(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, DefaultConfigFile)
+	if err := os.WriteFile(path, []byte(`package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Lifecycle: gowdk.LifecycleConfig{
+		Services: []gowdk.ServiceRef{
+			{ImportPath: "example.com/site/services"},
+		},
+	},
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadConfigFile(path)
+	if err == nil || !strings.Contains(err.Error(), "Lifecycle.Services[0].Function is required") {
+		t.Fatalf("expected lifecycle service ref validation, got %v", err)
+	}
+}
+
 func TestLoadConfigFileFallsBackForNonLiteralValues(t *testing.T) {
 	root := t.TempDir()
 	repoRoot := repositoryRoot(t)
@@ -396,9 +429,18 @@ func outputDir() string {
 	return "dist/site"
 }
 
+func serviceImportPath() string {
+	return "example.com/site/services"
+}
+
 var Config = gowdk.Config{
 	Source: gowdk.SourceConfig{
 		Include: includes,
+	},
+	Lifecycle: gowdk.LifecycleConfig{
+		Services: []gowdk.ServiceRef{
+			{ImportPath: serviceImportPath(), Function: "Services"},
+		},
 	},
 	Build: gowdk.BuildConfig{
 		Output: outputDir(),
@@ -416,6 +458,9 @@ var Config = gowdk.Config{
 	}
 	if config.Build.Output != "dist/site" {
 		t.Fatalf("expected executable config to load output, got %q", config.Build.Output)
+	}
+	if len(config.Lifecycle.Services) != 1 || config.Lifecycle.Services[0].ImportPath != "example.com/site/services" || config.Lifecycle.Services[0].Function != "Services" {
+		t.Fatalf("expected executable config to load lifecycle services, got %#v", config.Lifecycle.Services)
 	}
 }
 

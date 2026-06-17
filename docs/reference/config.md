@@ -4,14 +4,15 @@ The root package exposes config types used by compiler and future generated app 
 
 ```go
 type Config struct {
-	AppName string
-	Source  SourceConfig
-	Modules []ModuleConfig
-	Render  RenderConfig
-	Env     EnvConfig
-	Build   BuildConfig
-	CSS     CSSConfig
-	Addons  []Addon
+	AppName   string
+	Source    SourceConfig
+	Modules   []ModuleConfig
+	Render    RenderConfig
+	Env       EnvConfig
+	Lifecycle LifecycleConfig
+	Build     BuildConfig
+	CSS       CSSConfig
+	Addons    []Addon
 }
 ```
 
@@ -106,6 +107,11 @@ var Config = gowdk.Config{
 			{Name: "GOWDK_CSRF_SECRET", Required: true},
 		},
 	},
+	Lifecycle: gowdk.LifecycleConfig{
+		Services: []gowdk.ServiceRef{
+			{ImportPath: "example.com/site/services", Function: "Services"},
+		},
+	},
 	CSS: gowdk.CSSConfig{
 		Include: []string{"styles/**/*.css"},
 		Default: []string{"global", "tokens"},
@@ -135,6 +141,38 @@ var Config = gowdk.Config{
 The addon module may import other GitHub/private/local modules. The project
 `go.mod` remains the source of truth for resolving those imports, including
 `require`, `replace`, `GOPRIVATE`, and module proxy configuration.
+
+## Lifecycle Services
+
+`Lifecycle.Services` declares app-owned service providers imported by the
+generated app binary:
+
+```go
+type LifecycleConfig struct {
+	Services []ServiceRef
+}
+
+type ServiceRef struct {
+	ImportPath string
+	Function   string
+}
+```
+
+Each provider must be an exported no-argument function with this signature:
+
+```go
+func Services() ([]app.Service, error)
+```
+
+Provider packages import `github.com/cssbruno/gowdk/runtime/app` and return
+`app.Service` values. The config loader validates that `ImportPath` and
+`Function` are present; the generated app Go build validates that the symbol
+exists and has the right signature.
+
+Lifecycle services are generic process hooks. Use them for workers, metrics
+listeners, protocol bridges, and app-owned servers. MCP adapters belong in app
+code or an external package that returns lifecycle services; GOWDK does not
+ship a core MCP addon or runtime package.
 
 ## Generated App Request Guards
 

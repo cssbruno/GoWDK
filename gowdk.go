@@ -9,14 +9,15 @@ import (
 // Config describes how a GOWDK application should be discovered, compiled,
 // and packaged.
 type Config struct {
-	AppName string
-	Source  SourceConfig
-	Modules []ModuleConfig
-	Render  RenderConfig
-	Env     EnvConfig
-	Build   BuildConfig
-	CSS     CSSConfig
-	Addons  []Addon
+	AppName   string
+	Source    SourceConfig
+	Modules   []ModuleConfig
+	Render    RenderConfig
+	Env       EnvConfig
+	Lifecycle LifecycleConfig
+	Build     BuildConfig
+	CSS       CSSConfig
+	Addons    []Addon
 }
 
 // SourceConfig selects portable .gwdk files for discovery.
@@ -165,6 +166,39 @@ func secretLikeEnvName(name string) bool {
 		}
 	}
 	return false
+}
+
+// LifecycleConfig declares process-level services that the generated binary
+// starts alongside the generated web app.
+type LifecycleConfig struct {
+	Services []ServiceRef
+}
+
+// ServiceRef names a package-level provider imported by the generated app.
+// Function must have signature:
+//
+//	func() ([]runtime/app.Service, error)
+type ServiceRef struct {
+	ImportPath string
+	Function   string
+}
+
+// Validate checks the structural lifecycle contract. Provider symbol existence
+// and signatures are verified by the generated app Go build.
+func (config LifecycleConfig) Validate() error {
+	for index, service := range config.Services {
+		importPath := strings.TrimSpace(service.ImportPath)
+		function := strings.TrimSpace(service.Function)
+		switch {
+		case importPath == "" && function == "":
+			return fmt.Errorf("Lifecycle.Services[%d] must declare ImportPath and Function", index)
+		case importPath == "":
+			return fmt.Errorf("Lifecycle.Services[%d].ImportPath is required", index)
+		case function == "":
+			return fmt.Errorf("Lifecycle.Services[%d].Function is required", index)
+		}
+	}
+	return nil
 }
 
 // BuildConfig controls output artifacts and frontend asset packaging.

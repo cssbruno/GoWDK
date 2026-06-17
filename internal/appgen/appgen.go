@@ -14,6 +14,8 @@ const (
 	serverDirName     = "cmd/server"
 	appOutputDirName  = appPackageDirName + "/app"
 	appFileName       = appPackageDirName + "/app.go"
+	lifecycleFileName = appPackageDirName + "/lifecycle_services.go"
+	lifecycleJSName   = appPackageDirName + "/lifecycle_services_js.go"
 	auditTestFileName = appPackageDirName + "/gowdk_audit_test.go"
 	mainFileName      = serverDirName + "/main.go"
 	modFileName       = "go.mod"
@@ -100,6 +102,9 @@ func GenerateWithOptions(outputDir, appDir string, options Options) (result Resu
 		return Result{}, err
 	}
 	if err := writeFileIfChanged(filepath.Join(absApp, appFileName), appSource); err != nil {
+		return Result{}, err
+	}
+	if err := writeLifecycleServiceFiles(absApp, options); err != nil {
 		return Result{}, err
 	}
 	auditTestSource, err := GeneratedAuditTestSource(options)
@@ -191,6 +196,9 @@ func GenerateBackendWithOptions(appDir string, options Options) (result Result, 
 	if err := writeFileIfChanged(filepath.Join(absApp, appFileName), appSource); err != nil {
 		return Result{}, err
 	}
+	if err := writeLifecycleServiceFiles(absApp, options); err != nil {
+		return Result{}, err
+	}
 	if _, err := writeInlineGoBlockFiles(absApp, options); err != nil {
 		return Result{}, err
 	}
@@ -210,6 +218,31 @@ func GenerateBackendWithOptions(appDir string, options Options) (result Result, 
 		PackagePath: filepath.Join(absApp, appFileName),
 		ModulePath:  filepath.Join(absApp, modFileName),
 	}, nil
+}
+
+func writeLifecycleServiceFiles(absApp string, options Options) error {
+	sources, err := lifecycleServiceFileSources(options)
+	if err != nil {
+		return err
+	}
+	for _, name := range []string{lifecycleFileName, lifecycleJSName} {
+		path := filepath.Join(absApp, name)
+		source, ok := sources[name]
+		if !ok {
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			continue
+		}
+		formatted, err := formatGeneratedGo(name, source)
+		if err != nil {
+			return err
+		}
+		if err := writeFileIfChanged(path, formatted); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func formatGeneratedGo(name string, source []byte) ([]byte, error) {

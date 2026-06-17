@@ -100,11 +100,13 @@ func executableCommandContractStmts(exposure BackendContractExposure) []ast.Stmt
 // commandInvalidationHeaderStmts emit the single-flight write path: after a
 // command's events are captured and dispatched, the adapter computes which
 // g:query regions those events invalidate and tells the submitting client via
-// the X-GOWDK-Queries response header. The client refreshes exactly those
-// regions immediately, without waiting for the realtime fanout that updates
-// every other connected client. The header rides alongside the unchanged JSON
-// result body, so non-browser callers are unaffected. Only emitted when the
-// build wires query invalidations (realtimeQueryInvalidations exists).
+// the X-GOWDK-Queries response header. The client uses the header for fallback
+// refreshes when no realtime stream is active; otherwise the generated realtime
+// invalidation owns the refresh. X-GOWDK-Events gives both paths the same event
+// IDs so the browser can dedupe in-flight or already-handled refreshes. The
+// headers ride alongside the unchanged JSON result body, so non-browser callers
+// are unaffected. Only emitted when the build wires query invalidations
+// (realtimeQueryInvalidations exists).
 func commandInvalidationHeaderStmts(queryInvalidations bool) []ast.Stmt {
 	if !queryInvalidations {
 		return nil
@@ -113,11 +115,22 @@ func commandInvalidationHeaderStmts(queryInvalidations bool) []ast.Stmt {
 		define([]ast.Expr{id("invalidatedQueries")}, call(sel("gowdkcontracts", "InvalidatedQueryTypes"), id("realtimeQueryInvalidations"), id("events"))),
 		&ast.IfStmt{
 			Cond: &ast.BinaryExpr{X: call(id("len"), id("invalidatedQueries")), Op: token.GTR, Y: intLit(0)},
-			Body: block(exprStmt(call(
-				selExpr(call(selExpr(id("response"), "Header")), "Set"),
-				stringLit("X-GOWDK-Queries"),
-				call(sel("strings", "Join"), id("invalidatedQueries"), stringLit(",")),
-			))),
+			Body: block(
+				exprStmt(call(
+					selExpr(call(selExpr(id("response"), "Header")), "Set"),
+					stringLit("X-GOWDK-Queries"),
+					call(sel("strings", "Join"), id("invalidatedQueries"), stringLit(",")),
+				)),
+				define([]ast.Expr{id("invalidatedEventIDs")}, call(sel("gowdkcontracts", "InvalidatedEventIDs"), id("realtimeQueryInvalidations"), id("events"))),
+				&ast.IfStmt{
+					Cond: &ast.BinaryExpr{X: call(id("len"), id("invalidatedEventIDs")), Op: token.GTR, Y: intLit(0)},
+					Body: block(exprStmt(call(
+						selExpr(call(selExpr(id("response"), "Header")), "Set"),
+						stringLit("X-GOWDK-Events"),
+						call(sel("strings", "Join"), id("invalidatedEventIDs"), stringLit(",")),
+					))),
+				},
+			),
 		},
 	}
 }

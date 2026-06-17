@@ -5424,10 +5424,16 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 		t.Fatalf("expected command response status 200, got %d", response.StatusCode)
 	}
 	// The command emits PatientCreated, which the invalidation edge maps to
-	// GetPatientPage. The single-flight write path names that region in the
-	// response header so the submitting client refreshes it immediately.
+	// GetPatientPage. The single-flight write path names that region and the
+	// matching event ID in response headers so the browser can coordinate the
+	// command fallback refresh with realtime invalidation fanout.
 	if got := response.Header.Get("X-GOWDK-Queries"); got != "gowdk-generated-app/patients.GetPatientPage" {
 		t.Fatalf("expected X-GOWDK-Queries to name the invalidated query, got %q", got)
+	}
+	if got := response.Header.Get("X-GOWDK-Events"); got == "" {
+		t.Fatal("expected X-GOWDK-Events to name the invalidating event ID")
+	} else if parts := strings.Split(got, ","); len(parts) != 1 || strings.TrimSpace(parts[0]) == "" {
+		t.Fatalf("expected one X-GOWDK-Events event ID, got %q", got)
 	}
 }
 

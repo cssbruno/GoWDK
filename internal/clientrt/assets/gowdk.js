@@ -97,12 +97,219 @@
     return false;
   }
 
+  // submitCommand is the g:command write path. A bare submit of a command form
+  // would natively navigate to the adapter's raw JSON response; instead we post
+  // in the background, then refresh invalidated g:query regions from the
+  // X-GOWDK-Queries response header when there is no active realtime stream.
+  // When realtime is active, the generated query-invalidation event owns that
+  // refresh so the submitter does not race two document refetches.
+  async function submitCommand(event) {
+    if (event.defaultPrevented) {
+      return;
+    }
+    var form = event.target && event.target.closest && event.target.closest('form[data-gowdk-command]');
+    if (!form) {
+      return;
+    }
+    // A form that also declares a partial target is handled by submitPartial.
+    if (form.hasAttribute('data-gowdk-target')) {
+      return;
+    }
+
+    if (!validateFormBeforeCommandSubmit(form)) {
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
+    form.setAttribute('aria-busy', 'true');
+    var command = form.dataset.gowdkCommand || '';
+    try {
+      var response = await traceFetch(form.getAttribute('action') || window.location.href, {
+        method: (form.getAttribute('method') || 'POST').toUpperCase(),
+        body: commandFormBody(form, event.submitter || null),
+        redirect: 'manual',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          'X-GOWDK-Command': '1'
+        }
+      }, { name: 'command submit', lane: 'command' });
+      if (response.redirected) {
+        throw await commandResponseError(response, 'command request redirected');
+      }
+      if (!response.ok) {
+        throw await commandResponseError(response, 'command request failed with status ' + response.status);
+      }
+      if (!responseIsJSON(response)) {
+        throw await commandResponseError(response, 'command response was not JSON');
+      }
+      var result = await parseCommandResult(response);
+      var queries = parseInvalidatedQueriesHeader(response.headers.get('X-GOWDK-Queries'));
+      var eventIDs = parseHeaderList(response.headers.get('X-GOWDK-Events'));
+      form.dispatchEvent(new CustomEvent('gowdk:command-success', {
+        detail: { form: form, command: command, result: result, queries: queries, eventIDs: eventIDs }
+      }));
+      if (queries.length) {
+        var refreshEnvelope = { form: form, command: command, eventIDs: eventIDs };
+        refreshInvalidatedQueriesAfterCommand(queries, refreshEnvelope);
+      }
+    } catch (error) {
+      form.dispatchEvent(new CustomEvent('gowdk:command-error', {
+        detail: {
+          form: form,
+          command: command,
+          error: error,
+          status: error && error.status || 0,
+          body: error && error.body || '',
+          response: error && error.response || null
+        }
+      }));
+    } finally {
+      form.removeAttribute('aria-busy');
+    }
+  }
+
+  function validateFormBeforeCommandSubmit(form) {
+    if (typeof form.checkValidity !== 'function' || form.checkValidity()) {
+      return true;
+    }
+    form.dispatchEvent(new CustomEvent('gowdk:validation-blocked', {
+      detail: { form: form }
+    }));
+    if (typeof form.reportValidity === 'function') {
+      form.reportValidity();
+    }
+    return false;
+  }
+
+  function commandFormBody(form, submitter) {
+    var formData = formDataWithSubmitter(form, submitter);
+    if (typeof URLSearchParams !== 'undefined') {
+      return new URLSearchParams(formData).toString();
+    }
+    var pairs = [];
+    if (formData && typeof formData.forEach === 'function') {
+      formData.forEach(function (value, key) {
+        pairs.push(encodeURIComponent(key) + '=' + encodeURIComponent(String(value)));
+      });
+    }
+    return pairs.join('&');
+  }
+
+  function formDataWithSubmitter(form, submitter) {
+    if (typeof FormData === 'undefined') {
+      return null;
+    }
+    if (!submitter) {
+      return new FormData(form);
+    }
+    var data;
+    try {
+      data = new FormData(form, submitter);
+    } catch (error) {
+      data = new FormData(form);
+    }
+    appendSubmitterIfMissing(data, submitter);
+    return data;
+  }
+
+  function appendSubmitterIfMissing(data, submitter) {
+    var name = submitterFieldName(submitter);
+    if (!name || submitter.disabled) {
+      return;
+    }
+    var value = submitterFieldValue(submitter);
+    if (typeof data.getAll === 'function') {
+      var values = data.getAll(name);
+      for (var i = 0; i < values.length; i++) {
+        if (String(values[i]) === value) {
+          return;
+        }
+      }
+    }
+    if (typeof data.append === 'function') {
+      data.append(name, value);
+    }
+  }
+
+  function submitterFieldName(submitter) {
+    return submitter && (submitter.name || submitter.getAttribute && submitter.getAttribute('name')) || '';
+  }
+
+  function submitterFieldValue(submitter) {
+    var value = submitter && submitter.value;
+    if (value == null && submitter && submitter.getAttribute) {
+      value = submitter.getAttribute('value');
+    }
+    return value == null ? '' : String(value);
+  }
+
+  function parseInvalidatedQueriesHeader(header) {
+    return parseHeaderList(header);
+  }
+
+  function parseHeaderList(header) {
+    if (!header) {
+      return [];
+    }
+    return header.split(',').map(function (query) {
+      return query.trim();
+    }).filter(function (query) {
+      return query;
+    });
+  }
+
+  async function commandResponseError(response, message) {
+    var body = '';
+    try {
+      body = await response.text();
+    } catch (error) {
+      body = '';
+    }
+    var error = new Error(message);
+    error.status = response && response.status || 0;
+    error.body = body;
+    error.response = response;
+    return error;
+  }
+
+  function responseIsJSON(response) {
+    var type = response && response.headers && response.headers.get && response.headers.get('Content-Type') || '';
+    type = type.toLowerCase();
+    return type.indexOf('application/json') !== -1 || type.indexOf('+json') !== -1;
+  }
+
+  async function parseCommandResult(response) {
+    var body = '';
+    try {
+      body = await response.text();
+    } catch (error) {
+      throw await commandResponseError(response, 'command response body could not be read');
+    }
+    if (!body) {
+      return null;
+    }
+    try {
+      return JSON.parse(body);
+    } catch (error) {
+      var parseError = new Error('command response contained invalid JSON');
+      parseError.status = response && response.status || 0;
+      parseError.body = body;
+      parseError.response = response;
+      throw parseError;
+    }
+  }
+
   var prefetchedDocuments = {};
   var prefetchOrder = [];
   var prefetchLimit = 8;
   var hoverPrefetchDelay = 65;
   var hoverPrefetchTimer = 0;
   var hoverPrefetchURL = '';
+  var activeQueryRefreshes = {};
+  var handledQueryRefreshEventIDs = {};
+  var handledQueryRefreshEventIDOrder = [];
+  var handledQueryRefreshEventIDLimit = 128;
   var realtimeEventsPath = '/_gowdk/realtime/events';
   var realtimeSource = null;
   var traceEndpoint = '/_gowdk/traces/browser';
@@ -110,6 +317,7 @@
 
   installTraceBridge();
   document.addEventListener('submit', submitPartial);
+  document.addEventListener('submit', submitCommand);
   document.addEventListener('click', navigateLink);
   document.addEventListener('mouseover', prefetchLink);
   document.addEventListener('mouseout', cancelHoverPrefetch);
@@ -704,7 +912,36 @@
     });
   }
 
-  async function refreshInvalidatedQueries(queries, envelope) {
+  function refreshInvalidatedQueries(queries, envelope) {
+    var eventIDs = queryRefreshEventIDs(envelope);
+    if (!eventIDs.length) {
+      return runInvalidatedQueryRefresh(queries, envelope);
+    }
+    for (var i = 0; i < eventIDs.length; i++) {
+      if (handledQueryRefreshEventIDs[eventIDs[i]]) {
+        return Promise.resolve();
+      }
+      if (activeQueryRefreshes[eventIDs[i]]) {
+        return activeQueryRefreshes[eventIDs[i]];
+      }
+    }
+    var refresh = runInvalidatedQueryRefresh(queries, envelope).then(function (result) {
+      rememberHandledQueryRefreshEventIDs(eventIDs);
+      return result;
+    }).finally(function () {
+      eventIDs.forEach(function (eventID) {
+        if (activeQueryRefreshes[eventID] === refresh) {
+          delete activeQueryRefreshes[eventID];
+        }
+      });
+    });
+    eventIDs.forEach(function (eventID) {
+      activeQueryRefreshes[eventID] = refresh;
+    });
+    return refresh;
+  }
+
+  async function runInvalidatedQueryRefresh(queries, envelope) {
     var regions = queryRegionsForInvalidation(document, queries);
     if (!regions.length || typeof DOMParser === 'undefined') {
       return;
@@ -743,6 +980,53 @@
     document.dispatchEvent(new CustomEvent('gowdk:query-refresh', {
       detail: { queries: queries, envelope: envelope }
     }));
+  }
+
+  function queryRefreshEventIDs(envelope) {
+    if (!envelope || typeof envelope !== 'object') {
+      return [];
+    }
+    var value = envelope.value || envelope.Value || null;
+    var eventIDs = envelope.eventIDs || envelope.EventIDs || null;
+    if ((!eventIDs || !eventIDs.length) && value && typeof value === 'object') {
+      eventIDs = value.eventIDs || value.EventIDs || null;
+    }
+    if (!Array.isArray(eventIDs)) {
+      return [];
+    }
+    return eventIDs.filter(function (eventID) {
+      return typeof eventID === 'string' && eventID;
+    });
+  }
+
+  function rememberHandledQueryRefreshEventIDs(eventIDs) {
+    eventIDs.forEach(function (eventID) {
+      if (!handledQueryRefreshEventIDs[eventID]) {
+        handledQueryRefreshEventIDOrder.push(eventID);
+      }
+      handledQueryRefreshEventIDs[eventID] = true;
+    });
+    while (handledQueryRefreshEventIDOrder.length > handledQueryRefreshEventIDLimit) {
+      delete handledQueryRefreshEventIDs[handledQueryRefreshEventIDOrder.shift()];
+    }
+  }
+
+  function refreshInvalidatedQueriesAfterCommand(queries, envelope) {
+    if (realtimeInvalidationRefreshActive()) {
+      return;
+    }
+    refreshInvalidatedQueries(queries, envelope).catch(function (error) {
+      dispatchRealtimeError(error, {
+        envelope: envelope,
+        queries: queries,
+        form: envelope && envelope.form || null,
+        command: envelope && envelope.command || ''
+      });
+    });
+  }
+
+  function realtimeInvalidationRefreshActive() {
+    return !!(realtimeSource && realtimeSource.readyState !== 2);
   }
 
   function replacementQueryRegion(region, replacements, index) {

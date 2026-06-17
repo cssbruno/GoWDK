@@ -71,8 +71,9 @@ type QueryInvalidation struct {
 
 // QueryInvalidationNotice is the browser payload sent for invalidated queries.
 type QueryInvalidationNotice struct {
-	Queries []string `json:"queries"`
-	Events  []string `json:"events,omitempty"`
+	Queries  []string `json:"queries"`
+	Events   []string `json:"events,omitempty"`
+	EventIDs []string `json:"eventIDs,omitempty"`
 }
 
 // EventDecoder converts a stored JSON event value back into the typed Go value

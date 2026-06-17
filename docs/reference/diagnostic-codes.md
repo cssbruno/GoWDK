@@ -156,8 +156,8 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `realtime_subscription_missing`, `realtime_subscription_invalid`,
   `realtime_subscription_role_not_allowed`.
 - Contract web adapters: `ssr_command_no_client` (a request-time page declares a
-  `g:command` write form whose generated adapter returns raw JSON and ships no
-  client to apply it).
+  `g:command` write form with no `g:query` region for it to refresh, so the write
+  is non-reactive and falls back to raw JSON when JavaScript is disabled).
 - WASM and browser Go: `unsupported_wasm_import`,
   `wasm_package_build_error`, `wasm_package_entrypoint_error`,
   `wasm_package_export_error`, `client_go_block_wasm_source_error`,

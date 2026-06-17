@@ -67,11 +67,14 @@ class Element extends EventTarget {
     this.tagName = tagName.toUpperCase();
     this.dataset = {};
     this.attributes = {};
+    this.fields = [];
     this.innerHTML = '';
     this.id = '';
     this.name = '';
+    this.value = '';
     this.method = '';
     this.action = '';
+    this.disabled = false;
     this.replacedWith = '';
     this.outerHTMLValue = '';
     this.valid = true;
@@ -79,6 +82,9 @@ class Element extends EventTarget {
   }
   closest(selector) {
     if (selector === 'form[data-gowdk-target]' && this.tagName === 'FORM' && this.dataset.gowdkTarget) {
+      return this;
+    }
+    if (selector === 'form[data-gowdk-command]' && this.tagName === 'FORM' && this.dataset.gowdkCommand) {
       return this;
     }
     return null;
@@ -175,10 +181,12 @@ class EventSourceStub extends EventTarget {
     super();
     this.url = url;
     this.closed = false;
+    this.readyState = 1;
     eventSources.push(this);
   }
   close() {
     this.closed = true;
+    this.readyState = 2;
   }
   emit(type, data) {
     const event = new CustomEvent(type);
@@ -203,8 +211,26 @@ global.window = {
   }
 };
 global.FormData = class {
-  constructor(form) {
+  constructor(form, submitter) {
     this.form = form;
+    this.entries = [];
+    for (const field of form.fields || []) {
+      if (field && field.name && !field.disabled) {
+        this.append(field.name, field.value ?? '');
+      }
+    }
+    if (submitter && submitter.includeInNativeFormData && submitter.name && !submitter.disabled) {
+      this.append(submitter.name, submitter.value ?? '');
+    }
+  }
+  append(name, value) {
+    this.entries.push([String(name), String(value)]);
+  }
+  getAll(name) {
+    return this.entries.filter(entry => entry[0] === String(name)).map(entry => entry[1]);
+  }
+  [Symbol.iterator]() {
+    return this.entries[Symbol.iterator]();
   }
 };
 
@@ -215,6 +241,16 @@ form.setAttribute('method', 'post');
 form.setAttribute('action', '/newsletter');
 form.dataset.gowdkTarget = '#newsletter';
 form.dataset.gowdkSwap = 'innerHTML';
+const commandForm = new Element('form');
+commandForm.method = 'post';
+commandForm.action = '/commands/create';
+commandForm.setAttribute('method', 'post');
+commandForm.setAttribute('action', '/commands/create');
+commandForm.dataset.gowdkCommand = 'patients.CreatePatient';
+commandForm.fields = [{ name: 'name', value: 'Ada' }];
+const commandSubmitter = new Element('button');
+commandSubmitter.name = 'intent';
+commandSubmitter.value = 'publish';
 const target = new Element('section');
 target.id = 'newsletter';
 target.innerHTML = '<p>Old</p>';
@@ -244,13 +280,55 @@ document.byID.email = input;
 document.activeElement = input;
 
 let request;
+let requests = [];
 let requestCount = 0;
 let swap = 'innerHTML';
 let fail = false;
 let reload = false;
+let commandMode = 'success';
+let refreshFail = false;
 global.fetch = async function(url, options) {
   requestCount++;
   request = { url, options };
+  requests.push(request);
+  if (url === '/commands/create') {
+    if (commandMode === 'redirect') {
+      return {
+        ok: true,
+        redirected: true,
+        status: 200,
+        headers: new Headers({ 'Content-Type': 'text/html; charset=utf-8' }),
+        text: async () => '<main>Login</main>'
+      };
+    }
+    if (commandMode === 'html') {
+      return {
+        ok: true,
+        redirected: false,
+        status: 200,
+        headers: new Headers({ 'Content-Type': 'text/html; charset=utf-8' }),
+        text: async () => '<main>Login</main>'
+      };
+    }
+    return {
+      ok: true,
+      redirected: false,
+      status: 200,
+      headers: new Headers({
+        'Content-Type': 'application/json; charset=utf-8',
+        'X-GOWDK-Queries': 'gowdk-generated-app/patients.GetPatientPage'
+      }),
+      text: async () => '{"id":"patient-1"}'
+    };
+  }
+  if (url === window.location.href && refreshFail) {
+    return {
+      ok: false,
+      status: 500,
+      headers: new Headers({ 'Content-Type': 'text/html; charset=utf-8' }),
+      text: async () => '<main>Refresh failed</main>'
+    };
+  }
   if (fail) {
     return {
       ok: false,
@@ -277,11 +355,19 @@ global.fetch = async function(url, options) {
 
 ` + runtime + `
 
-async function submit() {
-  const event = new CustomEvent('submit', { cancelable: true });
-  event.target = form;
-  document.dispatchEvent(event);
+async function flushRuntime() {
   await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+}
+
+async function submit(target = form, submitter = null) {
+  const event = new CustomEvent('submit', { cancelable: true });
+  event.target = target;
+  if (submitter) {
+    event.submitter = submitter;
+  }
+  document.dispatchEvent(event);
+  await flushRuntime();
   return event;
 }
 
@@ -347,6 +433,83 @@ async function submit() {
   assert.deepEqual(islandLifecycle.shift(), ['mount']);
   assert.deepEqual(queryRefresh.queries, ['gowdk-generated-app/patients.GetPatientPage']);
   request = null;
+  requests = [];
+  requestCount = 0;
+  invalidatedRegion.replacedWith = '';
+  invalidatedRegion.outerHTMLValue = '';
+
+  let commandSuccess = null;
+  let commandError = null;
+  commandForm.addEventListener('gowdk:command-success', event => {
+    commandSuccess = event.detail;
+  });
+  commandForm.addEventListener('gowdk:command-error', event => {
+    commandError = event.detail;
+  });
+  function resetCommandHarness() {
+    commandSuccess = null;
+    commandError = null;
+    realtimeError = null;
+    queryRefresh = null;
+    request = null;
+    requests = [];
+    requestCount = 0;
+    invalidatedRegion.replacedWith = '';
+    invalidatedRegion.outerHTMLValue = '';
+  }
+
+  let commandSubmit = await submit(commandForm, commandSubmitter);
+  assert.equal(commandSubmit.defaultPrevented, true);
+  assert.equal(requestCount, 1);
+  assert.equal(request.url, '/commands/create');
+  assert.equal(request.options.method, 'POST');
+  assert.equal(request.options.redirect, 'manual');
+  assert.equal(request.options.headers['Content-Type'], 'application/x-www-form-urlencoded;charset=UTF-8');
+  assert.equal(request.options.headers['X-GOWDK-Command'], '1');
+  assert.equal(typeof request.options.body, 'string');
+  const commandBody = new URLSearchParams(request.options.body);
+  assert.equal(commandBody.get('name'), 'Ada');
+  assert.deepEqual(commandBody.getAll('intent'), ['publish']);
+  assert.equal(commandSuccess.command, 'patients.CreatePatient');
+  assert.equal(commandSuccess.result.id, 'patient-1');
+  assert.deepEqual(commandSuccess.queries, ['gowdk-generated-app/patients.GetPatientPage']);
+  assert.equal(commandError, null);
+  assert.equal(invalidatedRegion.replacedWith, '');
+
+  resetCommandHarness();
+  commandMode = 'html';
+  await submit(commandForm, commandSubmitter);
+  assert.equal(commandSuccess, null);
+  assert.match(commandError.error.message, /command response was not JSON/);
+  assert.equal(commandError.status, 200);
+  assert.equal(commandError.body, '<main>Login</main>');
+  assert.equal(commandForm.attributes['aria-busy'], undefined);
+
+  resetCommandHarness();
+  commandMode = 'redirect';
+  await submit(commandForm, commandSubmitter);
+  assert.equal(commandSuccess, null);
+  assert.match(commandError.error.message, /command request redirected/);
+  assert.equal(commandError.status, 200);
+  assert.equal(commandError.body, '<main>Login</main>');
+  assert.equal(commandForm.attributes['aria-busy'], undefined);
+
+  resetCommandHarness();
+  commandMode = 'success';
+  eventSources[0].close();
+  refreshFail = true;
+  await submit(commandForm, commandSubmitter);
+  await flushRuntime();
+  assert.equal(commandSuccess.result.id, 'patient-1');
+  assert.equal(commandError, null);
+  assert.deepEqual(requests.map(item => item.url), ['/commands/create', 'http://example.test/newsletter']);
+  assert.match(realtimeError.error.message, /navigation request failed with status 500/);
+  assert.deepEqual(realtimeError.queries, ['gowdk-generated-app/patients.GetPatientPage']);
+  assert.equal(realtimeError.form, commandForm);
+  assert.equal(commandForm.attributes['aria-busy'], undefined);
+  refreshFail = false;
+  request = null;
+  requests = [];
   requestCount = 0;
 
   let afterSwap;

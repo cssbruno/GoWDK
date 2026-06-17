@@ -734,6 +734,11 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 	if strings.Contains(source, `gowdkcontracts.ExecuteCommandForRole[patients.CreatePatient, patients.CreatePatientResult]`) {
 		t.Fatalf("generated command contract must capture events instead of direct command execution:\n%s", source)
 	}
+	// Without query invalidations there is no realtimeQueryInvalidations symbol,
+	// so the single-flight refresh header must not be emitted.
+	if strings.Contains(source, `X-GOWDK-Queries`) {
+		t.Fatalf("command without query invalidations must not set the X-GOWDK-Queries header:\n%s", source)
+	}
 }
 
 func TestGenerateWritesRealtimeFanoutForSubscriptions(t *testing.T) {
@@ -843,6 +848,10 @@ func TestGenerateWritesRealtimeQueryInvalidationFanout(t *testing.T) {
 		`var realtimeQueryInvalidations []gowdkcontracts.QueryInvalidation = []gowdkcontracts.QueryInvalidation{gowdkcontracts.QueryInvalidation{EventCategory: gowdkcontracts.DomainEvent, EventType: "example.com/app/contracts/patients.PatientCreated", QueryType: "example.com/app/contracts/patients.GetPatientPage"}}`,
 		`gowdkcontracts.QueryInvalidationCommandEventSink(fanout, realtimeQueryInvalidations)`,
 		`gowdkcontracts.CompositeCommandEventSink(gowdkcontracts.InProcessCommandEventSink(), gowdkcontracts.QueryInvalidationCommandEventSink(fanout, realtimeQueryInvalidations), fanoutSink)`,
+		// Single-flight write path: the command adapter tells the submitting
+		// client which g:query regions to refresh via the X-GOWDK-Queries header.
+		`invalidatedQueries := gowdkcontracts.InvalidatedQueryTypes(realtimeQueryInvalidations, events)`,
+		`response.Header().Set("X-GOWDK-Queries", strings.Join(invalidatedQueries, ","))`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated invalidation source to contain %q:\n%s", expected, source)
@@ -5392,6 +5401,116 @@ func init() {
 		if !strings.Contains(string(eventPayload), expected) {
 			t.Fatalf("expected event sink output to contain %q, got %s", expected, eventPayload)
 		}
+	}
+	// Without query invalidations the single-flight refresh header is absent.
+	if got := response.Header.Get("X-GOWDK-Queries"); got != "" {
+		t.Fatalf("expected no X-GOWDK-Queries header without invalidations, got %q", got)
+	}
+}
+
+func TestGeneratedBinaryCommandSetsInvalidatedQueriesHeader(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients page</main>")
+
+	program := &gwdkir.Program{
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			ImportPath:  "gowdk-generated-app/patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			InputFields: []source.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
+			Method:      http.MethodPost,
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		}},
+		QueryInvalidations: []gwdkir.QueryInvalidation{{
+			Query:         "patients.GetPatientPage",
+			QueryType:     "gowdk-generated-app/patients.GetPatientPage",
+			Event:         "gowdk-generated-app/patients.PatientCreated",
+			EventType:     "gowdk-generated-app/patients.PatientCreated",
+			EventCategory: "domain",
+			Status:        gwdkir.ContractBindingBound,
+			OwnerKind:     gwdkir.SourcePage,
+			OwnerID:       "patients",
+		}},
+	}
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "patients", "patients.go"), `package patients
+
+import (
+	"context"
+
+	"github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type CreatePatient struct {
+	Name string
+}
+
+type CreatePatientResult struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+type PatientCreated struct {
+	ID string
+}
+
+func Register(registry *contracts.Registry) {
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient, contracts.RoleWeb)
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+	if err := contracts.EmitDomain(ctx, PatientCreated{ID: "patient-1"}); err != nil {
+		return CreatePatientResult{}, err
+	}
+	return CreatePatientResult{ID: "patient-1"}, nil
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/patients", http.MethodPost, "name=Ada")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected command response status 200, got %d", response.StatusCode)
+	}
+	// The command emits PatientCreated, which the invalidation edge maps to
+	// GetPatientPage. The single-flight write path names that region and the
+	// matching event ID in response headers so the browser can coordinate the
+	// command fallback refresh with realtime invalidation fanout.
+	if got := response.Header.Get("X-GOWDK-Queries"); got != "gowdk-generated-app/patients.GetPatientPage" {
+		t.Fatalf("expected X-GOWDK-Queries to name the invalidated query, got %q", got)
+	}
+	if got := response.Header.Get("X-GOWDK-Events"); got == "" {
+		t.Fatal("expected X-GOWDK-Events to name the invalidating event ID")
+	} else if parts := strings.Split(got, ","); len(parts) != 1 || strings.TrimSpace(parts[0]) == "" {
+		t.Fatalf("expected one X-GOWDK-Events event ID, got %q", got)
 	}
 }
 

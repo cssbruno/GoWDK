@@ -56,6 +56,24 @@ func TestValidatePageAllowsCommandWriteFormOnBuildTimePage(t *testing.T) {
 	}
 }
 
+func TestValidatePageAllowsCommandWithQueryRegionOnRequestTimePage(t *testing.T) {
+	page := gwdkir.Page{
+		ID:     "board",
+		Route:  "/board",
+		Source: "pages/board.page.gwdk",
+		Render: gowdk.SSR,
+		Guards: []string{"public"},
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main><section g:query="issues.GetBoard">Board</section><form g:command="issues.CreateIssue"><input name="title" /></form></main>`,
+		},
+	}
+	diagnostics := ValidatePage(ssrConfig(), irPage(page))
+	if firstDiagnostic(diagnostics, "ssr_command_no_client") != nil {
+		t.Fatalf("a command with a g:query region to refresh has a reactive path; did not expect ssr_command_no_client: %#v", diagnostics)
+	}
+}
+
 func TestValidatePageIgnoresQueryOnlyRequestTimePage(t *testing.T) {
 	page := gwdkir.Page{
 		ID:     "board",

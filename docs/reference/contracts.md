@@ -117,15 +117,25 @@ view {
 }
 ```
 
-`g:command` is a build-time (SPA/action) page feature: the generated client
-runtime applies the JSON the command adapter returns. A request-time page
-(`server {}`, SSR, or hybrid) ships no client for that write path, so a plain
-submit navigates to the adapter route and replaces the page with raw JSON. The
-compiler flags this with the `ssr_command_no_client` warning; on a request-time
-page use a `g:post` action handler that returns a `response.Response` (for
-example `response.RedirectTo`) instead. Request-time pages that declare realtime
-or invalidated `g:query` regions do receive the small client runtime so those
-regions can refetch.
+`g:command` is the reactive, contract-governed write. Any page that declares one
+— build-time or request-time (`server {}`, SSR, hybrid) — ships the small client
+runtime, which intercepts the submit, posts the command in the background, and
+applies a single-flight region refresh: the generated adapter computes which
+`g:query` regions the command's domain events invalidate and names them in the
+`X-GOWDK-Queries` response header, so the submitter's regions update immediately
+without waiting for the realtime fanout that refreshes every other connected
+client. The typed result rides on the `gowdk:command-success` event for optional
+optimistic UI. With realtime configured, the same invalidation also fans out over
+SSE to other clients (`g:subscribe` / invalidated `g:query` regions).
+
+Two caveats the `ssr_command_no_client` warning surfaces. First, with client
+JavaScript disabled a bare submit still navigates to the adapter's JSON — use a
+`g:post` action handler returning a `response.Response` (for example
+`response.RedirectTo`) when a no-JavaScript write path matters. Second, a
+`g:command` with no `g:query` region for it to refresh is a non-reactive write:
+it only fires `gowdk:command-success`. The warning fires only in that second
+case (a request-time command with no read region); add a bound `g:query` region
+or switch to `g:post`.
 
 Normal Go owns the contracts and handlers:
 

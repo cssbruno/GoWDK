@@ -37,7 +37,7 @@ func QueryInvalidationCommandEventSink(fanout PresentationFanout, invalidations 
 		if fanout == nil || len(events) == 0 || len(copied) == 0 {
 			return nil
 		}
-		queries, sourceEvents := invalidatedQueries(copied, events)
+		queries, sourceEvents, eventIDs := invalidatedQueries(copied, events)
 		if len(queries) == 0 {
 			return nil
 		}
@@ -45,17 +45,38 @@ func QueryInvalidationCommandEventSink(fanout PresentationFanout, invalidations 
 			Category: PresentationEvent,
 			Type:     QueryInvalidationPresentationEventType,
 			Value: QueryInvalidationNotice{
-				Queries: queries,
-				Events:  sourceEvents,
+				Queries:  queries,
+				Events:   sourceEvents,
+				EventIDs: eventIDs,
 			},
 		}})
 		return nil
 	})
 }
 
-func invalidatedQueries(invalidations []QueryInvalidation, events []EventEnvelope) ([]string, []string) {
+// InvalidatedQueryTypes returns the query types invalidated by the given command
+// events under the registered invalidation edges. The generated command adapter
+// uses it to tell the submitting client exactly which g:query regions to refresh
+// (the single-flight write path), independent of realtime fanout to other
+// clients. It returns nil when nothing is invalidated.
+func InvalidatedQueryTypes(invalidations []QueryInvalidation, events []EventEnvelope) []string {
+	queries, _, _ := invalidatedQueries(invalidations, events)
+	return queries
+}
+
+// InvalidatedEventIDs returns the captured event IDs that match at least one
+// query invalidation edge. The generated command adapter uses it as an exact
+// browser-side dedupe key between the command response refresh and realtime
+// invalidation fanout.
+func InvalidatedEventIDs(invalidations []QueryInvalidation, events []EventEnvelope) []string {
+	_, _, eventIDs := invalidatedQueries(invalidations, events)
+	return eventIDs
+}
+
+func invalidatedQueries(invalidations []QueryInvalidation, events []EventEnvelope) ([]string, []string, []string) {
 	queries := map[string]bool{}
 	sourceEvents := map[string]bool{}
+	eventIDs := map[string]bool{}
 	for _, event := range events {
 		for _, invalidation := range invalidations {
 			if invalidation.EventCategory != event.Category || invalidation.EventType != event.Type || invalidation.QueryType == "" {
@@ -63,9 +84,12 @@ func invalidatedQueries(invalidations []QueryInvalidation, events []EventEnvelop
 			}
 			queries[invalidation.QueryType] = true
 			sourceEvents[string(event.Category)+":"+event.Type] = true
+			if event.ID != "" {
+				eventIDs[event.ID] = true
+			}
 		}
 	}
-	return sortedKeys(queries), sortedKeys(sourceEvents)
+	return sortedKeys(queries), sortedKeys(sourceEvents), sortedKeys(eventIDs)
 }
 
 func sortedKeys(values map[string]bool) []string {

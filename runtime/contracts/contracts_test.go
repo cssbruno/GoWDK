@@ -639,6 +639,7 @@ func TestQueryInvalidationCommandEventSinkSendsGeneratedPresentationEvent(t *tes
 
 	err := DispatchCommandEvents(context.Background(), sink, NewRegistry(), RoleWeb, []EventEnvelope{{
 		Category: DomainEvent,
+		ID:       "event-1",
 		Type:     typeName[patientCreated](),
 		Value:    patientCreated{ID: "patient-1"},
 	}})
@@ -658,6 +659,50 @@ func TestQueryInvalidationCommandEventSinkSendsGeneratedPresentationEvent(t *tes
 	}
 	if !reflect.DeepEqual(notice.Queries, []string{typeName[patientPageQuery]()}) {
 		t.Fatalf("notice queries = %#v", notice.Queries)
+	}
+	if !reflect.DeepEqual(notice.EventIDs, []string{"event-1"}) {
+		t.Fatalf("notice event IDs = %#v", notice.EventIDs)
+	}
+}
+
+func TestInvalidatedQueryTypesReturnsMatchedQueries(t *testing.T) {
+	invalidations := []QueryInvalidation{{
+		EventCategory: DomainEvent,
+		EventType:     typeName[patientCreated](),
+		QueryType:     typeName[patientPageQuery](),
+	}}
+	queries := InvalidatedQueryTypes(invalidations, []EventEnvelope{{
+		Category: DomainEvent,
+		ID:       "event-1",
+		Type:     typeName[patientCreated](),
+		Value:    patientCreated{ID: "patient-1"},
+	}})
+	if !reflect.DeepEqual(queries, []string{typeName[patientPageQuery]()}) {
+		t.Fatalf("InvalidatedQueryTypes = %#v, want the matched query type", queries)
+	}
+	eventIDs := InvalidatedEventIDs(invalidations, []EventEnvelope{{
+		Category: DomainEvent,
+		ID:       "event-1",
+		Type:     typeName[patientCreated](),
+		Value:    patientCreated{ID: "patient-1"},
+	}})
+	if !reflect.DeepEqual(eventIDs, []string{"event-1"}) {
+		t.Fatalf("InvalidatedEventIDs = %#v, want the matched event ID", eventIDs)
+	}
+}
+
+func TestInvalidatedQueryTypesReturnsNilWhenNoEdgeMatches(t *testing.T) {
+	invalidations := []QueryInvalidation{{
+		EventCategory: DomainEvent,
+		EventType:     typeName[patientCreated](),
+		QueryType:     typeName[patientPageQuery](),
+	}}
+	queries := InvalidatedQueryTypes(invalidations, []EventEnvelope{{
+		Category: DomainEvent,
+		Type:     "example.com/app/contracts/other.Unrelated",
+	}})
+	if len(queries) != 0 {
+		t.Fatalf("InvalidatedQueryTypes = %#v, want nil for an unrelated event", queries)
 	}
 }
 

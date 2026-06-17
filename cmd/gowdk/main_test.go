@@ -363,7 +363,7 @@ route "/patients"
 view {
   <main>
     <form method="post" action="/patients" g:command="patients.CreatePatient">
-      <input name="name" />
+      <input name="name" aria-label="Name" />
     </form>
   </main>
 }
@@ -538,10 +538,10 @@ api Health GET "/api/health"
 view {
   <main>
     <form g:post={Subscribe}>
-      <input name="email" />
+      <input name="email" aria-label="Email" />
     </form>
     <form method="post" action="/patients" g:command="patients.CreatePatient">
-      <input name="name" />
+      <input name="name" aria-label="Name" />
     </form>
     <section g:query="patients.GetPatientPage">
       <h2>Patients</h2>
@@ -686,7 +686,7 @@ route "/patients"
 view {
   <main>
     <form method="post" action="/patients" g:command="patients.CreatePatient">
-      <input name="name" />
+      <input name="name" aria-label="Name" />
     </form>
   </main>
 }
@@ -822,7 +822,7 @@ route "/patients"
 view {
   <main>
     <form method="post" action="https://example.com/pay" g:command="patients.CreatePatient">
-      <input name="name" />
+      <input name="name" aria-label="Name" />
     </form>
   </main>
 }
@@ -4499,7 +4499,7 @@ act Subscribe POST "/newsletter"
 
 view {
   <form g:post={Subscribe}>
-    <input name="email" required />
+    <input name="email" aria-label="Email" required />
     <button type="submit">Subscribe</button>
   </form>
 }
@@ -4597,7 +4597,7 @@ act Subscribe POST "/newsletter"
 
 view {
   <form g:post={Subscribe}>
-    <input name="email" required />
+    <input name="email" aria-label="Email" required />
     <button type="submit">Subscribe</button>
   </form>
 }
@@ -4913,7 +4913,7 @@ act Subscribe POST "/newsletter"
 
 view {
   <form g:post={Subscribe}>
-    <input name="email" required />
+    <input name="email" aria-label="Email" required />
     <button type="submit">Subscribe</button>
   </form>
 }
@@ -5006,7 +5006,7 @@ act Subscribe POST "/newsletter"
 view {
   <main class="shell">
     <form g:post={Subscribe}>
-      <input name="email" required />
+      <input name="email" aria-label="Email" required />
       <button type="submit">Subscribe</button>
     </form>
   </main>
@@ -5089,7 +5089,7 @@ view {
       <button type="submit">Save</button>
     </form>
     <form method="post" action="/patients" g:command="patients.CreatePatient">
-      <input name="name" />
+      <input name="name" aria-label="Name" />
     </form>
     <section id="vitals">Vitals</section>
   </main>
@@ -5311,7 +5311,7 @@ fragment Summary GET "/dashboard/summary" "#summary" {
 view {
   <main>
     <form method="post" action="/patients" g:command="patients.CreatePatient">
-      <input name="name" />
+      <input name="name" aria-label="Name" />
     </form>
     <section id="summary" g:query="patients.GetPatientPage">
       {title}
@@ -5764,7 +5764,7 @@ route "/patients"
 view {
   <main>
     <form method="post" action="/patients" g:command="patients.CreatePatient">
-      <input name="name" />
+      <input name="name" aria-label="Name" />
     </form>
   </main>
 }
@@ -5865,7 +5865,7 @@ route "/patients"
 view {
   <main>
     <form method="post" action="/patients" g:command="patients.CreatePatient">
-      <input name="name" />
+      <input name="name" aria-label="Name" />
     </form>
   </main>
 }
@@ -5983,7 +5983,7 @@ act Refresh POST "/patients"
 view {
   <main>
     <form g:post={Refresh} g:target="#patients">
-      <input name="query" />
+      <input name="query" aria-label="Query" />
     </form>
     <section id="patients">Initial</section>
   </main>
@@ -6675,7 +6675,7 @@ act Subscribe POST "/newsletter"
 
 view {
   <form g:post={Subscribe}>
-    <input name="email" required />
+    <input name="email" aria-label="Email" required />
     <button type="submit">Subscribe</button>
   </form>
 }
@@ -6737,7 +6737,7 @@ act Subscribe POST "/newsletter"
 
 view {
   <form g:post={Subscribe}>
-    <input name="email" required />
+    <input name="email" aria-label="Email" required />
     <button type="submit">Subscribe</button>
   </form>
 }
@@ -6776,7 +6776,7 @@ act Subscribe POST "/newsletter"
 
 view {
   <form g:post={Subscribe}>
-    <input name="email" required />
+    <input name="email" aria-label="Email" required />
     <button type="submit">Subscribe</button>
   </form>
 }
@@ -6820,7 +6820,7 @@ act Subscribe POST "/newsletter"
 
 view {
   <form g:post={Subscribe}>
-    <input name="email" required />
+    <input name="email" aria-label="Email" required />
     <button type="submit">Subscribe</button>
   </form>
 }
@@ -6876,7 +6876,7 @@ api Session GET "/api/session"
 
 view {
   <form g:post={Login}>
-    <input name="email" required />
+    <input name="email" aria-label="Email" required />
     <button type="submit">Sign in</button>
   </form>
 }

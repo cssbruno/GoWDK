@@ -35,8 +35,16 @@ type Node struct {
 }
 
 type TreeReport struct {
-	Version int  `json:"version"`
-	Root    Node `json:"root"`
+	Version     int              `json:"version"`
+	Root        Node             `json:"root"`
+	Edges       []GraphEdge      `json:"edges,omitempty"`
+	Diagnostics []TreeDiagnostic `json:"diagnostics,omitempty"`
+}
+
+type TreeDiagnostic struct {
+	Code    string   `json:"code"`
+	Message string   `json:"message"`
+	Path    []string `json:"path,omitempty"`
 }
 
 type EndpointGraphReport struct {
@@ -67,6 +75,7 @@ type GraphEdge struct {
 }
 
 func BuildTree(ir gwdkir.Program) TreeReport {
+	ctx := newTreeContext(ir)
 	root := Node{
 		ID:   "program",
 		Kind: "program",
@@ -75,12 +84,182 @@ func BuildTree(ir gwdkir.Program) TreeReport {
 	packages := append([]gwdkir.Package(nil), ir.Packages...)
 	sort.Slice(packages, func(i, j int) bool { return packages[i].Name < packages[j].Name })
 	for _, pkg := range packages {
-		root.Children = append(root.Children, packageNode(pkg, ir))
+		root.Children = append(root.Children, packageNode(pkg, ir, ctx))
 	}
-	return TreeReport{Version: 1, Root: root}
+	ctx.detectComponentCycles()
+	return TreeReport{Version: 1, Root: root, Edges: ctx.sortedEdges(), Diagnostics: ctx.diagnostics}
 }
 
-func packageNode(pkg gwdkir.Package, ir gwdkir.Program) Node {
+type componentTarget struct {
+	ID      string
+	Package string
+	Name    string
+	Source  string
+}
+
+type treeContext struct {
+	components     map[string]componentTarget
+	edges          map[string]GraphEdge
+	componentEdges map[string]map[string]bool
+	diagnostics    []TreeDiagnostic
+	seenDiagnostic map[string]bool
+}
+
+func newTreeContext(ir gwdkir.Program) *treeContext {
+	ctx := &treeContext{
+		components:     map[string]componentTarget{},
+		edges:          map[string]GraphEdge{},
+		componentEdges: map[string]map[string]bool{},
+		seenDiagnostic: map[string]bool{},
+	}
+	for _, component := range ir.Components {
+		target := componentTarget{
+			ID:      nodeID("component", component.Package, component.Name),
+			Package: component.Package,
+			Name:    component.Name,
+			Source:  component.Source,
+		}
+		ctx.components[componentKey(component.Package, component.Name)] = target
+		if component.Package == "" {
+			ctx.components[componentKey("", component.Name)] = target
+		}
+	}
+	return ctx
+}
+
+func (ctx *treeContext) resolveComponentCall(template gwdkir.Template, name string) (componentTarget, bool) {
+	if alias, componentName, ok := strings.Cut(name, "."); ok {
+		for _, use := range template.Uses {
+			if use.Alias == alias {
+				target, exists := ctx.components[componentKey(use.Package, componentName)]
+				return target, exists
+			}
+		}
+		return componentTarget{}, false
+	}
+	if template.Package != "" {
+		if target, ok := ctx.components[componentKey(template.Package, name)]; ok {
+			return target, true
+		}
+	}
+	target, ok := ctx.components[componentKey("", name)]
+	return target, ok
+}
+
+func (ctx *treeContext) addEdge(from, to, kind string) {
+	if from == "" || to == "" || kind == "" {
+		return
+	}
+	key := from + "\x00" + to + "\x00" + kind
+	ctx.edges[key] = GraphEdge{From: from, To: to, Kind: kind}
+}
+
+func (ctx *treeContext) addComponentCall(template gwdkir.Template, targetID string) {
+	if template.OwnerKind != gwdkir.SourceComponent || targetID == "" {
+		return
+	}
+	ownerID := nodeID("component", template.Package, template.OwnerID)
+	if ctx.componentEdges[ownerID] == nil {
+		ctx.componentEdges[ownerID] = map[string]bool{}
+	}
+	ctx.componentEdges[ownerID][targetID] = true
+}
+
+func (ctx *treeContext) detectComponentCycles() {
+	var nodes []string
+	seen := map[string]bool{}
+	for from, targets := range ctx.componentEdges {
+		if !seen[from] {
+			nodes = append(nodes, from)
+			seen[from] = true
+		}
+		for to := range targets {
+			if !seen[to] {
+				nodes = append(nodes, to)
+				seen[to] = true
+			}
+		}
+	}
+	sort.Strings(nodes)
+	state := map[string]int{}
+	var stack []string
+	var visit func(string)
+	visit = func(id string) {
+		switch state[id] {
+		case 1:
+			ctx.recordCycle(id, stack)
+			return
+		case 2:
+			return
+		}
+		state[id] = 1
+		stack = append(stack, id)
+		targets := sortedComponentTargets(ctx.componentEdges[id])
+		for _, target := range targets {
+			visit(target)
+		}
+		stack = stack[:len(stack)-1]
+		state[id] = 2
+	}
+	for _, id := range nodes {
+		if state[id] == 0 {
+			visit(id)
+		}
+	}
+}
+
+func (ctx *treeContext) recordCycle(repeated string, stack []string) {
+	start := -1
+	for index, id := range stack {
+		if id == repeated {
+			start = index
+			break
+		}
+	}
+	if start < 0 {
+		return
+	}
+	path := append([]string(nil), stack[start:]...)
+	path = append(path, repeated)
+	key := strings.Join(path, "\x00")
+	if ctx.seenDiagnostic[key] {
+		return
+	}
+	ctx.seenDiagnostic[key] = true
+	ctx.diagnostics = append(ctx.diagnostics, TreeDiagnostic{
+		Code:    "component_composition_cycle",
+		Message: "component composition cycle detected",
+		Path:    path,
+	})
+}
+
+func (ctx *treeContext) sortedEdges() []GraphEdge {
+	edges := make([]GraphEdge, 0, len(ctx.edges))
+	for _, edge := range ctx.edges {
+		edges = append(edges, edge)
+	}
+	sort.Slice(edges, func(i, j int) bool {
+		left := edges[i].From + "\x00" + edges[i].To + "\x00" + edges[i].Kind
+		right := edges[j].From + "\x00" + edges[j].To + "\x00" + edges[j].Kind
+		return left < right
+	})
+	return edges
+}
+
+func sortedComponentTargets(targets map[string]bool) []string {
+	out := make([]string, 0, len(targets))
+	for target := range targets {
+		out = append(out, target)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func componentKey(packageName, componentName string) string {
+	return packageName + "\x00" + componentName
+}
+
+func packageNode(pkg gwdkir.Package, ir gwdkir.Program, ctx *treeContext) Node {
 	node := Node{
 		ID:   nodeID("package", pkg.Name),
 		Kind: "package",
@@ -90,13 +269,13 @@ func packageNode(pkg gwdkir.Package, ir gwdkir.Program) Node {
 		),
 	}
 	for _, page := range pagesForPackage(ir.Pages, pkg.Name) {
-		node.Children = append(node.Children, pageNode(page, ir))
+		node.Children = append(node.Children, pageNode(page, ir, ctx))
 	}
 	for _, component := range componentsForPackage(ir.Components, pkg.Name) {
-		node.Children = append(node.Children, componentNode(component, ir))
+		node.Children = append(node.Children, componentNode(component, ir, ctx))
 	}
 	for _, layout := range layoutsForPackage(ir.Layouts, pkg.Name) {
-		node.Children = append(node.Children, layoutNode(layout, ir))
+		node.Children = append(node.Children, layoutNode(layout, ir, ctx))
 	}
 	for _, endpoint := range standaloneEndpointsForPackage(ir.Endpoints, pkg.Name) {
 		node.Children = append(node.Children, endpointNode(endpoint))
@@ -104,7 +283,7 @@ func packageNode(pkg gwdkir.Package, ir gwdkir.Program) Node {
 	return node
 }
 
-func pageNode(page gwdkir.Page, ir gwdkir.Program) Node {
+func pageNode(page gwdkir.Page, ir gwdkir.Program, ctx *treeContext) Node {
 	node := Node{
 		ID:     nodeID("page", page.Package, page.ID),
 		Kind:   "page",
@@ -138,12 +317,12 @@ func pageNode(page gwdkir.Page, ir gwdkir.Program) Node {
 	}
 	node.Children = append(node.Children, contractRefNodes(ir.ContractRefs, gwdkir.SourcePage, page.ID)...)
 	if template, ok := templateForOwner(ir.Templates, gwdkir.SourcePage, page.ID, page.Package); ok {
-		node.Children = append(node.Children, templateNode(template))
+		node.Children = append(node.Children, templateNode(template, ctx))
 	}
 	return node
 }
 
-func componentNode(component gwdkir.Component, ir gwdkir.Program) Node {
+func componentNode(component gwdkir.Component, ir gwdkir.Program, ctx *treeContext) Node {
 	node := Node{
 		ID:     nodeID("component", component.Package, component.Name),
 		Kind:   "component",
@@ -159,12 +338,12 @@ func componentNode(component gwdkir.Component, ir gwdkir.Program) Node {
 	}
 	node.Children = append(node.Children, contractRefNodes(ir.ContractRefs, gwdkir.SourceComponent, component.Name)...)
 	if template, ok := templateForOwner(ir.Templates, gwdkir.SourceComponent, component.Name, component.Package); ok {
-		node.Children = append(node.Children, templateNode(template))
+		node.Children = append(node.Children, templateNode(template, ctx))
 	}
 	return node
 }
 
-func layoutNode(layout gwdkir.Layout, ir gwdkir.Program) Node {
+func layoutNode(layout gwdkir.Layout, ir gwdkir.Program, ctx *treeContext) Node {
 	node := Node{
 		ID:     nodeID("layout", layout.Package, layout.ID),
 		Kind:   "layout",
@@ -178,12 +357,12 @@ func layoutNode(layout gwdkir.Layout, ir gwdkir.Program) Node {
 	}
 	node.Children = append(node.Children, contractRefNodes(ir.ContractRefs, gwdkir.SourceLayout, layout.ID)...)
 	if template, ok := templateForOwner(ir.Templates, gwdkir.SourceLayout, layout.ID, layout.Package); ok {
-		node.Children = append(node.Children, templateNode(template))
+		node.Children = append(node.Children, templateNode(template, ctx))
 	}
 	return node
 }
 
-func templateNode(template gwdkir.Template) Node {
+func templateNode(template gwdkir.Template, ctx *treeContext) Node {
 	node := Node{
 		ID:     nodeID("view", string(template.OwnerKind), template.Package, template.OwnerID),
 		Kind:   "view",
@@ -210,11 +389,11 @@ func templateNode(template gwdkir.Template) Node {
 			return node
 		}
 	}
-	node.Children = append(node.Children, viewNodes(template, nodes, node.ID)...)
+	node.Children = append(node.Children, viewNodes(template, nodes, node.ID, ctx)...)
 	return node
 }
 
-func viewNodes(template gwdkir.Template, nodes []viewmodel.Node, parentID string) []Node {
+func viewNodes(template gwdkir.Template, nodes []viewmodel.Node, parentID string, ctx *treeContext) []Node {
 	out := make([]Node, 0, len(nodes))
 	for index, raw := range nodes {
 		childID := nodeID(parentID, fmt.Sprint(index))
@@ -231,21 +410,33 @@ func viewNodes(template gwdkir.Template, nodes []viewmodel.Node, parentID string
 					"directives", directiveNames(typed.Attrs),
 				),
 			}
-			node.Children = append(node.Children, viewNodes(template, typed.Children, childID)...)
+			node.Children = append(node.Children, viewNodes(template, typed.Children, childID, ctx)...)
 			out = append(out, node)
 		case viewmodel.ComponentCall:
+			nodeProps := props(
+				"attributes", attrsProps(typed.Attrs),
+				"directives", directiveNames(typed.Attrs),
+			)
+			if nodeProps == nil {
+				nodeProps = map[string]any{}
+			}
+			if target, ok := ctx.resolveComponentCall(template, typed.Name); ok {
+				nodeProps["targetId"] = target.ID
+				nodeProps["targetPackage"] = target.Package
+				nodeProps["targetName"] = target.Name
+				nodeProps["targetSource"] = target.Source
+				ctx.addEdge(childID, target.ID, "renders_component")
+				ctx.addComponentCall(template, target.ID)
+			}
 			node := Node{
 				ID:     childID,
 				Kind:   "component-call",
 				Name:   typed.Name,
 				Source: template.Source,
 				Span:   viewSpan(template, typed.Start, typed.End),
-				Props: props(
-					"attributes", attrsProps(typed.Attrs),
-					"directives", directiveNames(typed.Attrs),
-				),
+				Props:  nodeProps,
 			}
-			node.Children = append(node.Children, viewNodes(template, typed.Children, childID)...)
+			node.Children = append(node.Children, viewNodes(template, typed.Children, childID, ctx)...)
 			out = append(out, node)
 		case viewmodel.Text:
 			name := strings.TrimSpace(typed.Value)
@@ -426,7 +617,120 @@ func BuildEndpointGraph(config gowdk.Config, ir gwdkir.Program) EndpointGraphRep
 			builder.addEdge(endpointID, contractID, "references_contract")
 		}
 	}
+	addStructuralDispatchNodes(&builder, ir, metadata.Endpoints)
 	return EndpointGraphReport{Version: 1, Nodes: builder.sortedNodes(), Edges: builder.sortedEdges()}
+}
+
+type structuralDispatch struct {
+	Action     string
+	Command    string
+	Query      string
+	Events     []string
+	Attrs      map[string]string
+	Directives []string
+}
+
+func addStructuralDispatchNodes(builder *graphBuilder, ir gwdkir.Program, endpoints []compiler.EndpointBinding) {
+	actionTargets := map[string]string{}
+	contractTargets := map[string]string{}
+	for _, endpoint := range endpoints {
+		switch endpoint.Kind {
+		case compiler.EndpointAction:
+			actionTargets[structuralActionKey(endpoint.Package, endpoint.PageID, endpoint.Symbol)] = endpointBindingID(endpoint)
+		case compiler.EndpointCommand, compiler.EndpointQuery:
+			contractTargets[structuralContractKey(endpoint.Package, endpoint.PageID, endpoint.Source, endpoint.Kind, endpoint.Symbol)] = endpointBindingID(endpoint)
+		}
+	}
+	for _, template := range ir.Templates {
+		nodes := template.Nodes
+		if len(nodes) == 0 {
+			var err error
+			nodes, err = viewparse.Parse(template.Body)
+			if err != nil {
+				continue
+			}
+		}
+		parentID := nodeID("view", string(template.OwnerKind), template.Package, template.OwnerID)
+		addStructuralNodesForView(builder, template, nodes, parentID, actionTargets, contractTargets)
+	}
+}
+
+func addStructuralNodesForView(builder *graphBuilder, template gwdkir.Template, nodes []viewmodel.Node, parentID string, actionTargets map[string]string, contractTargets map[string]string) {
+	for index, raw := range nodes {
+		childID := nodeID(parentID, fmt.Sprint(index))
+		switch typed := raw.(type) {
+		case viewmodel.Element:
+			dispatch := structuralDispatchForElement(typed)
+			if dispatch.Action != "" || dispatch.Command != "" || dispatch.Query != "" || len(dispatch.Events) > 0 {
+				builder.addNode(GraphNode{
+					ID:     childID,
+					Kind:   "structural",
+					Name:   typed.Name,
+					Source: template.Source,
+					Span:   viewSpan(template, typed.Start, typed.End),
+					Props: props(
+						"ownerKind", string(template.OwnerKind),
+						"ownerId", template.OwnerID,
+						"package", template.Package,
+						"attributes", dispatch.Attrs,
+						"directives", dispatch.Directives,
+						"events", dispatch.Events,
+						"action", dispatch.Action,
+						"command", dispatch.Command,
+						"query", dispatch.Query,
+					),
+				})
+				if dispatch.Action != "" {
+					builder.addEdge(childID, actionTargets[structuralActionKey(template.Package, template.OwnerID, dispatch.Action)], "dispatches")
+				}
+				if dispatch.Command != "" {
+					builder.addEdge(childID, contractTargets[structuralContractKey(template.Package, template.OwnerID, template.Source, compiler.EndpointCommand, dispatch.Command)], "dispatches")
+				}
+				if dispatch.Query != "" {
+					builder.addEdge(childID, contractTargets[structuralContractKey(template.Package, template.OwnerID, template.Source, compiler.EndpointQuery, dispatch.Query)], "dispatches")
+				}
+			}
+			addStructuralNodesForView(builder, template, typed.Children, childID, actionTargets, contractTargets)
+		case viewmodel.ComponentCall:
+			addStructuralNodesForView(builder, template, typed.Children, childID, actionTargets, contractTargets)
+		}
+	}
+}
+
+func structuralDispatchForElement(element viewmodel.Element) structuralDispatch {
+	dispatch := structuralDispatch{
+		Attrs:      attrsProps(element.Attrs),
+		Directives: directiveNames(element.Attrs),
+	}
+	for _, attr := range element.Attrs {
+		switch {
+		case attr.Name == "g:post":
+			dispatch.Action = attrValue(attr)
+		case attr.Name == "g:command":
+			dispatch.Command = attrValue(attr)
+		case attr.Name == "g:query":
+			dispatch.Query = attrValue(attr)
+		case strings.HasPrefix(attr.Name, "g:on:"):
+			dispatch.Events = append(dispatch.Events, attr.Name)
+		}
+	}
+	sort.Strings(dispatch.Events)
+	return dispatch
+}
+
+func attrValue(attr viewmodel.Attr) string {
+	if attr.Boolean {
+		return ""
+	}
+	return strings.TrimSpace(attr.Value)
+}
+
+func structuralActionKey(packageName, ownerID, symbol string) string {
+	return strings.Join([]string{packageName, ownerID, symbol}, "\x00")
+}
+
+func structuralContractKey(packageName, ownerID, sourcePath string, kind compiler.EndpointKind, name string) string {
+	return strings.Join([]string{packageName, ownerID, sourcePath, string(kind), name}, "\x00")
 }
 
 func BuildAssetGraph(ir gwdkir.Program) AssetGraphReport {

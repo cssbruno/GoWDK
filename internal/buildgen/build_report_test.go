@@ -250,6 +250,9 @@ func TestBuildWritesPageMetadataToSPAHTMLHead(t *testing.T) {
 			Description: "Portable .gwdk pages compiled into Go web output.",
 			Canonical:   "https://gowdk.com/",
 			Image:       "https://gowdk.com/assets/social.png",
+			Robots:      "index,follow",
+			Preload:     []gwdkir.HeadResource{{Href: "/assets/app.css", As: "style"}},
+			Prefetch:    []gwdkir.HeadResource{{Href: "/docs"}},
 		},
 		Blocks: gwdkir.Blocks{
 			View:     true,
@@ -279,7 +282,10 @@ func TestBuildWritesPageMetadataToSPAHTMLHead(t *testing.T) {
 		`<title>GOWDK - Go-native web apps</title>`,
 		`<meta name="description" content="Portable .gwdk pages compiled into Go web output.">`,
 		`<link rel="canonical" href="https://gowdk.com/">`,
+		`<meta name="robots" content="index,follow">`,
 		`<link rel="icon" href="/favicon.ico">`,
+		`<link rel="preload" href="/assets/app.css" as="style">`,
+		`<link rel="prefetch" href="/docs">`,
 		`<meta property="og:site_name" content="GOWDK">`,
 		`<meta property="og:type" content="website">`,
 		`<meta property="og:url" content="https://gowdk.com/">`,
@@ -297,6 +303,10 @@ func TestBuildWritesPageMetadataToSPAHTMLHead(t *testing.T) {
 			t.Fatalf("expected %q in output:\n%s", want, output)
 		}
 	}
+	assertHTMLOrder(t, output,
+		`<link rel="preload" href="/assets/app.css" as="style">`,
+		`<link rel="stylesheet" href="/assets/app.css">`,
+	)
 	assertHTMLOrder(t, output,
 		`<meta name="twitter:image" content="https://gowdk.com/assets/social.png">`,
 		`<link rel="stylesheet" href="/assets/app.css">`,

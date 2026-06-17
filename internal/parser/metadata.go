@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -87,6 +88,34 @@ func applyMetadata(page *gwdkir.Page, name, rawValue string, lineNumber int, raw
 		}
 		page.Metadata.Image = image
 		page.Spans.Image = span
+	case "robots":
+		robots, err := metadataText(name, value)
+		if err != nil {
+			return err
+		}
+		page.Metadata.Robots = robots
+		page.Spans.Robots = span
+	case "noindex":
+		noIndex, err := metadataBool(name, value)
+		if err != nil {
+			return err
+		}
+		page.Metadata.NoIndex = noIndex
+		page.Spans.NoIndex = span
+	case "preload":
+		resource, err := metadataHeadResource(name, value)
+		if err != nil {
+			return err
+		}
+		page.Metadata.Preload = append(page.Metadata.Preload, resource)
+		page.Spans.Preload = append(page.Spans.Preload, source.NamedSpan{Name: resource.Href, Span: span})
+	case "prefetch":
+		resource, err := metadataHeadResource(name, value)
+		if err != nil {
+			return err
+		}
+		page.Metadata.Prefetch = append(page.Metadata.Prefetch, resource)
+		page.Spans.Prefetch = append(page.Spans.Prefetch, source.NamedSpan{Name: resource.Href, Span: span})
 	case "guard":
 		if value == "" {
 			return fmt.Errorf("guard requires a value")
@@ -114,6 +143,72 @@ func metadataText(name, value string) (string, error) {
 		return "", fmt.Errorf("%s requires a non-empty value", name)
 	}
 	return text, nil
+}
+
+func metadataBool(name, value string) (bool, error) {
+	raw := strings.ToLower(strings.TrimSpace(trimQuotes(value)))
+	if raw == "" {
+		return true, nil
+	}
+	switch raw {
+	case "true", "yes", "1":
+		return true, nil
+	case "false", "no", "0":
+		return false, nil
+	default:
+		return false, fmt.Errorf("%s requires true or false", name)
+	}
+}
+
+func metadataHeadResource(name, value string) (gwdkir.HeadResource, error) {
+	fields := strings.Fields(value)
+	if len(fields) == 0 {
+		return gwdkir.HeadResource{}, fmt.Errorf("%s requires a resource URL", name)
+	}
+	if len(fields) != 1 && len(fields) != 2 && len(fields) != 3 {
+		return gwdkir.HeadResource{}, fmt.Errorf("%s requires '<href>' or '<href> as <type>'", name)
+	}
+	href := strings.TrimSpace(trimQuotes(fields[0]))
+	if err := validateHeadResourceHref(name, href); err != nil {
+		return gwdkir.HeadResource{}, err
+	}
+	resource := gwdkir.HeadResource{Href: href}
+	switch len(fields) {
+	case 2:
+		resource.As = strings.TrimSpace(trimQuotes(fields[1]))
+	case 3:
+		if fields[1] != "as" {
+			return gwdkir.HeadResource{}, fmt.Errorf("%s requires '<href> as <type>'", name)
+		}
+		resource.As = strings.TrimSpace(trimQuotes(fields[2]))
+	}
+	if strings.ContainsAny(resource.As, "\r\n") {
+		return gwdkir.HeadResource{}, fmt.Errorf("%s resource type must stay on one line", name)
+	}
+	return resource, nil
+}
+
+func validateHeadResourceHref(name, href string) error {
+	if href == "" {
+		return fmt.Errorf("%s requires a non-empty resource URL", name)
+	}
+	if strings.ContainsAny(href, "\r\n") {
+		return fmt.Errorf("%s resource URL must stay on one line", name)
+	}
+	if strings.HasPrefix(href, "//") {
+		return fmt.Errorf("%s resource URL must not be protocol-relative", name)
+	}
+	parsed, err := url.Parse(href)
+	if err != nil {
+		return fmt.Errorf("%s resource URL is invalid: %w", name, err)
+	}
+	if parsed.IsAbs() {
+		scheme := strings.ToLower(parsed.Scheme)
+		if scheme != "http" && scheme != "https" {
+			return fmt.Errorf("%s resource URL must use http or https when absolute", name)
+		}
+	}
+	return nil
 }
 
 func endpointErrorPage(match []string, lineNumber int) (string, error) {

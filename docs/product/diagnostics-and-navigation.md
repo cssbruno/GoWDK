@@ -78,7 +78,7 @@ LSP slice lives in
   parser or IR spans: parser diagnostics, route declarations and params,
   action/API/fragment declarations, contract references, realtime
   subscriptions, component view bindings, component client statements,
-  unbound DOM ref usage, missing image alt warnings, duplicate `use` aliases,
+  unbound DOM ref usage, accessibility warnings, duplicate `use` aliases,
   layout references, and backend binding diagnostics.
 - Warning policy through `gowdk check --warnings-as-errors`.
 - Registry-backed `gowdk fix` rewrites and matching LSP quick fixes.

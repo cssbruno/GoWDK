@@ -115,7 +115,7 @@ func TestServerPublishesDiagnosticsAndClearsOnClose(t *testing.T) {
 func TestServerPublishesComponentClientDiagnostics(t *testing.T) {
 	uri := "file:///tmp/counter.cmp.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\ncomponent Counter\n\nclient {\n  fn Bad() {\n    Missing++\n  }\n}\n\nview {\n  <button g:on:click={Bad()}>Bad</button>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\ncomponent Counter\n\nclient {\n  fn Bad() {\n    Missing++\n  }\n}\n\nview {\n  <button type=\"button\" g:on:click={Bad()}>Bad</button>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}`) +
 		framed(`{"jsonrpc":"2.0","method":"exit"}`)
 
@@ -163,7 +163,7 @@ func TestServerPublishesComponentClientDiagnostics(t *testing.T) {
 func TestServerPublishesUnboundDOMRefDiagnosticAtClientStatement(t *testing.T) {
 	uri := "file:///tmp/search.cmp.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\ncomponent Search\n\nclient {\n  ref searchInput HTMLInputElement\n\n  fn FocusSearch() {\n    searchInput.Focus()\n  }\n}\n\nview {\n  <button g:on:click={FocusSearch()}>Focus</button>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\ncomponent Search\n\nclient {\n  ref searchInput HTMLInputElement\n\n  fn FocusSearch() {\n    searchInput.Focus()\n  }\n}\n\nview {\n  <button type=\"button\" g:on:click={FocusSearch()}>Focus</button>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}`) +
 		framed(`{"jsonrpc":"2.0","method":"exit"}`)
 
@@ -209,7 +209,7 @@ func TestServerPublishesContractReferenceDiagnostics(t *testing.T) {
 	pagePath := filepath.Join(root, "pages", "patients.page.gwdk")
 	uri := fileURI(pagePath)
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\npage patients\nroute \"/patients\"\nguard public\n\nview {\n  <main>\n    <form method=\"post\" action=\"/patients\" g:command=\"patients.CreatePatient\">\n      <input name=\"name\" />\n    </form>\n  </main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\npage patients\nroute \"/patients\"\nguard public\n\nview {\n  <main>\n    <form method=\"post\" action=\"/patients\" g:command=\"patients.CreatePatient\">\n      <input name=\"name\" aria-label=\"Name\" />\n    </form>\n  </main>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}`) +
 		framed(`{"jsonrpc":"2.0","method":"exit"}`)
 
@@ -291,6 +291,42 @@ func TestServerReturnsProjectAwareCompletions(t *testing.T) {
 	assertResponseID(t, messages[6], float64(4))
 }
 
+func TestServerReturnsInspectTreeRequest(t *testing.T) {
+	componentURI := "file:///tmp/card.cmp.gwdk"
+	pageURI := "file:///tmp/home.page.gwdk"
+	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+componentURI+`","languageId":"gwdk","version":1,"text":"package ui\n\ncomponent Card\n\nview {\n  <article></article>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":"package pages\nuse ui \"ui\"\n\npage home\nroute \"/\"\n\nview {\n  <main><ui.Card /></main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":2,"method":"gowdk/tree","params":{"textDocument":{"uri":"`+pageURI+`"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":3,"method":"shutdown","params":null}`) +
+		framed(`{"jsonrpc":"2.0","method":"exit"}`)
+
+	var output bytes.Buffer
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	if err := server.Serve(stringsReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	messages := readOutputMessages(t, output.Bytes())
+	if len(messages) != 5 {
+		t.Fatalf("expected 5 output messages, got %d", len(messages))
+	}
+	assertResponseID(t, messages[3], float64(2))
+	result := messages[3]["result"].(map[string]any)
+	if result["version"] != float64(1) {
+		t.Fatalf("expected tree version 1, got %#v", result)
+	}
+	root := result["root"].(map[string]any)
+	if root["kind"] != "program" {
+		t.Fatalf("expected program root, got %#v", root)
+	}
+	if !hasJSONGraphEdge(result["edges"].([]any), "view:page:pages:home:0:0", "component:ui:Card", "renders_component") {
+		t.Fatalf("expected component edge in tree result: %#v", result["edges"])
+	}
+	assertResponseID(t, messages[4], float64(3))
+}
+
 func TestServerReturnsHoverForLanguageAndProjectSymbols(t *testing.T) {
 	uri := "file:///tmp/signup.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
@@ -323,7 +359,7 @@ func TestServerReturnsDefinitionForComponentCalls(t *testing.T) {
 	pageURI := "file:///tmp/home.page.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
 		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+localComponentURI+`","languageId":"gwdk","version":1,"text":"package app\n\ncomponent ProductCard\n\nview {\n  <article></article>\n}\n"}}}`) +
-		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+importedComponentURI+`","languageId":"gwdk","version":1,"text":"package design\n\ncomponent Button\n\nview {\n  <button></button>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+importedComponentURI+`","languageId":"gwdk","version":1,"text":"package design\n\ncomponent Button\n\nview {\n  <button type=\"button\"></button>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+pageURI+`","languageId":"gwdk","version":1,"text":"package app\nuse ui \"design\"\n\npage home\nroute \"/\"\n\nview {\n  <main><ProductCard /><ui.Button /></main>\n}\n"}}}`) +
 		framed(`{"jsonrpc":"2.0","id":2,"method":"textDocument/definition","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":7,"character":11}}}`) +
 		framed(`{"jsonrpc":"2.0","id":3,"method":"textDocument/definition","params":{"textDocument":{"uri":"`+pageURI+`"},"position":{"line":7,"character":27}}}`) +
@@ -781,6 +817,16 @@ func assertReferenceURIs(t *testing.T, message map[string]any, expected ...strin
 		}
 		seen[uri]--
 	}
+}
+
+func hasJSONGraphEdge(edges []any, from, to, kind string) bool {
+	for _, raw := range edges {
+		edge := raw.(map[string]any)
+		if edge["from"] == from && edge["to"] == to && edge["kind"] == kind {
+			return true
+		}
+	}
+	return false
 }
 
 func assertCodeActionEdit(t *testing.T, message map[string]any, uri string, title string, newText string, line int) {

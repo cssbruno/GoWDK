@@ -88,9 +88,12 @@ func inspectTypedPackage(fset *token.FileSet, packageDir string, files []*ast.Fi
 			if !ok || obj == nil {
 				return true
 			}
+			payload := contractPayloadType(obj.Name(), obj.Type())
 			typesBySelector[exprString(fset, selector)] = contractTypeInfo{
-				Exported: obj.Exported(),
-				Struct:   isStructType(obj.Type()),
+				Exported:       obj.Exported(),
+				Struct:         isStructType(obj.Type()),
+				PayloadFields:  payload.Fields,
+				PayloadMessage: payload.Message,
 			}
 			return true
 		})

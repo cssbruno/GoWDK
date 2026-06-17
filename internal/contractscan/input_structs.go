@@ -3,6 +3,7 @@ package contractscan
 import (
 	"fmt"
 	"go/ast"
+	"go/types"
 	"strconv"
 	"strings"
 
@@ -107,6 +108,45 @@ func contractPayloadStruct(typeName string, structType *ast.StructType) inputStr
 	return inputStruct{Fields: fields}
 }
 
+func contractPayloadType(typeName string, typ types.Type) inputStruct {
+	structType, ok := types.Unalias(typ).Underlying().(*types.Struct)
+	if !ok {
+		return inputStruct{}
+	}
+	seen := map[string]bool{}
+	var fields []source.BackendInputField
+	for index := 0; index < structType.NumFields(); index++ {
+		field := structType.Field(index)
+		if field.Anonymous() {
+			return inputStruct{Message: fmt.Sprintf("contract payload %s cannot use embedded fields", typeName)}
+		}
+		jsonName, skip, _, err := contractJSONTagNameRaw(structType.Tag(index))
+		if err != nil {
+			return inputStruct{Message: fmt.Sprintf("contract payload %s has invalid json tag: %v", typeName, err)}
+		}
+		if !field.Exported() || skip {
+			continue
+		}
+		fieldType, ok := contractInputFieldTypeFromType(field.Type())
+		if !ok {
+			return inputStruct{Message: fmt.Sprintf("contract payload %s uses unsupported field type", typeName)}
+		}
+		if jsonName == "" {
+			jsonName = field.Name()
+		}
+		if seen[jsonName] {
+			return inputStruct{Message: fmt.Sprintf("contract payload %s maps multiple fields to json field %q", typeName, jsonName)}
+		}
+		seen[jsonName] = true
+		fields = append(fields, source.BackendInputField{
+			FieldName: field.Name(),
+			FormName:  jsonName,
+			Type:      fieldType,
+		})
+	}
+	return inputStruct{Fields: fields}
+}
+
 func contractFormTagName(field *ast.Field) (string, bool, bool, error) {
 	if field == nil || field.Tag == nil {
 		return "", false, false, nil
@@ -134,6 +174,10 @@ func contractJSONTagName(field *ast.Field) (string, bool, bool, error) {
 	if err != nil {
 		return "", false, false, err
 	}
+	return contractJSONTagNameRaw(tag)
+}
+
+func contractJSONTagNameRaw(tag string) (string, bool, bool, error) {
 	value, ok, err := contractStructTagValue(tag, "json")
 	if err != nil || !ok {
 		return "", false, ok, err
@@ -200,6 +244,47 @@ func contractInputFieldType(expression ast.Expr) (string, bool) {
 	}
 	ident, ok := array.Elt.(*ast.Ident)
 	if !ok || ident.Name != "string" {
+		return "", false
+	}
+	return source.BackendInputTypeStringSlice, true
+}
+
+func contractInputFieldTypeFromType(typ types.Type) (string, bool) {
+	typ = types.Unalias(typ)
+	if basic, ok := typ.Underlying().(*types.Basic); ok {
+		switch basic.Kind() {
+		case types.Bool:
+			return source.BackendInputTypeBool, true
+		case types.Int:
+			return source.BackendInputTypeInt, true
+		case types.Int8:
+			return source.BackendInputTypeInt8, true
+		case types.Int16:
+			return source.BackendInputTypeInt16, true
+		case types.Int32:
+			return source.BackendInputTypeInt32, true
+		case types.Int64:
+			return source.BackendInputTypeInt64, true
+		case types.Uint:
+			return source.BackendInputTypeUint, true
+		case types.Uint8:
+			return source.BackendInputTypeUint8, true
+		case types.Uint16:
+			return source.BackendInputTypeUint16, true
+		case types.Uint32:
+			return source.BackendInputTypeUint32, true
+		case types.Uint64:
+			return source.BackendInputTypeUint64, true
+		case types.String:
+			return source.BackendInputTypeString, true
+		}
+	}
+	slice, ok := typ.Underlying().(*types.Slice)
+	if !ok {
+		return "", false
+	}
+	elem, ok := types.Unalias(slice.Elem()).Underlying().(*types.Basic)
+	if !ok || elem.Kind() != types.String {
 		return "", false
 	}
 	return source.BackendInputTypeStringSlice, true

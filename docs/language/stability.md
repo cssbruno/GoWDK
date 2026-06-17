@@ -58,6 +58,10 @@ All metadata keywords are **Stable**. The canonical list is `lang.MetadataKeywor
 | `description` | Stable |
 | `canonical` | Stable |
 | `image` | Stable |
+| `robots` | Stable |
+| `noindex` | Stable |
+| `preload` | Stable |
+| `prefetch` | Stable |
 | `layout` | Stable |
 | `cache` | Stable |
 | `revalidate` | Stable |

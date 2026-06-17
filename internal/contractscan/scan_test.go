@@ -410,6 +410,126 @@ func SendWelcomeEmail(ctx context.Context, event defs.PatientCreated) error {
 	}
 }
 
+func TestScanExpandsImportedEventPayloadAndResultFields(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26.4\n\nrequire github.com/cssbruno/gowdk v0.0.0\nreplace github.com/cssbruno/gowdk => "+gowdkRepoRoot(t)+"\n")
+	writeFile(t, filepath.Join(root, "contractdefs", "types.go"), `package contractdefs
+
+type CreatePatient struct {
+	Name string `+"`form:\"name\"`"+`
+}
+
+type CreatePatientResult struct {
+	ID string `+"`json:\"id\"`"+`
+	Tags []string `+"`json:\"tags\"`"+`
+	Skip string `+"`json:\"-\"`"+`
+}
+
+type PatientImported struct {
+	ID string `+"`json:\"id\"`"+`
+	Age int `+"`json:\"age\"`"+`
+	Active bool `+"`json:\"active\"`"+`
+}
+`)
+	writeFile(t, filepath.Join(root, "patients", "register.go"), `package patients
+
+import (
+	"context"
+
+	"example.com/app/contractdefs"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterCommand[contractdefs.CreatePatient, contractdefs.CreatePatientResult](r, HandleCreatePatient)
+	contracts.RegisterIntegrationEvent[contractdefs.PatientImported](r, SendPatientImported)
+}
+
+func HandleCreatePatient(ctx context.Context, command contractdefs.CreatePatient) (contractdefs.CreatePatientResult, error) {
+	return contractdefs.CreatePatientResult{}, nil
+}
+
+func SendPatientImported(ctx context.Context, event contractdefs.PatientImported) error {
+	return nil
+}
+`)
+
+	report, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %#v", report.Diagnostics)
+	}
+	command := findContract(t, report.Contracts, runtimecontracts.Command, "contractdefs.CreatePatient")
+	if got := inputFieldsString(command.ResultFields); got != "ID:id:string,Tags:tags:[]string" {
+		t.Fatalf("unexpected imported command result fields: %s", got)
+	}
+	event := findContract(t, report.Contracts, runtimecontracts.Event, "contractdefs.PatientImported")
+	if got := inputFieldsString(event.PayloadFields); got != "ID:id:string,Age:age:int,Active:active:bool" {
+		t.Fatalf("unexpected imported event payload fields: %s", got)
+	}
+
+	payload, err := AsyncAPIPayload(report, AsyncAPIOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	for _, expected := range []string{`"PatientImported"`, `"id"`, `"age"`, `"active"`} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected AsyncAPI payload to contain %q:\n%s", expected, output)
+		}
+	}
+}
+
+func TestScanKeepsUnsupportedImportedEventPayloadShallow(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "go.mod"), "module example.com/app\n\ngo 1.26.4\n\nrequire github.com/cssbruno/gowdk v0.0.0\nreplace github.com/cssbruno/gowdk => "+gowdkRepoRoot(t)+"\n")
+	writeFile(t, filepath.Join(root, "contractdefs", "types.go"), `package contractdefs
+
+type PatientImported struct {
+	Meta map[string]string `+"`json:\"meta\"`"+`
+}
+`)
+	writeFile(t, filepath.Join(root, "patients", "register.go"), `package patients
+
+import (
+	"context"
+
+	"example.com/app/contractdefs"
+	contracts "github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+func Register(r *contracts.Registry) {
+	contracts.RegisterIntegrationEvent[contractdefs.PatientImported](r, SendPatientImported)
+}
+
+func SendPatientImported(ctx context.Context, event contractdefs.PatientImported) error {
+	return nil
+}
+`)
+
+	report, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Diagnostics) != 0 {
+		t.Fatalf("unsupported payload fields should not fail scanning: %#v", report.Diagnostics)
+	}
+	event := findContract(t, report.Contracts, runtimecontracts.Event, "contractdefs.PatientImported")
+	if len(event.PayloadFields) != 0 {
+		t.Fatalf("unsupported imported payload should stay shallow, got %#v", event.PayloadFields)
+	}
+	payload, err := AsyncAPIPayload(report, AsyncAPIOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	if !strings.Contains(output, `"x-go-type": "contractdefs.PatientImported"`) || strings.Contains(output, `"meta"`) {
+		t.Fatalf("expected shallow deterministic AsyncAPI schema, got:\n%s", output)
+	}
+}
+
 func TestScanReportsUnexportedLocalHandler(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "patients.go"), `package patients

@@ -164,7 +164,7 @@ func addOpenAPIEndpointOperation(paths map[string]openAPIPath, components map[st
 		Summary:     endpointSummary(string(endpoint.Kind), endpoint.Symbol, endpoint.Path),
 		Tags:        []string{string(endpoint.Kind)},
 		Parameters:  pathParameters(openAPIPathFromGOWDK(endpoint.Path), endpoint.RouteParams),
-		Responses:   endpointResponses(components, string(endpoint.Kind), ""),
+		Responses:   endpointResponses(components, string(endpoint.Kind), "", nil),
 		XGOWDK: openAPIGOWDKExtension{
 			Kind:           string(endpoint.Kind),
 			Route:          endpoint.Path,
@@ -198,7 +198,7 @@ func addOpenAPIContractOperation(paths map[string]openAPIPath, components map[st
 		Summary:     endpointSummary(kind, ref.Name, ref.Path),
 		Tags:        []string{kind},
 		Parameters:  pathParameters(openAPIPathFromGOWDK(ref.Path), nil),
-		Responses:   endpointResponses(components, kind, ref.Result),
+		Responses:   endpointResponses(components, kind, ref.Result, ref.ResultFields),
 		XGOWDK: openAPIGOWDKExtension{
 			Kind:           kind,
 			Route:          ref.Path,
@@ -259,12 +259,17 @@ func attachInputFields(operation *openAPIOperation, components map[string]openAP
 	}
 }
 
-func endpointResponses(components map[string]openAPISchema, kind string, resultType string) map[string]openAPIResponse {
+func endpointResponses(components map[string]openAPISchema, kind string, resultType string, resultFields []source.BackendInputField) map[string]openAPIResponse {
 	response := openAPIResponse{Description: "OK"}
 	if resultType != "" {
 		name := schemaComponentName(resultType)
 		if _, ok := components[name]; !ok {
-			components[name] = openAPISchema{Type: "object", XGoType: resultType}
+			schema := openAPISchema{Type: "object", XGoType: resultType}
+			if len(resultFields) > 0 {
+				schema = objectSchemaFromFields(resultFields)
+				schema.XGoType = resultType
+			}
+			components[name] = schema
 		}
 		response.Content = map[string]openAPIMediaType{
 			"application/json": {Schema: openAPISchema{Ref: "#/components/schemas/" + name}},

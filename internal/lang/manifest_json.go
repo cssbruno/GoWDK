@@ -80,10 +80,19 @@ type layoutJSON struct {
 }
 
 type metadataJSON struct {
-	Title       string `json:"title,omitempty"`
-	Description string `json:"description,omitempty"`
-	Canonical   string `json:"canonical,omitempty"`
-	Image       string `json:"image,omitempty"`
+	Title       string             `json:"title,omitempty"`
+	Description string             `json:"description,omitempty"`
+	Canonical   string             `json:"canonical,omitempty"`
+	Image       string             `json:"image,omitempty"`
+	Robots      string             `json:"robots,omitempty"`
+	NoIndex     bool               `json:"noindex,omitempty"`
+	Preload     []headResourceJSON `json:"preload,omitempty"`
+	Prefetch    []headResourceJSON `json:"prefetch,omitempty"`
+}
+
+type headResourceJSON struct {
+	Href string `json:"href"`
+	As   string `json:"as,omitempty"`
 }
 
 type routeParamJSON struct {
@@ -245,7 +254,8 @@ func marshalManifestJSON(result CheckResult, defaultMode gowdk.RenderMode) ([]by
 }
 
 func metadataJSONFor(metadata gwdkir.PageMetadata) *metadataJSON {
-	if metadata.Title == "" && metadata.Description == "" && metadata.Canonical == "" && metadata.Image == "" {
+	if metadata.Title == "" && metadata.Description == "" && metadata.Canonical == "" && metadata.Image == "" &&
+		metadata.Robots == "" && !metadata.NoIndex && len(metadata.Preload) == 0 && len(metadata.Prefetch) == 0 {
 		return nil
 	}
 	return &metadataJSON{
@@ -253,7 +263,22 @@ func metadataJSONFor(metadata gwdkir.PageMetadata) *metadataJSON {
 		Description: metadata.Description,
 		Canonical:   metadata.Canonical,
 		Image:       metadata.Image,
+		Robots:      metadata.Robots,
+		NoIndex:     metadata.NoIndex,
+		Preload:     headResourcesJSON(metadata.Preload),
+		Prefetch:    headResourcesJSON(metadata.Prefetch),
 	}
+}
+
+func headResourcesJSON(resources []gwdkir.HeadResource) []headResourceJSON {
+	if len(resources) == 0 {
+		return nil
+	}
+	out := make([]headResourceJSON, 0, len(resources))
+	for _, resource := range resources {
+		out = append(out, headResourceJSON{Href: resource.Href, As: resource.As})
+	}
+	return out
 }
 
 func routeParamsJSON(params []source.RouteParam) []routeParamJSON {

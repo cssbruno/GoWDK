@@ -134,11 +134,13 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
 - Components, stores, and markup: `duplicate_component_name`,
   `redundant_component_implementation`, `component_contract_error`,
   `component_field_error`, `component_client_error`,
+  `component_composition_cycle`,
   `duplicate_component_emit`, `duplicate_page_store`, `page_store_error`,
   `page_store_persist_key_conflict`, `page_store_persist_scope_conflict`,
   `page_store_persist_scope_invalid`, `page_store_persist_secret_field`,
   `unknown_component_store`, `view_parse_error`.
-- Accessibility: `missing_img_alt`.
+- Accessibility: `missing_img_alt`, `missing_form_label`,
+  `empty_link_text`, `missing_button_type`, `heading_order_skip`.
 - Go blocks and generated app wiring: `invalid_go_block`,
   `go_client_requires_page`, `go_ssr_requires_request_render`,
   `unknown_go_block_target`, `unknown_addon_go_block_target`,

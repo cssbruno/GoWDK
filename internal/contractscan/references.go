@@ -63,6 +63,7 @@ func LinkReferences(refs []gwdkir.ContractReference, report Report) []gwdkir.Con
 		linked[index].Result = contract.Result
 		linked[index].Roles = append([]string(nil), contract.Roles...)
 		linked[index].InputFields = append([]source.BackendInputField(nil), contract.InputFields...)
+		linked[index].ResultFields = append([]source.BackendInputField(nil), contract.ResultFields...)
 		if diagnostic, bad := lookupContractDiagnostic(invalid[ref.Kind], ref); bad {
 			linked[index].Status = gwdkir.ContractBindingInvalid
 			linked[index].Message = diagnostic.Message

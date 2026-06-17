@@ -60,6 +60,10 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 - Return a document outline (top-level package, metadata, imports, uses, blocks,
   endpoints, and component/page declarations) from the recursive-descent outline
   pass over the shared tokenizer.
+- Return the source-linked inspect tree for open documents through a custom
+  `gowdk/tree` request. Params may include `{ "textDocument": { "uri": "..." } }`;
+  the result is the same versioned tree projection as `gowdk inspect tree`,
+  including ordered nodes, component composition edges, and tree diagnostics.
 
 ### Non-Functional
 
@@ -88,6 +92,8 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 - [x] `textDocument/semanticTokens/full` returns encoded token data for open `.gwdk` buffers.
 - [x] `textDocument/documentSymbol` returns a top-level outline parsed by the
       recursive-descent outline pass over the shared tokenizer (ADR 0010).
+- [x] `gowdk/tree` returns the versioned inspect tree projection for open
+      project documents.
 - [x] `go test ./...` and `go build ./cmd/gowdk` pass.
 
 ## Edge Cases

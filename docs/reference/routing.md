@@ -418,11 +418,13 @@ and snapshots; keep `gowdk routes` for route and endpoint report integrations.
 
 Use `gowdk inspect endpoint-graph --json` when route debugging needs the
 dispatch graph. The current graph schema is version `1` and includes `page`,
-`route`, `endpoint`, `handler`, `guard`, and `contract` nodes. Edges describe
-route declarations, page-owned endpoints, planned/generated handlers, inherited
-guard policy, and routable command/query contract references. Endpoint nodes
-carry method/path, source kind, cache, guards, CSRF policy, binding status,
-signature, input type, and source span when available.
+`route`, `endpoint`, `handler`, `guard`, `contract`, and `structural` nodes.
+Edges describe route declarations, page-owned endpoints, planned/generated
+handlers, inherited guard policy, routable command/query contract references,
+and structural `dispatches` links from `g:post`, `g:command`, and `g:query`
+view elements to generated endpoint nodes. Endpoint nodes carry method/path,
+source kind, cache, guards, CSRF policy, binding status, signature, input type,
+and source span when available.
 
 Use `gowdk inspect asset-graph --json` when debugging which source owner
 introduced CSS, JavaScript, component file assets, or WASM declarations. The
@@ -435,3 +437,5 @@ tree instead of a route-only projection. The current tree schema is version `1`
 and includes package, page, component, layout, route, endpoint,
 contract-reference, view, element, component-call, and text nodes with stable
 IDs, source paths, source spans when known, properties, and ordered children.
+Resolved component calls also produce `renders_component` edges, and component
+composition cycles are reported as tree diagnostics.

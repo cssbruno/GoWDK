@@ -1019,6 +1019,10 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Contract scan reports validate local and imported contract/result types
   resolved by `go/types` as exported struct symbols where the scanner can
   resolve them.
+- Contract scan reports include exported JSON fields for supported local and
+  imported command/query result structs and integration-event payload structs
+  when those structs can be resolved. Unsupported imported payload/result
+  shapes stay as shallow named schemas with the Go type marker.
 - Contract scan reports duplicate command owner registrations.
 - `gowdk check` and CLI `gowdk build` fail on contract scan diagnostics such
   as invalid handler signatures and duplicate command owners.
@@ -1071,8 +1075,9 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
   `type` = contract event type, `source` = the application/module boundary,
   `id` = event envelope identifier supplied by the transport, `time` = event
   envelope time supplied by the transport, and `datacontenttype` =
-  `application/json`. Imported event payload structs currently emit shallow
-  named schemas; #315 tracks imported payload field expansion.
+  `application/json`. Resolvable local and imported integration-event payload
+  structs contribute JSON-field schemas; unsupported or unresolvable imported
+  payloads emit shallow named schemas with the Go type marker.
 - Command contract adapter IR includes the form method and either the literal
   form action or, for page-owned forms that omit `action`, the page route.
 - Page-owned query contract adapter IR includes `GET` plus the page route.

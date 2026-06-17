@@ -170,7 +170,7 @@ guard public
 view {
   <main>
     <form method="post" action="/patients" g:command="patients.CreatePatient">
-      <input name="name" />
+      <input name="name" aria-label="Name" />
     </form>
   </main>
 }
@@ -460,6 +460,66 @@ view {
 	}
 }
 
+func TestCheckFilesWarnsForExpandedAccessibilityIssues(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "signup.page.gwdk")
+	writeGWDK(t, path, `package app
+
+page signup
+route "/signup"
+guard public
+
+view {
+  <main>
+    <input id="email" name="email" />
+    <a href="/docs"></a>
+    <button>Save</button>
+    <h1>Sign up</h1>
+    <h3>Details</h3>
+  </main>
+}
+`)
+
+	_, diagnostics := CheckFiles(gowdk.Config{}, []string{path})
+	if diagnostics.HasErrors() {
+		t.Fatalf("expected warning-only diagnostics, got %v", diagnostics)
+	}
+	for _, code := range []string{"missing_form_label", "empty_link_text", "missing_button_type", "heading_order_skip"} {
+		if !hasDiagnosticCode(diagnostics, code) {
+			t.Fatalf("expected %s warning in %#v", code, diagnostics)
+		}
+	}
+}
+
+func TestCheckFilesAcceptsAccessibleFormAndLinkMarkup(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "signup.page.gwdk")
+	writeGWDK(t, path, `package app
+
+page signup
+route "/signup"
+guard public
+
+view {
+  <main>
+    <label for="email">Email</label>
+    <input id="email" name="email" />
+    <label><textarea name="bio"></textarea></label>
+    <input name="token" type="hidden" />
+    <a href="/docs">Docs</a>
+    <button type="button">Save</button>
+    <h1>Sign up</h1>
+    <h2>Details</h2>
+  </main>
+}
+`)
+
+	_, diagnostics := CheckFiles(gowdk.Config{}, []string{path})
+	if len(diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %#v", diagnostics)
+	}
+}
+
 func TestCheckJSONIncludesAccessibilityWarning(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "gallery.page.gwdk")
@@ -470,7 +530,10 @@ route "/gallery"
 guard public
 
 view {
-  <img src="/hero.png" />
+  <main>
+    <img src="/hero.png" />
+    <button>Save</button>
+  </main>
 }
 `)
 
@@ -480,6 +543,7 @@ view {
 	}
 	output := string(payload)
 	if !strings.Contains(output, `"code": "missing_img_alt"`) ||
+		!strings.Contains(output, `"code": "missing_button_type"`) ||
 		!strings.Contains(output, `"severity": "warning"`) {
 		t.Fatalf("expected accessibility warning in JSON: %s", output)
 	}
@@ -783,7 +847,7 @@ client {
 }
 
 view {
-  <button g:on:click={Bad()}>Bad</button>
+  <button type="button" g:on:click={Bad()}>Bad</button>
 }
 `)
 
@@ -929,7 +993,7 @@ client {
 }
 
 view {
-  <button g:on:click={Bad()}>{Count}</button>
+  <button type="button" g:on:click={Bad()}>{Count}</button>
 }
 `)
 
@@ -957,6 +1021,15 @@ view {
 		!strings.Contains(diagnostic.Message, `operator && requires bools`) {
 		t.Fatalf("expected expression diagnostic JSON details, got: %s", output)
 	}
+}
+
+func hasDiagnosticCode(diagnostics Diagnostics, code string) bool {
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Code == code {
+			return true
+		}
+	}
+	return false
 }
 
 func writeGWDK(t *testing.T, path, content string) {

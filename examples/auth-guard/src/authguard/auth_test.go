@@ -5,22 +5,23 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
+	gowdkauth "github.com/cssbruno/gowdk/addons/auth"
 	"github.com/cssbruno/gowdk/runtime/form"
 )
 
-func TestLoginRequiresSessionSecret(t *testing.T) {
-	resetTestState()
-	t.Setenv("GOWDK_AUTH_SESSION_SECRET", "")
-	_, err := Login(context.Background(), form.Values{"email": {"demo@example.com"}, "password": {"demo-password"}})
-	if err == nil || !strings.Contains(err.Error(), "GOWDK_AUTH_SESSION_SECRET") {
-		t.Fatalf("expected session secret error, got %v", err)
-	}
-}
-
 func TestLoginIssuesSessionCookie(t *testing.T) {
 	resetTestState()
-	t.Setenv("GOWDK_AUTH_SESSION_SECRET", strings.Repeat("s", 32))
+	_, err := gowdkauth.Configure(gowdkauth.Options{
+		Secret:     []byte(strings.Repeat("s", gowdkauth.MinSessionSecretBytes)),
+		CookieName: sessionCookie,
+		TTL:        12 * time.Hour,
+		Insecure:   true,
+	})
+	if err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
 	result, err := Login(context.Background(), form.Values{"email": {"demo@example.com"}, "password": {"demo-password"}})
 	if err != nil {
 		t.Fatalf("Login: %v", err)
@@ -37,11 +38,6 @@ func TestLoginIssuesSessionCookie(t *testing.T) {
 }
 
 func resetTestState() {
-	sessionState.Lock()
-	sessionState.manager = nil
-	sessionState.err = nil
-	sessionState.Unlock()
-
 	passwordState.Lock()
 	passwordState.hash = ""
 	passwordState.err = nil

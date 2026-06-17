@@ -61,7 +61,21 @@ func registerGuardsDecl() ast.Decl {
 	return funcDecl("RegisterGuards", []*ast.Field{
 		{Names: []*ast.Ident{id("registry")}, Type: sel("gowdkguard", "Registry")},
 	}, nil, []ast.Stmt{
-		assign([]ast.Expr{id("guardRegistry")}, id("registry")),
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: id("registry"), Op: token.EQL, Y: id("nil")},
+			Body: block(&ast.ReturnStmt{}),
+		},
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: id("guardRegistry"), Op: token.EQL, Y: id("nil")},
+			Body: block(assign([]ast.Expr{id("guardRegistry")}, &ast.CompositeLit{Type: sel("gowdkguard", "Registry")})),
+		},
+		&ast.RangeStmt{
+			Key:   id("name"),
+			Value: id("guard"),
+			Tok:   token.DEFINE,
+			X:     id("registry"),
+			Body:  block(assign([]ast.Expr{&ast.IndexExpr{X: id("guardRegistry"), Index: id("name")}}, id("guard"))),
+		},
 	})
 }
 
@@ -75,10 +89,10 @@ func registerAuthProviderDecl() ast.Decl {
 
 func requiredGuardBackingInitDecl(options Options) ast.Decl {
 	var stmts []ast.Stmt
-	if generatedUsesCustomGuards(options) {
+	if generatedRequiresAppGuardRegistry(options) {
 		stmts = append(stmts, exprStmt(call(sel("RegisterGuards"), call(id("GOWDKGuardRegistry")))))
 	}
-	if generatedUsesNativeRBACGuards(options) {
+	if generatedUsesNativeRBACGuards(options) && !generatedUsesAuthAddon(options) {
 		stmts = append(stmts, exprStmt(call(sel("RegisterAuthProvider"), call(id("GOWDKAuthProvider")))))
 	}
 	if len(stmts) == 0 {
@@ -141,8 +155,15 @@ func denyByOmissionStmts() []ast.Stmt {
 }
 
 func generatedUsesCustomGuards(options Options) bool {
+	return generatedRequiresAppGuardRegistry(options)
+}
+
+func generatedRequiresAppGuardRegistry(options Options) bool {
 	for _, name := range generatedGuardNames(options) {
 		if auth.IsPublicGuard(name) {
+			continue
+		}
+		if name == authRequiredGuard && generatedUsesAuthAddon(options) {
 			continue
 		}
 		if !auth.IsNativeGuard(name) {

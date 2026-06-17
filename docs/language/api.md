@@ -108,10 +108,12 @@ still follow normal `runtime/response.Response` behavior.
 webhook endpoints. `examples/endpoints/src/endpoints/handlers.go` keeps validation, JSON
 decoding, response shape, and webhook policy in normal Go handlers.
 
-APIs declared on guarded pages share the generated app guard hooks with SSR
-pages and actions. Custom guards require `GOWDKGuardRegistry`; native RBAC guard
-IDs such as `role:admin` and `permission:reports.read` require
-`GOWDKAuthProvider`. Missing backing hooks fail the generated app Go build.
+APIs declared on guarded pages share generated app guard backing with SSR pages
+and actions. `auth.Addon` supplies `auth.required` and native RBAC session guard
+backing when configured. Custom guards require `GOWDKGuardRegistry`; native RBAC
+guard IDs such as `role:admin` and `permission:reports.read` require
+`GOWDKAuthProvider` only without `auth.Addon`. Missing backing hooks fail the
+generated app Go build.
 Generated API handlers run guards before user handler calls. Treat these as
 defense-in-depth redundancy for generated route/page access, never as backend
 resource authorization. If the page itself is protected, use request-time page

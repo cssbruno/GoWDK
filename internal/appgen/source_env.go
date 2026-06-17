@@ -23,7 +23,7 @@ func envRuntimeValidationRequired(config gowdk.EnvConfig) bool {
 }
 
 func generatedEnvFileLoadRequired(options Options) bool {
-	return envRuntimeValidationRequired(options.Config.Env) || csrfEnabled(options)
+	return envRuntimeValidationRequired(options.Config.Env) || csrfEnabled(options) || generatedUsesAuthAddon(options)
 }
 
 func loadEnvFileDecl(options Options) []ast.Decl {

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"time"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/actions"
@@ -811,6 +812,10 @@ func parseAddons(expression ast.Expr, imports map[string]string) ([]gowdk.Addon,
 			addons = append(addons, addon)
 			continue
 		}
+		if addon, ok := parseAuthAddon(element, imports); ok {
+			addons = append(addons, addon)
+			continue
+		}
 		if addon, ok := parseSEOAddon(element, imports); ok {
 			addons = append(addons, addon)
 			continue
@@ -870,6 +875,152 @@ func parseBuiltInAddon(expression ast.Expr, imports map[string]string) (gowdk.Ad
 		return static.Addon(), true
 	default:
 		return nil, false
+	}
+}
+
+func parseAuthAddon(expression ast.Expr, imports map[string]string) (gowdk.Addon, bool) {
+	call, ok := expression.(*ast.CallExpr)
+	if !ok {
+		return nil, false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "Addon" {
+		return nil, false
+	}
+	packageName, ok := selector.X.(*ast.Ident)
+	if !ok || imports[packageName.Name] != auth.ImportPath {
+		return nil, false
+	}
+	if len(call.Args) > 1 {
+		return nil, false
+	}
+	if len(call.Args) == 0 {
+		return auth.Addon(), true
+	}
+
+	options, ok := parseAuthOptions(call.Args[0], imports)
+	if !ok {
+		return nil, false
+	}
+	return auth.Addon(options), true
+}
+
+func parseAuthOptions(expression ast.Expr, imports map[string]string) (auth.Options, bool) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok || !isAuthOptionsType(literal.Type, imports) {
+		return auth.Options{}, false
+	}
+
+	fields, ok := strictConfigLiteralFields(expression)
+	if !ok {
+		return auth.Options{}, false
+	}
+	var options auth.Options
+	for _, field := range fields {
+		switch field.Name {
+		case "SecretEnv":
+			value, ok := parseLiteralString(field.Value)
+			if !ok {
+				return auth.Options{}, false
+			}
+			options.SecretEnv = value
+		case "CookieName":
+			value, ok := parseLiteralString(field.Value)
+			if !ok {
+				return auth.Options{}, false
+			}
+			options.CookieName = value
+		case "TTL":
+			value, ok := parseDuration(field.Value, imports)
+			if !ok {
+				return auth.Options{}, false
+			}
+			options.TTL = value
+		case "Insecure":
+			value, ok := parseLiteralBool(field.Value)
+			if !ok {
+				return auth.Options{}, false
+			}
+			options.Insecure = value
+		default:
+			return auth.Options{}, false
+		}
+	}
+	return options, true
+}
+
+func isAuthOptionsType(expression ast.Expr, imports map[string]string) bool {
+	selector, ok := expression.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "Options" {
+		return false
+	}
+	packageName, ok := selector.X.(*ast.Ident)
+	return ok && imports[packageName.Name] == auth.ImportPath
+}
+
+func parseDuration(expression ast.Expr, imports map[string]string) (time.Duration, bool) {
+	switch typed := expression.(type) {
+	case *ast.BasicLit:
+		if typed.Kind != token.INT {
+			return 0, false
+		}
+		value, err := strconv.ParseInt(typed.Value, 10, 64)
+		if err != nil {
+			return 0, false
+		}
+		return time.Duration(value), true
+	case *ast.SelectorExpr:
+		return parseTimeDurationConstant(typed, imports)
+	case *ast.BinaryExpr:
+		if typed.Op != token.MUL {
+			return 0, false
+		}
+		if multiplier, ok := parseDurationMultiplier(typed.X); ok {
+			if unit, ok := parseDuration(typed.Y, imports); ok {
+				return time.Duration(multiplier) * unit, true
+			}
+		}
+		if multiplier, ok := parseDurationMultiplier(typed.Y); ok {
+			if unit, ok := parseDuration(typed.X, imports); ok {
+				return time.Duration(multiplier) * unit, true
+			}
+		}
+	}
+	return 0, false
+}
+
+func parseDurationMultiplier(expression ast.Expr) (int64, bool) {
+	literal, ok := expression.(*ast.BasicLit)
+	if !ok || literal.Kind != token.INT {
+		return 0, false
+	}
+	value, err := strconv.ParseInt(literal.Value, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return value, true
+}
+
+func parseTimeDurationConstant(selector *ast.SelectorExpr, imports map[string]string) (time.Duration, bool) {
+	packageName, ok := selector.X.(*ast.Ident)
+	if !ok || imports[packageName.Name] != "time" {
+		return 0, false
+	}
+	switch selector.Sel.Name {
+	case "Nanosecond":
+		return time.Nanosecond, true
+	case "Microsecond":
+		return time.Microsecond, true
+	case "Millisecond":
+		return time.Millisecond, true
+	case "Second":
+		return time.Second, true
+	case "Minute":
+		return time.Minute, true
+	case "Hour":
+		return time.Hour, true
+	default:
+		return 0, false
 	}
 }
 
@@ -1144,8 +1295,23 @@ func parseLiteralString(expression ast.Expr) (string, bool) {
 }
 
 func parseBool(expression ast.Expr) bool {
+	value, ok := parseLiteralBool(expression)
+	return ok && value
+}
+
+func parseLiteralBool(expression ast.Expr) (bool, bool) {
 	identifier, ok := expression.(*ast.Ident)
-	return ok && identifier.Name == "true"
+	if !ok {
+		return false, false
+	}
+	switch identifier.Name {
+	case "true":
+		return true, true
+	case "false":
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 // parseInt narrows a parsed integer literal to int, clamping values that fall

@@ -3,6 +3,7 @@ package gowdk
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Config describes how a GOWDK application should be discovered, compiled,
@@ -376,6 +377,23 @@ const (
 type Addon interface {
 	Name() string
 	Features() []Feature
+}
+
+// AuthSessionOptions is the generated-app-safe subset of auth session
+// configuration. Secret values stay out of compiler config; generated apps read
+// them from SecretEnv at runtime.
+type AuthSessionOptions struct {
+	SecretEnv  string
+	CookieName string
+	TTL        time.Duration
+	Insecure   bool
+}
+
+// AuthSessionProvider is implemented by auth addons that can supply generated
+// app session setup. The compiler uses it to wire built-in auth guard backing
+// code without requiring per-app hooks.
+type AuthSessionProvider interface {
+	AuthSessionOptions() AuthSessionOptions
 }
 
 // SEOURL describes one additional URL that an SEO addon can add to the

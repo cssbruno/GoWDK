@@ -47,6 +47,9 @@ func runtimeImportMap(options Options) map[string]string {
 		imports["os"] = "os"
 		imports["strings"] = "strings"
 	}
+	if generatedUsesAuthAddon(options) {
+		imports["gowdkauthaddon"] = "github.com/cssbruno/gowdk/addons/auth"
+	}
 	if envRuntimeValidationRequired(options.Config.Env) {
 		imports["errors"] = "errors"
 		imports["os"] = "os"
@@ -309,6 +312,7 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 		// below is what declares the authProvider var the binding reads.
 		decls = append(decls, csrfTokenSourceVarDecl(), csrfValidatorVarDecl(), csrfNewFuncDecl(full))
 	}
+	decls = append(decls, authSetupDecls(full)...)
 	decls = append(decls, rateLimitDecls(full)...)
 	decls = append(decls, guardDecls(full)...)
 	decls = append(decls, ssrExactDecl(full.SSR, generatedUsesRateLimit(full), csrf), ssrDynamicDecl(full.SSR, generatedUsesRateLimit(full), csrf))
@@ -334,6 +338,7 @@ func backendGeneratedDecls(options Options) []ast.Decl {
 	if csrfEnabled(options) {
 		decls = append(decls, csrfTokenSourceVarDecl(), csrfValidatorVarDecl(), csrfNewFuncDecl(options))
 	}
+	decls = append(decls, authSetupDecls(options)...)
 	decls = append(decls, rateLimitDecls(options)...)
 	decls = append(decls, guardDecls(options)...)
 	return decls
@@ -399,6 +404,7 @@ func handlerDecl() ast.Decl {
 func serveMuxDecl(options Options, embedded bool) ast.Decl {
 	stmts := []ast.Stmt{}
 	stmts = append(stmts, loadEnvFileStmt(options)...)
+	stmts = append(stmts, authSetupStmts(options)...)
 	stmts = append(stmts, validateEnvContractStmt(options.Config.Env)...)
 	if embedded {
 		stmts = append(stmts,

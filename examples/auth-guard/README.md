@@ -26,12 +26,12 @@ password: demo-password
 
 ## Files
 
-- `gowdk.config.go`: enables `auth.Addon()` and `ssr.Addon()`, declares the
-  required session and CSRF secrets, and builds one generated binary.
-- `apphooks/auth_guard_hooks.go.txt`: copied into the generated app package so
-  `GOWDKGuardRegistry` and `GOWDKAuthProvider` are available at compile time.
+- `gowdk.config.go`: enables `auth.Addon(auth.Options{...})` and `ssr.Addon()`,
+  declares the required session and CSRF secrets, and builds one generated
+  binary.
 - `src/authguard/auth.go`: owns demo credentials, password verification,
-  session creation, guard behavior, logout, and SSR load data in normal Go.
+  login/logout handlers, and SSR load data in normal Go. Generated auth startup
+  owns the default session manager and `auth.required` guard.
 - `src/authguard/login.page.gwdk`: public login route and CSRF-protected login
   action.
 - `src/authguard/dashboard.page.gwdk`: protected SSR dashboard with
@@ -40,9 +40,9 @@ password: demo-password
 ## Ownership
 
 GOWDK owns generated route dispatch, guard execution order, CSRF token
-injection/validation, signed session cookie helpers, and native RBAC guard
-checks. The app owns users, credential policy, durable storage, session
-duration, custom guard decisions, and backend resource authorization.
+injection/validation, signed session cookie helpers, default `auth.required`,
+and native RBAC guard checks. The app owns users, credential policy, durable
+storage, custom guard decisions, and backend resource authorization.
 
 Runtime secrets are separate: `GOWDK_AUTH_SESSION_SECRET` signs sessions and
 `GOWDK_CSRF_SECRET` signs generated action tokens. Both must be stable

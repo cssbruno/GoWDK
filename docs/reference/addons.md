@@ -35,9 +35,11 @@ the rest are opt-in extension points.
    relative to the generated app directory, formatted before writing).
 4. **Runtime hook registration** — generated apps register runtime hooks from
    user-owned Go in the generated package, for example
-   `RegisterRateLimiter(*ratelimit.Limiter)`, `GOWDKAuthProvider() auth.Provider`,
-   or `RegisterContractEventSink(...)`. GOWDK never calls third-party runtime
-   code implicitly; the app wires it.
+   `RegisterRateLimiter(*ratelimit.Limiter)`, custom `GOWDKGuardRegistry`
+   entries, or `RegisterContractEventSink(...)`. The built-in auth addon is the
+   narrow exception: `auth.Addon(auth.Options{...})` wires its own session
+   provider and `auth.required` guard. External runtime services remain
+   app-owned.
 
 ### Addon categories
 
@@ -249,12 +251,12 @@ Addons: []gowdk.Addon{
 	embed.Addon(),
 	css.Addon(),
 	db.Addon(),
-		ratelimit.Addon(),
-		contracts.Addon(),
-		observability.Addon(),
-		seo.Addon(seo.Options{
-			BaseURL: "https://example.com",
-		}),
+	ratelimit.Addon(),
+	contracts.Addon(),
+	observability.Addon(),
+	seo.Addon(seo.Options{
+		BaseURL: "https://example.com",
+	}),
 	realtime.Addon(),
 }
 ```
@@ -291,6 +293,8 @@ export is isolated in the nested `runtime/trace/otel` module. See
   backed by Go standard-library PBKDF2-HMAC-SHA256.
 - Signed-cookie `Sessions` that implement `runtime/auth.Provider` for native
   `role:` and `permission:` guards.
+- Generated app startup wiring for `auth.required`, `role:`, and
+  `permission:` guards when `auth.Addon` is enabled.
 
 The cryptography and dependency stance is recorded in
 [ADR 0011](../engineering/decisions/0011-auth-addon-cryptography.md).
@@ -341,14 +345,32 @@ if err != nil {
 negative values are rejected. Issued sessions require a non-empty
 `Principal.ID`.
 
-Register the session provider from generated app hook code when using native
-RBAC guard IDs:
+In generated apps, configure the addon instead of writing guard hook files:
 
 ```go
-func GOWDKAuthProvider() gowdkauth.Provider {
-	return sessions.Provider()
-}
+auth.Addon(auth.Options{
+	SecretEnv:  "GOWDK_AUTH_SESSION_SECRET",
+	CookieName: "myapp_session",
+	TTL:        12 * time.Hour,
+	Insecure:   true, // local HTTP development only
+})
 ```
+
+Generated startup constructs the session manager, registers it as the native
+RBAC provider, and adds the default `auth.required` guard. Login/logout handlers
+can issue or clear the same cookie through the configured manager:
+
+```go
+sessions, err := auth.DefaultSessions()
+if err != nil {
+	return response.Response{}, err
+}
+cookie, err := sessions.Cookie(auth.Principal{ID: userID, Roles: []string{"user"}})
+```
+
+Custom guard IDs still require `GOWDKGuardRegistry`. Native `role:` and
+`permission:` guards require `GOWDKAuthProvider` only when the auth addon is not
+configured.
 
 GOWDK owns generated guard dispatch, CSRF validation, signed session cookie
 helpers, and native RBAC checks. Application Go owns user lookup, credential

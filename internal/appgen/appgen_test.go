@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/cssbruno/gowdk"
+	authaddon "github.com/cssbruno/gowdk/addons/auth"
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
@@ -3105,6 +3106,57 @@ func TestGenerateWritesGuardRegistryAndGuardChecks(t *testing.T) {
 	}
 }
 
+func TestGenerateWiresAuthAddonSessionProviderAndRequiredGuard(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Addons: []gowdk.Addon{authaddon.Addon(authaddon.Options{
+			SecretEnv:  "GOWDK_TEST_AUTH_SECRET",
+			CookieName: "site_session",
+			TTL:        2 * time.Hour,
+			Insecure:   true,
+		})}},
+		SSR: []SSRRoute{{
+			PageID: "dashboard",
+			Route:  "/dashboard",
+			Guards: []string{"auth.required", "role:user"},
+			HTML:   "<main>Dashboard</main>",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkauthaddon "github.com/cssbruno/gowdk/addons/auth"`,
+		`func configureAuth() error`,
+		`gowdkauthaddon.Configure(gowdkauthaddon.Options{SecretEnv: "GOWDK_TEST_AUTH_SECRET", CookieName: "site_session", TTL: 7200000000000, Insecure: true})`,
+		`RegisterAuthProvider(sessions.Provider())`,
+		`guardRegistry["auth.required"] = gowdkauthaddon.RequireAuthenticated(authProvider)`,
+		`if err := configureAuth(); err != nil`,
+		`gowdkguard.RunGuardsWithAuth(guardContext, guards, guardRegistry, authProvider)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected auth addon generated source to contain %q:\n%s", expected, source)
+		}
+	}
+	for _, unexpected := range []string{
+		`RegisterGuards(GOWDKGuardRegistry())`,
+		`RegisterAuthProvider(GOWDKAuthProvider())`,
+	} {
+		if strings.Contains(source, unexpected) {
+			t.Fatalf("auth addon should not require app hook %q:\n%s", unexpected, source)
+		}
+	}
+}
+
 func TestGenerateWiresRateLimiterWhenEnabled(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -5001,6 +5053,31 @@ func TestGeneratedBinarySSRGuardRequiresBackingCode(t *testing.T) {
 	}
 	if _, err := BuildBinary(appDir, binaryPath); err == nil || !strings.Contains(err.Error(), "GOWDKGuardRegistry") {
 		t.Fatalf("expected missing GOWDKGuardRegistry compile error, got %v", err)
+	}
+}
+
+func TestGeneratedBinaryAuthAddonSuppliesGuardBackingCode(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Addons: []gowdk.Addon{authaddon.Addon(authaddon.Options{
+			SecretEnv: "GOWDK_TEST_AUTH_SECRET",
+		})}},
+		SSR: []SSRRoute{{
+			PageID: "dashboard",
+			Route:  "/dashboard",
+			Guards: []string{"auth.required", "role:user"},
+			HTML:   "<main><h1>Request Dashboard</h1></main>",
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatalf("expected auth addon to satisfy generated guard hooks, got %v", err)
 	}
 }
 

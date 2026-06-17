@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -29,6 +30,12 @@ const (
 
 // ErrNoSession reports that a request carries no readable session cookie.
 var ErrNoSession = errors.New("gowdk auth: no session")
+
+var (
+	defaultSessionsMu sync.RWMutex
+	defaultSessions   *Sessions
+	defaultOptions    Options
+)
 
 // errBadSession reports a present-but-invalid (tampered, malformed, or expired)
 // session. It is intentionally unexported and collapses to a nil principal so
@@ -110,6 +117,47 @@ func New(options Options) (*Sessions, error) {
 		insecure: options.Insecure,
 		now:      now,
 	}, nil
+}
+
+// Configure initializes the process-wide default session manager used by
+// DefaultSessions and generated auth wiring.
+func Configure(options Options) (*Sessions, error) {
+	sessions, err := New(options)
+	if err != nil {
+		return nil, err
+	}
+	defaultSessionsMu.Lock()
+	defer defaultSessionsMu.Unlock()
+	defaultSessions = sessions
+	defaultOptions = options
+	return sessions, nil
+}
+
+// DefaultSessions returns the process-wide session manager. When Configure has
+// not been called yet, it creates one from DefaultSessionSecretEnv.
+func DefaultSessions() (*Sessions, error) {
+	defaultSessionsMu.RLock()
+	sessions := defaultSessions
+	defaultSessionsMu.RUnlock()
+	if sessions != nil {
+		return sessions, nil
+	}
+	defaultSessionsMu.Lock()
+	defer defaultSessionsMu.Unlock()
+	if defaultSessions != nil {
+		return defaultSessions, nil
+	}
+	options := defaultOptions
+	if options.SecretEnv == "" && len(options.Secret) == 0 {
+		options.SecretEnv = DefaultSessionSecretEnv
+	}
+	var err error
+	defaultSessions, err = New(options)
+	if err != nil {
+		return nil, err
+	}
+	defaultOptions = options
+	return defaultSessions, nil
 }
 
 func sessionSecret(options Options) ([]byte, error) {

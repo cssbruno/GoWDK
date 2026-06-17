@@ -605,6 +605,106 @@ var Config = gowdk.Config{
 	}
 }
 
+func TestLoadConfigFileReadsAuthAddonOptions(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, DefaultConfigFile)
+	if err := os.WriteFile(path, []byte(`package main
+
+import (
+	"time"
+
+	"github.com/cssbruno/gowdk"
+	authaddon "github.com/cssbruno/gowdk/addons/auth"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		authaddon.Addon(authaddon.Options{
+			SecretEnv: "GOWDK_SITE_SESSION_SECRET",
+			CookieName: "site_session",
+			TTL: 2 * time.Hour,
+			Insecure: true,
+		}),
+	},
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !config.HasFeature(gowdk.FeatureAuth) {
+		t.Fatal("expected parsed config to enable auth")
+	}
+	provider, ok := config.Addons[0].(gowdk.AuthSessionProvider)
+	if !ok {
+		t.Fatalf("expected AuthSessionProvider, got %T", config.Addons[0])
+	}
+	options := provider.AuthSessionOptions()
+	if options.SecretEnv != "GOWDK_SITE_SESSION_SECRET" || options.CookieName != "site_session" || options.TTL.String() != "2h0m0s" || !options.Insecure {
+		t.Fatalf("unexpected auth session options: %#v", options)
+	}
+}
+
+func TestLoadConfigFilePreservesExecutableAuthAddonOptions(t *testing.T) {
+	root := t.TempDir()
+	repoRoot := repositoryRoot(t)
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/site
+
+go 1.22
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+repoRoot+`
+`)
+	path := filepath.Join(root, DefaultConfigFile)
+	writeTestFile(t, path, `package app
+
+import (
+	"os"
+	"time"
+
+	"github.com/cssbruno/gowdk"
+	authaddon "github.com/cssbruno/gowdk/addons/auth"
+)
+
+var Config = gowdk.Config{
+	AppName: os.Getenv("GOWDK_TEST_APP_NAME"),
+	Addons: []gowdk.Addon{
+		authaddon.Addon(authaddon.Options{
+			SecretEnv: "GOWDK_SITE_SESSION_SECRET",
+			CookieName: "site_session",
+			TTL: 2 * time.Hour,
+			Insecure: true,
+		}),
+	},
+}
+`)
+	tidyTestModule(t, root)
+	t.Setenv("GOWDK_TEST_APP_NAME", "Executable Auth App")
+
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.AppName != "Executable Auth App" {
+		t.Fatalf("expected executable config to load app name, got %q", config.AppName)
+	}
+	if !config.HasFeature(gowdk.FeatureAuth) {
+		t.Fatalf("expected executable config to keep auth addon, got %#v", config.Addons)
+	}
+	provider, ok := config.Addons[0].(gowdk.AuthSessionProvider)
+	if !ok {
+		t.Fatalf("expected executable auth addon to preserve AuthSessionProvider, got %T", config.Addons[0])
+	}
+	options := provider.AuthSessionOptions()
+	if options.SecretEnv != "GOWDK_SITE_SESSION_SECRET" || options.CookieName != "site_session" || options.TTL.String() != "2h0m0s" || !options.Insecure {
+		t.Fatalf("unexpected executable auth options: %#v", options)
+	}
+}
+
 func TestLoadConfigFileReadsSEOAddonOptions(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, DefaultConfigFile)

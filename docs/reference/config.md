@@ -139,7 +139,12 @@ The addon module may import other GitHub/private/local modules. The project
 ## Generated App Request Guards
 
 When generated SSR, action, API, or fragment routes declare `guard`, the
-generated app package exposes guard registration hooks:
+generated app package can expose guard registration hooks. If `auth.Addon` is
+configured, generated startup registers the default `auth.required` guard and a
+session-backed provider for native `role:` / `permission:` guard IDs from the
+addon options.
+
+Custom guard IDs still require a generated app hook:
 
 ```go
 package gowdkapp
@@ -174,8 +179,8 @@ func GOWDKAuthProvider() gowdkauth.Provider {
 
 This file belongs with generated app startup code, not inside feature packages
 that declare handlers. Missing required backing functions fail the generated app
-Go build. Guard errors still return HTTP 403 before SSR load functions, action
-decoding, API handlers, or user business logic run.
+Go build when no addon supplies them. Guard errors still return HTTP 403 before
+SSR load functions, action decoding, API handlers, or user business logic run.
 
 Native RBAC guards are a defense-in-depth redundancy layer for generated
 route/page access. They must never replace backend authorization inside
@@ -515,7 +520,9 @@ Go code, edit the config manually.
 
 The literal config loader recognizes built-in addon constructors when they are
 imported from their canonical package paths. Most are no-argument constructors;
-`addons/seo` also accepts the literal SEO options subset:
+`addons/auth` accepts the generated-app-safe session options subset
+(`SecretEnv`, `CookieName`, `TTL`, `Insecure`), and `addons/seo` accepts the
+literal SEO options subset:
 
 ```go
 import (
@@ -543,7 +550,10 @@ var Config = gowdk.Config{
 		partial.Addon(),
 		ssr.Addon(),
 		api.Addon(),
-		auth.Addon(),
+		auth.Addon(auth.Options{
+			SecretEnv:  "GOWDK_AUTH_SESSION_SECRET",
+			CookieName: "gowdk_session",
+		}),
 		contracts.Addon(),
 		embed.Addon(),
 		css.Addon(),

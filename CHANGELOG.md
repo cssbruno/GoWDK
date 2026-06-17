@@ -7,6 +7,40 @@ packages, and tooling contracts may change before 1.0.
 
 _No changes yet._
 
+## v0.7.0 - 2026-06-17
+
+### Changed
+
+- `gowdk version` and the VS Code extension metadata now report `0.7.0`.
+- Request-time routing, layout wiring, route visibility, and related-route
+  diagnostics were tightened across the compiler and generated reports.
+- Auth addon guard wiring and formatter nesting behavior were hardened.
+- `g:command` client write paths now use single-flight behavior, including the
+  HTML-embedded path, and request-time pages ship the required client runtime.
+
+### Implemented
+
+- Generated binary lifecycle services now have documented contracts and
+  implementation coverage.
+- Route parameter tracing and WASM store support were added across generated
+  output and runtime surfaces.
+- OpenAPI result schemas and AsyncAPI event payload schemas now expand supported
+  local and imported struct fields instead of stopping at shallow named
+  references.
+- Inspect reports now include component composition edges, component cycle
+  diagnostics, structural dispatch nodes, action/command/query dispatch edges,
+  and the same tree projection through the LSP `gowdk/tree` request.
+- Page metadata now supports `robots`, `noindex`, `preload`, and `prefetch`,
+  including generated head output, manifest data, and sitemap exclusion for
+  noindex pages.
+- Accessibility diagnostics now warn on missing image alt text, missing form
+  labels, empty link text, missing button types, and skipped heading levels.
+
+### Known Gaps
+
+- GOWDK remains experimental 0.x software. Public syntax, generated output,
+  runtime packages, and tooling contracts may change before 1.0.
+
 ## v0.6.1 - 2026-06-16
 
 ### Changed

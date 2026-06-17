@@ -88,17 +88,11 @@ type buildDataRunnerCandidate struct {
 }
 
 func buildDataRunnerCandidates(routeParams map[string]string) []buildDataRunnerCandidate {
-	if len(routeParams) > 0 {
-		return []buildDataRunnerCandidate{
-			{returnsError: true, withParams: true},
-			{returnsError: false, withParams: true},
-			{returnsError: true},
-			{returnsError: false},
-		}
-	}
 	return []buildDataRunnerCandidate{
 		{returnsError: true},
 		{returnsError: false},
+		{returnsError: true, withParams: true},
+		{returnsError: false, withParams: true},
 	}
 }
 

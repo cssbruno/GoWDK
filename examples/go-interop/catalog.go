@@ -34,6 +34,19 @@ func FeaturedCopyWithErrorForBuild() (FeaturedCopy, error) {
 	}, nil
 }
 
+func StaticCopyWithParamsForBuild(params gowdk.BuildParams) FeaturedCopy {
+	if len(params.Route) != 0 {
+		return FeaturedCopy{
+			Title:   "Unexpected route params",
+			Tagline: fmt.Sprintf("got %d params", len(params.Route)),
+		}
+	}
+	return FeaturedCopy{
+		Title:   "Static Go params",
+		Tagline: "Static pages receive empty BuildParams.",
+	}
+}
+
 type PostCopy struct {
 	Title     string `json:"title"`
 	Canonical string `json:"canonical"`

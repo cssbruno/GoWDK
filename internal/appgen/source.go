@@ -318,7 +318,8 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	decls = append(decls, authSetupDecls(full)...)
 	decls = append(decls, rateLimitDecls(full)...)
 	decls = append(decls, guardDecls(full)...)
-	decls = append(decls, ssrExactDecl(full.SSR, generatedUsesRateLimit(full), csrf), ssrDynamicDecl(full.SSR, generatedUsesRateLimit(full), csrf))
+	traceSSR := generatedObservabilityEnabled(full)
+	decls = append(decls, ssrExactDecl(full.SSR, generatedUsesRateLimit(full), csrf, traceSSR), ssrDynamicDecl(full.SSR, generatedUsesRateLimit(full), csrf, traceSSR))
 	if generatedRealtimeQueryInvalidationsEnabled(direct) {
 		decls = append(decls, ssrRegionRegistrationDecls(full.SSR)...)
 	}

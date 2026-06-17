@@ -238,7 +238,7 @@ func cleanRobotDisallow(disallow []string) []string {
 func publicSEOPageIDs(ir gwdkir.Program) map[string]bool {
 	publicPages := map[string]bool{}
 	for _, page := range ir.Pages {
-		if pageHasPublicGuard(page) {
+		if pageHasPublicGuard(page) && !pageNoIndex(page) {
 			publicPages[page.ID] = true
 		}
 	}
@@ -248,6 +248,15 @@ func publicSEOPageIDs(ir gwdkir.Program) map[string]bool {
 func pageHasPublicGuard(page gwdkir.Page) bool {
 	for _, guard := range page.Guards {
 		if gowdkauth.IsPublicGuard(guard) {
+			return true
+		}
+	}
+	return false
+}
+
+func pageNoIndex(page gwdkir.Page) bool {
+	for _, token := range strings.Split(robotsContent(page.Metadata), ",") {
+		if strings.EqualFold(strings.TrimSpace(token), "noindex") {
 			return true
 		}
 	}
@@ -269,6 +278,13 @@ func seoExclusions(config gowdk.Config, ir gwdkir.Program, artifacts []Artifact,
 		}
 		mode := page.RenderMode(config.Render.DefaultMode())
 		switch {
+		case pageNoIndex(page):
+			excluded = append(excluded, seoExclusion{
+				PageID: page.ID,
+				Route:  page.Route,
+				Reason: "noindex",
+				Mode:   string(mode),
+			})
 		case isRequestTimePage(config, page):
 			excluded = append(excluded, seoExclusion{
 				PageID: page.ID,

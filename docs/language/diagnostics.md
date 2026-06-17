@@ -40,11 +40,13 @@ for safe rewrites. `gowdk fix` and LSP code actions use the same fix title,
 description, and named rewriter from the registry.
 
 Warnings are non-fatal unless `gowdk check --warnings-as-errors` is used.
-`missing_img_alt` is emitted for literal `<img>` elements without an explicit
-`alt` attribute. `missing_page_guard` is emitted for a page that declares no
-`guard`: the build still succeeds, but the page is not public by default; its
-route is denied (403) at request time until the author adds `guard public` (or
-a protective guard). Access is never granted by omission.
+Accessibility warnings include `missing_img_alt`, `missing_form_label`,
+`empty_link_text`, `missing_button_type`, and `heading_order_skip` for literal
+view markup in pages, components, and layouts. `missing_page_guard` is emitted
+for a page that declares no `guard`: the build still succeeds, but the page is
+not public by default; its route is denied (403) at request time until the
+author adds `guard public` (or a protective guard). Access is never granted by
+omission.
 
 ## Current Code Registry
 

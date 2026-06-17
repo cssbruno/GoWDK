@@ -123,6 +123,15 @@ type PageMetadata struct {
 	Description string
 	Canonical   string
 	Image       string
+	Robots      string
+	NoIndex     bool
+	Preload     []HeadResource
+	Prefetch    []HeadResource
+}
+
+type HeadResource struct {
+	Href string
+	As   string
 }
 
 type Blocks struct {
@@ -184,6 +193,10 @@ type PageSpans struct {
 	Description source.SourceSpan
 	Canonical   source.SourceSpan
 	Image       source.SourceSpan
+	Robots      source.SourceSpan
+	NoIndex     source.SourceSpan
+	Preload     []source.NamedSpan
+	Prefetch    []source.NamedSpan
 	Layouts     []source.NamedSpan
 	Guard       []source.NamedSpan
 	CSS         []source.NamedSpan
@@ -464,6 +477,7 @@ type Template struct {
 	Route     string
 	Guards    []string
 	Imports   []Import
+	Uses      []Use
 	Body      string
 	Nodes     []viewmodel.Node `json:"-"`
 	Span      source.SourceSpan
@@ -473,26 +487,27 @@ type Template struct {
 // ContractReference records a source-level reference to a backend contract.
 // Binding to Go contract metadata is a later analyzer step.
 type ContractReference struct {
-	Kind        ContractKind
-	Name        string
-	ImportAlias string
-	ImportPath  string
-	Type        string
-	Result      string
-	Roles       []string
-	Guards      []string
-	InputFields []source.BackendInputField
-	Method      string
-	Path        string
-	Status      ContractBindingStatus
-	Handler     string
-	Register    string
-	Message     string
-	OwnerKind   SourceKind
-	OwnerID     string
-	Package     string
-	Source      string
-	Span        source.SourceSpan
+	Kind         ContractKind
+	Name         string
+	ImportAlias  string
+	ImportPath   string
+	Type         string
+	Result       string
+	Roles        []string
+	Guards       []string
+	InputFields  []source.BackendInputField
+	ResultFields []source.BackendInputField
+	Method       string
+	Path         string
+	Status       ContractBindingStatus
+	Handler      string
+	Register     string
+	Message      string
+	OwnerKind    SourceKind
+	OwnerID      string
+	Package      string
+	Source       string
+	Span         source.SourceSpan
 }
 
 type ContractKind string

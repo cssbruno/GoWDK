@@ -105,6 +105,36 @@ func TestBuildOpenAPISpecMapsSupportedEndpointRouteParamTypes(t *testing.T) {
 	}
 }
 
+func TestBuildOpenAPISpecExpandsContractResultFields(t *testing.T) {
+	spec := buildOpenAPISpec(gowdk.Config{}, gwdkir.Program{
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:   gwdkir.ContractQuery,
+			Name:   "patients.GetPatient",
+			Method: "GET",
+			Path:   "/patients",
+			Status: gwdkir.ContractBindingBound,
+			Result: "patients.PatientPage",
+			ResultFields: []source.BackendInputField{
+				{FieldName: "ID", FormName: "id", Type: "string"},
+				{FieldName: "Age", FormName: "age", Type: "int"},
+				{FieldName: "Tags", FormName: "tags", Type: "[]string"},
+			},
+		}},
+	})
+
+	schema := spec.Components.Schemas["PatientPage"]
+	if schema.Type != "object" || schema.XGoType != "patients.PatientPage" {
+		t.Fatalf("unexpected result schema: %#v", schema)
+	}
+	if schema.Properties["id"].Type != "string" ||
+		schema.Properties["age"].Type != "integer" ||
+		schema.Properties["tags"].Type != "array" ||
+		schema.Properties["tags"].Items == nil ||
+		schema.Properties["tags"].Items.Type != "string" {
+		t.Fatalf("unexpected result properties: %#v", schema.Properties)
+	}
+}
+
 func TestBuildOpenAPISpecMarksCommandContractsCSRFProtectedByDefault(t *testing.T) {
 	spec := buildOpenAPISpec(gowdk.Config{}, gwdkir.Program{
 		ContractRefs: []gwdkir.ContractReference{{

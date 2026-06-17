@@ -27,8 +27,10 @@ type inputStruct struct {
 }
 
 type contractTypeInfo struct {
-	Exported bool
-	Struct   bool
+	Exported       bool
+	Struct         bool
+	PayloadFields  []source.BackendInputField
+	PayloadMessage string
 }
 
 type parsedGoFile struct {
@@ -118,7 +120,8 @@ func scanPackage(fset *token.FileSet, files []parsedGoFile, inspectionCache *pac
 		}
 	}
 	applyContractInputFields(contracts, inputStructs)
-	applyContractPayloadFields(contracts, payloadStructs)
+	applyContractPayloadFields(contracts, payloadStructs, typedPackage.Types)
+	applyContractResultFields(contracts, payloadStructs, typedPackage.Types)
 	diagnostics = append(diagnostics, validateContractTypes(contracts, types, typedPackage.Types)...)
 	diagnostics = append(diagnostics, validateEventNames(contracts)...)
 	diagnostics = append(diagnostics, validateContracts(contracts, typedPackage.Functions)...)
@@ -225,17 +228,41 @@ func applyContractInputFields(contracts []Contract, structs map[string]inputStru
 	}
 }
 
-func applyContractPayloadFields(contracts []Contract, structs map[string]inputStruct) {
+func applyContractPayloadFields(contracts []Contract, structs map[string]inputStruct, importedTypes map[string]contractTypeInfo) {
 	for index := range contracts {
 		if contracts[index].Kind != runtimecontracts.Event {
 			continue
 		}
-		payloadStruct, ok := structs[contracts[index].Type]
+		payloadStruct, ok := contractJSONStruct(contracts[index].Type, structs, importedTypes)
 		if !ok || payloadStruct.Message != "" {
 			continue
 		}
 		contracts[index].PayloadFields = append([]source.BackendInputField(nil), payloadStruct.Fields...)
 	}
+}
+
+func applyContractResultFields(contracts []Contract, structs map[string]inputStruct, importedTypes map[string]contractTypeInfo) {
+	for index := range contracts {
+		if contracts[index].Kind != runtimecontracts.Command && contracts[index].Kind != runtimecontracts.Query {
+			continue
+		}
+		resultStruct, ok := contractJSONStruct(contracts[index].Result, structs, importedTypes)
+		if !ok || resultStruct.Message != "" {
+			continue
+		}
+		contracts[index].ResultFields = append([]source.BackendInputField(nil), resultStruct.Fields...)
+	}
+}
+
+func contractJSONStruct(name string, structs map[string]inputStruct, importedTypes map[string]contractTypeInfo) (inputStruct, bool) {
+	if local, ok := structs[name]; ok {
+		return local, true
+	}
+	info, ok := importedTypes[name]
+	if !ok {
+		return inputStruct{}, false
+	}
+	return inputStruct{Fields: append([]source.BackendInputField(nil), info.PayloadFields...), Message: info.PayloadMessage}, true
 }
 
 func validateContractInputStructs(contracts []Contract, structs map[string]inputStruct) []Diagnostic {

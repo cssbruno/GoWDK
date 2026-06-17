@@ -24,7 +24,8 @@ unsupported unless another language reference explicitly says otherwise.
 - Snippet/render blocks are not supported. Use GOWDK component slots for the
   supported reusable-markup model.
 - Head management is page metadata, not `view {}` markup. Use `title`,
-  `description`, `canonical`, and `image`.
+  `description`, `canonical`, `image`, `robots`, `noindex`, `preload`, and
+  `prefetch`.
 - External template syntax is rejected instead of translated implicitly.
 
 Deferred construct families each fail with a registered diagnostic (see

@@ -29,6 +29,7 @@ type Contract struct {
 	Handler          string                         `json:"handler,omitempty"`
 	Register         string                         `json:"register,omitempty"`
 	InputFields      []source.BackendInputField     `json:"inputFields,omitempty"`
+	ResultFields     []source.BackendInputField     `json:"resultFields,omitempty"`
 	PayloadFields    []source.BackendInputField     `json:"payloadFields,omitempty"`
 	Emits            []EventRef                     `json:"emits,omitempty"`
 	Roles            []string                       `json:"roles,omitempty"`

@@ -381,15 +381,22 @@ a versioned source-linked node tree with `program`, `package`, `page`,
 `component`, `layout`, `route`, `endpoint`, `contract-reference`, `view`,
 `element`, `component-call`, and `text` nodes. Each node has a stable `id`,
 `kind`, optional `name`, source path, source span when known, node-specific
-`props`, and ordered `children`.
+`props`, and ordered `children`. The tree report also exposes additive
+`renders_component` edges for resolved component calls, plus
+`component_composition_cycle` diagnostics when component composition cycles are
+found.
 
 `gowdk inspect endpoint-graph` prints a versioned graph with `page`, `route`,
-`endpoint`, `handler`, `guard`, and `contract` nodes plus deterministic
-`declares`, `owns_endpoint`, `handled_by`, `uses_guard`, and
-`references_contract` edges. Endpoint nodes include method/path, source kind,
-cache, guards, CSRF policy, binding status, signature, and input type when
-available. The graph is additive on top of `gowdk routes`/`gowdk endpoints`;
-keep those commands for stable route and endpoint report integrations.
+`endpoint`, `handler`, `guard`, `contract`, and `structural` nodes plus
+deterministic `declares`, `owns_endpoint`, `handled_by`, `uses_guard`,
+`references_contract`, and `dispatches` edges. Structural nodes represent
+source view elements that declare `g:post`, `g:command`, `g:query`, or
+`g:on:*`; resolvable action and command/query elements point at the generated
+endpoint node they dispatch to. Endpoint nodes include method/path, source
+kind, cache, guards, CSRF policy, binding status, signature, and input type
+when available. The graph is additive on top of `gowdk routes`/`gowdk
+endpoints`; keep those commands for stable route and endpoint report
+integrations.
 
 `gowdk inspect asset-graph` prints a versioned graph with source owners,
 templates, and declared assets. Asset nodes include kind, package, owner,
@@ -428,14 +435,15 @@ that should be edited or moved into app-owned files before serious use.
 `openapi.json` describes the routable web surface: actions, APIs, fragments,
 and web-routable command/query contract references. It includes paths, methods,
 path/query/form request schemas when input fields are known, and deterministic
-named response schema references. Full response struct expansion is deferred to
-[#316](https://github.com/cssbruno/GoWDK/issues/316).
+named response schema references. Command/query result structs are expanded
+when the scanner can resolve supported exported JSON fields; otherwise the
+report keeps the deterministic shallow named schema with the Go type marker.
 
 `asyncapi.json` describes integration-event contract registrations. Local event
-payload structs contribute JSON-field schemas; imported event payload schemas
-fall back to deterministic named object schemas until
-[#315](https://github.com/cssbruno/GoWDK/issues/315) resolves imported payload
-fields. Domain and presentation events are excluded from the default report.
+payload structs and resolvable imported event payload structs contribute
+JSON-field schemas. Unsupported or unresolvable imported payloads fall back to
+deterministic shallow named object schemas with the Go type marker. Domain and
+presentation events are excluded from the default report.
 
 `gowdk inspect ir` prints the validated `internal/gwdkir.Program` compiler IR as
 JSON. This is an M2 compiler-spine debugging and snapshot surface, not a stable

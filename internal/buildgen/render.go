@@ -627,8 +627,17 @@ func document(config gowdk.Config, page gwdkir.Page, body string, stylesheets []
 	if page.Metadata.Canonical != "" {
 		head = append(head, "  <link rel=\"canonical\""+gowhtml.Attr("href", page.Metadata.Canonical)+">")
 	}
+	if robots := robotsContent(page.Metadata); robots != "" {
+		head = append(head, "  <meta name=\"robots\""+gowhtml.Attr("content", robots)+">")
+	}
 	if config.Build.Head.Favicon != "" {
 		head = append(head, "  <link rel=\"icon\""+gowhtml.Attr("href", config.Build.Head.Favicon)+">")
+	}
+	for _, resource := range page.Metadata.Preload {
+		head = append(head, headResourceTag("preload", resource))
+	}
+	for _, resource := range page.Metadata.Prefetch {
+		head = append(head, headResourceTag("prefetch", resource))
 	}
 	if socialHeadEnabled(config.Build.Head, page.Metadata) {
 		if config.Build.Head.SiteName != "" {
@@ -720,6 +729,30 @@ func nonEmptyScripts(scripts []gowdk.Script) []gowdk.Script {
 
 func socialHeadEnabled(head gowdk.HeadConfig, metadata gwdkir.PageMetadata) bool {
 	return head.SiteName != "" || head.Image != "" || head.TwitterCard != "" || metadata.Image != ""
+}
+
+func robotsContent(metadata gwdkir.PageMetadata) string {
+	robots := strings.TrimSpace(metadata.Robots)
+	if !metadata.NoIndex {
+		return robots
+	}
+	if robots == "" {
+		return "noindex"
+	}
+	for _, token := range strings.Split(robots, ",") {
+		if strings.EqualFold(strings.TrimSpace(token), "noindex") {
+			return robots
+		}
+	}
+	return robots + ", noindex"
+}
+
+func headResourceTag(rel string, resource gwdkir.HeadResource) string {
+	tag := "  <link" + gowhtml.Attr("rel", rel) + gowhtml.Attr("href", resource.Href)
+	if resource.As != "" {
+		tag += gowhtml.Attr("as", resource.As)
+	}
+	return tag + ">"
 }
 
 func escapeScriptJSON(payload string) string {

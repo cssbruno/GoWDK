@@ -71,6 +71,10 @@ Implemented or partial metadata declarations:
 - `description "<text>"`
 - `canonical "<url>"`
 - `image "<url>"`
+- `robots "<policy>"`
+- `noindex [true|false]`
+- `preload "<href>" [as "<type>"]`
+- `prefetch "<href>" [as "<type>"]`
 - `layout <id>[, <id>...]`
 - `cache "<policy>"`
 - `revalidate <seconds|duration>`

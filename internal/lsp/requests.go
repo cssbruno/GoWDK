@@ -3,6 +3,7 @@ package lsp
 import (
 	"fmt"
 
+	"github.com/cssbruno/gowdk/internal/inspectreport"
 	"github.com/cssbruno/gowdk/internal/lang"
 )
 
@@ -41,6 +42,9 @@ func (server *Server) handleRequest(request rpcRequest) [][]byte {
 	case "shutdown":
 		server.shutdown = true
 		return singleMessage(response(request.ID, nil))
+	case "gowdk/tree":
+		ir, _ := server.openProjectIR()
+		return singleMessage(response(request.ID, inspectreport.BuildTree(ir)))
 	case "textDocument/formatting":
 		var params documentFormattingParams
 		if err := decodeParams(request.Params, &params); err != nil {

@@ -8,7 +8,7 @@ act Subscribe POST "/newsletter"
 
 view {
   <form g:post={Subscribe}>
-    <input name="email" required />
+    <input name="email" aria-label="Email" required />
     <button type="submit">Subscribe</button>
   </form>
 }

@@ -29,6 +29,10 @@ title "Home"
 description "Compile-first Go web output."
 canonical "https://example.com/"
 image "https://example.com/social.png"
+robots "index,follow"
+noindex false
+preload "/assets/app.css" as "style"
+prefetch "/docs"
 layout root, marketing
 cache "public, max-age=60"
 revalidate 5m
@@ -49,6 +53,14 @@ Supported metadata declarations:
 - `canonical "<url>"`: optional canonical URL link for generated page output.
 - `image "<url>"`: optional social preview image URL for Open Graph and
   Twitter metadata.
+- `robots "<policy>"`: optional robots meta content.
+- `noindex [true|false]`: optional shorthand for adding `noindex` to the
+  robots meta content. A bare `noindex` line is treated as `true`.
+- `preload "<href>" [as "<type>"]`: optional head preload link. Absolute
+  URLs must be `http` or `https`; protocol-relative and active-content URLs
+  are rejected.
+- `prefetch "<href>" [as "<type>"]`: optional head prefetch link with the
+  same URL restrictions as `preload`.
 - `layout <id>[, <id>...]`: optional page layout IDs, or a layout identity in
   `.layout.gwdk` files.
 - `cache "<policy>"`: optional page Cache-Control policy for successful

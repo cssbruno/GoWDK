@@ -168,6 +168,44 @@ func TestBuildExcludesGuardlessRoutesFromSEOSitemap(t *testing.T) {
 	}
 }
 
+func TestBuildExcludesNoIndexRoutesFromSEOSitemap(t *testing.T) {
+	outputDir := t.TempDir()
+	config := gowdk.Config{Addons: []gowdk.Addon{
+		seo.Addon(seo.Options{BaseURL: "https://example.com"}),
+	}}
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{
+		seoHomePage(),
+		{
+			ID:     "draft",
+			Route:  "/draft",
+			Guards: []string{"public"},
+			Metadata: gwdkir.PageMetadata{
+				NoIndex: true,
+			},
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main>Draft</main>`,
+			},
+		},
+	}}
+
+	result, err := Build(config, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sitemap := readFile(t, result.SitemapPath)
+	if strings.Contains(sitemap, "https://example.com/draft") {
+		t.Fatalf("noindex route must not be listed in sitemap:\n%s", sitemap)
+	}
+	event := findBuildReportEvent(result.Report, "seo", "seo_route_excluded")
+	if event == nil {
+		t.Fatalf("expected noindex SEO exclusion event in %#v", result.Report.Events)
+	}
+	if event.PageID != "draft" || event.Route != "/draft" || event.Data["reason"] != "noindex" || event.Data["mode"] != "spa" {
+		t.Fatalf("unexpected noindex SEO exclusion event: %#v", event)
+	}
+}
+
 func TestBuildMemoryCollectsSEOArtifacts(t *testing.T) {
 	config := gowdk.Config{Addons: []gowdk.Addon{seo.Addon(seo.Options{BaseURL: "https://example.com"})}}
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{seoHomePage()}}

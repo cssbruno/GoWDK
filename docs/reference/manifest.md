@@ -105,7 +105,9 @@ Fields:
 - `route`: declared route path.
 - `render`: effective render mode after applying default `spa`.
 - `metadata`: optional page document metadata from `title`, `description`,
-  `canonical`, and `image`.
+  `canonical`, `image`, `robots`, `noindex`, `preload`, and `prefetch`.
+  `preload` and `prefetch` entries are arrays of `{ "href": "...", "as":
+  "..." }` objects; `as` is omitted when the source declaration did not set it.
 - `layouts`: optional ordered layout references. Bare names are same-package or
   package-less layout IDs; qualified names such as `chrome.root` resolve through
   page `use chrome "package"` declarations.

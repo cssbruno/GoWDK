@@ -9,7 +9,7 @@ description: Bump the GOWDK release version. Use when updating the CLI version, 
 
 - Source of truth: `const version = "0.x.y"` near the top of
   `cmd/gowdk/main.go` (no `v` prefix). GitHub tags and install snippets use
-  `v0.x.y`. Current line: `const version = "0.6.1"`.
+  `v0.x.y`. Current line: `const version = "0.7.0"`.
 - `editors/vscode/package.json` must match the CLI constant exactly;
   `editors/vscode/scripts/sync-version.js` reads the constant from
   `cmd/gowdk/main.go` and writes/checks `package.json`. Never edit the

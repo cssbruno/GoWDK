@@ -68,8 +68,7 @@ func lifecycleContractRegistryEnabled(options Options) bool {
 	return len(executableContractExposures(backendAdapterIR(options).ContractExposures)) > 0
 }
 
-func configuredServicesDecl(options Options) ast.Decl {
-	providers := lifecycleServiceProviders(options)
+func configuredServicesDecl(providers []lifecycleServiceProvider) ast.Decl {
 	if len(providers) == 0 {
 		return funcDecl("configuredServices", nil, []*ast.Field{
 			{Type: &ast.ArrayType{Elt: sel("gowdkruntime", "Service")}},
@@ -106,8 +105,42 @@ func configuredServicesDecl(options Options) ast.Decl {
 	}, stmts)
 }
 
+func lifecycleServiceFileSources(options Options) (map[string][]byte, error) {
+	providers := lifecycleServiceProviders(options)
+	if len(providers) == 0 {
+		return nil, nil
+	}
+	source, err := lifecycleServiceFileSource("!js", providers)
+	if err != nil {
+		return nil, err
+	}
+	jsSource, err := lifecycleServiceFileSource("js", nil)
+	if err != nil {
+		return nil, err
+	}
+	return map[string][]byte{
+		lifecycleFileName: []byte(source),
+		lifecycleJSName:   []byte(jsSource),
+	}, nil
+}
+
+func lifecycleServiceFileSource(buildTag string, providers []lifecycleServiceProvider) (string, error) {
+	imports := map[string]string{
+		"gowdkruntime": "github.com/cssbruno/gowdk/runtime/app",
+	}
+	for _, provider := range providers {
+		imports[provider.Alias] = provider.ImportPath
+	}
+	source, err := printGoFile("gowdkapp", imports, []ast.Decl{configuredServicesDecl(providers)})
+	if err != nil {
+		return "", err
+	}
+	return "//go:build " + buildTag + "\n\n" + source, nil
+}
+
 func lifecycleServiceProviders(options Options) []lifecycleServiceProvider {
 	aliases := map[string]string{}
+	used := lifecycleReservedAliases(options)
 	providers := make([]lifecycleServiceProvider, 0, len(options.Config.Lifecycle.Services))
 	for _, service := range options.Config.Lifecycle.Services {
 		importPath := strings.TrimSpace(service.ImportPath)
@@ -117,7 +150,7 @@ func lifecycleServiceProviders(options Options) []lifecycleServiceProvider {
 		}
 		alias, ok := aliases[importPath]
 		if !ok {
-			alias = fmt.Sprintf("gowdkservice%d", len(aliases))
+			alias = nextLifecycleServiceAlias(used)
 			aliases[importPath] = alias
 		}
 		providers = append(providers, lifecycleServiceProvider{
@@ -127,4 +160,32 @@ func lifecycleServiceProviders(options Options) []lifecycleServiceProvider {
 		})
 	}
 	return providers
+}
+
+func lifecycleReservedAliases(options Options) map[string]bool {
+	used := map[string]bool{}
+	for alias := range generatedImportAliasUseCounts() {
+		used[alias] = true
+	}
+	if options.ProxyBackend {
+		return used
+	}
+	adapter := backendAdapterIR(options)
+	for _, alias := range backendImports(adapter, options.SSR) {
+		used[alias] = true
+	}
+	for _, alias := range backendContractImports(executableContractExposures(adapter.ContractExposures)) {
+		used[alias] = true
+	}
+	return used
+}
+
+func nextLifecycleServiceAlias(used map[string]bool) string {
+	for index := 0; ; index++ {
+		alias := fmt.Sprintf("gowdkservice%d", index)
+		if !used[alias] {
+			used[alias] = true
+			return alias
+		}
+	}
 }

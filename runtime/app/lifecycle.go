@@ -108,6 +108,11 @@ func Run(ctx context.Context, server *http.Server, application *Application, opt
 		options.ShutdownTimeout = DefaultShutdownTimeout
 	}
 
+	signalContext, stopSignals := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+	runContext, cancel := context.WithCancel(signalContext)
+	defer cancel()
+
 	values := application.Values
 	if values == nil {
 		values = map[string]any{}
@@ -121,14 +126,10 @@ func Run(ctx context.Context, server *http.Server, application *Application, opt
 	services := nonNilServices(application.Services)
 	for _, service := range services {
 		if err := service.Mount(serviceContext); err != nil {
+			cancel()
 			return fmt.Errorf("gowdk service %q mount failed: %w", serviceName(service), err)
 		}
 	}
-
-	signalContext, stopSignals := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	defer stopSignals()
-	runContext, cancel := context.WithCancel(signalContext)
-	defer cancel()
 
 	serviceErrors, servicesDone := startServices(runContext, serviceContext, services)
 	serverDone := startServer(server)
@@ -190,6 +191,9 @@ func startServices(ctx context.Context, serviceContext ServiceContext, services 
 		go func() {
 			defer wait.Done()
 			if err := service.Run(ctx, serviceContext); err != nil {
+				if ctx.Err() != nil && errors.Is(err, ctx.Err()) {
+					return
+				}
 				select {
 				case errorsChannel <- fmt.Errorf("gowdk service %q failed: %w", serviceName(service), err):
 				default:

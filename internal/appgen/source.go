@@ -179,9 +179,6 @@ func runtimeImportMap(options Options) map[string]string {
 			imports[alias] = importPath
 		}
 	}
-	for _, provider := range lifecycleServiceProviders(options) {
-		imports[provider.Alias] = provider.ImportPath
-	}
 
 	return imports
 }
@@ -258,6 +255,7 @@ func forceImportAlias(importPath string) bool {
 }
 
 func appShellDecls(options Options) []ast.Decl {
+	providers := lifecycleServiceProviders(options)
 	decls := []ast.Decl{
 		maxActionBodyBytesDecl(options),
 		maxAPIBodyBytesDecl(options),
@@ -269,14 +267,17 @@ func appShellDecls(options Options) []ast.Decl {
 		handlerDecl(),
 		newServeMuxDecl(options, true),
 		serveMuxDecl(options, true),
-		configuredServicesDecl(options),
 	)
+	if len(providers) == 0 {
+		decls = append(decls, configuredServicesDecl(nil))
+	}
 	decls = append(decls, loadEnvFileDecl(options)...)
 	decls = append(decls, validateEnvContractDecl(options.Config.Env)...)
 	return decls
 }
 
 func backendShellDecls(options Options) []ast.Decl {
+	providers := lifecycleServiceProviders(options)
 	decls := []ast.Decl{
 		maxActionBodyBytesDecl(options),
 		maxAPIBodyBytesDecl(options),
@@ -287,8 +288,10 @@ func backendShellDecls(options Options) []ast.Decl {
 		handlerDecl(),
 		newServeMuxDecl(options, false),
 		serveMuxDecl(options, false),
-		configuredServicesDecl(options),
 	)
+	if len(providers) == 0 {
+		decls = append(decls, configuredServicesDecl(nil))
+	}
 	decls = append(decls, loadEnvFileDecl(options)...)
 	decls = append(decls, validateEnvContractDecl(options.Config.Env)...)
 	return decls

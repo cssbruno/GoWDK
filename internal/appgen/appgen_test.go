@@ -152,8 +152,17 @@ func TestGenerateWiresConfiguredLifecycleServices(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := string(payload)
+	appSource := string(payload)
+	if strings.Contains(appSource, "example.com/site/services") || strings.Contains(appSource, "example.com/site/metrics") {
+		t.Fatalf("lifecycle providers must stay out of app.go:\n%s", appSource)
+	}
+	lifecyclePayload, err := os.ReadFile(filepath.Join(result.AppDir, lifecycleFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(lifecyclePayload)
 	for _, expected := range []string{
+		`//go:build !js`,
 		`gowdkservice0 "example.com/site/services"`,
 		`gowdkservice1 "example.com/site/metrics"`,
 		`func configuredServices() ([]gowdkruntime.Service, error)`,
@@ -163,11 +172,82 @@ func TestGenerateWiresConfiguredLifecycleServices(t *testing.T) {
 		`services = append(services, provided1...)`,
 		`provided2, err := gowdkservice1.Metrics()`,
 		`services = append(services, provided2...)`,
-		`Services: services`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated lifecycle source to contain %q:\n%s", expected, source)
 		}
+	}
+	jsPayload, err := os.ReadFile(filepath.Join(result.AppDir, lifecycleJSName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsSource := string(jsPayload)
+	for _, expected := range []string{
+		`//go:build js`,
+		`func configuredServices() ([]gowdkruntime.Service, error)`,
+		`return nil, nil`,
+	} {
+		if !strings.Contains(jsSource, expected) {
+			t.Fatalf("expected generated lifecycle js source to contain %q:\n%s", expected, jsSource)
+		}
+	}
+	if strings.Contains(jsSource, "example.com/site/services") || strings.Contains(jsSource, "example.com/site/metrics") {
+		t.Fatalf("js lifecycle stub must not import providers:\n%s", jsSource)
+	}
+}
+
+func TestGenerateLifecycleServiceAliasesReserveBackendImports(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{
+			Lifecycle: gowdk.LifecycleConfig{Services: []gowdk.ServiceRef{{
+				ImportPath: "example.com/site/services",
+				Function:   "Services",
+			}}},
+		},
+		APIs: []APIEndpoint{{
+			PageID:  "status",
+			APIName: "Status",
+			Method:  http.MethodGet,
+			Route:   "/api/status",
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
+				ImportPath:   "example.com/site/gowdkservice0",
+				PackageName:  "gowdkservice0",
+				FunctionName: "Status",
+				Signature:    source.BackendSignatureAPI,
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	appPayload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(appPayload), `gowdkservice0 "example.com/site/gowdkservice0"`) {
+		t.Fatalf("expected backend import to keep gowdkservice0 alias:\n%s", appPayload)
+	}
+	lifecyclePayload, err := os.ReadFile(filepath.Join(result.AppDir, lifecycleFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(lifecyclePayload)
+	for _, expected := range []string{
+		`gowdkservice1 "example.com/site/services"`,
+		`provided0, err := gowdkservice1.Services()`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected lifecycle provider alias reservation %q:\n%s", expected, source)
+		}
+	}
+	if strings.Contains(source, `gowdkservice0 "example.com/site/services"`) {
+		t.Fatalf("lifecycle provider reused backend alias:\n%s", source)
 	}
 }
 
@@ -4116,6 +4196,54 @@ func TestBuildWASMCompilesGeneratedApp(t *testing.T) {
 	}
 	if info.Size() == 0 {
 		t.Fatal("expected wasm artifact to be non-empty")
+	}
+}
+
+func TestBuildWASMIgnoresLifecycleProviderImports(t *testing.T) {
+	root := t.TempDir()
+	repoRoot, ok := gowdkRuntimeModuleRoot()
+	if !ok {
+		t.Fatal("could not locate GOWDK module root")
+	}
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/site
+
+go 1.22
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+filepath.ToSlash(repoRoot)+`
+`)
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	wasmPath := filepath.Join(root, "site.wasm")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "gowdk-assets.json"), `{"version":1,"files":{}}`)
+	writeTestFile(t, filepath.Join(root, "services", "services.go"), `//go:build !js
+
+package services
+
+import gowdkapp "github.com/cssbruno/gowdk/runtime/app"
+
+func Services() ([]gowdkapp.Service, error) {
+	return []gowdkapp.Service{gowdkapp.ServiceHooks{ServiceName: "noop"}}, nil
+}
+`)
+	t.Chdir(root)
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: gowdk.Config{
+		Lifecycle: gowdk.LifecycleConfig{Services: []gowdk.ServiceRef{{
+			ImportPath: "example.com/site/services",
+			Function:   "Services",
+		}}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	built, err := BuildWASM(appDir, wasmPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if built != wasmPath {
+		t.Fatalf("unexpected wasm path: %q", built)
 	}
 }
 

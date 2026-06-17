@@ -89,6 +89,32 @@ func TestRunReturnsNilForContextCancellation(t *testing.T) {
 	}
 }
 
+func TestRunSuppressesServiceContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	mux := http.NewServeMux()
+	started := make(chan struct{})
+	go func() {
+		<-started
+		cancel()
+	}()
+
+	err := Run(ctx, testLifecycleServer(mux), &Application{
+		Handler: mux,
+		Mux:     mux,
+		Services: []Service{ServiceHooks{
+			ServiceName: "worker",
+			RunFunc: func(ctx context.Context, _ ServiceContext) error {
+				close(started)
+				<-ctx.Done()
+				return ctx.Err()
+			},
+		}},
+	}, RunOptions{ShutdownTimeout: time.Second})
+	if err != nil {
+		t.Fatalf("expected service context cancellation to be graceful, got %v", err)
+	}
+}
+
 func TestRunReportsServiceShutdownTimeout(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

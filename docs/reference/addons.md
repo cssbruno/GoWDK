@@ -36,10 +36,13 @@ the rest are opt-in extension points.
 4. **Runtime hook registration** — generated apps register runtime hooks from
    user-owned Go in the generated package, for example
    `RegisterRateLimiter(*ratelimit.Limiter)`, custom `GOWDKGuardRegistry`
-   entries, or `RegisterContractEventSink(...)`. The built-in auth addon is the
-   narrow exception: `auth.Addon(auth.Options{...})` wires its own session
-   provider and `auth.required` guard. External runtime services remain
-   app-owned.
+   entries, `GOWDKAuthProvider() auth.Provider`, or
+   `RegisterContractEventSink(...)`. The built-in auth addon is the narrow
+   exception: `auth.Addon(auth.Options{...})` wires its own session provider and
+   `auth.required` guard. GOWDK never calls third-party runtime code implicitly;
+   the app wires it. External addons do not become implicit runtime services;
+   app-owned background work is declared separately through
+   `Config.Lifecycle.Services`.
 
 ### Addon categories
 
@@ -228,7 +231,8 @@ available for tooling to warn.
 `gowdk.NewAddon(name, features...)` creates a marker addon for feature checks.
 It does not by itself make the compiler, app generator, or runtime call
 third-party code; implement `CSSProcessor`, `SEOProvider`, or
-`GoBlockConsumer` when the addon needs behavior.
+`GoBlockConsumer` when the addon needs build-time behavior. Runtime background
+services stay app-owned and are imported through `Config.Lifecycle.Services`.
 
 The current compiler validator checks whether SSR is enabled when a page uses
 `server {}` or `go server {}`. SPA builds invoke addons that implement

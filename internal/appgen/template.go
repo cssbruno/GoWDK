@@ -7,12 +7,14 @@ import (
 
 func serverMainSource() (string, error) {
 	return printGoFile("main", map[string]string{
-		"gowdkapp": "gowdk-generated-app/gowdkapp",
-		"log":      "log",
-		"http":     "net/http",
-		"os":       "os",
-		"strings":  "strings",
-		"time":     "time",
+		"context":      "context",
+		"gowdkapp":     "gowdk-generated-app/gowdkapp",
+		"gowdkruntime": "github.com/cssbruno/gowdk/runtime/app",
+		"log":          "log",
+		"http":         "net/http",
+		"os":           "os",
+		"strings":      "strings",
+		"time":         "time",
 	}, []ast.Decl{
 		serverMainDecl(),
 		serverEnvDecl(),
@@ -21,7 +23,7 @@ func serverMainSource() (string, error) {
 
 func serverMainDecl() ast.Decl {
 	return funcDecl("main", nil, nil, []ast.Stmt{
-		define([]ast.Expr{id("handler"), id("err")}, call(sel("gowdkapp", "Handler"))),
+		define([]ast.Expr{id("application"), id("err")}, call(sel("gowdkapp", "App"))),
 		&ast.IfStmt{
 			Cond: notNil("err"),
 			Body: block(exprStmt(call(sel("log", "Fatal"), id("err")))),
@@ -33,7 +35,7 @@ func serverMainDecl() ast.Decl {
 				Type: sel("http", "Server"),
 				Elts: []ast.Expr{
 					keyValue("Addr", id("addr")),
-					keyValue("Handler", id("handler")),
+					keyValue("Handler", selExpr(id("application"), "Handler")),
 					keyValue("ReadHeaderTimeout", durationExpr(5)),
 					keyValue("ReadTimeout", durationExpr(10)),
 					keyValue("WriteTimeout", durationExpr(30)),
@@ -44,12 +46,11 @@ func serverMainDecl() ast.Decl {
 		}),
 		exprStmt(call(sel("log", "Printf"), stringLit("serving embedded GOWDK app at http://%s"), id("addr"))),
 		&ast.IfStmt{
-			Init: define([]ast.Expr{id("err")}, call(selExpr(id("server"), "ListenAndServe"))),
-			Cond: &ast.BinaryExpr{
-				X:  notNil("err"),
-				Op: token.LAND,
-				Y:  &ast.BinaryExpr{X: id("err"), Op: token.NEQ, Y: sel("http", "ErrServerClosed")},
-			},
+			Init: define([]ast.Expr{id("err")}, call(sel("gowdkruntime", "Run"), call(sel("context", "Background")), id("server"), id("application"), &ast.CompositeLit{
+				Type: sel("gowdkruntime", "RunOptions"),
+				Elts: []ast.Expr{keyValue("ShutdownTimeout", durationExpr(10))},
+			})),
+			Cond: notNil("err"),
 			Body: block(exprStmt(call(sel("log", "Fatal"), id("err")))),
 		},
 	})

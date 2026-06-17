@@ -161,28 +161,29 @@ and the frontend knows where generated endpoints live.
 ## Process Lifecycle And Logs
 
 The generated `cmd/server` entrypoint is intentionally small: it constructs the
-generated `net/http` handler, reads `GOWDK_ADDR`, installs the documented
-`http.Server` timeout and header limits, logs startup, and exits on
-`ListenAndServe` failure. It does not install signal handling or a custom
-graceful-shutdown supervisor.
+generated application with `gowdkapp.App()`, reads `GOWDK_ADDR`, installs the
+documented `http.Server` timeout and header limits, logs startup, and calls
+`runtime/app.Run`. The runtime supervisor mounts configured lifecycle services,
+starts the HTTP server, cancels on service/server error or SIGINT/SIGTERM, and
+uses a 10 second graceful shutdown timeout.
 
-Apps that need graceful drain behavior should use the generated package from
+Apps that need a different drain policy can use the generated package from
 app-owned startup code:
 
 ```go
-handler, err := gowdkapp.Handler()
+application, err := gowdkapp.App()
 if err != nil {
 	return err
 }
-server := &http.Server{Addr: ":8080", Handler: handler}
+server := &http.Server{Addr: ":8080", Handler: application.Handler}
+return gowdkruntime.Run(ctx, server, application, gowdkruntime.RunOptions{ShutdownTimeout: 30 * time.Second})
 ```
 
-Use ordinary Go signal handling around that server and call
-`server.Shutdown(ctx)` with the app's timeout policy. Request logging,
-structured logs, route logging, OpenTelemetry instrumentation, compression, and
-optional ETags are also app-owned middleware or reverse-proxy concerns. GOWDK
-keeps generated panic responses generic and redacts secret-like text from
-generated panic logs.
+Request logging, structured logs, route logging, OpenTelemetry instrumentation,
+compression, optional ETags, and protocol-specific background services are
+app-owned middleware, lifecycle services, or reverse-proxy concerns. GOWDK keeps
+generated panic responses generic and redacts secret-like text from generated
+panic logs.
 
 ## Docker
 

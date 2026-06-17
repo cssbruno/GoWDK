@@ -20,7 +20,8 @@ artifacts, `gowdk-security.json` posture reports outside served output, and
 cache metadata. The build pipeline skips identical generated writes and can
 incrementally render page-only SPA edits in the dev loop.
 
-Generated apps use `runtime/app` and `net/http` handler contracts. They can
+Generated apps use `runtime/app`, generated process lifecycle, and `net/http`
+handler contracts. They can
 serve embedded build output, feature-bound action/API handlers, CSRF-wired
 action POSTs, first supported action redirect and fragment responses,
 standalone fragment routes, guards, rate-limit hooks, endpoint panic
@@ -203,7 +204,7 @@ manifest report (`internal/lang/testdata/manifest_golden`).
 | `runtime/response` | HTML, redirect, fragment, and JSON response envelopes. | Runtime | Initial response model implemented. |
 | `runtime/asset` | Asset manifest resolution. | Runtime | Initial manifest helper implemented. |
 | `runtime/route` | Runtime route matching for generated request-time routes. | Runtime | Dynamic route matcher for first-slice generated SSR and standalone fragment routes implemented. |
-| `runtime/app` | Shared generated app HTTP server. | Runtime | Serves embedded spa files, ordered app-wide middleware, configured security headers, identity headers, health checks, asset manifest counts, optional generated 404/500 pages, no-JS cookie acknowledgement, server-side cookie notice hiding, generated CSRF token injection for POST forms, request-time panic boundaries with `runtime/security` redaction, and generated action/API/fragment/SSR callback hooks. |
+| `runtime/app` | Shared generated app HTTP server and process lifecycle. | Runtime | Serves embedded spa files, ordered app-wide middleware, configured security headers, identity headers, health checks, asset manifest counts, optional generated 404/500 pages, no-JS cookie acknowledgement, server-side cookie notice hiding, generated CSRF token injection for POST forms, request-time panic boundaries with `runtime/security` redaction, generated action/API/fragment/SSR callback hooks, lifecycle service contracts, SIGINT/SIGTERM cancellation, and graceful generated-binary shutdown. |
 | `runtime/security` | Runtime-safe security text helpers. | Runtime | Provides conservative secret-like text redaction for generated app panic/error logging without importing compiler-private `internal/` packages. |
 | `runtime/testkit` | Generated audit test helpers. | Runtime | Provides small `httptest` helpers used by generated `gowdk_audit_test.go` files and `gowdk audit --run` to verify route status, method rejection, and configured response headers in-process against generated app handlers. |
 | `runtime/contracts` | Typed contract registry and in-process dispatch. | Runtime | Implemented for queries, commands, backend-owned domain and integration events, presentation events, jobs, metadata, stable observation names and labels for logs/metrics/traces, local command-buffered event dispatch, event-envelope capture/replay with stable IDs, dependency-free outbox/broker/presentation-fanout/event-source/seen-store interfaces, command event sinks, an event worker loop with ack/nack, context cancellation, optional post-ack deduplication windows, explicit nacked-batch backoff options, a dependency-free file outbox adapter, dependency-free in-memory broker/EventSource adapter, dependency-free in-memory and file-backed seen stores, and dependency-free SSE presentation fanout adapter with retry hints and drop-on-full per-client buffers. Concrete Redis Streams, Redis TTL seen-store, NATS, and WebSocket adapters are nested optional modules. Separate worker/cron binary generators and deployment recipes are platform tooling, not runtime core. |

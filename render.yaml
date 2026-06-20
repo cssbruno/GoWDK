@@ -1,12 +1,19 @@
 services:
   - type: web
     name: gowdk-page
-    runtime: static
-    # Build from the repo root so docs-site can render ../docs and docs-only
-    # changes trigger deploys.
+    runtime: go
+    # The docs site lives in the GOWDK monorepo under docs-site/. Render only
+    # reads a Blueprint render.yaml from the repository root, so this file lives
+    # here (not in docs-site/). Render checks out the whole repo and enters
+    # docs-site/ (rootDir) to build; the parent directory (..) is the framework
+    # root whose docs/ tree syncdocs renders.
+    #
+    # This deploys as a Go binary (not a static publish): main.go embeds
+    # dist/site and serves it, reading $PORT from Render. The build must generate
+    # dist/site BEFORE `go build`, because main.go uses //go:embed dist/site.
+    rootDir: docs-site
     buildCommand: |
       set -euo pipefail
-      cd docs-site
       mkdir -p tools
       tailwind_version="v4.3.1"
       tailwind_sha256="2526d063ba03b71f9a3ea7d5cee14f0aec147f117f222d5adc97b1d736d45999"
@@ -20,7 +27,8 @@ services:
       mkdir -p dist/site/assets
       cp -R assets/. dist/site/assets/
       cp assets/favicon.ico dist/site/favicon.ico
-    staticPublishPath: docs-site/dist/site
+      go build -tags netgo -ldflags '-s -w' -o app .
+    startCommand: ./app
     buildFilter:
       paths:
         - docs-site/**

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/clientlang"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/viewmodel"
 	"github.com/cssbruno/gowdk/internal/viewparse"
 )
@@ -85,20 +86,24 @@ func componentViewReferencesFromNodes(source string, nodes []viewmodel.Node) com
 	return refs
 }
 
-func validateInterpolations(value string, symbols map[string]clientlang.ValueType, messages *[]spannedMessage) {
+// validateInterpolations checks every {expr} in value. enclosing is the source
+// span of the text node or attribute that holds value; it is stamped on each
+// emitted diagnostic so loop-body interpolation errors point at that node
+// instead of falling back to the whole view block.
+func validateInterpolations(value string, symbols map[string]clientlang.ValueType, messages *[]spannedMessage, enclosing source.SourceSpan) {
 	exprs, err := interpolationExpressions(value)
 	if err != nil {
-		*messages = append(*messages, spannedMessage{Message: err.Error()})
+		*messages = append(*messages, spannedMessage{Message: err.Error(), Span: enclosing})
 		return
 	}
 	for _, expr := range exprs {
 		typ, _, err := clientlang.CheckExpr(expr, symbols)
 		if err != nil {
-			*messages = append(*messages, spannedMessage{Message: fmt.Sprintf("interpolation %q is invalid: %v", expr, err)})
+			*messages = append(*messages, spannedMessage{Message: fmt.Sprintf("interpolation %q is invalid: %v", expr, err), Span: enclosing})
 			continue
 		}
 		if typ == clientlang.TypeArray || typ == clientlang.TypeObject {
-			*messages = append(*messages, spannedMessage{Message: fmt.Sprintf("interpolation %q must be scalar, got %s", expr, typ)})
+			*messages = append(*messages, spannedMessage{Message: fmt.Sprintf("interpolation %q must be scalar, got %s", expr, typ), Span: enclosing})
 		}
 	}
 }
@@ -148,15 +153,6 @@ func elementForDirective(element viewmodel.Element) (viewmodel.Attr, bool) {
 		}
 	}
 	return viewmodel.Attr{}, false
-}
-
-func elementKeyExpression(element viewmodel.Element) (string, bool) {
-	for _, attr := range element.Attrs {
-		if attr.Name == "g:key" {
-			return strings.TrimSpace(attr.Value), true
-		}
-	}
-	return "", false
 }
 
 func collectComponentViewReferences(source string, nodes []viewmodel.Node, refs *componentViewRefs) {

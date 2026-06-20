@@ -628,7 +628,11 @@ Every 0.x minor release must have:
   planning.
 - [ ] Add dev tests for failed rebuild recovery and generated app dev flow
   smoke.
-- [ ] Add LSP exact source-range diagnostics once spans are complete.
+- [x] Add LSP exact source-range diagnostics. The LSP consumes
+  `Diagnostic.Range` directly; high-value parser/IR/compiler diagnostics
+  (including `g:for`/`g:key` row bodies) carry exact spans. Remaining
+  file/line-level gaps are listed under "Source Ranges" in
+  `docs/reference/diagnostic-codes.md`.
 - [ ] Add go-to-definition for components, layouts, Go handlers, Go build
   functions, CSS inputs, and assets.
 - [ ] Add hover docs, completions, quick fixes, tree views, graph views, build
@@ -761,7 +765,9 @@ Start with these in order:
 - [x] Add `gowdk generate stubs`.
 - [ ] Stabilize `gowdk check --json`.
 - [ ] Add diagnostic codes.
-- [ ] Add exact source spans where missing.
+- [ ] Add exact source spans where missing. Tracked gaps are listed under
+  "Source Ranges" in `docs/reference/diagnostic-codes.md` (Go contract-scan
+  diagnostics, untyped `withLine` parser errors, `client {}` block columns).
 - [ ] Finish downstream `gwdkir` migration.
 - [ ] Add generated Go golden tests.
 - [ ] Add endpoint IR report.

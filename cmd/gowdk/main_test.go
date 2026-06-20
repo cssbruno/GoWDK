@@ -7223,6 +7223,7 @@ func TestLiveReloadFileHandlerInjectsScript(t *testing.T) {
 	for _, expected := range []string{
 		`__gowdk-error-overlay`,
 		`events.addEventListener("build-error"`,
+		`events.addEventListener("runtime-error"`,
 		`events.addEventListener("component-hmr"`,
 		`fetchFreshDocument`,
 		`GOWDK build failed`,
@@ -7264,6 +7265,55 @@ func TestDevRuntimeProxyHandlerInjectsScript(t *testing.T) {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("expected proxied HTML to contain %q:\n%s", expected, body)
 		}
+	}
+}
+
+func TestDevRuntimeProxyHandlerInjectsRuntimeErrorOverlay(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, `<!doctype html><html><body><main>safe generated error page</main></body></html>`)
+	}))
+	defer upstream.Close()
+
+	targetAddr := strings.TrimPrefix(upstream.URL, "http://")
+	request := httptest.NewRequest(http.MethodGet, "/panic/secret-token?password=hunter2", nil)
+	request.Header.Set("Cookie", "session=secret-cookie")
+	response := httptest.NewRecorder()
+	devRuntimeProxyHandler(targetAddr, newLiveReloadBroker()).ServeHTTP(response, request)
+
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d with body %s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	for _, expected := range []string{
+		`<main>safe generated error page</main>`,
+		`new EventSource("/__gowdk/reload")`,
+		`GOWDK runtime request failed`,
+		`Generated app returned HTTP 500 through the dev runtime proxy.`,
+		`HTTP 500`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected proxied 500 HTML to contain %q:\n%s", expected, body)
+		}
+	}
+	for _, forbidden := range []string{"secret-token", "hunter2", "secret-cookie"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("runtime overlay leaked request detail %q:\n%s", forbidden, body)
+		}
+	}
+}
+
+func TestLiveReloadScriptCapacityHintAvoidsOverflow(t *testing.T) {
+	maxInt := int(^uint(0) >> 1)
+	if got := liveReloadScriptCapacityHint(10, 5); got != 15 {
+		t.Fatalf("expected normal capacity hint 15, got %d", got)
+	}
+	if got := liveReloadScriptCapacityHint(maxInt, 1); got != 0 {
+		t.Fatalf("expected overflow capacity hint to fall back to 0, got %d", got)
+	}
+	if got := liveReloadScriptCapacityHint(-1, 1); got != 0 {
+		t.Fatalf("expected invalid capacity hint to fall back to 0, got %d", got)
 	}
 }
 

@@ -214,11 +214,18 @@ func devRuntimeProxyHandler(targetAddr string, reload *liveReloadBroker) http.Ha
 		request.Header.Del("Accept-Encoding")
 	}
 	proxy.ModifyResponse = func(response *http.Response) error {
+		runtimeErrorPayload := ""
+		if response.StatusCode >= http.StatusInternalServerError {
+			runtimeErrorPayload = devRuntimeErrorEventData(response.StatusCode)
+			reload.notifyData("runtime-error", runtimeErrorPayload)
+		}
 		if response.Request == nil ||
 			response.Request.Method != http.MethodGet ||
-			response.StatusCode != http.StatusOK ||
 			response.Header.Get("Content-Encoding") != "" ||
 			!strings.Contains(strings.ToLower(response.Header.Get("Content-Type")), "text/html") {
+			return nil
+		}
+		if response.StatusCode != http.StatusOK && runtimeErrorPayload == "" {
 			return nil
 		}
 		body, err := io.ReadAll(response.Body)
@@ -228,7 +235,11 @@ func devRuntimeProxyHandler(targetAddr string, reload *liveReloadBroker) http.Ha
 		if err != nil {
 			return err
 		}
-		body = injectLiveReloadScript(body)
+		if runtimeErrorPayload != "" {
+			body = injectLiveReloadScriptWithInitialOverlay(body, []byte(runtimeErrorPayload))
+		} else {
+			body = injectLiveReloadScript(body)
+		}
 		response.Body = io.NopCloser(bytes.NewReader(body))
 		response.ContentLength = int64(len(body))
 		response.Header.Set("Content-Length", fmt.Sprint(len(body)))
@@ -244,7 +255,43 @@ func devRuntimeProxyHandler(targetAddr string, reload *liveReloadBroker) http.Ha
 }
 
 func injectLiveReloadScript(html []byte) []byte {
-	const script = `<script>
+	return injectLiveReloadScriptWithInitialOverlay(html, nil)
+}
+
+func injectLiveReloadScriptWithInitialOverlay(html []byte, initialOverlay []byte) []byte {
+	initial := "null"
+	if len(initialOverlay) > 0 {
+		initial = string(initialOverlay)
+	}
+	script := strings.Replace(liveReloadScriptTemplate, "__GOWDK_INITIAL_OVERLAY__", initial, 1)
+	capacity := liveReloadScriptCapacityHint(len(html), len(script))
+	lower := strings.ToLower(string(html))
+	index := strings.LastIndex(lower, "</body>")
+	if index < 0 {
+		out := make([]byte, 0, capacity)
+		out = append(out, html...)
+		out = append(out, script...)
+		return out
+	}
+	out := make([]byte, 0, capacity)
+	out = append(out, html[:index]...)
+	out = append(out, script...)
+	out = append(out, html[index:]...)
+	return out
+}
+
+func liveReloadScriptCapacityHint(htmlLen int, scriptLen int) int {
+	if htmlLen < 0 || scriptLen < 0 {
+		return 0
+	}
+	maxInt := int(^uint(0) >> 1)
+	if htmlLen > maxInt-scriptLen {
+		return 0
+	}
+	return htmlLen + scriptLen
+}
+
+const liveReloadScriptTemplate = `<script>
 (() => {
   const overlayID = "__gowdk-error-overlay";
   const parsePayload = (data) => {
@@ -309,8 +356,9 @@ func injectLiveReloadScript(html []byte) []byte {
       overlay.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:rgba(24,24,27,.96);color:#fff;font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:24px;overflow:auto;white-space:pre-wrap;";
       document.body.appendChild(overlay);
     }
-    const lines = ["GOWDK build failed", ""];
+    const lines = [payload.title || "GOWDK build failed", ""];
     lines.push(payload.message || "Check the terminal for details.");
+    addSection(lines, "Status", [payload.status ? "HTTP " + payload.status : ""]);
     addSection(lines, "Diagnostics", (payload.diagnostics || []).map(formatDiagnostic));
     addSection(lines, "Last successful build", [formatTime(payload.lastSuccessfulBuild)]);
     addSection(lines, "Changed files", payload.changedFiles || []);
@@ -398,26 +446,15 @@ func injectLiveReloadScript(html []byte) []byte {
     window.location.reload();
   });
   events.addEventListener("build-error", (event) => showOverlay(parsePayload(event.data)));
+  events.addEventListener("runtime-error", (event) => showOverlay(parsePayload(event.data)));
   events.addEventListener("component-hmr", (event) => {
     removeOverlay();
     applyComponentHMR(parsePayload(event.data)).catch(() => window.location.reload());
   });
+  const initialOverlay = __GOWDK_INITIAL_OVERLAY__;
+  if (initialOverlay) showOverlay(initialOverlay);
 })();
 </script>`
-	lower := strings.ToLower(string(html))
-	index := strings.LastIndex(lower, "</body>")
-	if index < 0 {
-		out := make([]byte, 0, len(html)+len(script))
-		out = append(out, html...)
-		out = append(out, script...)
-		return out
-	}
-	out := make([]byte, 0, len(html)+len(script))
-	out = append(out, html[:index]...)
-	out = append(out, script...)
-	out = append(out, html[index:]...)
-	return out
-}
 
 type liveReloadBroker struct {
 	mu      sync.Mutex

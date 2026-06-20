@@ -617,8 +617,8 @@ Every 0.x minor release must have:
   stub mode, debug mode, and machine-readable build report schema docs.
 - [x] Add browser error overlay to `gowdk dev`.
 - [x] Show compiler errors and generated Go build errors in the browser.
-- [ ] Show dev-only runtime panics in the browser after the generated-app
-  runtime bridge exists.
+- [x] Show dev-only generated-app runtime 5xx failures in the browser through
+  the proxy bridge with generic, non-request-bearing payloads.
 - [x] Keep last successful build clearly visible.
 - [x] Log changed files for failed dev rebuilds.
 - [x] Document backend dev proxy behavior and stabilize terminal wording for

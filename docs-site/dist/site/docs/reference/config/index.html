@@ -1,0 +1,494 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Config Reference - GOWDK</title>
+  <meta name="description" content="The root package exposes config types used by compiler and future generated app behavior.">
+  <link rel="icon" href="/favicon.ico">
+  <meta property="og:site_name" content="GOWDK">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Config Reference - GOWDK">
+  <meta property="og:description" content="The root package exposes config types used by compiler and future generated app behavior.">
+  <meta property="og:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Config Reference - GOWDK">
+  <meta name="twitter:description" content="The root package exposes config types used by compiler and future generated app behavior.">
+  <meta name="twitter:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <link rel="stylesheet" href="/assets/app.f8be0ea9d706.css">
+  <script type="module" src="/assets/gowdk/components/site/CookieNotice/inline-gowdk.js" defer></script>
+  <script type="module" src="/assets/gowdk/components/site/DocsPage/inline-gowdk.js" defer></script>
+  <script src="/assets/gowdk/gowdk.js" defer></script>
+</head>
+<body>
+<div class="site-frame"><div class="site-banner" role="alert"><span class="site-banner-badge">Experimental</span><span class="site-banner-text">GOWDK is <strong>0.x</strong> and not production-ready — the language, generated output, and APIs can change between releases.</span><a class="site-banner-link" href="https://github.com/cssbruno/GoWDK/releases">Release status</a></div><header class="site-header"><a class="brand-link" href="/" aria-label="GOWDK documentation"><span class="brand-mark" aria-hidden="true">❯</span><span class="brand-name">GOWDK</span><span class="brand-tag">docs</span></a><nav class="top-nav" aria-label="Main navigation"><a href="/docs/getting-started/">Getting Started</a><a href="/docs/reference/cli/">CLI</a><a class="github-link" href="https://github.com/cssbruno/gowdk" aria-label="GOWDK on GitHub"><span class="github-icon">GH</span><span>GitHub</span></a></nav></header><div class="site-body"><div class="docs-shell"><aside class="docs-sidebar"><button class="docs-search-btn" type="button" data-docs-search aria-label="Search documentation"><span class="docs-search-ico" aria-hidden="true">⌕</span><span class="docs-search-label">Search docs</span><kbd class="docs-search-kbd">⌘K</kbd></button><nav class="docs-nav" aria-label="Documentation" data-docs-nav><a href="/">Overview</a><p class="docs-nav-group">Start</p><a href="/docs/getting-started/">Getting Started</a><p class="docs-nav-group">Language</p><a href="/docs/language/">GOWDK Language</a><a href="/docs/language/spec/">Current .gwdk Language Spec</a><a href="/docs/language/syntax/">Syntax</a><a href="/docs/language/semantics/">Semantics</a><a href="/docs/language/grammar/">Grammar</a><a href="/docs/language/blocks/">Blocks</a><a href="/docs/language/markup/">Markup</a><a href="/docs/language/components/">Components</a><a href="/docs/language/layouts/">Layouts</a><a href="/docs/language/data/">Data Lifecycle</a><a href="/docs/language/actions/">Actions</a><a href="/docs/language/api/">API</a><a href="/docs/language/forms/">Forms And Progressive Enhancement</a><a href="/docs/language/partials/">Partials</a><a href="/docs/language/ssr/">SSR</a><a href="/docs/language/hybrid/">Hybrid Rendering</a><a href="/docs/language/formatting/">Formatting</a><a href="/docs/language/diagnostics/">Diagnostics</a><a href="/docs/language/audit/">Audit Policy Files</a><a href="/docs/language/conformance/">.gwdk Conformance Corpus</a><a href="/docs/language/guards/">Guards And Default-Deny Page Access</a><a href="/docs/language/stability/">Language Construct Stability</a><p class="docs-nav-group">Reference</p><a href="/docs/reference/">Reference</a><a href="/docs/reference/routing/">Routing Reference</a><a href="/docs/reference/cli/">CLI Reference</a><a href="/docs/reference/config/">Config Reference</a><a href="/docs/reference/css/">CSS Reference</a><a href="/docs/reference/hooks/">Hooks, Guards, And Middleware</a><a href="/docs/reference/addons/">Addons Reference</a><a href="/docs/reference/contracts/">Contracts</a><a href="/docs/reference/errors/">Errors And Boundaries</a><a href="/docs/reference/diagnostics/">Diagnostics Reference</a><a href="/docs/reference/diagnostic-codes/">Diagnostic Codes</a><a href="/docs/reference/dev/">Dev Loop</a><a href="/docs/reference/deployment/">Deployment</a><a href="/docs/reference/testing/">Testing Reference</a><a href="/docs/reference/framework-integrations/">Framework Integrations</a><a href="/docs/reference/manifest/">Manifest Reference</a><a href="/docs/reference/db/">DB Addon</a><a href="/docs/reference/go-interop/">Go Interop</a><a href="/docs/reference/images/">Images</a><a href="/docs/reference/observability/">Observability</a><a href="/docs/reference/pwa-offline/">PWA And Offline</a><a href="/docs/reference/realtime/">Realtime</a><a href="/docs/reference/seo/">SEO Addon</a><a href="/docs/reference/tracing/">Tracing</a><p class="docs-nav-group">Compiler</p><a href="/docs/compiler/">Compiler</a><a href="/docs/compiler/project-structure/">Project Structure</a><a href="/docs/compiler/pipeline/">Compiler Pipeline</a><a href="/docs/compiler/generated-output/">Generated Output</a><a href="/docs/compiler/browser-compiler/">Browser-Facing Output</a><a href="/docs/compiler/build-report/">Build Report</a><a href="/docs/compiler/manifest/">Manifest</a><a href="/docs/compiler/endpoint-binding-inspection/">Feature Spec: go/packages Endpoint Binding Inspection</a><a href="/docs/compiler/incremental-cache-keys/">Incremental Cache Keys</a><a href="/docs/compiler/syntax-contributors/">Syntax Contributor Checklist</a><p class="docs-nav-group">Engineering</p><a href="/docs/engineering/architecture/">Architecture</a><a href="/docs/engineering/security/">Security Baseline</a><a href="/docs/engineering/conventions/">Engineering Conventions</a><a href="/docs/engineering/naming-conventions/">Naming And Full-Name Conventions</a><a href="/docs/engineering/code-quality/">Code Quality</a><a href="/docs/engineering/generated-code-policy/">Generated Code Policy</a><a href="/docs/engineering/dependency-policy/">Dependency Policy</a><a href="/docs/engineering/operations/">Operations</a><a href="/docs/engineering/testing/">Testing Strategy</a><a href="/docs/engineering/ci/">CI</a><a href="/docs/engineering/release/">Release</a><a href="/docs/engineering/await-blocks-plan/">Implementation Plan: Bounded Await Blocks</a><a href="/docs/engineering/markup-transitions-plan/">Implementation Plan: Bounded Markup Transitions</a><a href="/docs/engineering/release-plan/">0.x Improvement Checklist</a><a href="/docs/engineering/security-threat-model/">Security Threat Model</a><p class="docs-nav-group">Decisions</p><a href="/docs/engineering/decisions/">Architecture Decision Records</a><a href="/docs/engineering/decisions/0001-llm-ready-project-structure/">ADR 0001: LLM-Ready Project Structure</a><a href="/docs/engineering/decisions/0002-compile-first-render-model/">ADR 0002: Compile-First Render Model</a><a href="/docs/engineering/decisions/0003-js-default-explicit-wasm-islands/">ADR 0003: JS Default, Component-Declared WASM Islands</a><a href="/docs/engineering/decisions/0004-production-wasm-island-abi/">ADR 0004: Production WASM Island ABI</a><a href="/docs/engineering/decisions/0005-generated-go-emission-boundary/">ADR 0005: Generated Go Emission Boundary</a><a href="/docs/engineering/decisions/0006-gowdk-compiler-and-runtime-boundary/">ADR 0006: GOWDK Compiler And Runtime Boundary</a><a href="/docs/engineering/decisions/0007-static-first-spa-navigation/">ADR 0007: Static-First SPA Navigation</a><a href="/docs/engineering/decisions/0008-bounded-client-language/">ADR 0008: Bounded Client Language</a><a href="/docs/engineering/decisions/0009-optional-inline-go-authoring/">ADR 0009: Optional Inline Go Authoring</a><a href="/docs/engineering/decisions/0010-tokenizer-recursive-descent-parser/">ADR 0010: Tokenizer and Recursive-Descent Parser Direction</a><a href="/docs/engineering/decisions/0011-auth-addon-cryptography/">ADR 0011: Auth Addon Cryptography Stance</a><a href="/docs/engineering/decisions/0012-realtime-subscribe-surface/">ADR 0012: Realtime Subscribe Surface</a><a href="/docs/engineering/decisions/0013-built-in-tracing-observability/">ADR 0013: Built-In Tracing Observability</a><a href="/docs/engineering/decisions/0014-addon-runtime-config-split/">ADR 0014: Addon Runtime Config Split</a><a href="/docs/engineering/decisions/0015-generated-binary-lifecycle-services/">ADR 0015: Generated Binary Lifecycle Services</a><p class="docs-nav-group">Product</p><a href="/docs/product/vision/">Product Vision</a><a href="/docs/product/roadmap/">Product Roadmap</a><a href="/docs/product/requirements/">Product Requirements</a><a href="/docs/product/language-server/">Feature Spec: GOWDK Language Server</a><a href="/docs/product/await-blocks-spec/">Feature Spec: Bounded Await Blocks</a><a href="/docs/product/contract-runtime-spec/">Feature Spec: Contract Runtime</a><a href="/docs/product/diagnostics-and-navigation/">Feature Spec: Diagnostics And Navigation</a><a href="/docs/product/markup-transitions-spec/">Feature Spec: Bounded Markup Transitions</a><a href="/docs/product/observability-tracing-spec/">Feature Spec: GOWDK Trace</a><a href="/docs/product/playground/">Playground Onboarding and Sandboxing</a><a href="/docs/product/playground-hosted-execution-spec/">Feature Spec: Playground Hosted Execution And Export</a><a href="/docs/product/security-audit-spec/">Feature Spec: Declarative Security Audit (M8)</a></nav></aside><div class="doc-area"><main class="doc-page"><div class="doc-body"><div class="doc-main-col"><nav class="doc-breadcrumb" aria-label="Breadcrumb" data-doc-breadcrumb hidden></nav><header class="doc-hero"><p class="eyebrow">Reference</p><h1>Config Reference</h1><p class="doc-lead">The root package exposes config types used by compiler and future generated app behavior.</p></header><article class="prose"><p>The root package exposes config types used by compiler and future generated app behavior.</p><pre><code class="language-go">type Config struct {
+	AppName   string
+	Source    SourceConfig
+	Modules   []ModuleConfig
+	Render    RenderConfig
+	Env       EnvConfig
+	Lifecycle LifecycleConfig
+	Build     BuildConfig
+	CSS       CSSConfig
+	Addons    []Addon
+}
+</code></pre><h2 id="source">Source</h2><p><code>gowdk.config.go</code> is required for CLI commands that compile, validate, inspect,
+or serve a development loop for <code>.gwdk</code> code: <code>check</code>, <code>manifest</code>, <code>sitemap</code>,
+<code>routes</code>, <code>inspect ir</code>, <code>build</code>, and <code>dev</code>. Those commands load
+<code>gowdk.config.go</code> from the current directory by default, or the file passed
+with <code>--config &lt;file&gt;</code>.</p><p><code>SourceConfig</code> has include and exclude patterns. Discovery support exists in
+<code>internal/discover</code>, and <code>gowdk build</code> reads literal <code>Source.Include</code> and
+<code>Source.Exclude</code> fields from the loaded config when no explicit files are
+supplied. Explicit file paths still require a loaded config.</p><p><code>Modules</code> declares named source groups. Build discovery treats modules as
+source selectors. Generated app and binary composition is controlled by the
+modules selected for a specific build command.</p><p>Supported initial config subset:</p><pre><code class="language-go">package app
+
+import &#34;github.com/cssbruno/gowdk&#34;
+
+var Config = gowdk.Config{
+	Source: gowdk.SourceConfig{
+		Include: []string{&#34;src/**/*.gwdk&#34;},
+		Exclude: []string{&#34;src/**/draft.page.gwdk&#34;},
+	},
+	Modules: []gowdk.ModuleConfig{
+		{Name: &#34;frontend&#34;, Type: &#34;frontend&#34;},
+		{
+			Name: &#34;frontend2&#34;,
+			Type: &#34;marketing-ui&#34;,
+			Source: gowdk.SourceConfig{
+				Include: []string{&#34;ui2/**/*.gwdk&#34;},
+			},
+		},
+		{
+			Name: &#34;backendmicroservice&#34;,
+			Type: &#34;backendmicroservice&#34;,
+			Source: gowdk.SourceConfig{
+				Include: []string{&#34;services/backend/**/*.gwdk&#34;},
+				Exclude: []string{&#34;services/backend/**/draft.page.gwdk&#34;},
+			},
+		},
+	},
+	Build: gowdk.BuildConfig{
+		Output: &#34;dist/site&#34;,
+		Mode: gowdk.Production,
+		Head: gowdk.HeadConfig{
+			SiteName: &#34;Example&#34;,
+			Favicon: &#34;/favicon.ico&#34;,
+			Image: &#34;https://example.com/social.png&#34;,
+			TwitterCard: &#34;summary&#34;,
+		},
+		Stylesheets: []gowdk.Stylesheet{
+			{Href: &#34;/assets/app.css&#34;},
+		},
+		Scripts: []gowdk.Script{
+			{Src: &#34;/assets/app.js&#34;, Type: &#34;module&#34;},
+		},
+		Targets: []gowdk.BuildTargetConfig{
+			{
+				Name: &#34;admin&#34;,
+				Modules: []string{&#34;admin&#34;},
+				Output: &#34;dist/admin&#34;,
+				App: &#34;.gowdk/admin&#34;,
+				Binary: &#34;bin/admin&#34;,
+				WASM: &#34;bin/admin.wasm&#34;,
+				DeployRecipes: []string{&#34;systemd&#34;},
+			},
+			{
+				Name: &#34;public-admin&#34;,
+				Modules: []string{&#34;public&#34;, &#34;admin&#34;},
+				Output: &#34;dist/public-admin&#34;,
+				App: &#34;.gowdk/public-admin&#34;,
+				Binary: &#34;bin/public-admin&#34;,
+			},
+		},
+	},
+	Env: gowdk.EnvConfig{
+		Vars: []gowdk.EnvVar{
+			{Name: &#34;GOWDK_BACKEND_ORIGIN&#34;, Required: true},
+			{Name: &#34;GOWDK_ADDR&#34;, Default: &#34;127.0.0.1:8080&#34;},
+		},
+		Secrets: []gowdk.SecretEnv{
+			{Name: &#34;DATABASE_URL&#34;, Required: true},
+			{Name: &#34;GOWDK_CSRF_SECRET&#34;, Required: true},
+		},
+	},
+	Lifecycle: gowdk.LifecycleConfig{
+		Services: []gowdk.ServiceRef{
+			{ImportPath: &#34;example.com/site/services&#34;, Function: &#34;Services&#34;},
+		},
+	},
+	CSS: gowdk.CSSConfig{
+		Include: []string{&#34;styles/**/*.css&#34;},
+		Default: []string{&#34;global&#34;, &#34;tokens&#34;},
+	},
+}
+</code></pre><p>The CLI first parses this file as a literal config subset. Unknown top-level
+<code>gowdk.Config</code> fields are rejected instead of silently ignored. When a supported
+field contains non-literal Go that the subset cannot reduce safely, the loader
+falls back to the executable config bridge described below.</p><p>Addon constructors outside the built-in AST subset are loaded through a small
+Go helper that imports the config package. That means addon packages are normal
+Go modules:</p><pre><code class="language-go">import brand &#34;github.com/example/gowdk-brand&#34;
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		brand.Addon(),
+	},
+}
+</code></pre><p>The addon module may import other GitHub/private/local modules. The project
+<code>go.mod</code> remains the source of truth for resolving those imports, including
+<code>require</code>, <code>replace</code>, <code>GOPRIVATE</code>, and module proxy configuration.</p><h2 id="lifecycle-services">Lifecycle Services</h2><p><code>Lifecycle.Services</code> declares app-owned service providers imported by the
+generated app binary:</p><pre><code class="language-go">type LifecycleConfig struct {
+	Services []ServiceRef
+}
+
+type ServiceRef struct {
+	ImportPath string
+	Function   string
+}
+</code></pre><p>Each provider must be an exported no-argument function with this signature:</p><pre><code class="language-go">func Services() ([]app.Service, error)
+</code></pre><p>Provider packages import <code>github.com/cssbruno/gowdk/runtime/app</code> and return
+<code>app.Service</code> values. The config loader validates that <code>ImportPath</code> and
+<code>Function</code> are present; the generated app Go build validates that the symbol
+exists and has the right signature.</p><p>Lifecycle services are generic process hooks. Use them for workers, metrics
+listeners, protocol bridges, and app-owned servers. MCP adapters belong in app
+code or an external package that returns lifecycle services; GOWDK does not
+ship a core MCP addon or runtime package.</p><h2 id="generated-app-request-guards">Generated App Request Guards</h2><p>When generated SSR, action, API, or fragment routes declare <code>guard</code>, the
+generated app package can expose guard registration hooks. If <code>auth.Addon</code> is
+configured, generated startup registers the default <code>auth.required</code> guard and a
+session-backed provider for native <code>role:</code> / <code>permission:</code> guard IDs from the
+addon options.</p><p>Custom guard IDs still require a generated app hook:</p><pre><code class="language-go">package gowdkapp
+
+import gowdkguard &#34;github.com/cssbruno/gowdk/runtime/guard&#34;
+
+func GOWDKGuardRegistry() gowdkguard.Registry {
+	return gowdkguard.Registry{
+		&#34;auth.required&#34;: func(ctx gowdkguard.Context) error {
+			return nil
+		},
+	}
+}
+</code></pre><p>Native RBAC guard IDs such as <code>role:admin</code> and <code>permission:patients.read</code> use
+an application-owned principal source instead of a custom guard function:</p><pre><code class="language-go">import (
+	&#34;net/http&#34;
+
+	gowdkauth &#34;github.com/cssbruno/gowdk/runtime/auth&#34;
+)
+
+func GOWDKAuthProvider() gowdkauth.Provider {
+	return gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
+		return &amp;gowdkauth.Principal{ID: &#34;user-1&#34;, Roles: []string{&#34;admin&#34;}}, nil
+	})
+}
+</code></pre><p>This file belongs with generated app startup code, not inside feature packages
+that declare handlers. Missing required backing functions fail the generated app
+Go build when no addon supplies them. Guard errors still return HTTP 403 before
+SSR load functions, action decoding, API handlers, or user business logic run.</p><p>Native RBAC guards are a defense-in-depth redundancy layer for generated
+route/page access. They must never replace backend authorization inside
+handlers, services, repositories, or external systems.</p><p>See <a href="/docs/reference/hooks/">hooks.md</a> for guard, rate-limit, and middleware ordering.</p><h2 id="modules">Modules</h2><p><code>ModuleConfig</code> names a logical source group:</p><pre><code class="language-go">type ModuleConfig struct {
+	Name   string
+	Type   string
+	Source SourceConfig
+}
+</code></pre><p><code>Type</code> is user-defined metadata in the current build slice. GOWDK does not
+validate or reserve type values, so projects can use values such as <code>frontend</code>,
+<code>frontend2</code>, <code>backend</code>, <code>backendmicroservice</code>, <code>worker</code>, or any local module
+role. Deployment code remains user-owned; GOWDK does not infer Kubernetes or
+deployment settings from module type.</p><p>When <code>gowdk build</code> discovers files and a module has a name but no
+<code>Source.Include</code>, it uses <code>&lt;module-name&gt;/**/*.gwdk</code>. For example,
+<code>{Name: &#34;frontend&#34;}</code> discovers <code>frontend/**/*.gwdk</code>. Explicit module include
+patterns override that default for the module. Root <code>Source.Exclude</code> and module
+<code>Source.Exclude</code> patterns are both honored. <code>gowdk build --module &lt;name&gt;</code> limits
+discovery to selected configured modules.</p><p>The selected modules define what gets compiled into the build output and, when
+<code>--app</code> or <code>--bin</code> is used, what is copied into the generated app and embedded
+in the generated binary. Ad hoc CLI flags can still package modules directly:</p><pre><code class="language-sh"># Single-module binary.
+gowdk build --module admin --out dist/admin --app .gowdk/admin --bin bin/admin
+
+# Multi-module binary.
+gowdk build --module public --module admin --out dist/app --app .gowdk/app --bin bin/app
+
+# Separate binaries with different module sets.
+gowdk build --module public --out dist/public --app .gowdk/public --bin bin/public
+gowdk build --module admin,api --out dist/admin-api --app .gowdk/admin-api --bin bin/admin-api
+</code></pre><p>Use distinct <code>--out</code> and <code>--app</code> directories for separate binaries so stale
+artifacts from another module selection cannot be copied into the next binary.</p><h2 id="render">Render</h2><p><code>RenderConfig.Default</code> controls the default render mode. When omitted, default mode is <code>spa</code>.</p><h2 id="env">Env</h2><p><code>EnvConfig</code> declares the runtime environment contract. Config owns the names,
+required flags, and safe non-secret defaults. Deployment owns all values.</p><pre><code class="language-go">type EnvConfig struct {
+	Vars    []gowdk.EnvVar
+	Secrets []gowdk.SecretEnv
+}
+
+type EnvVar struct {
+	Name     string
+	Required bool
+	Default  string
+}
+
+type SecretEnv struct {
+	Name     string
+	Required bool
+}
+</code></pre><p>Use <code>Vars</code> for normal runtime settings:</p><pre><code class="language-go">Env: gowdk.EnvConfig{
+	Vars: []gowdk.EnvVar{
+		{Name: &#34;GOWDK_ADDR&#34;, Default: &#34;127.0.0.1:8080&#34;},
+		{Name: &#34;GOWDK_BACKEND_ORIGIN&#34;, Required: true},
+	},
+}
+</code></pre><p>Use <code>Secrets</code> for secret names:</p><pre><code class="language-go">Env: gowdk.EnvConfig{
+	Secrets: []gowdk.SecretEnv{
+		{Name: &#34;DATABASE_URL&#34;, Required: true},
+		{Name: &#34;GOWDK_CSRF_SECRET&#34;, Required: true},
+	},
+}
+</code></pre><p>Validation runs when <code>gowdk.config.go</code> is loaded. Required names that are unset
+or blank in the host environment fail with a direct diagnostic such as
+<code>DATABASE_URL is required but is not set</code>. Required vars with <code>Default</code> are
+treated as satisfied by the default. Secrets have no <code>Default</code> or value field by
+type; <code>Default</code> and <code>Value</code> are rejected in literal config parsing too.</p><p>Project-aware CLI commands can load local env files before validation:</p><pre><code class="language-sh">gowdk check --env-file .env.dev
+gowdk build --env-file .env.production
+</code></pre><p>If <code>--env-file</code> is omitted, GOWDK auto-loads <code>.env.&lt;GOWDK_ENV&gt;</code> from the
+project root when <code>GOWDK_ENV</code> is set and the file exists, otherwise <code>.env</code> when
+present. Process environment values always win over file values. The file is
+only a value source for the same validation contract; it does not bypass
+<code>Required</code> or <code>MinBytes</code>.</p><p>The same name cannot appear in both <code>Vars</code> and <code>Secrets</code>. Secret-looking var
+names ending in <code>_SECRET</code>, <code>_TOKEN</code>, <code>_PASSWORD</code>, or <code>_KEY</code> are rejected and
+must move to <code>Secrets</code>. Diagnostics print names only and never print values.</p><p>Generated app binaries repeat the required env check before serving requests.
+For direct binary runs, set <code>GOWDK_ENV_FILE=/path/to/.env</code> or place <code>.env</code> in
+the process working directory. This is a startup redundancy layer only. It does
+not replace backend
+authorization, handler validation, database checks, deployment secrets, or
+runtime-specific security controls.</p><h2 id="build">Build</h2><p><code>BuildConfig.Output</code>, <code>BuildConfig.Mode</code>, <code>BuildConfig.Assets</code>,
+<code>BuildConfig.ObfuscateAssets</code>,
+<code>BuildConfig.Head</code>, <code>BuildConfig.CSRF</code>, <code>BuildConfig.SecurityHeaders</code>, <code>BuildConfig.BodyLimits</code>,
+<code>BuildConfig.AllowMissingBackend</code>, <code>BuildConfig.Stylesheets</code>,
+<code>BuildConfig.Scripts</code>, and <code>BuildConfig.Targets</code> are target build settings.
+Current <code>gowdk build</code> reads literal <code>Build.Output</code>, <code>Build.Mode</code>,
+<code>Build.ObfuscateAssets</code>, <code>Build.Head</code>, <code>Build.CSRF</code>,
+<code>Build.SecurityHeaders</code>, <code>Build.BodyLimits</code>, <code>Build.AllowMissingBackend</code>,
+<code>Build.Stylesheets</code>, <code>Build.Scripts</code>, and <code>Build.Targets</code> from
+<code>gowdk.config.go</code>; <code>--out</code> overrides <code>Build.Output</code> for ad hoc builds and
+<code>--obfuscate-assets</code> overrides <code>Build.Mode</code> to production for that build.
+<code>BuildConfig.Assets</code> remains planned.</p><p><code>Build.Targets</code> declares repeatable module-to-output packaging:</p><pre><code class="language-go">type BuildConfig struct {
+	Output              string
+	Mode                gowdk.BuildMode
+	Assets              gowdk.AssetMode
+	ObfuscateAssets     bool
+	Head                gowdk.HeadConfig
+	CSRF                gowdk.CSRFConfig
+	SecurityHeaders     gowdk.SecurityHeadersConfig
+	BodyLimits          gowdk.BodyLimitsConfig
+	AllowMissingBackend bool
+	Stylesheets         []gowdk.Stylesheet
+	Scripts             []gowdk.Script
+	Targets             []gowdk.BuildTargetConfig
+}
+
+type HeadConfig struct {
+	SiteName    string
+	Favicon     string
+	Image       string
+	TwitterCard string
+}
+
+type CSRFConfig struct {
+	Enabled    bool
+	Disabled   bool
+	SecretEnv  string
+	CookieName string
+	FieldName  string
+	HeaderName string
+	Insecure   bool
+}
+
+type SecurityHeadersConfig struct {
+	Enabled bool
+	Headers map[string]string
+}
+
+type BodyLimitsConfig struct {
+	ActionBytes int64
+	APIBytes    int64
+}
+
+type Script struct {
+	Src  string
+	Type string
+}
+
+type BuildTargetConfig struct {
+	Name          string
+	Modules       []string
+	Output        string
+	App           string
+	Binary        string
+	WASM          string
+	BackendApp    string
+	BackendBinary string
+	DeployRecipes []string
+}
+</code></pre><p><code>Mode</code> controls development metadata in generated frontend artifacts. The
+default omitted mode behaves like <code>gowdk.Development</code> and emits JavaScript
+island source maps. Set <code>Mode: gowdk.Production</code> to omit <code>.js.map</code> artifacts and
+<code>sourceMappingURL</code> comments and to compact generated island JavaScript.</p><p><code>ObfuscateAssets</code> is a production-only optimization/hardening switch for
+compiler-owned generated browser JavaScript such as the SPA/partial runtime,
+store runtime, island runtime/stubs, and WASM loader glue. It uses deterministic
+minification/identifier shortening, disables generated source maps through
+production mode, records transformed assets in <code>gowdk-assets.json</code>, and writes
+<code>asset_obfuscation</code> / <code>asset_obfuscated</code> build-report events. It is not a
+security boundary and does not replace server-side auth, guards, CSRF,
+validation, or handler authorization. Configs that set <code>ObfuscateAssets: true</code>
+must also set <code>Mode: gowdk.Production</code>; the CLI flag <code>--obfuscate-assets</code>
+sets both for the current build.</p><p>Production mode also requires explicitly declared <code>act</code> and <code>api</code> endpoints to
+bind to supported same-package Go handlers. Missing or unsupported handlers fail
+the build by default. Set <code>AllowMissingBackend: true</code> or pass
+<code>--allow-missing-backend</code> when intentionally generating HTTP 501 stubs during a
+migration.</p><p><code>Head</code> controls app-level document head tags. <code>Favicon</code> emits
+<code>&lt;link rel=&#34;icon&#34;&gt;</code>. <code>SiteName</code>, <code>Image</code>, and <code>TwitterCard</code> enable generated
+Open Graph and Twitter metadata. A page-level <code>image</code> overrides <code>Head.Image</code>
+for that page.</p><p><code>Scripts</code> declares global script tags emitted into every GOWDK-generated HTML
+document. Use page or component <code>js &#34;./file.js&#34;</code>, <code>js &#34;./file.ts&#34;</code>, or inline
+<code>js {}</code> declarations when a browser module should be emitted and linked only
+where that page/component is used.</p><p><code>CSRF</code> controls generated action and web-command CSRF wiring. CSRF is enabled by
+default for generated state-changing form endpoints. Generated apps require a
+signing secret from <code>SecretEnv</code> or <code>GOWDK_CSRF_SECRET</code>, inject a hidden token
+field into served HTML POST forms, and validate POSTs before generated decoding
+or user handlers run. Invalid or missing tokens return HTTP 403 with
+<code>invalid csrf token</code> and <code>Cache-Control: no-store</code>. Set <code>Disabled: true</code> only
+for an intentional non-production/test opt-out. <code>Enabled</code> is retained for older
+configs but is no longer required. <code>CookieName</code>, <code>FieldName</code>, and <code>HeaderName</code>
+override the generated token transport names.
+<code>Insecure</code> is for local HTTP development only: it disables the Secure cookie
+flag, uses the default cookie name <code>gowdk-csrf</code> instead of
+<code>__Host-gowdk-csrf</code>, and rejects explicit <code>__Host-</code>/<code>__Secure-</code> cookie names
+because browsers require those prefixes to be Secure.</p><p><code>SecurityHeaders</code> controls additional headers written by generated app
+handlers. When <code>Enabled</code> is true, each entry in <code>Headers</code> is passed to
+<code>runtime/app</code> and emitted on every generated response path, including health
+checks and generated errors. Use it for app-owned headers such as
+<code>X-Content-Type-Options</code>, <code>Referrer-Policy</code>, <code>Content-Security-Policy</code>, and
+<code>X-Frame-Options</code>. Keep TLS-boundary headers such as <code>Strict-Transport-Security</code>
+at the HTTPS edge unless the generated app is directly responsible for TLS.</p><p><code>BodyLimits</code> controls generated request body caps in bytes. Omitted or
+non-positive values use the default 1 MiB cap. <code>ActionBytes</code> applies to
+generated action POST handlers and web command form adapters before form
+decoding. <code>APIBytes</code> applies to generated API handlers before user code reads
+the request body.</p><p><code>Name</code> is required. <code>Output</code> is optional and defaults to
+<code>.gowdk/output/&lt;target-name&gt;</code> when omitted. <code>Modules</code> selects configured
+modules; omit it to use the default configured discovery set. <code>App</code> is optional
+and writes a generated Go app that embeds the target output. <code>Binary</code> is
+optional, requires <code>App</code>, and compiles that generated app for the local
+platform. <code>WASM</code> is optional, requires <code>App</code>, and compiles the generated app
+with <code>GOOS=js GOARCH=wasm</code>.</p><p><code>BackendApp</code> is optional and writes a generated backend-only Go app for
+feature-bound action/API endpoints. <code>BackendBinary</code> is optional, requires
+<code>BackendApp</code>, and compiles that backend app. When a target has both frontend
+<code>App</code>/<code>Binary</code> and <code>BackendApp</code>/<code>BackendBinary</code>, the frontend binary proxies
+generated backend routes to <code>GOWDK_BACKEND_ORIGIN</code>.</p><p><code>DeployRecipes</code> is optional and accepts <code>static</code>, <code>systemd</code>, <code>caddy</code>, <code>nginx</code>,
+and <code>split</code>. The values map to <code>gowdk build --deploy-recipe</code> and emit starter
+deployment files for the target shape. They do not add secrets, domains, TLS
+policy, platform-specific rollout logic, storage, backups, or CDN settings.</p><p>When <code>Build.Targets</code> is present, <code>gowdk build</code> runs every configured target
+unless ad hoc build flags or explicit files are passed. Use <code>gowdk build --target &lt;name&gt;</code> to run one or more named targets; <code>--target</code> may be repeated or
+comma-separated.</p><h2 id="css">CSS</h2><p><code>CSSConfig</code> controls discovered CSS inputs and generated page CSS output:</p><pre><code class="language-go">type CSSConfig struct {
+	Include []string
+	Exclude []string
+	Default []string
+	Output  CSSOutputConfig
+}
+
+type CSSOutputConfig struct {
+	Dir        string
+	HrefPrefix string
+}
+</code></pre><p>When omitted, CSS discovery scans <code>**/*.css</code>, excludes <code>.git</code>, <code>vendor</code>,
+<code>node_modules</code>, <code>.gowdk</code>, <code>dist</code>, and the selected build output directory, and
+uses <code>global.css</code> as the default CSS input when present.</p><p><code>CSS.Default</code> names discovered CSS inputs used by the <code>default</code> built-in in
+<code>css</code>. Generated page CSS defaults to <code>assets/gowdk/&lt;page-id&gt;.css</code> and hrefs
+under <code>/assets/gowdk/</code>.</p><h2 id="addons">Addons</h2><p><code>Addons</code> registers optional features such as spa, actions, partial, SSR, API,
+embed, CSS, contracts, realtime, auth, DB helpers, rate limiting, and SEO
+output. Current validation uses feature registration for render-mode,
+realtime, and other compiler checks; SPA builds invoke addons that implement
+<code>gowdk.CSSProcessor</code> or <code>gowdk.SEOProvider</code>.</p><p>DB helper usage is ordinary Go code around <code>database/sql</code>; see <a href="/docs/reference/db/">db.md</a>
+for migrations, transactions, readiness, and sqlc usage.</p><p>Use <code>gowdk add --list</code> to print addable built-in addon names, and
+<code>gowdk add --list --registry</code> to inspect the local discovery metadata. Use
+<code>gowdk add &lt;name&gt;</code> to insert the canonical import and <code>&lt;name&gt;.Addon()</code>
+constructor into <code>gowdk.config.go</code>. <code>gowdk add seo</code> requires
+<code>--base-url &lt;url&gt;</code> because SEO build output requires <code>seo.Options.BaseURL</code>. The
+command rewrites literal <code>Config.Addons</code> lists only; if <code>Addons</code> is computed by
+Go code, edit the config manually.</p><p>The literal config loader recognizes built-in addon constructors when they are
+imported from their canonical package paths. Most are no-argument constructors;
+<code>addons/auth</code> accepts the generated-app-safe session options subset
+(<code>SecretEnv</code>, <code>CookieName</code>, <code>TTL</code>, <code>Insecure</code>), and <code>addons/seo</code> accepts the
+literal SEO options subset:</p><pre><code class="language-go">import (
+	&#34;github.com/cssbruno/gowdk/addons/actions&#34;
+	&#34;github.com/cssbruno/gowdk/addons/api&#34;
+	&#34;github.com/cssbruno/gowdk/addons/auth&#34;
+	&#34;github.com/cssbruno/gowdk/addons/contracts&#34;
+	&#34;github.com/cssbruno/gowdk/addons/css&#34;
+	&#34;github.com/cssbruno/gowdk/addons/db&#34;
+	&#34;github.com/cssbruno/gowdk/addons/embed&#34;
+	&#34;github.com/cssbruno/gowdk/addons/partial&#34;
+	&#34;github.com/cssbruno/gowdk/addons/ratelimit&#34;
+	&#34;github.com/cssbruno/gowdk/addons/realtime&#34;
+	&#34;github.com/cssbruno/gowdk/addons/seo&#34;
+	&#34;github.com/cssbruno/gowdk/addons/spa&#34;
+	&#34;github.com/cssbruno/gowdk/addons/ssr&#34;
+	&#34;github.com/cssbruno/gowdk/addons/static&#34;
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		static.Addon(),
+		spa.Addon(),
+		actions.Addon(),
+		partial.Addon(),
+		ssr.Addon(),
+		api.Addon(),
+		auth.Addon(auth.Options{
+			SecretEnv:  &#34;GOWDK_AUTH_SESSION_SECRET&#34;,
+			CookieName: &#34;gowdk_session&#34;,
+		}),
+		contracts.Addon(),
+		embed.Addon(),
+		css.Addon(),
+		db.Addon(),
+		ratelimit.Addon(),
+		realtime.Addon(),
+		seo.Addon(seo.Options{
+			BaseURL: &#34;https://example.com&#34;,
+		}),
+	},
+}
+</code></pre><p>If <code>Addons</code> contains a constructor outside that AST-only subset, the loader
+uses an executable config bridge: it creates a temporary helper inside the
+project module, imports the config package as normal Go, and reads the resulting
+<code>gowdk.Config</code>. That allows addons from other modules, including GitHub-hosted
+addons, to participate through the regular <code>gowdk.Addon</code>,
+<code>gowdk.CSSProcessor</code>, <code>gowdk.SEOProvider</code>, and <code>gowdk.GoBlockConsumer</code>
+interfaces:</p><pre><code class="language-go">import (
+	&#34;github.com/cssbruno/gowdk&#34;
+	&#34;github.com/example/gowdk-brand&#34;
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		brand.Addon(),
+	},
+}
+</code></pre><p>External addon dependencies must already be resolvable by the project module,
+for example with <code>go get github.com/example/gowdk-brand</code>. Config packages must
+be importable Go packages, not <code>package main</code>.</p><p>The literal loader also recognizes the known literal Tailwind addon options
+subset without needing the executable bridge:</p><pre><code class="language-go">import &#34;github.com/cssbruno/gowdk/addons/tailwind&#34;
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		tailwind.Addon(tailwind.Options{
+			Input:  &#34;styles/app.css&#34;,
+			Minify: true,
+		}),
+	},
+}
+</code></pre><p>When <code>Command</code> is omitted, the Tailwind addon uses <code>tailwindcss</code> from <code>PATH</code>.
+If the executable is missing, builds fail with an install-required error. The
+executable bridge runs project config code only when the AST-only loader finds
+addon constructors it cannot reduce safely.</p><p>When <code>ratelimit.Addon()</code> is enabled, generated apps with request-time action,
+API, fragment, SSR, or split-backend proxy routes expose
+<code>gowdkapp.RegisterRateLimiter(*ratelimit.Limiter)</code>. User-owned Go still creates
+the limiter and chooses the in-memory store, Redis store adapter, key function,
+limit, and window.</p></article><nav class="doc-pager" aria-label="Pagination" data-doc-pager hidden></nav></div><aside class="doc-toc" data-doc-toc-wrap hidden><p class="doc-toc-title">On this page</p><nav aria-label="On this page" data-doc-toc></nav></aside></div></main></div></div><div class="docs-modal" data-docs-modal hidden><div class="docs-modal-panel" role="dialog" aria-modal="true" aria-label="Search documentation"><div class="docs-modal-search"><span class="docs-modal-ico" aria-hidden="true">⌕</span><input class="docs-modal-input" type="text" placeholder="Search documentation" data-docs-search-input aria-label="Search documentation"><kbd class="docs-modal-esc">Esc</kbd></div><div class="docs-modal-results" data-docs-results></div></div></div><aside class="cookie-notice" data-cookie-notice aria-label="Cookie notice" hidden><div class="cookie-copy"><strong>One cookie</strong><p>This site stores a single cookie to remember you dismissed this notice. No tracking, no analytics.</p></div><button class="button cookie-dismiss" type="button" data-cookie-dismiss>Got it</button></aside></div><footer class="site-footer"><div class="site-footer-inner"><span>GOWDK - Go-native web apps that rebuild fast.</span><nav class="site-footer-nav" aria-label="Footer"><a href="/">Docs</a><a href="/docs/getting-started/">Getting Started</a><a href="https://github.com/cssbruno/gowdk">GitHub</a></nav></div></footer></div>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Build Report - GOWDK</title>
+  <meta name="description" content="Every app generation entrypoint creates a structured build report. Disk builds write it to gowdk-build-report.json at the selected output root; in-memory builds return the same...">
+  <link rel="icon" href="/favicon.ico">
+  <meta property="og:site_name" content="GOWDK">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Build Report - GOWDK">
+  <meta property="og:description" content="Every app generation entrypoint creates a structured build report. Disk builds write it to gowdk-build-report.json at the selected output root; in-memory builds return the same...">
+  <meta property="og:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Build Report - GOWDK">
+  <meta name="twitter:description" content="Every app generation entrypoint creates a structured build report. Disk builds write it to gowdk-build-report.json at the selected output root; in-memory builds return the same...">
+  <meta name="twitter:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <link rel="stylesheet" href="/assets/app.f8be0ea9d706.css">
+  <script type="module" src="/assets/gowdk/components/site/CookieNotice/inline-gowdk.js" defer></script>
+  <script type="module" src="/assets/gowdk/components/site/DocsPage/inline-gowdk.js" defer></script>
+  <script src="/assets/gowdk/gowdk.js" defer></script>
+</head>
+<body>
+<div class="site-frame"><div class="site-banner" role="alert"><span class="site-banner-badge">Experimental</span><span class="site-banner-text">GOWDK is <strong>0.x</strong> and not production-ready — the language, generated output, and APIs can change between releases.</span><a class="site-banner-link" href="https://github.com/cssbruno/GoWDK/releases">Release status</a></div><header class="site-header"><a class="brand-link" href="/" aria-label="GOWDK documentation"><span class="brand-mark" aria-hidden="true">❯</span><span class="brand-name">GOWDK</span><span class="brand-tag">docs</span></a><nav class="top-nav" aria-label="Main navigation"><a href="/docs/getting-started/">Getting Started</a><a href="/docs/reference/cli/">CLI</a><a class="github-link" href="https://github.com/cssbruno/gowdk" aria-label="GOWDK on GitHub"><span class="github-icon">GH</span><span>GitHub</span></a></nav></header><div class="site-body"><div class="docs-shell"><aside class="docs-sidebar"><button class="docs-search-btn" type="button" data-docs-search aria-label="Search documentation"><span class="docs-search-ico" aria-hidden="true">⌕</span><span class="docs-search-label">Search docs</span><kbd class="docs-search-kbd">⌘K</kbd></button><nav class="docs-nav" aria-label="Documentation" data-docs-nav><a href="/">Overview</a><p class="docs-nav-group">Start</p><a href="/docs/getting-started/">Getting Started</a><p class="docs-nav-group">Language</p><a href="/docs/language/">GOWDK Language</a><a href="/docs/language/spec/">Current .gwdk Language Spec</a><a href="/docs/language/syntax/">Syntax</a><a href="/docs/language/semantics/">Semantics</a><a href="/docs/language/grammar/">Grammar</a><a href="/docs/language/blocks/">Blocks</a><a href="/docs/language/markup/">Markup</a><a href="/docs/language/components/">Components</a><a href="/docs/language/layouts/">Layouts</a><a href="/docs/language/data/">Data Lifecycle</a><a href="/docs/language/actions/">Actions</a><a href="/docs/language/api/">API</a><a href="/docs/language/forms/">Forms And Progressive Enhancement</a><a href="/docs/language/partials/">Partials</a><a href="/docs/language/ssr/">SSR</a><a href="/docs/language/hybrid/">Hybrid Rendering</a><a href="/docs/language/formatting/">Formatting</a><a href="/docs/language/diagnostics/">Diagnostics</a><a href="/docs/language/audit/">Audit Policy Files</a><a href="/docs/language/conformance/">.gwdk Conformance Corpus</a><a href="/docs/language/guards/">Guards And Default-Deny Page Access</a><a href="/docs/language/stability/">Language Construct Stability</a><p class="docs-nav-group">Reference</p><a href="/docs/reference/">Reference</a><a href="/docs/reference/routing/">Routing Reference</a><a href="/docs/reference/cli/">CLI Reference</a><a href="/docs/reference/config/">Config Reference</a><a href="/docs/reference/css/">CSS Reference</a><a href="/docs/reference/hooks/">Hooks, Guards, And Middleware</a><a href="/docs/reference/addons/">Addons Reference</a><a href="/docs/reference/contracts/">Contracts</a><a href="/docs/reference/errors/">Errors And Boundaries</a><a href="/docs/reference/diagnostics/">Diagnostics Reference</a><a href="/docs/reference/diagnostic-codes/">Diagnostic Codes</a><a href="/docs/reference/dev/">Dev Loop</a><a href="/docs/reference/deployment/">Deployment</a><a href="/docs/reference/testing/">Testing Reference</a><a href="/docs/reference/framework-integrations/">Framework Integrations</a><a href="/docs/reference/manifest/">Manifest Reference</a><a href="/docs/reference/db/">DB Addon</a><a href="/docs/reference/go-interop/">Go Interop</a><a href="/docs/reference/images/">Images</a><a href="/docs/reference/observability/">Observability</a><a href="/docs/reference/pwa-offline/">PWA And Offline</a><a href="/docs/reference/realtime/">Realtime</a><a href="/docs/reference/seo/">SEO Addon</a><a href="/docs/reference/tracing/">Tracing</a><p class="docs-nav-group">Compiler</p><a href="/docs/compiler/">Compiler</a><a href="/docs/compiler/project-structure/">Project Structure</a><a href="/docs/compiler/pipeline/">Compiler Pipeline</a><a href="/docs/compiler/generated-output/">Generated Output</a><a href="/docs/compiler/browser-compiler/">Browser-Facing Output</a><a href="/docs/compiler/build-report/">Build Report</a><a href="/docs/compiler/manifest/">Manifest</a><a href="/docs/compiler/endpoint-binding-inspection/">Feature Spec: go/packages Endpoint Binding Inspection</a><a href="/docs/compiler/incremental-cache-keys/">Incremental Cache Keys</a><a href="/docs/compiler/syntax-contributors/">Syntax Contributor Checklist</a><p class="docs-nav-group">Engineering</p><a href="/docs/engineering/architecture/">Architecture</a><a href="/docs/engineering/security/">Security Baseline</a><a href="/docs/engineering/conventions/">Engineering Conventions</a><a href="/docs/engineering/naming-conventions/">Naming And Full-Name Conventions</a><a href="/docs/engineering/code-quality/">Code Quality</a><a href="/docs/engineering/generated-code-policy/">Generated Code Policy</a><a href="/docs/engineering/dependency-policy/">Dependency Policy</a><a href="/docs/engineering/operations/">Operations</a><a href="/docs/engineering/testing/">Testing Strategy</a><a href="/docs/engineering/ci/">CI</a><a href="/docs/engineering/release/">Release</a><a href="/docs/engineering/await-blocks-plan/">Implementation Plan: Bounded Await Blocks</a><a href="/docs/engineering/markup-transitions-plan/">Implementation Plan: Bounded Markup Transitions</a><a href="/docs/engineering/release-plan/">0.x Improvement Checklist</a><a href="/docs/engineering/security-threat-model/">Security Threat Model</a><p class="docs-nav-group">Decisions</p><a href="/docs/engineering/decisions/">Architecture Decision Records</a><a href="/docs/engineering/decisions/0001-llm-ready-project-structure/">ADR 0001: LLM-Ready Project Structure</a><a href="/docs/engineering/decisions/0002-compile-first-render-model/">ADR 0002: Compile-First Render Model</a><a href="/docs/engineering/decisions/0003-js-default-explicit-wasm-islands/">ADR 0003: JS Default, Component-Declared WASM Islands</a><a href="/docs/engineering/decisions/0004-production-wasm-island-abi/">ADR 0004: Production WASM Island ABI</a><a href="/docs/engineering/decisions/0005-generated-go-emission-boundary/">ADR 0005: Generated Go Emission Boundary</a><a href="/docs/engineering/decisions/0006-gowdk-compiler-and-runtime-boundary/">ADR 0006: GOWDK Compiler And Runtime Boundary</a><a href="/docs/engineering/decisions/0007-static-first-spa-navigation/">ADR 0007: Static-First SPA Navigation</a><a href="/docs/engineering/decisions/0008-bounded-client-language/">ADR 0008: Bounded Client Language</a><a href="/docs/engineering/decisions/0009-optional-inline-go-authoring/">ADR 0009: Optional Inline Go Authoring</a><a href="/docs/engineering/decisions/0010-tokenizer-recursive-descent-parser/">ADR 0010: Tokenizer and Recursive-Descent Parser Direction</a><a href="/docs/engineering/decisions/0011-auth-addon-cryptography/">ADR 0011: Auth Addon Cryptography Stance</a><a href="/docs/engineering/decisions/0012-realtime-subscribe-surface/">ADR 0012: Realtime Subscribe Surface</a><a href="/docs/engineering/decisions/0013-built-in-tracing-observability/">ADR 0013: Built-In Tracing Observability</a><a href="/docs/engineering/decisions/0014-addon-runtime-config-split/">ADR 0014: Addon Runtime Config Split</a><a href="/docs/engineering/decisions/0015-generated-binary-lifecycle-services/">ADR 0015: Generated Binary Lifecycle Services</a><p class="docs-nav-group">Product</p><a href="/docs/product/vision/">Product Vision</a><a href="/docs/product/roadmap/">Product Roadmap</a><a href="/docs/product/requirements/">Product Requirements</a><a href="/docs/product/language-server/">Feature Spec: GOWDK Language Server</a><a href="/docs/product/await-blocks-spec/">Feature Spec: Bounded Await Blocks</a><a href="/docs/product/contract-runtime-spec/">Feature Spec: Contract Runtime</a><a href="/docs/product/diagnostics-and-navigation/">Feature Spec: Diagnostics And Navigation</a><a href="/docs/product/markup-transitions-spec/">Feature Spec: Bounded Markup Transitions</a><a href="/docs/product/observability-tracing-spec/">Feature Spec: GOWDK Trace</a><a href="/docs/product/playground/">Playground Onboarding and Sandboxing</a><a href="/docs/product/playground-hosted-execution-spec/">Feature Spec: Playground Hosted Execution And Export</a><a href="/docs/product/security-audit-spec/">Feature Spec: Declarative Security Audit (M8)</a></nav></aside><div class="doc-area"><main class="doc-page"><div class="doc-body"><div class="doc-main-col"><nav class="doc-breadcrumb" aria-label="Breadcrumb" data-doc-breadcrumb hidden></nav><header class="doc-hero"><p class="eyebrow">Compiler</p><h1>Build Report</h1><p class="doc-lead">Every app generation entrypoint creates a structured build report. Disk builds write it to gowdk-build-report.json at the selected output root; in-memory builds return the same file in MemoryResult.Files; failed builds wrap the original error in buildgen.BuildError so callers can inspect the partial report while preserving the original error text. Callers without a real output root can use BuildMemoryWithOptions or BuildMemoryFromIRWithOptions; an empty OutputBase uses . for deterministic relative path metadata and does not create files or report directories.</p></header><article class="prose"><p>Every app generation entrypoint creates a structured build report. Disk
+builds write it to <code>gowdk-build-report.json</code> at the selected output root;
+in-memory builds return the same file in <code>MemoryResult.Files</code>; failed builds
+wrap the original error in <code>buildgen.BuildError</code> so callers can inspect the
+partial report while preserving the original error text.
+Callers without a real output root can use <code>BuildMemoryWithOptions</code> or
+<code>BuildMemoryFromIRWithOptions</code>; an empty <code>OutputBase</code> uses <code>.</code> for deterministic
+relative path metadata and does not create files or report directories.</p><p>The report is mandatory for compiler-facing build APIs. It is deterministic:
+it does not include timestamps or durations, so unchanged builds can still skip
+rewriting identical generated files.</p><p>Build timings are opt-in and separate. <code>gowdk build --timings</code> writes
+<code>gowdk-build-timings.json</code> at the output root, and <code>gowdk build --timings=&lt;file&gt;</code> writes the same versioned JSON shape to a custom file. Timing
+data is not printed to stdout and is not added to <code>gowdk-build-report.json</code>.</p><h2 id="schema">Schema</h2><pre><code class="language-json">{
+  &#34;version&#34;: 1,
+  &#34;mode&#34;: &#34;build&#34;,
+  &#34;outputDir&#34;: &#34;dist/site&#34;,
+  &#34;events&#34;: [
+    {
+      &#34;level&#34;: &#34;info&#34;,
+      &#34;stage&#34;: &#34;validate&#34;,
+      &#34;kind&#34;: &#34;ir_valid&#34;,
+      &#34;message&#34;: &#34;compiler IR validation completed&#34;
+    }
+  ]
+}
+</code></pre><p><code>mode</code> is <code>build</code>, <code>memory</code>, or <code>incremental</code>. Events use <code>debug</code>, <code>info</code>, or
+<code>error</code> levels and record the compiler stage, a stable event kind, a message,
+and optional page, route, path, and string data fields.</p><p>Current stages are:</p><ul><li><code>start</code>: compiler IR counts at build entry.</li><li><code>validate</code>: compiler IR and compiler contract validation.</li><li><code>plan</code>: SPA page, CSS, and runtime asset planning.</li><li><code>write</code>: page, CSS, and runtime asset writes or memory collection.</li><li><code>manifest</code>: route and asset manifest reads/writes.</li><li><code>seo</code>: optional sitemap/robots output and sitemap route exclusions.</li><li><code>cleanup</code>: stale changed-page output removal during incremental builds.</li><li><code>complete</code>: successful build summary.</li><li><code>report</code>: build report serialization or write failure.</li></ul><p>Current report events include:</p><ul><li><code>cache_policy</code>: summarizes generated page, CSS, asset, and request-time cache
+policies.</li><li><code>asset_obfuscation</code>: summarizes whether production generated-asset
+obfuscation was enabled and how many compiler-owned browser assets were
+transformed.</li><li><code>asset_obfuscated</code>: one event per compiler-owned generated browser asset
+transformed by <code>Build.ObfuscateAssets</code> or <code>gowdk build --obfuscate-assets</code>,
+including before/after hashes, byte counts, and whether the payload changed.</li><li><code>asset_size</code>: one event per generated runtime asset, including JavaScript,
+source maps, WASM modules, and loaders. <code>data.kind</code> is <code>javascript</code>, <code>wasm</code>,
+<code>sourcemap</code>, <code>css</code>, or <code>asset</code>; <code>data.bytes</code> is the generated byte count.
+For <code>assets/gowdk/islands/wasm_exec.js</code>, <code>data.wasmExecGoVersion</code> records
+the Go toolchain version that supplied the runtime file.</li><li><code>contract_reference</code>: one event per linked or unlinked <code>g:command</code>/<code>g:query</code>
+reference, including owner, source, status, route metadata, roles, and
+handler/register metadata when known.</li><li><code>realtime_subscription</code>: one event per <code>g:subscribe</code> reference, including
+query, presentation event, owner, source, status, roles, and handler/register
+metadata when known.</li><li><code>query_invalidation</code>: one event per validated domain-event to query
+invalidation edge used by bound <code>g:query</code> regions, including query, event,
+owner, source, status, and guard metadata when known.</li><li><code>sitemap_written</code> / <code>robots_written</code>: emitted when <code>addons/seo</code> writes
+<code>sitemap.xml</code> and <code>robots.txt</code>.</li><li><code>seo_route_excluded</code>: emitted when <code>addons/seo</code> excludes a page from the
+build-time sitemap, with <code>data.reason</code> and render <code>mode</code>. Reasons include
+request-time rendering, missing dynamic <code>paths {}</code>, and guardless routes that
+the generated app denies by default.</li></ul><h2 id="cli-debug-output">CLI Debug Output</h2><p><code>gowdk build --debug</code> prints a readable version of this report to stderr while
+normal generated artifact paths remain on stdout. <code>gowdk dev</code> forwards
+<code>--debug</code> as a build flag, including incremental SPA rebuilds.</p><p>Example:</p><pre><code class="language-sh">gowdk build --debug --out dist/site src/pages/home.page.gwdk
+</code></pre><p>Generated file paths are still scriptable from stdout; report details are only
+printed to stderr when <code>--debug</code> is present. The JSON report file is generated
+for every successful disk build even without <code>--debug</code>.</p><h2 id="cli-timing-output">CLI Timing Output</h2><p><code>gowdk build --timings</code> records elapsed phase durations and simple counters in
+a separate sidecar:</p><pre><code class="language-json">{
+  &#34;version&#34;: 1,
+  &#34;mode&#34;: &#34;build&#34;,
+  &#34;outputDir&#34;: &#34;dist/site&#34;,
+  &#34;phases&#34;: [
+    {
+      &#34;name&#34;: &#34;parse_lower&#34;,
+      &#34;durationMs&#34;: 1.25
+    }
+  ],
+  &#34;counters&#34;: {
+    &#34;source_files&#34;: 1,
+    &#34;files_written&#34;: 4,
+    &#34;identical_writes_skipped&#34;: 0
+  }
+}
+</code></pre><p>Current phases include <code>config_load</code>, <code>source_discovery</code>, <code>parse_lower</code>,
+<code>ir_assembly</code>, <code>go_binding</code>, <code>ir_validation</code>, <code>contract_validation</code>,
+<code>output_plan_writes</code>, <code>app_generation</code>, <code>binary_build</code>, <code>wasm_build</code>,
+<code>backend_app_generation</code>, and <code>backend_binary_build</code> when those paths run.</p><p><code>gowdk dev</code> incremental SPA rebuilds reuse the same sidecar when <code>--timings</code> is
+forwarded in the build flags. Incremental counters include
+<code>incremental_input_changes</code>, <code>incremental_page_changes</code>,
+<code>incremental_component_changes</code>, <code>incremental_layout_changes</code>,
+<code>incremental_affected_pages</code>, <code>files_written</code>, and
+<code>identical_writes_skipped</code>.</p><h2 id="benchmarks">Benchmarks</h2><p>Use Go&#39;s benchmark runner for repeatable compiler regression tracking:</p><pre><code class="language-sh">go test ./internal/parser ./internal/gwdkanalysis ./internal/compiler ./internal/buildgen -run &#39;^$&#39; -bench &#39;Benchmark(ParseLowerPage|IRAssembly|ValidateProgram|GeneratedOutputFromValidatedIR|IncrementalRebuildChangedPage)$&#39; -benchmem -count=5
+</code></pre><p>Stable benchmark names:</p><ul><li><code>BenchmarkParseLowerPage</code>: parses and lowers one representative page source.</li><li><code>BenchmarkIRAssembly</code>: assembles pages/components into <code>gwdkir.Program</code>.</li><li><code>BenchmarkValidateProgram</code>: runs compiler validation on assembled IR.</li><li><code>BenchmarkGeneratedOutputFromValidatedIR</code>: writes SPA output from validated IR.</li><li><code>BenchmarkIncrementalRebuildChangedPage</code>: rewrites the changed-page
+incremental build path.</li></ul><p>Capture local baselines with the command above and compare with <code>benchstat</code>.
+CI should run benchmarks for trend data only; do not gate merges on fixed
+duration thresholds because hardware and filesystem variance are expected.</p></article><nav class="doc-pager" aria-label="Pagination" data-doc-pager hidden></nav></div><aside class="doc-toc" data-doc-toc-wrap hidden><p class="doc-toc-title">On this page</p><nav aria-label="On this page" data-doc-toc></nav></aside></div></main></div></div><div class="docs-modal" data-docs-modal hidden><div class="docs-modal-panel" role="dialog" aria-modal="true" aria-label="Search documentation"><div class="docs-modal-search"><span class="docs-modal-ico" aria-hidden="true">⌕</span><input class="docs-modal-input" type="text" placeholder="Search documentation" data-docs-search-input aria-label="Search documentation"><kbd class="docs-modal-esc">Esc</kbd></div><div class="docs-modal-results" data-docs-results></div></div></div><aside class="cookie-notice" data-cookie-notice aria-label="Cookie notice" hidden><div class="cookie-copy"><strong>One cookie</strong><p>This site stores a single cookie to remember you dismissed this notice. No tracking, no analytics.</p></div><button class="button cookie-dismiss" type="button" data-cookie-dismiss>Got it</button></aside></div><footer class="site-footer"><div class="site-footer-inner"><span>GOWDK - Go-native web apps that rebuild fast.</span><nav class="site-footer-nav" aria-label="Footer"><a href="/">Docs</a><a href="/docs/getting-started/">Getting Started</a><a href="https://github.com/cssbruno/gowdk">GitHub</a></nav></div></footer></div>
+</body>
+</html>

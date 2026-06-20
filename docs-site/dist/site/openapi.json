@@ -1,0 +1,17 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "GOWDK routable web surface",
+    "version": "0"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {},
+  "components": {},
+  "x-gowdk": {
+    "schema": "gowdk.openapi.v1"
+  }
+}

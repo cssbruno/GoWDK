@@ -1,0 +1,654 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contracts - GOWDK</title>
+  <meta name="description" content="runtime/contracts is the first runtime slice of the GOWDK Runtime contract-driven backend model. It is usable from normal Go today. .gwdk command and query references are...">
+  <link rel="icon" href="/favicon.ico">
+  <meta property="og:site_name" content="GOWDK">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Contracts - GOWDK">
+  <meta property="og:description" content="runtime/contracts is the first runtime slice of the GOWDK Runtime contract-driven backend model. It is usable from normal Go today. .gwdk command and query references are...">
+  <meta property="og:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Contracts - GOWDK">
+  <meta name="twitter:description" content="runtime/contracts is the first runtime slice of the GOWDK Runtime contract-driven backend model. It is usable from normal Go today. .gwdk command and query references are...">
+  <meta name="twitter:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <link rel="stylesheet" href="/assets/app.f8be0ea9d706.css">
+  <script type="module" src="/assets/gowdk/components/site/CookieNotice/inline-gowdk.js" defer></script>
+  <script type="module" src="/assets/gowdk/components/site/DocsPage/inline-gowdk.js" defer></script>
+  <script src="/assets/gowdk/gowdk.js" defer></script>
+</head>
+<body>
+<div class="site-frame"><div class="site-banner" role="alert"><span class="site-banner-badge">Experimental</span><span class="site-banner-text">GOWDK is <strong>0.x</strong> and not production-ready — the language, generated output, and APIs can change between releases.</span><a class="site-banner-link" href="https://github.com/cssbruno/GoWDK/releases">Release status</a></div><header class="site-header"><a class="brand-link" href="/" aria-label="GOWDK documentation"><span class="brand-mark" aria-hidden="true">❯</span><span class="brand-name">GOWDK</span><span class="brand-tag">docs</span></a><nav class="top-nav" aria-label="Main navigation"><a href="/docs/getting-started/">Getting Started</a><a href="/docs/reference/cli/">CLI</a><a class="github-link" href="https://github.com/cssbruno/gowdk" aria-label="GOWDK on GitHub"><span class="github-icon">GH</span><span>GitHub</span></a></nav></header><div class="site-body"><div class="docs-shell"><aside class="docs-sidebar"><button class="docs-search-btn" type="button" data-docs-search aria-label="Search documentation"><span class="docs-search-ico" aria-hidden="true">⌕</span><span class="docs-search-label">Search docs</span><kbd class="docs-search-kbd">⌘K</kbd></button><nav class="docs-nav" aria-label="Documentation" data-docs-nav><a href="/">Overview</a><p class="docs-nav-group">Start</p><a href="/docs/getting-started/">Getting Started</a><p class="docs-nav-group">Language</p><a href="/docs/language/">GOWDK Language</a><a href="/docs/language/spec/">Current .gwdk Language Spec</a><a href="/docs/language/syntax/">Syntax</a><a href="/docs/language/semantics/">Semantics</a><a href="/docs/language/grammar/">Grammar</a><a href="/docs/language/blocks/">Blocks</a><a href="/docs/language/markup/">Markup</a><a href="/docs/language/components/">Components</a><a href="/docs/language/layouts/">Layouts</a><a href="/docs/language/data/">Data Lifecycle</a><a href="/docs/language/actions/">Actions</a><a href="/docs/language/api/">API</a><a href="/docs/language/forms/">Forms And Progressive Enhancement</a><a href="/docs/language/partials/">Partials</a><a href="/docs/language/ssr/">SSR</a><a href="/docs/language/hybrid/">Hybrid Rendering</a><a href="/docs/language/formatting/">Formatting</a><a href="/docs/language/diagnostics/">Diagnostics</a><a href="/docs/language/audit/">Audit Policy Files</a><a href="/docs/language/conformance/">.gwdk Conformance Corpus</a><a href="/docs/language/guards/">Guards And Default-Deny Page Access</a><a href="/docs/language/stability/">Language Construct Stability</a><p class="docs-nav-group">Reference</p><a href="/docs/reference/">Reference</a><a href="/docs/reference/routing/">Routing Reference</a><a href="/docs/reference/cli/">CLI Reference</a><a href="/docs/reference/config/">Config Reference</a><a href="/docs/reference/css/">CSS Reference</a><a href="/docs/reference/hooks/">Hooks, Guards, And Middleware</a><a href="/docs/reference/addons/">Addons Reference</a><a href="/docs/reference/contracts/">Contracts</a><a href="/docs/reference/errors/">Errors And Boundaries</a><a href="/docs/reference/diagnostics/">Diagnostics Reference</a><a href="/docs/reference/diagnostic-codes/">Diagnostic Codes</a><a href="/docs/reference/dev/">Dev Loop</a><a href="/docs/reference/deployment/">Deployment</a><a href="/docs/reference/testing/">Testing Reference</a><a href="/docs/reference/framework-integrations/">Framework Integrations</a><a href="/docs/reference/manifest/">Manifest Reference</a><a href="/docs/reference/db/">DB Addon</a><a href="/docs/reference/go-interop/">Go Interop</a><a href="/docs/reference/images/">Images</a><a href="/docs/reference/observability/">Observability</a><a href="/docs/reference/pwa-offline/">PWA And Offline</a><a href="/docs/reference/realtime/">Realtime</a><a href="/docs/reference/seo/">SEO Addon</a><a href="/docs/reference/tracing/">Tracing</a><p class="docs-nav-group">Compiler</p><a href="/docs/compiler/">Compiler</a><a href="/docs/compiler/project-structure/">Project Structure</a><a href="/docs/compiler/pipeline/">Compiler Pipeline</a><a href="/docs/compiler/generated-output/">Generated Output</a><a href="/docs/compiler/browser-compiler/">Browser-Facing Output</a><a href="/docs/compiler/build-report/">Build Report</a><a href="/docs/compiler/manifest/">Manifest</a><a href="/docs/compiler/endpoint-binding-inspection/">Feature Spec: go/packages Endpoint Binding Inspection</a><a href="/docs/compiler/incremental-cache-keys/">Incremental Cache Keys</a><a href="/docs/compiler/syntax-contributors/">Syntax Contributor Checklist</a><p class="docs-nav-group">Engineering</p><a href="/docs/engineering/architecture/">Architecture</a><a href="/docs/engineering/security/">Security Baseline</a><a href="/docs/engineering/conventions/">Engineering Conventions</a><a href="/docs/engineering/naming-conventions/">Naming And Full-Name Conventions</a><a href="/docs/engineering/code-quality/">Code Quality</a><a href="/docs/engineering/generated-code-policy/">Generated Code Policy</a><a href="/docs/engineering/dependency-policy/">Dependency Policy</a><a href="/docs/engineering/operations/">Operations</a><a href="/docs/engineering/testing/">Testing Strategy</a><a href="/docs/engineering/ci/">CI</a><a href="/docs/engineering/release/">Release</a><a href="/docs/engineering/await-blocks-plan/">Implementation Plan: Bounded Await Blocks</a><a href="/docs/engineering/markup-transitions-plan/">Implementation Plan: Bounded Markup Transitions</a><a href="/docs/engineering/release-plan/">0.x Improvement Checklist</a><a href="/docs/engineering/security-threat-model/">Security Threat Model</a><p class="docs-nav-group">Decisions</p><a href="/docs/engineering/decisions/">Architecture Decision Records</a><a href="/docs/engineering/decisions/0001-llm-ready-project-structure/">ADR 0001: LLM-Ready Project Structure</a><a href="/docs/engineering/decisions/0002-compile-first-render-model/">ADR 0002: Compile-First Render Model</a><a href="/docs/engineering/decisions/0003-js-default-explicit-wasm-islands/">ADR 0003: JS Default, Component-Declared WASM Islands</a><a href="/docs/engineering/decisions/0004-production-wasm-island-abi/">ADR 0004: Production WASM Island ABI</a><a href="/docs/engineering/decisions/0005-generated-go-emission-boundary/">ADR 0005: Generated Go Emission Boundary</a><a href="/docs/engineering/decisions/0006-gowdk-compiler-and-runtime-boundary/">ADR 0006: GOWDK Compiler And Runtime Boundary</a><a href="/docs/engineering/decisions/0007-static-first-spa-navigation/">ADR 0007: Static-First SPA Navigation</a><a href="/docs/engineering/decisions/0008-bounded-client-language/">ADR 0008: Bounded Client Language</a><a href="/docs/engineering/decisions/0009-optional-inline-go-authoring/">ADR 0009: Optional Inline Go Authoring</a><a href="/docs/engineering/decisions/0010-tokenizer-recursive-descent-parser/">ADR 0010: Tokenizer and Recursive-Descent Parser Direction</a><a href="/docs/engineering/decisions/0011-auth-addon-cryptography/">ADR 0011: Auth Addon Cryptography Stance</a><a href="/docs/engineering/decisions/0012-realtime-subscribe-surface/">ADR 0012: Realtime Subscribe Surface</a><a href="/docs/engineering/decisions/0013-built-in-tracing-observability/">ADR 0013: Built-In Tracing Observability</a><a href="/docs/engineering/decisions/0014-addon-runtime-config-split/">ADR 0014: Addon Runtime Config Split</a><a href="/docs/engineering/decisions/0015-generated-binary-lifecycle-services/">ADR 0015: Generated Binary Lifecycle Services</a><p class="docs-nav-group">Product</p><a href="/docs/product/vision/">Product Vision</a><a href="/docs/product/roadmap/">Product Roadmap</a><a href="/docs/product/requirements/">Product Requirements</a><a href="/docs/product/language-server/">Feature Spec: GOWDK Language Server</a><a href="/docs/product/await-blocks-spec/">Feature Spec: Bounded Await Blocks</a><a href="/docs/product/contract-runtime-spec/">Feature Spec: Contract Runtime</a><a href="/docs/product/diagnostics-and-navigation/">Feature Spec: Diagnostics And Navigation</a><a href="/docs/product/markup-transitions-spec/">Feature Spec: Bounded Markup Transitions</a><a href="/docs/product/observability-tracing-spec/">Feature Spec: GOWDK Trace</a><a href="/docs/product/playground/">Playground Onboarding and Sandboxing</a><a href="/docs/product/playground-hosted-execution-spec/">Feature Spec: Playground Hosted Execution And Export</a><a href="/docs/product/security-audit-spec/">Feature Spec: Declarative Security Audit (M8)</a></nav></aside><div class="doc-area"><main class="doc-page"><div class="doc-body"><div class="doc-main-col"><nav class="doc-breadcrumb" aria-label="Breadcrumb" data-doc-breadcrumb hidden></nav><header class="doc-hero"><p class="eyebrow">Reference</p><h1>Contracts</h1><p class="doc-lead">runtime/contracts is the first runtime slice of the GOWDK Runtime contract-driven backend model. It is usable from normal Go today. .gwdk command and query references are discoverable in compiler IR, build reports, and generated web adapters when they have a routable method/path.</p></header><article class="prose"><p><code>runtime/contracts</code> is the first runtime slice of the GOWDK Runtime
+contract-driven backend model. It is usable from normal Go today. <code>.gwdk</code>
+command and query references are discoverable in compiler IR, build reports,
+and generated web adapters when they have a routable method/path.</p><h2 id="trust-boundary">Trust Boundary</h2><pre><code class="language-text">frontend UI event -&gt; command/query -&gt; backend handler -&gt; backend-owned event
+frontend &lt;- result or presentation event
+</code></pre><ul><li>UI events are browser-local clicks, submits, inputs, and changes.</li><li>Commands are backend intent and have one owner handler.</li><li>Queries read state and should not change state.</li><li>Domain events are backend facts emitted after command success.</li><li>Integration events are backend facts intended for durable delivery later.</li><li>Presentation events are browser-facing notifications; they are not trusted
+input.</li><li>Contract scanning rejects first browser-UI and vague event-name anti-patterns
+such as <code>ButtonClicked</code>, <code>FormSubmitted</code>, and <code>PatientChanged</code>.</li></ul><h2 id="runtime-api">Runtime API</h2><p>Enable compiler integration with:</p><pre><code class="language-go">Addons: []gowdk.Addon{
+    contractsaddon.Addon(),
+}
+</code></pre><p>Enable <code>addons/realtime</code> alongside <code>addons/contracts</code> when the app wants an
+explicit config feature for browser presentation-event fanout.</p><p>The runtime registry, generated <code>g:command</code> / <code>g:query</code> adapters, and generated
+worker helper APIs are implemented for the current contract-driven runtime
+slice.</p><p>Go does not support generic methods, so the API uses generic functions over a
+registry. Keep this shape while the repository targets Go 1.26; revisit it when
+the project upgrades to Go 1.27 and the language supports generic methods:</p><pre><code class="language-go">r := contracts.NewRegistry()
+
+contracts.RegisterQuery[GetPatientPage, PatientPageData](r, LoadPatientPage)
+contracts.RegisterCommand[CreatePatient, CreatePatientResult](r, HandleCreatePatient)
+contracts.RegisterDomainEvent[PatientCreated](r, SendWelcomeEmail)
+contracts.RegisterDomainEvent[PatientCreated](r, WriteAuditLog)
+contracts.RegisterJob[SyncPatients](r, RunPatientSync)
+</code></pre><p>Run contracts:</p><pre><code class="language-go">page, err := contracts.ExecuteQuery[GetPatientPage, PatientPageData](ctx, r, query)
+result, err := contracts.ExecuteCommand[CreatePatient, CreatePatientResult](ctx, r, command)
+err := contracts.ExecuteJob(ctx, r, job)
+</code></pre><p>Run a role-filtered runtime:</p><pre><code class="language-go">result, err := contracts.ExecuteCommandForRole[CreatePatient, CreatePatientResult](
+    ctx,
+    r,
+    contracts.RoleWeb,
+    command,
+)
+
+err := contracts.PublishDomainForRole(ctx, r, contracts.RoleWorker, PatientCreated{ID: id})
+err := contracts.ExecuteJobForRole(ctx, r, contracts.RoleCron, SyncPatients{})
+metadata := r.ContractsForRole(contracts.RoleWeb)
+</code></pre><p>Default execution helpers run the whole in-process registry for small
+single-binary apps. Role-specific helpers run handlers with no explicit roles
+and handlers registered for the selected role. They skip handlers registered
+only for another role and return <code>role_not_allowed</code> when the selected role
+tries to execute a command, query, or job that is not available to that role.</p><p>Generated web adapters always execute command/query references with
+<code>contracts.RoleWeb</code>. A <code>.gwdk</code><code>g:command</code> or <code>g:query</code> reference to a
+worker/cron/admin/API-only contract is a compiler diagnostic, not a generated
+route that fails later.</p><h2 id="local-single-binary-app-path">Local Single-Binary App Path</h2><p>The supported milestone-14 path is local-first: one generated binary can serve
+the page, execute <code>g:command</code> and <code>g:query</code> web adapters through the web role,
+and replay captured backend events through local runtime helpers. User-owned
+worker and cron commands can run the same generated registry helpers; separate
+worker/cron binary generators remain future deployment tooling.</p><p>Minimal page:</p><pre><code class="language-gwdk">package contracts
+
+import patients &#34;github.com/acme/clinic/patients&#34;
+
+page patients
+route &#34;/patients&#34;
+guard public
+
+view {
+  &lt;main&gt;
+    &lt;form method=&#34;post&#34; action=&#34;/patients&#34; g:command=&#34;patients.CreatePatient&#34;&gt;
+      &lt;input name=&#34;name&#34; /&gt;
+      &lt;button&gt;Create patient&lt;/button&gt;
+    &lt;/form&gt;
+    &lt;section g:query=&#34;patients.GetPatientPage&#34;&gt;&lt;/section&gt;
+  &lt;/main&gt;
+}
+</code></pre><p><code>g:command</code> is the reactive, contract-governed write. Any page that declares one
+— build-time or request-time (<code>server {}</code>, SSR, hybrid) — ships the small client
+runtime, which intercepts the submit, posts the command in the background, and
+applies a single-flight region refresh: the generated adapter computes which
+<code>g:query</code> regions the command&#39;s domain events invalidate and names them in the
+<code>X-GOWDK-Queries</code> response header, so the submitter&#39;s regions update immediately
+without waiting for the realtime fanout that refreshes every other connected
+client.</p><p>For a parameterless region whose data comes from the page&#39;s <code>load {}</code>, the
+adapter goes one step further and renders the invalidated region inline — true
+single-flight. It returns a <code>{ result, patches: [{ query, html }] }</code> envelope
+(signalled by the <code>X-GOWDK-Patches</code> response header) and the client swaps the
+region HTML directly, with no second page fetch. Regions that need route context
+the command request lacks (a dynamic route param) stay in the <code>X-GOWDK-Queries</code>
+header only and the client refetches them — the same path used when JavaScript
+re-runs the page render. The raw command result body is preserved whenever no
+region renders, so non-browser callers are unaffected.</p><p>The typed result rides on the <code>gowdk:command-success</code> event for optional
+optimistic UI. With realtime configured, the same invalidation also fans out over
+SSE to other clients (<code>g:subscribe</code> / invalidated <code>g:query</code> regions), reusing the
+client&#39;s region-swap routine so the embedded and fanned-out paths converge.</p><p>Two caveats the <code>ssr_command_no_client</code> warning surfaces. First, with client
+JavaScript disabled a bare submit still navigates to the adapter&#39;s JSON — use a
+<code>g:post</code> action handler returning a <code>response.Response</code> (for example
+<code>response.RedirectTo</code>) when a no-JavaScript write path matters. Second, a
+<code>g:command</code> with no <code>g:query</code> region for it to refresh is a non-reactive write:
+it only fires <code>gowdk:command-success</code>. The warning fires only in that second
+case (a request-time command with no read region); add a bound <code>g:query</code> region
+or switch to <code>g:post</code>.</p><p>Normal Go owns the contracts and handlers:</p><pre><code class="language-go">package patients
+
+import (
+    &#34;context&#34;
+
+    &#34;github.com/cssbruno/gowdk/runtime/contracts&#34;
+)
+
+type GetPatientPage struct{ Filter string }
+type PatientPageData struct{ Source string `json:&#34;source&#34;` }
+type CreatePatient struct{ Name string }
+type CreatePatientResult struct{ ID string `json:&#34;id&#34;` }
+type PatientCreated struct{ ID string }
+
+func Register(registry *contracts.Registry) {
+    contracts.RegisterQuery[GetPatientPage, PatientPageData](registry, LoadPatientPage, contracts.RoleWeb)
+    contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient, contracts.RoleWeb)
+    contracts.RegisterDomainEvent[PatientCreated](registry, SendWelcomeEmail, contracts.RoleWorker)
+}
+
+func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData, error) {
+    return PatientPageData{Source: &#34;db&#34;}, nil
+}
+
+func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePatientResult, error) {
+    if err := contracts.EmitDomain(ctx, PatientCreated{ID: &#34;patient-1&#34;}); err != nil {
+        return CreatePatientResult{}, err
+    }
+    return CreatePatientResult{ID: &#34;patient-1&#34;}, nil
+}
+
+func SendWelcomeEmail(ctx context.Context, event PatientCreated) error { return nil }
+</code></pre><p>The generated command adapter captures events emitted by <code>HandleCreatePatient</code>
+only after the command succeeds. Browser events remain untrusted UI input;
+backend facts must be emitted from Go handlers with <code>EmitDomain</code>,
+<code>EmitIntegration</code>, or <code>EmitPresentation</code>.</p><p>The repository example is <code>examples/contracts/</code>:</p><pre><code class="language-sh">go run ./cmd/gowdk build --config examples/contracts/gowdk.config.go \
+  --out /tmp/gowdk-contracts-build \
+  --app /tmp/gowdk-contracts-app \
+  --bin /tmp/gowdk-contracts-site \
+  examples/contracts/patients.page.gwdk
+</code></pre><p>Verify adapter metadata through the build report:</p><pre><code class="language-sh">grep -F &#39;&#34;name&#34;: &#34;patients.CreatePatient&#34;&#39; /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F &#39;&#34;kind&#34;: &#34;command&#34;&#39; /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F &#39;&#34;path&#34;: &#34;/contracts/patients&#34;&#39; /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F &#39;&#34;guards&#34;: &#34;public&#34;&#39; /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F &#39;&#34;name&#34;: &#34;patients.GetPatientPage&#34;&#39; /tmp/gowdk-contracts-build/gowdk-build-report.json
+grep -F &#39;&#34;kind&#34;: &#34;query&#34;&#39; /tmp/gowdk-contracts-build/gowdk-build-report.json
+</code></pre><h2 id="observability">Observability</h2><p><code>runtime/contracts</code> exposes stable operation names and labels for logs,
+metrics, and traces. These names are API values, not CLI display text.</p><pre><code class="language-go">metadata := r.ContractsForRole(contracts.RoleWeb)
+observation := metadata[0].ObservationForRole(
+    contracts.ObservationExecuteCommand,
+    contracts.RoleWeb,
+)
+</code></pre><p>The stable operation names include:</p><table><thead><tr><th>Operation</th><th>Name</th></tr></thead><tbody><tr><td>Register query</td><td><code>gowdk.contract.register.query</code></td></tr><tr><td>Register command</td><td><code>gowdk.contract.register.command</code></td></tr><tr><td>Register event</td><td><code>gowdk.contract.register.event</code></td></tr><tr><td>Register job</td><td><code>gowdk.contract.register.job</code></td></tr><tr><td>Execute query</td><td><code>gowdk.contract.execute.query</code></td></tr><tr><td>Execute command</td><td><code>gowdk.contract.execute.command</code></td></tr><tr><td>Capture command events</td><td><code>gowdk.contract.capture.command</code></td></tr><tr><td>Execute job</td><td><code>gowdk.contract.execute.job</code></td></tr><tr><td>Publish event</td><td><code>gowdk.contract.publish.event</code></td></tr><tr><td>Store command events in outbox</td><td><code>gowdk.contract.outbox.store</code></td></tr><tr><td>Publish broker events</td><td><code>gowdk.contract.broker.publish</code></td></tr><tr><td>Send presentation events</td><td><code>gowdk.contract.presentation.send</code></td></tr><tr><td>Worker receive batch</td><td><code>gowdk.contract.worker.receive</code></td></tr><tr><td>Worker ack batch</td><td><code>gowdk.contract.worker.ack</code></td></tr><tr><td>Worker nack batch</td><td><code>gowdk.contract.worker.nack</code></td></tr><tr><td>Worker dedup skip</td><td><code>gowdk.contract.worker.dedup_skip</code></td></tr></tbody></table><p><code>Metadata.ObservationLabels()</code> returns the stable contract labels: kind, event
+category, contract type name, result type name, role, roles, and handler count
+when known. <code>EventEnvelope.ObservationLabels()</code> returns the event kind,
+category, stable event ID, and captured event contract type.
+<code>ContractName[T]()</code> returns the same Go contract type name used by metadata and
+event envelopes.
+<code>ObservationForRole</code> records the runtime role that performed the operation.</p><p>Inside a command handler, emit backend-owned events through the command context:</p><pre><code class="language-go">func HandleCreatePatient(ctx context.Context, cmd CreatePatient) (CreatePatientResult, error) {
+    id := &#34;patient-1&#34;
+    if err := contracts.EmitDomain(ctx, PatientCreated{ID: id}); err != nil {
+        return CreatePatientResult{}, err
+    }
+    return CreatePatientResult{ID: id}, nil
+}
+</code></pre><p>Emitted events are dispatched only after the command handler returns
+successfully. If the command returns an error, recorded events are discarded.</p><p>Capture events instead of dispatching subscribers when a command needs an
+outbox boundary:</p><pre><code class="language-go">result, events, err := contracts.CaptureCommandEvents[CreatePatient, CreatePatientResult](
+    ctx,
+    r,
+    command,
+)
+</code></pre><p>Each captured <code>EventEnvelope</code> contains a stable event ID, event category, Go
+type name, and typed value. Capturing does not run event subscribers.</p><p>For tests, <code>runtime/testkit</code> wraps this path with an in-memory registry helper
+and typed event assertions. See <code>docs/reference/testing.md</code> and
+<code>examples/contracts/patients/contracts_test.go</code>.</p><p>For dependency-free outbox integration, implement the small <code>Outbox</code> interface:</p><pre><code class="language-go">type PatientOutbox struct{}
+
+func (PatientOutbox) StoreEvents(ctx context.Context, events []contracts.EventEnvelope) error {
+    return nil
+}
+
+result, err := contracts.ExecuteCommandToOutbox[CreatePatient, CreatePatientResult](
+    ctx,
+    r,
+    PatientOutbox{},
+    command,
+)
+</code></pre><p><code>ExecuteCommandToOutbox</code> stores events only after the command handler succeeds.
+It does not dispatch subscribers. Database transactions, outbox tables, retry
+policy, idempotency, broker publication, and worker delivery remain adapter
+responsibilities outside the core package.</p><p>For durable domain events, adapter code should preserve this order:</p><pre><code class="language-text">start transaction
+apply state change
+store domain event in outbox
+commit transaction
+publish from worker
+</code></pre><p>Use plain <code>ExecuteCommand</code> for small single-binary apps where in-process
+subscriber dispatch is enough. Use <code>CaptureCommandEvents</code> or
+<code>ExecuteCommandToOutbox</code> when subscribers should run from a later worker or
+broker delivery path.</p><p>GOWDK Runtime also includes a dependency-free file outbox adapter for local
+durable JSON Lines storage:</p><pre><code class="language-go">import &#34;github.com/cssbruno/gowdk/runtime/contracts/fileoutbox&#34;
+
+outbox := fileoutbox.New(
+    &#34;var/gowdk-outbox.jsonl&#34;,
+    fileoutbox.WithJSONTypeDecoder[PatientCreated](),
+    fileoutbox.WithDeadLetter(&#34;var/gowdk-outbox.dead.jsonl&#34;, 5),
+)
+
+_, err := contracts.ExecuteCommandToOutbox[CreatePatient, CreatePatientResult](
+    ctx,
+    r,
+    outbox,
+    command,
+)
+
+err = contracts.RunEventWorker(ctx, r, outbox)
+</code></pre><p>The file outbox implements both <code>contracts.Outbox</code> and
+<code>contracts.EventSource</code>. It stores captured envelopes as JSON Lines records,
+rewrites pending and dead-letter files through temp-file replacement, decodes
+records through explicitly registered decoders, removes records only after
+worker <code>Ack</code>, and keeps records after <code>Nack</code> for retry. Nack records the attempt
+count, last attempt time, and last error in the durable record. It is useful for
+local development, small single-host deployments, and tests.
+When <code>WithDeadLetter(path, maxAttempts)</code> is configured, records move to the
+dead-letter JSON Lines file after the configured failed delivery count.
+Applications that need database transactions, cross-process locking, retry
+backoff, broker delivery, or operational dead-letter processing should use a
+database-backed or broker-backed adapter.</p><p>Delivery guarantees:</p><ul><li>Local in-process dispatch is process-local exactly once for that command
+execution because subscribers run before the command response is written.</li><li>Outbox and broker delivery is at-least-once. Use <code>RunEventWorkerWithSeenStore</code>
+or <code>RunEventWorkerForRoleWithSeenStore</code> with a <code>contracts.SeenStore</code> to skip
+duplicate event IDs inside a configured deduplication window. Duplicate
+batches are acknowledged without invoking subscribers.</li><li>A deduplication window is not an exactly-once guarantee. Subscribers must
+still tolerate redelivery outside the window, after store loss, after seen
+store write failures, or across concurrent workers. Event IDs are marked seen
+only after worker dispatch and source <code>Ack</code> both succeed.</li></ul><p>GOWDK Runtime provides three seen-store adapters:</p><ul><li><code>contracts.NewMemorySeenStore(limit)</code> keeps a bounded process-local LRU
+window for local single-binary apps and tests.</li><li><code>fileoutbox.NewSeenStore(path, fileoutbox.WithSeenLimit(limit))</code> keeps a
+dependency-free JSON Lines window next to the file outbox.</li><li><code>redisstream.NewSeenStore(client, prefix, ttl)</code> checks IDs with Redis
+<code>EXISTS</code>, records IDs with <code>SET</code>, and applies an expiration TTL for Redis
+Streams worker deployments.</li></ul><p>Subscriber handlers must still be idempotent for any durable delivery adapter.
+Use a stable domain key, event ID, outbox record ID, or application-level
+dedupe table to make repeated deliveries safe. GOWDK Runtime does not hide
+retries behind generated JavaScript or browser state.</p><p>External broker adapters can implement the dependency-free <code>Broker</code> interface:</p><pre><code class="language-go">type PatientBroker struct{}
+
+func (PatientBroker) PublishEvents(ctx context.Context, events []contracts.EventEnvelope) error {
+    return nil
+}
+
+result, err := contracts.ExecuteCommandToBroker[CreatePatient, CreatePatientResult](
+    ctx,
+    r,
+    PatientBroker{},
+    command,
+)
+</code></pre><p><code>ExecuteCommandToBroker</code> publishes captured events only after the command
+handler succeeds. It does not dispatch local subscribers. Broker adapters own
+serialization, acknowledgements, retries, dead-letter behavior, and delivery
+guarantees.</p><p>Realtime adapters can implement <code>PresentationFanout</code> for browser-facing output:</p><pre><code class="language-go">type PatientFanout struct{}
+
+func (PatientFanout) SendPresentationEvents(ctx context.Context, events []contracts.EventEnvelope) error {
+    return nil
+}
+
+result, err := contracts.ExecuteCommandToPresentationFanout[CreatePatient, CreatePatientResult](
+    ctx,
+    r,
+    PatientFanout{},
+    command,
+)
+</code></pre><p>Only presentation events are sent to fanout. Domain and integration events are
+filtered out. Fanout adapters own SSE/WebSocket sessions, serialization, client
+targeting, buffering, and disconnect behavior.</p><p>Worker or broker adapter code can replay captured events through the same typed
+subscriber registry:</p><pre><code class="language-go">err := contracts.PublishEnvelopesForRole(ctx, r, contracts.RoleWorker, events)
+</code></pre><p>Envelope replay keeps the original event category and type. Subscribers still
+run through role filtering. If a subscriber returns an error, replay stops and
+returns <code>subscriber_failed</code>; adapter retry and idempotency policy stays outside
+the core runtime.</p><p>Queue or outbox adapters can drive worker subscribers with <code>EventSource</code>:</p><pre><code class="language-go">type PatientEventSource struct{}
+
+func (PatientEventSource) ReceiveEventBatch(ctx context.Context) (contracts.EventBatch, error) {
+    return contracts.EventBatch{}, contracts.ErrEventSourceClosed
+}
+
+err := contracts.RunEventWorker(ctx, r, PatientEventSource{})
+</code></pre><p><code>RunEventWorker</code> dispatches batches with <code>RoleWorker</code>, calls <code>Ack</code> after
+successful subscriber replay, calls <code>Nack</code> when subscriber replay fails, stops
+cleanly when the source returns <code>ErrEventSourceClosed</code>, and returns the context
+error when <code>ctx</code> is canceled. <code>RunEventWorkerForRole</code> can be used for another
+runtime role. <code>ErrEventSourceClosed</code> means a finite source drained cleanly, as
+with the file outbox or in-memory broker; long-lived brokers such as Redis
+Streams and NATS should keep blocking until the worker context is canceled or
+the adapter is genuinely closed.</p><p>Generated command routes use the same event-plumbing boundary through one
+configurable sink:</p><pre><code class="language-go">gowdkapp.RegisterContractEventSink(contracts.OutboxCommandEventSink(outbox))
+</code></pre><p>The generated app API exists when routable command contract adapters are
+generated. Passing <code>nil</code> restores the default in-process sink:</p><pre><code class="language-go">gowdkapp.RegisterContractEventSink(nil)
+</code></pre><p>Available sink helpers:</p><ul><li><code>InProcessCommandEventSink()</code> dispatches captured events through the local
+registry with role filtering.</li><li><code>OutboxCommandEventSink(outbox)</code> stores captured events without local
+subscriber dispatch.</li><li><code>BrokerCommandEventSink(broker)</code> publishes captured events to a broker.</li><li><code>PresentationFanoutCommandEventSink(fanout)</code> sends only presentation events.</li><li><code>CompositeCommandEventSink(...)</code> sends the same captured event batch to
+multiple sinks in order.</li></ul><p>Apps that need more than one destination can implement
+<code>contracts.CommandEventSink</code> directly or use <code>CompositeCommandEventSink</code>.</p><p>Choose the sink based on where subscribers should run:</p><table><thead><tr><th>Need</th><th>Sink</th></tr></thead><tbody><tr><td>Small single-binary app</td><td><code>InProcessCommandEventSink()</code></td></tr><tr><td>Local durable queue or test fixture</td><td><code>OutboxCommandEventSink(fileoutbox.New(...))</code></td></tr><tr><td>Local in-memory queue</td><td><code>BrokerCommandEventSink(membroker.New())</code></td></tr><tr><td>Redis Streams queue</td><td><code>BrokerCommandEventSink(redisstream.New(...))</code></td></tr><tr><td>Core NATS live pub/sub</td><td><code>BrokerCommandEventSink(natsbroker.New(...))</code></td></tr><tr><td>Browser notifications over SSE or WebSocket</td><td><code>PresentationFanoutCommandEventSink(hub)</code></td></tr><tr><td>More than one destination</td><td><code>CompositeCommandEventSink(...)</code></td></tr></tbody></table><p><code>CompositeCommandEventSink</code> sends the same captured batch to each sink in
+order. A later sink is not called after an earlier sink returns an error.
+Presentation fanout sinks filter non-presentation events themselves. Broker and
+outbox sinks receive the full event batch.</p><p>Generated packages with executable contract registrations also expose:</p><pre><code class="language-go">shared := gowdkapp.ContractRegistry()
+fresh := gowdkapp.NewContractRegistry()
+err := gowdkapp.RunContractEventWorker(ctx, source)
+err = gowdkapp.RunContractEventWorkerWithOptions(
+    ctx,
+    source,
+    contracts.WithEventWorkerBackoff(backoff),
+)
+err = gowdkapp.RunContractEventWorkerWithSeenStore(ctx, source, seen)
+err = gowdkapp.RunContractEventWorkerWithSeenStoreAndOptions(
+    ctx,
+    source,
+    seen,
+    contracts.WithEventWorkerBackoff(backoff),
+)
+</code></pre><p><code>ContractRegistry</code> returns the generated app&#39;s shared in-process registry.
+Generated web command/query routes use the same registry, and lifecycle
+services can read it from <code>runtime/app.ServiceContext.Values</code> with key
+<code>runtime/app.ServiceValueContractRegistry</code>. <code>NewContractRegistry</code> creates a
+fresh registry using the scanned registration functions. <code>RunContractEventWorker</code>
+replays an <code>EventSource</code> through a fresh registry with the worker role.
+<code>RunContractEventWorkerWithSeenStore</code> uses the same worker role and skips
+duplicate event IDs through the provided <code>contracts.SeenStore</code>. The
+<code>WithOptions</code> variants pass runtime worker options, including nacked-batch
+backoff, through to <code>runtime/contracts</code>.</p><p>These helpers are deliberately local process APIs. Use them from the generated
+binary, a user-owned worker or cron command, or a test fixture. Generated
+worker/cron binaries, supervisor configs, queue topology, and deployment
+recipe starters are platform tooling, not part of the milestone-14 runtime
+contract.</p><h2 id="worker-backoff">Worker Backoff</h2><p>By default, an event worker immediately asks the source for another batch after
+the source accepts <code>Nack</code>. Pass <code>contracts.WithEventWorkerBackoff</code> when a
+worker should wait after nacked subscriber delivery:</p><pre><code class="language-go">backoff := func(retry contracts.EventWorkerRetry) time.Duration {
+    delay := 250 * time.Millisecond
+    for i := 1; i &lt; retry.Attempt &amp;&amp; delay &lt; 5*time.Second; i++ {
+        delay *= 2
+    }
+    if delay &gt; 5*time.Second {
+        return 5 * time.Second
+    }
+    return delay
+}
+
+err := gowdkapp.RunContractEventWorkerWithSeenStoreAndOptions(
+    ctx,
+    source,
+    seen,
+    contracts.WithEventWorkerBackoff(backoff),
+)
+</code></pre><p>Use <code>contracts.ConstantEventWorkerBackoff(duration)</code> for a fixed delay.
+Backoff runs only after subscriber replay fails and the <code>EventSource</code> accepts
+<code>Nack</code>; ack failures, receive failures, missing <code>Nack</code>, and context
+cancellation still return errors. Durable adapters still own their persistent
+attempt counters, dead-letter files, pending-message behavior, and operational
+retry policy.</p><p>Dependency-free adapters:</p><ul><li><code>runtime/contracts/fileoutbox</code> stores JSON Lines records on disk and
+implements both <code>Outbox</code> and <code>EventSource</code>. Each record has its own durable
+record ID plus the event envelope ID used by worker deduplication.</li><li><code>runtime/contracts/membroker</code> provides an in-memory <code>Broker</code> and
+<code>EventSource</code> for tests, local development, and single-process apps.</li><li><code>runtime/contracts/sse</code> provides an <code>http.Handler</code> and
+<code>PresentationFanout</code> for server-sent browser presentation events.
+<code>addons/realtime</code> re-exports this dependency-free SSE hub as <code>NewSSE</code>.</li></ul><p>Optional broker and realtime adapters:</p><ul><li><code>runtime/contracts/redisstream</code> uses Redis Streams as a <code>Broker</code> and
+<code>EventSource</code>.</li><li><code>runtime/contracts/natsbroker</code> uses core NATS publish/subscribe as a
+<code>Broker</code> and <code>EventSource</code>.</li><li><code>runtime/contracts/websocketfanout</code> provides an <code>http.Handler</code> and
+<code>PresentationFanout</code> for browser WebSocket clients.</li></ul><p>These concrete optional adapters are nested Go modules. Add only the adapter an
+application uses:</p><pre><code class="language-sh">go get github.com/cssbruno/gowdk/runtime/contracts/redisstream
+go get github.com/cssbruno/gowdk/runtime/contracts/natsbroker
+go get github.com/cssbruno/gowdk/runtime/contracts/websocketfanout
+</code></pre><p>See <code>docs/reference/realtime.md</code> for the transport choice, config setup, and
+deployment caveats.</p><h2 id="sink-recipes">Sink Recipes</h2><h3 id="redis-streams">Redis Streams</h3><p>Use Redis Streams when command routes should append events to a queue and a
+worker should replay subscribers later:</p><pre><code class="language-go">import (
+    &#34;time&#34;
+
+    &#34;github.com/cssbruno/gowdk/runtime/contracts&#34;
+    &#34;github.com/cssbruno/gowdk/runtime/contracts/redisstream&#34;
+    redis &#34;github.com/redis/go-redis/v9&#34;
+)
+
+client := redis.NewClient(&amp;redis.Options{Addr: &#34;127.0.0.1:6379&#34;})
+
+events := redisstream.New(
+    client,
+    &#34;gowdk:events&#34;,
+    &#34;gowdk-workers&#34;,
+    &#34;worker-1&#34;,
+    redisstream.WithBlock(5*time.Second),
+    redisstream.WithJSONDecoder[PatientCreated](&#34;patients.PatientCreated&#34;),
+)
+
+if err := events.EnsureGroup(ctx); err != nil {
+    return err
+}
+
+gowdkapp.RegisterContractEventSink(contracts.BrokerCommandEventSink(events))
+</code></pre><p>A worker can use the same adapter as an <code>EventSource</code>:</p><pre><code class="language-go">if err := gowdkapp.RunContractEventWorker(ctx, events); err != nil {
+    return err
+}
+</code></pre><p><code>Ack</code> calls <code>XACK</code> and then <code>XDEL</code>. Subscriber failures leave messages pending
+for the Redis consumer group to handle according to app-owned retry policy.
+Register JSON decoders for event types that need typed Go values when replayed
+through subscribers.</p><h3 id="nats">NATS</h3><p>Use the NATS adapter for live event distribution where subscribers are expected
+to be online:</p><pre><code class="language-go">import (
+    &#34;time&#34;
+
+    &#34;github.com/cssbruno/gowdk/runtime/contracts&#34;
+    &#34;github.com/cssbruno/gowdk/runtime/contracts/natsbroker&#34;
+    nats &#34;github.com/nats-io/nats.go&#34;
+)
+
+conn, err := nats.Connect(nats.DefaultURL)
+if err != nil {
+    return err
+}
+
+events := natsbroker.New(
+    conn,
+    &#34;gowdk.events&#34;,
+    natsbroker.WithQueue(&#34;gowdk-workers&#34;),
+    natsbroker.WithTimeout(5*time.Second),
+    natsbroker.WithJSONDecoder[PatientCreated](&#34;patients.PatientCreated&#34;),
+)
+defer events.Close()
+
+gowdkapp.RegisterContractEventSink(contracts.BrokerCommandEventSink(events))
+</code></pre><p>Worker replay uses the same adapter:</p><pre><code class="language-go">if err := gowdkapp.RunContractEventWorker(ctx, events); err != nil {
+    return err
+}
+</code></pre><p>This adapter uses core NATS publish/subscribe. It does not provide durable
+replay for offline subscribers. Use Redis Streams, the file outbox, or a
+custom JetStream adapter when events must survive worker downtime. When a batch
+drain encounters a later malformed message after already decoding earlier
+messages, the adapter returns the decoded events so they can still be
+dispatched.</p><h3 id="sse-presentation-fanout">SSE Presentation Fanout</h3><p>Use SSE when the app needs one-way browser presentation events:</p><pre><code class="language-go">import (
+    &#34;net/http&#34;
+
+    &#34;github.com/cssbruno/gowdk/runtime/contracts&#34;
+    &#34;github.com/cssbruno/gowdk/runtime/contracts/sse&#34;
+)
+
+hub := sse.New()
+http.Handle(&#34;/gowdk/events&#34;, hub)
+
+gowdkapp.RegisterContractEventSink(
+    contracts.PresentationFanoutCommandEventSink(hub),
+)
+</code></pre><p>The browser receives <code>event: gowdk-presentation</code> messages whose <code>data</code> value is
+the JSON <code>contracts.EventEnvelope</code>. Domain and integration events are ignored.</p><h3 id="websocket-presentation-fanout">WebSocket Presentation Fanout</h3><p>Use WebSocket fanout when clients need a persistent bidirectional transport for
+presentation events:</p><pre><code class="language-go">import (
+    &#34;net/http&#34;
+
+    &#34;github.com/coder/websocket&#34;
+    &#34;github.com/cssbruno/gowdk/runtime/contracts&#34;
+    &#34;github.com/cssbruno/gowdk/runtime/contracts/websocketfanout&#34;
+)
+
+hub := websocketfanout.New(websocketfanout.WithAcceptOptions(websocket.AcceptOptions{
+    OriginPatterns: []string{&#34;https://example.com&#34;},
+}))
+http.Handle(&#34;/gowdk/events/ws&#34;, hub)
+
+gowdkapp.RegisterContractEventSink(
+    contracts.PresentationFanoutCommandEventSink(hub),
+)
+</code></pre><p>Each presentation event is written as one text JSON <code>contracts.EventEnvelope</code>.
+Slow clients can drop queued messages when their buffer fills; tune
+<code>WithBufferSize</code> for the app&#39;s realtime behavior.</p><h3 id="fanout-plus-queue">Fanout Plus Queue</h3><p>Apps can send browser presentation events immediately and still queue the full
+event batch for backend workers:</p><pre><code class="language-go">sink := contracts.CompositeCommandEventSink(
+    contracts.PresentationFanoutCommandEventSink(hub),
+    contracts.BrokerCommandEventSink(events),
+)
+
+gowdkapp.RegisterContractEventSink(sink)
+</code></pre><p>The generated command route fails before writing JSON success if any sink
+returns an error.</p><h2 id="gwdk-command-references"><code>.gwdk</code> Command References</h2><p>Use <code>g:command</code> on forms to declare backend command intent:</p><pre><code class="language-html">&lt;form method=&#34;post&#34; action=&#34;/patients&#34; g:command=&#34;patients.CreatePatient&#34;&gt;
+  &lt;input name=&#34;name&#34;&gt;
+  &lt;button&gt;Create patient&lt;/button&gt;
+&lt;/form&gt;
+</code></pre><p>Current behavior:</p><ul><li>Renders <code>data-gowdk-command=&#34;patients.CreatePatient&#34;</code>.</li><li>Adds a command reference to <code>internal/gwdkir.Program.ContractRefs</code>.</li><li>Records the reference alias, imported package path when declared with a
+<code>.gwdk import</code>, local command type, bound result type, binding status, and
+handler/register function names and runtime roles in IR/build-report
+metadata when known.</li><li>Records literal form <code>method</code> and <code>action</code> as command adapter IR
+method/path. If a page-owned <code>g:command</code> form omits <code>action</code>, the command
+adapter path is the owning page route, matching the browser&#39;s default form
+submission target.</li><li><code>gowdk build</code> links command references to scanned Go command registrations
+and adds <code>contract_reference</code> events with status and source line/column to
+<code>gowdk-build-report.json</code>. Command events include method/path when present.</li><li>Generated apps register the scanned package registration function once in a
+local <code>runtime/contracts.Registry</code>, route the form method/action through the
+backend router, capture emitted backend events with
+<code>CaptureCommandEventsForRole(..., contracts.RoleWeb, input)</code>, send captured
+events to the configured command event sink, and return the command result as
+no-store JSON.</li><li>Success responses are <code>200 application/json</code> with the command result encoded
+directly as JSON. Error responses are <code>application/json</code> with
+<code>{&#34;error&#34;:&#34;...&#34;}</code> and <code>Cache-Control: no-store</code>; ordinary 5xx errors use the
+generic HTTP status text, while <code>response.NewHandlerError(status, message, cause)</code> can opt into an explicit client-safe status and message. Form parse,
+oversized body, CSRF, and typed input decode failures use the same JSON error
+shape.</li><li>When the scanner can see the exported command input struct fields, generated
+adapters parse submitted form values, allow only the scanned fields, decode
+supported scalar fields, and pass the typed command input to the registry.</li><li>When generated CSRF is enabled, command contract forms receive the same
+hidden token injection as POST action forms, and generated command adapters
+validate the submitted token before dispatch.</li><li>Command references on guarded pages inherit the page guards. When rate
+limiting is enabled, generated command adapters run rate limiting first,
+guards second, then form parsing, CSRF validation, typed input decoding, and
+command execution.</li><li><code>gowdk check</code> and CLI <code>gowdk build</code> fail when a command reference is missing,
+linked to an invalid Go handler signature, or bound only to non-web runtime
+roles.</li><li>Requires a package-qualified Go reference such as <code>patients.CreatePatient</code>.</li><li>Must not be combined with <code>g:post</code>.</li></ul><p>If the scanner cannot see the command input fields yet, generated command
+adapters construct a zero-value command input before dispatch.</p><h2 id="gwdk-query-references"><code>.gwdk</code> Query References</h2><p>Use <code>g:query</code> on HTML elements to declare readonly backend query intent:</p><pre><code class="language-html">&lt;section g:query=&#34;patients.GetPatientPage&#34;&gt;
+  &lt;h1&gt;Patients&lt;/h1&gt;
+&lt;/section&gt;
+</code></pre><p>Current behavior:</p><ul><li>Renders <code>data-gowdk-query=&#34;patients.GetPatientPage&#34;</code>.</li><li>Adds a query reference to <code>internal/gwdkir.Program.ContractRefs</code>.</li><li>Records the reference alias, imported package path when declared with a
+<code>.gwdk import</code>, local query type, bound result type, binding status, and
+handler/register function names and runtime roles in IR/build-report
+metadata when known.</li><li><code>gowdk build</code> links query references to scanned Go query registrations and
+adds <code>contract_reference</code> events with status and source line/column to
+<code>gowdk-build-report.json</code>.</li><li>Page-owned query references record <code>GET</code> plus the page route as first
+request-time source metadata.</li><li>Generated apps register the scanned package registration function once in a
+local <code>runtime/contracts.Registry</code>, route page-owned query references through
+the backend router, execute the query with <code>ExecuteQueryForRole(..., contracts.RoleWeb, input)</code>, and return the query result as no-store JSON.</li><li>Success responses are <code>200 application/json</code> with the query result encoded
+directly as JSON. Error responses are <code>application/json</code> with
+<code>{&#34;error&#34;:&#34;...&#34;}</code> and <code>Cache-Control: no-store</code>; ordinary 5xx errors use the
+generic HTTP status text, while <code>response.NewHandlerError(status, message, cause)</code> can opt into an explicit client-safe status and message.</li><li>Page-owned query routes share the page path, so generated apps dispatch them
+only for explicit query requests: <code>Accept: application/json</code>, another
+<code>+json</code> media type, or <code>X-GOWDK-Query: true</code>. Normal document requests keep
+serving the page HTML at the same route.</li><li>When the scanner can see the exported query input struct fields, generated
+adapters decode supported URL query parameters into the typed query input.</li><li>Query references on guarded pages inherit the page guards. When rate limiting
+is enabled, generated query adapters run rate limiting first, guards second,
+then typed URL query decoding and query execution.</li><li><code>gowdk check</code> and CLI <code>gowdk build</code> fail when a query reference is missing,
+linked to an invalid Go handler signature, or bound only to non-web runtime
+roles.</li><li>Requires a package-qualified Go reference such as <code>patients.GetPatientPage</code>.</li><li>Must not be combined with <code>g:post</code> or <code>g:command</code> on the same form.</li></ul><p>If the scanner cannot see the query input fields yet, generated query adapters
+construct a zero-value query input before dispatch.</p><h2 id="gwdk-realtime-subscriptions"><code>.gwdk</code> Realtime Subscriptions</h2><p>Use <code>g:subscribe</code> beside <code>g:query</code> to bind a query-owned region to a
+browser-facing presentation event:</p><pre><code class="language-html">&lt;section g:query=&#34;patients.GetPatientPage&#34; g:subscribe=&#34;patients.PatientNotice&#34;&gt;
+  &lt;h1&gt;Patients&lt;/h1&gt;
+&lt;/section&gt;
+</code></pre><p>Current behavior:</p><ul><li>Renders <code>data-gowdk-subscribe=&#34;patients.PatientNotice&#34;</code> and a validated
+<code>data-gowdk-subscribe-type</code> marker beside the <code>data-gowdk-query</code> marker.</li><li>Adds a subscription record to
+<code>internal/gwdkir.Program.RealtimeSubscriptions</code>.</li><li>Records query and event aliases, imported package paths when declared with
+<code>.gwdk import</code>, local query/event types, owner metadata, guards, and exact
+source spans.</li><li>Requires <code>realtime.Addon()</code> in project config.</li><li><code>gowdk check</code> and CLI <code>gowdk build</code> fail when the event reference is missing,
+linked to an invalid Go handler signature, registered as a domain or
+integration event, or bound only to non-web runtime roles.</li><li><code>gowdk build</code> adds <code>realtime_subscription</code> events with status and source
+line/column to <code>gowdk-build-report.json</code>.</li><li>Generated apps with bound subscriptions expose <code>RealtimeEventsPath</code>, mount
+<code>/_gowdk/realtime/events</code>, and stream only subscribed presentation event
+types through the dependency-free SSE fanout by default.</li><li>Generated realtime streams inherit subscribed page guards. The generated
+handler chooses page guards from <code>?path=...</code> or the same-origin referer path
+when available, otherwise it fails closed by requiring the union of guarded
+subscriptions before opening the SSE response.</li><li><code>RegisterRealtimeFanout(realtime.PresentationFanout)</code> can replace the
+generated fanout for app-owned transport setup.</li><li>Generated <code>gowdk.js</code> connects subscribed pages to the SSE stream and applies
+explicit <code>replaceHTML</code> patches from presentation event payloads to matching
+query-owned regions.</li><li>Requires package-qualified Go references such as
+<code>patients.PatientNotice</code>.</li><li>Must be on the same element as <code>g:query</code>; unbounded subscriptions are
+rejected.</li></ul><p>Only explicit <code>replaceHTML</code> client patches are supported today. The
+dependency-free SSE adapter sends a <code>retry: 1000</code> directive for browser
+EventSource reconnects and uses bounded per-client buffers; events are dropped
+for clients whose buffers are full rather than blocking command execution.
+Custom retry/backoff/replay, active session-change stream revocation, and
+richer patch shapes remain separate follow-up pieces.</p><h2 id="query-invalidations">Query Invalidations</h2><p>Use <code>contracts.RegisterInvalidation[event, query]</code> in Go when a domain event
+should refresh query-owned regions:</p><pre><code class="language-go">func Register(registry *contracts.Registry) {
+	contracts.RegisterQuery[GetPatientPage, PatientPageData](registry, LoadPatientPage, contracts.RoleWeb)
+	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient, contracts.RoleWeb)
+	contracts.RegisterDomainEvent[PatientCreated](registry, SendWelcomeEmail, contracts.RoleWorker)
+	contracts.RegisterInvalidation[PatientCreated, GetPatientPage](registry)
+}
+</code></pre><p>Current behavior:</p><ul><li>Scans invalidation edges beside normal contract registrations.</li><li>Rejects edges that name an unknown query, an unknown domain event, or a
+domain event no scanned command emits.</li><li>Joins validated edges with bound <code>g:query</code> references into
+<code>internal/gwdkir.Program.QueryInvalidations</code>.</li><li>Requires <code>realtime.Addon()</code> when a bound query uses generated invalidation
+refresh.</li><li><code>gowdk build</code> adds <code>query_invalidation</code> events with status and source
+line/column to <code>gowdk-build-report.json</code>.</li><li><code>gowdk graph</code> prints <code>invalidates</code> edges from domain events to queries.</li><li>Generated HTML renders validated <code>data-gowdk-query-type</code> markers for
+invalidated query regions.</li><li>Generated command adapters emit a <code>gowdk.query.invalidate</code> presentation event
+after successful command event dispatch when captured domain events
+invalidate bound queries.</li><li>Generated <code>gowdk.js</code> refetches the current document and replaces matching
+non-subscribed query regions. Regions with <code>g:subscribe</code> are left to explicit
+presentation patches.</li></ul><p>Invalidations are explicit Go metadata, not compiler inference from handler
+bodies. The first slice refreshes matching regions from the current document;
+fragment/API-specific query execution and richer refresh policies remain
+future work.</p><p>Templates must not declare backend facts:</p><pre><code class="language-html">&lt;!-- rejected --&gt;
+&lt;form g:event=&#34;PatientCreated&#34;&gt;
+</code></pre><p>Use <code>g:on:*</code> for local UI/component events and <code>g:command</code> for backend intent.</p><h2 id="current-limits">Current Limits</h2><ul><li>Generated command/query adapters execute bound references through
+<code>runtime/contracts</code> when the <code>.gwdk</code> reference has a routable method/path,
+an import path, a local contract type, a result type, and a scanned package
+registration function.</li><li><code>.gwdk</code> command/query reference linking matches the full reference name, the
+captured local contract type, and the scanned Go contract type import path
+when the <code>.gwdk</code> import alias differs from the Go package name.</li><li>Form-local <code>g:command</code> references and element-local <code>g:query</code> references
+include exact source line and column in IR and build reports.</li><li>Missing, invalid, or non-web-only command/query references produce
+<code>contract_reference_*</code> diagnostics in <code>gowdk check</code>, in LSP dirty-buffer
+diagnostics, and stop CLI builds. Diagnostic suggestions point to
+<code>gowdk contracts list</code> and <code>gowdk contracts graph</code> when scanned registration
+state needs inspection.</li><li>Generated fallback contract routes that remain in appgen for allowed
+non-bound modes return explicit HTTP 501 no-store responses.</li><li>Other contract diagnostics do not all have exact source spans yet.</li><li><code>gowdk contracts</code>, <code>gowdk list commands|queries|events|jobs</code>, <code>gowdk graph</code>,
+and <code>gowdk trace &lt;contract&gt;</code> can scan Go AST registration calls today.</li><li>Contract scan reports include <code>go/types</code> diagnostics for command, query,
+event, and job handler signatures across local package files and imported
+handler symbols when the standard Go importer can resolve them.</li><li>Contract scanning caches package import/export inspection by package directory
+and import set inside each scan.</li><li>Contract scanning rejects feature packages that import generated app output
+such as <code>gowdk-generated-app/gowdkapp</code>, because that dependency direction
+creates generated app import cycles.</li><li>Contract scan reports include the top-level package registration function
+that accepts <code>*contracts.Registry</code>, when the registration call is inside one.</li><li>Contract scan roles are propagated into linked IR, app adapter IR, and
+build-report metadata.</li><li>Page guards are propagated into linked IR and app adapter IR for generated
+command/query routes.</li><li>Contract scan reports include same-package exported command/query input struct
+fields for generated form/query decoders.</li><li>Contract scan reports validate local and imported contract/result types
+resolved by <code>go/types</code> as exported struct symbols where the scanner can
+resolve them.</li><li>Contract scan reports include exported JSON fields for supported local and
+imported command/query result structs and integration-event payload structs
+when those structs can be resolved. Unsupported imported payload/result
+shapes stay as shallow named schemas with the Go type marker.</li><li>Contract scan reports duplicate command owner registrations.</li><li><code>gowdk check</code> and CLI <code>gowdk build</code> fail on contract scan diagnostics such
+as invalid handler signatures and duplicate command owners.</li><li><code>gowdk graph</code> detects command-emitted events when command handlers call
+<code>contracts.EmitDomain</code>, <code>contracts.EmitIntegration</code>, or
+<code>contracts.EmitPresentation</code> with a visible event type.</li><li>Contract scanning reports <code>contract_event_category_invalid</code> when a command
+emits a visible event type under one category but the scanner only sees
+registrations for that event type under another category.</li><li><code>gowdk trace &lt;contract&gt;</code> reports a single command/query/event/job, command
+emitted events, event subscribers, source locations, handlers, and roles.</li><li><code>runtime/contracts</code> can capture command-emitted events as <code>EventEnvelope</code>
+values and pass them to a dependency-free <code>Outbox</code> interface without
+dispatching subscribers.</li><li><code>EventEnvelope</code> carries a stable event ID for outbox/broker replay and worker
+deduplication.</li><li>Captured event envelopes can be replayed later with
+<code>PublishEnvelope</code>, <code>PublishEnvelopes</code>, and role-filtered variants.</li><li><code>runtime/contracts/fileoutbox</code> provides a dependency-free JSON Lines adapter
+that implements <code>contracts.Outbox</code> and <code>contracts.EventSource</code>, including
+atomic file replacement, nack retry metadata, and an opt-in dead-letter file.</li><li><code>contracts.NewMemorySeenStore</code>, <code>fileoutbox.NewSeenStore</code>, and
+<code>redisstream.NewSeenStore</code> provide deduplication windows for event workers.</li><li>External broker adapters can implement the dependency-free <code>Broker</code>
+interface and receive captured envelopes through <code>ExecuteCommandToBroker</code> or
+<code>PublishEventsToBroker</code>.</li><li>Realtime adapters can implement the dependency-free <code>PresentationFanout</code>
+interface and receive only presentation envelopes through
+<code>ExecuteCommandToPresentationFanout</code> or <code>SendPresentationEventsToFanout</code>.</li><li>Generated command adapters expose <code>RegisterContractEventSink</code>; a registered
+<code>CommandEventSink</code> receives captured command events before the generated
+adapter writes the JSON command result.</li><li>Generated contract packages expose <code>ContractRegistry</code>, <code>NewContractRegistry</code>, and
+<code>RunContractEventWorker</code> / <code>RunContractEventWorkerWithSeenStore</code> when
+executable contract registrations are present.</li><li>Queue/outbox adapters can implement the dependency-free <code>EventSource</code>
+interface and drive worker-role subscribers through <code>RunEventWorker</code>.</li><li><code>internal/appgen</code> records command/query contract exposure metadata in backend
+adapter IR, including reference name, alias, import path, local contract
+type, result type, runtime roles, decoded input fields, binding status,
+handler, register function, owner, and source.</li><li>Generated app adapter source is assembled from Go AST nodes, printed with
+<code>go/printer</code>, and normalized with <code>go/format</code>; contract adapter emitters do
+not use string line writing.</li><li><code>gowdk routes</code> includes routable <code>g:command</code> and <code>g:query</code> references as
+backend endpoint metadata with contract binding details.</li><li><code>gowdk build</code> writes <code>openapi.json</code> for the routable web surface and
+<code>asyncapi.json</code> for contract integration events. The AsyncAPI report excludes
+domain and presentation events by default. Its CloudEvents mapping is:
+<code>type</code> = contract event type, <code>source</code> = the application/module boundary,
+<code>id</code> = event envelope identifier supplied by the transport, <code>time</code> = event
+envelope time supplied by the transport, and <code>datacontenttype</code> =
+<code>application/json</code>. Resolvable local and imported integration-event payload
+structs contribute JSON-field schemas; unsupported or unresolvable imported
+payloads emit shallow named schemas with the Go type marker.</li><li>Command contract adapter IR includes the form method and either the literal
+form action or, for page-owned forms that omit <code>action</code>, the page route.</li><li>Page-owned query contract adapter IR includes <code>GET</code> plus the page route.</li><li>Page-owned generated query routes use JSON/query request negotiation so they
+do not replace normal static, SPA, or SSR page responses.</li><li>Cross-package contract input field discovery remains planned.</li><li>Separate web/worker/cron binary generators remain planned platform tooling.
+User-owned worker and cron commands can use
+<code>NewContractRegistry</code>, <code>RunContractEventWorker*</code>, and
+<code>contracts.ExecuteJobForRole</code> with the same registrations today. Schedule
+ownership, overlap prevention, durable retry operations, failure reporting,
+restart behavior, and production supervision stay app-owned until platform
+tooling is designed.</li></ul></article><nav class="doc-pager" aria-label="Pagination" data-doc-pager hidden></nav></div><aside class="doc-toc" data-doc-toc-wrap hidden><p class="doc-toc-title">On this page</p><nav aria-label="On this page" data-doc-toc></nav></aside></div></main></div></div><div class="docs-modal" data-docs-modal hidden><div class="docs-modal-panel" role="dialog" aria-modal="true" aria-label="Search documentation"><div class="docs-modal-search"><span class="docs-modal-ico" aria-hidden="true">⌕</span><input class="docs-modal-input" type="text" placeholder="Search documentation" data-docs-search-input aria-label="Search documentation"><kbd class="docs-modal-esc">Esc</kbd></div><div class="docs-modal-results" data-docs-results></div></div></div><aside class="cookie-notice" data-cookie-notice aria-label="Cookie notice" hidden><div class="cookie-copy"><strong>One cookie</strong><p>This site stores a single cookie to remember you dismissed this notice. No tracking, no analytics.</p></div><button class="button cookie-dismiss" type="button" data-cookie-dismiss>Got it</button></aside></div><footer class="site-footer"><div class="site-footer-inner"><span>GOWDK - Go-native web apps that rebuild fast.</span><nav class="site-footer-nav" aria-label="Footer"><a href="/">Docs</a><a href="/docs/getting-started/">Getting Started</a><a href="https://github.com/cssbruno/gowdk">GitHub</a></nav></div></footer></div>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DB Addon - GOWDK</title>
+  <meta name="description" content="addons/db is experimental 0.x database/sql plumbing. It does not own schemas, migrations, sqlc output, repositories, domain validation, tenants, or resource authorization.">
+  <link rel="icon" href="/favicon.ico">
+  <meta property="og:site_name" content="GOWDK">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="DB Addon - GOWDK">
+  <meta property="og:description" content="addons/db is experimental 0.x database/sql plumbing. It does not own schemas, migrations, sqlc output, repositories, domain validation, tenants, or resource authorization.">
+  <meta property="og:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="DB Addon - GOWDK">
+  <meta name="twitter:description" content="addons/db is experimental 0.x database/sql plumbing. It does not own schemas, migrations, sqlc output, repositories, domain validation, tenants, or resource authorization.">
+  <meta name="twitter:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <link rel="stylesheet" href="/assets/app.f8be0ea9d706.css">
+  <script type="module" src="/assets/gowdk/components/site/CookieNotice/inline-gowdk.js" defer></script>
+  <script type="module" src="/assets/gowdk/components/site/DocsPage/inline-gowdk.js" defer></script>
+  <script src="/assets/gowdk/gowdk.js" defer></script>
+</head>
+<body>
+<div class="site-frame"><div class="site-banner" role="alert"><span class="site-banner-badge">Experimental</span><span class="site-banner-text">GOWDK is <strong>0.x</strong> and not production-ready — the language, generated output, and APIs can change between releases.</span><a class="site-banner-link" href="https://github.com/cssbruno/GoWDK/releases">Release status</a></div><header class="site-header"><a class="brand-link" href="/" aria-label="GOWDK documentation"><span class="brand-mark" aria-hidden="true">❯</span><span class="brand-name">GOWDK</span><span class="brand-tag">docs</span></a><nav class="top-nav" aria-label="Main navigation"><a href="/docs/getting-started/">Getting Started</a><a href="/docs/reference/cli/">CLI</a><a class="github-link" href="https://github.com/cssbruno/gowdk" aria-label="GOWDK on GitHub"><span class="github-icon">GH</span><span>GitHub</span></a></nav></header><div class="site-body"><div class="docs-shell"><aside class="docs-sidebar"><button class="docs-search-btn" type="button" data-docs-search aria-label="Search documentation"><span class="docs-search-ico" aria-hidden="true">⌕</span><span class="docs-search-label">Search docs</span><kbd class="docs-search-kbd">⌘K</kbd></button><nav class="docs-nav" aria-label="Documentation" data-docs-nav><a href="/">Overview</a><p class="docs-nav-group">Start</p><a href="/docs/getting-started/">Getting Started</a><p class="docs-nav-group">Language</p><a href="/docs/language/">GOWDK Language</a><a href="/docs/language/spec/">Current .gwdk Language Spec</a><a href="/docs/language/syntax/">Syntax</a><a href="/docs/language/semantics/">Semantics</a><a href="/docs/language/grammar/">Grammar</a><a href="/docs/language/blocks/">Blocks</a><a href="/docs/language/markup/">Markup</a><a href="/docs/language/components/">Components</a><a href="/docs/language/layouts/">Layouts</a><a href="/docs/language/data/">Data Lifecycle</a><a href="/docs/language/actions/">Actions</a><a href="/docs/language/api/">API</a><a href="/docs/language/forms/">Forms And Progressive Enhancement</a><a href="/docs/language/partials/">Partials</a><a href="/docs/language/ssr/">SSR</a><a href="/docs/language/hybrid/">Hybrid Rendering</a><a href="/docs/language/formatting/">Formatting</a><a href="/docs/language/diagnostics/">Diagnostics</a><a href="/docs/language/audit/">Audit Policy Files</a><a href="/docs/language/conformance/">.gwdk Conformance Corpus</a><a href="/docs/language/guards/">Guards And Default-Deny Page Access</a><a href="/docs/language/stability/">Language Construct Stability</a><p class="docs-nav-group">Reference</p><a href="/docs/reference/">Reference</a><a href="/docs/reference/routing/">Routing Reference</a><a href="/docs/reference/cli/">CLI Reference</a><a href="/docs/reference/config/">Config Reference</a><a href="/docs/reference/css/">CSS Reference</a><a href="/docs/reference/hooks/">Hooks, Guards, And Middleware</a><a href="/docs/reference/addons/">Addons Reference</a><a href="/docs/reference/contracts/">Contracts</a><a href="/docs/reference/errors/">Errors And Boundaries</a><a href="/docs/reference/diagnostics/">Diagnostics Reference</a><a href="/docs/reference/diagnostic-codes/">Diagnostic Codes</a><a href="/docs/reference/dev/">Dev Loop</a><a href="/docs/reference/deployment/">Deployment</a><a href="/docs/reference/testing/">Testing Reference</a><a href="/docs/reference/framework-integrations/">Framework Integrations</a><a href="/docs/reference/manifest/">Manifest Reference</a><a href="/docs/reference/db/">DB Addon</a><a href="/docs/reference/go-interop/">Go Interop</a><a href="/docs/reference/images/">Images</a><a href="/docs/reference/observability/">Observability</a><a href="/docs/reference/pwa-offline/">PWA And Offline</a><a href="/docs/reference/realtime/">Realtime</a><a href="/docs/reference/seo/">SEO Addon</a><a href="/docs/reference/tracing/">Tracing</a><p class="docs-nav-group">Compiler</p><a href="/docs/compiler/">Compiler</a><a href="/docs/compiler/project-structure/">Project Structure</a><a href="/docs/compiler/pipeline/">Compiler Pipeline</a><a href="/docs/compiler/generated-output/">Generated Output</a><a href="/docs/compiler/browser-compiler/">Browser-Facing Output</a><a href="/docs/compiler/build-report/">Build Report</a><a href="/docs/compiler/manifest/">Manifest</a><a href="/docs/compiler/endpoint-binding-inspection/">Feature Spec: go/packages Endpoint Binding Inspection</a><a href="/docs/compiler/incremental-cache-keys/">Incremental Cache Keys</a><a href="/docs/compiler/syntax-contributors/">Syntax Contributor Checklist</a><p class="docs-nav-group">Engineering</p><a href="/docs/engineering/architecture/">Architecture</a><a href="/docs/engineering/security/">Security Baseline</a><a href="/docs/engineering/conventions/">Engineering Conventions</a><a href="/docs/engineering/naming-conventions/">Naming And Full-Name Conventions</a><a href="/docs/engineering/code-quality/">Code Quality</a><a href="/docs/engineering/generated-code-policy/">Generated Code Policy</a><a href="/docs/engineering/dependency-policy/">Dependency Policy</a><a href="/docs/engineering/operations/">Operations</a><a href="/docs/engineering/testing/">Testing Strategy</a><a href="/docs/engineering/ci/">CI</a><a href="/docs/engineering/release/">Release</a><a href="/docs/engineering/await-blocks-plan/">Implementation Plan: Bounded Await Blocks</a><a href="/docs/engineering/markup-transitions-plan/">Implementation Plan: Bounded Markup Transitions</a><a href="/docs/engineering/release-plan/">0.x Improvement Checklist</a><a href="/docs/engineering/security-threat-model/">Security Threat Model</a><p class="docs-nav-group">Decisions</p><a href="/docs/engineering/decisions/">Architecture Decision Records</a><a href="/docs/engineering/decisions/0001-llm-ready-project-structure/">ADR 0001: LLM-Ready Project Structure</a><a href="/docs/engineering/decisions/0002-compile-first-render-model/">ADR 0002: Compile-First Render Model</a><a href="/docs/engineering/decisions/0003-js-default-explicit-wasm-islands/">ADR 0003: JS Default, Component-Declared WASM Islands</a><a href="/docs/engineering/decisions/0004-production-wasm-island-abi/">ADR 0004: Production WASM Island ABI</a><a href="/docs/engineering/decisions/0005-generated-go-emission-boundary/">ADR 0005: Generated Go Emission Boundary</a><a href="/docs/engineering/decisions/0006-gowdk-compiler-and-runtime-boundary/">ADR 0006: GOWDK Compiler And Runtime Boundary</a><a href="/docs/engineering/decisions/0007-static-first-spa-navigation/">ADR 0007: Static-First SPA Navigation</a><a href="/docs/engineering/decisions/0008-bounded-client-language/">ADR 0008: Bounded Client Language</a><a href="/docs/engineering/decisions/0009-optional-inline-go-authoring/">ADR 0009: Optional Inline Go Authoring</a><a href="/docs/engineering/decisions/0010-tokenizer-recursive-descent-parser/">ADR 0010: Tokenizer and Recursive-Descent Parser Direction</a><a href="/docs/engineering/decisions/0011-auth-addon-cryptography/">ADR 0011: Auth Addon Cryptography Stance</a><a href="/docs/engineering/decisions/0012-realtime-subscribe-surface/">ADR 0012: Realtime Subscribe Surface</a><a href="/docs/engineering/decisions/0013-built-in-tracing-observability/">ADR 0013: Built-In Tracing Observability</a><a href="/docs/engineering/decisions/0014-addon-runtime-config-split/">ADR 0014: Addon Runtime Config Split</a><a href="/docs/engineering/decisions/0015-generated-binary-lifecycle-services/">ADR 0015: Generated Binary Lifecycle Services</a><p class="docs-nav-group">Product</p><a href="/docs/product/vision/">Product Vision</a><a href="/docs/product/roadmap/">Product Roadmap</a><a href="/docs/product/requirements/">Product Requirements</a><a href="/docs/product/language-server/">Feature Spec: GOWDK Language Server</a><a href="/docs/product/await-blocks-spec/">Feature Spec: Bounded Await Blocks</a><a href="/docs/product/contract-runtime-spec/">Feature Spec: Contract Runtime</a><a href="/docs/product/diagnostics-and-navigation/">Feature Spec: Diagnostics And Navigation</a><a href="/docs/product/markup-transitions-spec/">Feature Spec: Bounded Markup Transitions</a><a href="/docs/product/observability-tracing-spec/">Feature Spec: GOWDK Trace</a><a href="/docs/product/playground/">Playground Onboarding and Sandboxing</a><a href="/docs/product/playground-hosted-execution-spec/">Feature Spec: Playground Hosted Execution And Export</a><a href="/docs/product/security-audit-spec/">Feature Spec: Declarative Security Audit (M8)</a></nav></aside><div class="doc-area"><main class="doc-page"><div class="doc-body"><div class="doc-main-col"><nav class="doc-breadcrumb" aria-label="Breadcrumb" data-doc-breadcrumb hidden></nav><header class="doc-hero"><p class="eyebrow">Reference</p><h1>DB Addon</h1><p class="doc-lead">addons/db is experimental 0.x database/sql plumbing. It does not own schemas, migrations, sqlc output, repositories, domain validation, tenants, or resource authorization.</p></header><article class="prose"><p><code>addons/db</code> is experimental 0.x <code>database/sql</code> plumbing. It does not own
+schemas, migrations, sqlc output, repositories, domain validation, tenants, or
+resource authorization.</p><h2 id="open-a-database">Open A Database</h2><p>Import the driver in app-owned Go, then open the database through the helper:</p><pre><code class="language-go">package data
+
+import (
+	&#34;database/sql&#34;
+	&#34;os&#34;
+
+	gowdkdb &#34;github.com/cssbruno/gowdk/addons/db&#34;
+	_ &#34;github.com/jackc/pgx/v5/stdlib&#34;
+)
+
+func Open() (*sql.DB, error) {
+	return gowdkdb.OpenWithOptions(&#34;pgx&#34;, os.Getenv(&#34;DATABASE_URL&#34;), gowdkdb.Options{
+		MaxOpenConns: 10,
+		MaxIdleConns: 5,
+	})
+}
+</code></pre><p>The DB addon imports no SQL driver. Keep driver dependencies in the application
+module or in an optional nested module.</p><h2 id="apply-sql-migrations">Apply SQL Migrations</h2><p>Embed user-authored SQL files and apply them in lexical order:</p><pre><code class="language-go">package data
+
+import (
+	&#34;context&#34;
+	&#34;database/sql&#34;
+	&#34;embed&#34;
+
+	gowdkdb &#34;github.com/cssbruno/gowdk/addons/db&#34;
+)
+
+//go:embed migrations/*.sql
+var migrationFiles embed.FS
+
+func ApplyMigrations(ctx context.Context, database *sql.DB) error {
+	_, err := gowdkdb.ApplyMigrations(ctx, database, migrationFiles, gowdkdb.MigrationOptions{
+		Dir:         &#34;migrations&#34;,
+		Placeholder: gowdkdb.DollarPlaceholder,
+	})
+	return err
+}
+</code></pre><p>Tracking contract:</p><ul><li>The default tracking table is <code>gowdk_schema_migrations</code>.</li><li>Each row stores migration file name, SHA-256 checksum, and applied timestamp.
+Migration names are limited to 255 characters so the tracking table can use a
+bounded primary key on MySQL-compatible drivers.</li><li>Re-running the same file with the same checksum skips it.</li><li>Re-running the same file name with different content fails with a checksum
+mismatch.</li><li>Before user SQL runs, <code>ApplyMigrations</code> reserves the migration name in the
+tracking table and finalizes the checksum after the SQL succeeds. Concurrent
+runners are serialized by that primary-key reservation; a runner that sees an
+incomplete reservation fails closed instead of executing the same file again.</li><li><code>MigrationResult</code> is returned only after the transaction commits. If a
+migration, reservation, tracking update, or commit fails, the returned result
+is empty.</li><li><code>MigrationOptions.Table</code> can rename the tracking table, but only simple SQL
+identifiers are accepted.</li><li><code>QuestionPlaceholder</code> is the default. Use <code>DollarPlaceholder</code> for
+PostgreSQL-style drivers.</li></ul><p>GOWDK does not split SQL files, generate migration files, infer schema state, or
+own rollback/down semantics. Keep those policies in normal Go and SQL tooling.</p><h2 id="transactions">Transactions</h2><p>Use <code>WithTx</code> when an action, API, command, or service method needs one
+transaction:</p><pre><code class="language-go">func CreatePatient(ctx context.Context, database *sql.DB, input CreatePatientInput) error {
+	return gowdkdb.WithTx(ctx, database, nil, func(ctx context.Context, tx *sql.Tx) error {
+		queries := patientdb.New(tx)
+		return queries.CreatePatient(ctx, patientdb.CreatePatientParams{
+			Name: input.Name,
+		})
+	})
+}
+</code></pre><p><code>WithTx</code> begins with the provided context, commits when the function returns
+nil, rolls back when it returns an error, and rolls back before re-panicking if
+the function panics. Context cancellation before <code>BeginTx</code> prevents the
+function from running.</p><h2 id="readiness">Readiness</h2><p>Generated apps already expose <code>/_gowdk/health</code> for process and artifact status.
+Database readiness is app-owned because DSNs, tenants, credentials, and failure
+policy are app-specific. Expose it through a normal generated API when needed:</p><pre><code class="language-gwdk">api DatabaseReady GET &#34;/api/ready&#34;
+</code></pre><pre><code class="language-go">func DatabaseReady(ctx context.Context, _ *http.Request) (response.Response, error) {
+	readiness := gowdkdb.CheckReadiness(ctx, database)
+	status := http.StatusOK
+	if !readiness.Ready {
+		status = http.StatusServiceUnavailable
+	}
+	return response.JSONValue(status, readiness)
+}
+</code></pre><p>Do not return DSNs, credentials, tenant IDs, or query results from readiness
+endpoints. <code>CheckReadiness</code> returns a generic public error string on failure;
+use <code>Ping</code> directly when server-side startup or logging code needs the wrapped
+database error.</p><h2 id="sqlc-walkthrough">sqlc Walkthrough</h2><p>Install and run sqlc in the application module; GOWDK does not run it for you:</p><pre><code class="language-sh">go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+sqlc generate
+go test ./...
+</code></pre><p>Minimal app layout:</p><pre><code class="language-text">db/schema.sql
+db/query.sql
+internal/patientdb/   # generated by sqlc
+src/patients.go       # GOWDK action/API handlers call patientdb
+</code></pre><p><code>sqlc.yaml</code>:</p><pre><code class="language-yaml">version: &#34;2&#34;
+sql:
+  - engine: &#34;postgresql&#34;
+    schema: &#34;db/schema.sql&#34;
+    queries: &#34;db/query.sql&#34;
+    gen:
+      go:
+        package: &#34;patientdb&#34;
+        out: &#34;internal/patientdb&#34;
+</code></pre><p><code>db/query.sql</code>:</p><pre><code class="language-sql">-- name: CreatePatient :one
+INSERT INTO patients (name) VALUES ($1)
+RETURNING id, name;
+</code></pre><p>Handler usage:</p><pre><code class="language-go">func SavePatient(ctx context.Context, values form.Values) (response.Response, error) {
+	name := strings.TrimSpace(values.First(&#34;name&#34;))
+	err := gowdkdb.WithTx(ctx, database, nil, func(ctx context.Context, tx *sql.Tx) error {
+		queries := patientdb.New(tx)
+		_, err := queries.CreatePatient(ctx, name)
+		return err
+	})
+	if err != nil {
+		return response.Response{}, err
+	}
+	return response.RedirectTo(&#34;/patients&#34;), nil
+}
+</code></pre><p>Test the GOWDK helper package and the isolated real-driver module from this
+repository:</p><pre><code class="language-sh">go test ./addons/db
+(cd addons/db/sqlitetest &amp;&amp; go test ./...)
+scripts/test-go-modules.sh
+</code></pre><p><code>scripts/test-go-modules.sh</code> includes <code>addons/db/sqlitetest</code>, so CI covers the
+real-driver SQLite smoke without adding that driver to the root module graph.</p></article><nav class="doc-pager" aria-label="Pagination" data-doc-pager hidden></nav></div><aside class="doc-toc" data-doc-toc-wrap hidden><p class="doc-toc-title">On this page</p><nav aria-label="On this page" data-doc-toc></nav></aside></div></main></div></div><div class="docs-modal" data-docs-modal hidden><div class="docs-modal-panel" role="dialog" aria-modal="true" aria-label="Search documentation"><div class="docs-modal-search"><span class="docs-modal-ico" aria-hidden="true">⌕</span><input class="docs-modal-input" type="text" placeholder="Search documentation" data-docs-search-input aria-label="Search documentation"><kbd class="docs-modal-esc">Esc</kbd></div><div class="docs-modal-results" data-docs-results></div></div></div><aside class="cookie-notice" data-cookie-notice aria-label="Cookie notice" hidden><div class="cookie-copy"><strong>One cookie</strong><p>This site stores a single cookie to remember you dismissed this notice. No tracking, no analytics.</p></div><button class="button cookie-dismiss" type="button" data-cookie-dismiss>Got it</button></aside></div><footer class="site-footer"><div class="site-footer-inner"><span>GOWDK - Go-native web apps that rebuild fast.</span><nav class="site-footer-nav" aria-label="Footer"><a href="/">Docs</a><a href="/docs/getting-started/">Getting Started</a><a href="https://github.com/cssbruno/gowdk">GitHub</a></nav></div></footer></div>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CSS Reference - GOWDK</title>
+  <meta name="description" content="GOWDK has an initial compile-time CSS extension point. It is intentionally small: Tailwind and other CSS tools are addons, not core dependencies.">
+  <link rel="icon" href="/favicon.ico">
+  <meta property="og:site_name" content="GOWDK">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="CSS Reference - GOWDK">
+  <meta property="og:description" content="GOWDK has an initial compile-time CSS extension point. It is intentionally small: Tailwind and other CSS tools are addons, not core dependencies.">
+  <meta property="og:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="CSS Reference - GOWDK">
+  <meta name="twitter:description" content="GOWDK has an initial compile-time CSS extension point. It is intentionally small: Tailwind and other CSS tools are addons, not core dependencies.">
+  <meta name="twitter:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <link rel="stylesheet" href="/assets/app.f8be0ea9d706.css">
+  <script type="module" src="/assets/gowdk/components/site/CookieNotice/inline-gowdk.js" defer></script>
+  <script type="module" src="/assets/gowdk/components/site/DocsPage/inline-gowdk.js" defer></script>
+  <script src="/assets/gowdk/gowdk.js" defer></script>
+</head>
+<body>
+<div class="site-frame"><div class="site-banner" role="alert"><span class="site-banner-badge">Experimental</span><span class="site-banner-text">GOWDK is <strong>0.x</strong> and not production-ready — the language, generated output, and APIs can change between releases.</span><a class="site-banner-link" href="https://github.com/cssbruno/GoWDK/releases">Release status</a></div><header class="site-header"><a class="brand-link" href="/" aria-label="GOWDK documentation"><span class="brand-mark" aria-hidden="true">❯</span><span class="brand-name">GOWDK</span><span class="brand-tag">docs</span></a><nav class="top-nav" aria-label="Main navigation"><a href="/docs/getting-started/">Getting Started</a><a href="/docs/reference/cli/">CLI</a><a class="github-link" href="https://github.com/cssbruno/gowdk" aria-label="GOWDK on GitHub"><span class="github-icon">GH</span><span>GitHub</span></a></nav></header><div class="site-body"><div class="docs-shell"><aside class="docs-sidebar"><button class="docs-search-btn" type="button" data-docs-search aria-label="Search documentation"><span class="docs-search-ico" aria-hidden="true">⌕</span><span class="docs-search-label">Search docs</span><kbd class="docs-search-kbd">⌘K</kbd></button><nav class="docs-nav" aria-label="Documentation" data-docs-nav><a href="/">Overview</a><p class="docs-nav-group">Start</p><a href="/docs/getting-started/">Getting Started</a><p class="docs-nav-group">Language</p><a href="/docs/language/">GOWDK Language</a><a href="/docs/language/spec/">Current .gwdk Language Spec</a><a href="/docs/language/syntax/">Syntax</a><a href="/docs/language/semantics/">Semantics</a><a href="/docs/language/grammar/">Grammar</a><a href="/docs/language/blocks/">Blocks</a><a href="/docs/language/markup/">Markup</a><a href="/docs/language/components/">Components</a><a href="/docs/language/layouts/">Layouts</a><a href="/docs/language/data/">Data Lifecycle</a><a href="/docs/language/actions/">Actions</a><a href="/docs/language/api/">API</a><a href="/docs/language/forms/">Forms And Progressive Enhancement</a><a href="/docs/language/partials/">Partials</a><a href="/docs/language/ssr/">SSR</a><a href="/docs/language/hybrid/">Hybrid Rendering</a><a href="/docs/language/formatting/">Formatting</a><a href="/docs/language/diagnostics/">Diagnostics</a><a href="/docs/language/audit/">Audit Policy Files</a><a href="/docs/language/conformance/">.gwdk Conformance Corpus</a><a href="/docs/language/guards/">Guards And Default-Deny Page Access</a><a href="/docs/language/stability/">Language Construct Stability</a><p class="docs-nav-group">Reference</p><a href="/docs/reference/">Reference</a><a href="/docs/reference/routing/">Routing Reference</a><a href="/docs/reference/cli/">CLI Reference</a><a href="/docs/reference/config/">Config Reference</a><a href="/docs/reference/css/">CSS Reference</a><a href="/docs/reference/hooks/">Hooks, Guards, And Middleware</a><a href="/docs/reference/addons/">Addons Reference</a><a href="/docs/reference/contracts/">Contracts</a><a href="/docs/reference/errors/">Errors And Boundaries</a><a href="/docs/reference/diagnostics/">Diagnostics Reference</a><a href="/docs/reference/diagnostic-codes/">Diagnostic Codes</a><a href="/docs/reference/dev/">Dev Loop</a><a href="/docs/reference/deployment/">Deployment</a><a href="/docs/reference/testing/">Testing Reference</a><a href="/docs/reference/framework-integrations/">Framework Integrations</a><a href="/docs/reference/manifest/">Manifest Reference</a><a href="/docs/reference/db/">DB Addon</a><a href="/docs/reference/go-interop/">Go Interop</a><a href="/docs/reference/images/">Images</a><a href="/docs/reference/observability/">Observability</a><a href="/docs/reference/pwa-offline/">PWA And Offline</a><a href="/docs/reference/realtime/">Realtime</a><a href="/docs/reference/seo/">SEO Addon</a><a href="/docs/reference/tracing/">Tracing</a><p class="docs-nav-group">Compiler</p><a href="/docs/compiler/">Compiler</a><a href="/docs/compiler/project-structure/">Project Structure</a><a href="/docs/compiler/pipeline/">Compiler Pipeline</a><a href="/docs/compiler/generated-output/">Generated Output</a><a href="/docs/compiler/browser-compiler/">Browser-Facing Output</a><a href="/docs/compiler/build-report/">Build Report</a><a href="/docs/compiler/manifest/">Manifest</a><a href="/docs/compiler/endpoint-binding-inspection/">Feature Spec: go/packages Endpoint Binding Inspection</a><a href="/docs/compiler/incremental-cache-keys/">Incremental Cache Keys</a><a href="/docs/compiler/syntax-contributors/">Syntax Contributor Checklist</a><p class="docs-nav-group">Engineering</p><a href="/docs/engineering/architecture/">Architecture</a><a href="/docs/engineering/security/">Security Baseline</a><a href="/docs/engineering/conventions/">Engineering Conventions</a><a href="/docs/engineering/naming-conventions/">Naming And Full-Name Conventions</a><a href="/docs/engineering/code-quality/">Code Quality</a><a href="/docs/engineering/generated-code-policy/">Generated Code Policy</a><a href="/docs/engineering/dependency-policy/">Dependency Policy</a><a href="/docs/engineering/operations/">Operations</a><a href="/docs/engineering/testing/">Testing Strategy</a><a href="/docs/engineering/ci/">CI</a><a href="/docs/engineering/release/">Release</a><a href="/docs/engineering/await-blocks-plan/">Implementation Plan: Bounded Await Blocks</a><a href="/docs/engineering/markup-transitions-plan/">Implementation Plan: Bounded Markup Transitions</a><a href="/docs/engineering/release-plan/">0.x Improvement Checklist</a><a href="/docs/engineering/security-threat-model/">Security Threat Model</a><p class="docs-nav-group">Decisions</p><a href="/docs/engineering/decisions/">Architecture Decision Records</a><a href="/docs/engineering/decisions/0001-llm-ready-project-structure/">ADR 0001: LLM-Ready Project Structure</a><a href="/docs/engineering/decisions/0002-compile-first-render-model/">ADR 0002: Compile-First Render Model</a><a href="/docs/engineering/decisions/0003-js-default-explicit-wasm-islands/">ADR 0003: JS Default, Component-Declared WASM Islands</a><a href="/docs/engineering/decisions/0004-production-wasm-island-abi/">ADR 0004: Production WASM Island ABI</a><a href="/docs/engineering/decisions/0005-generated-go-emission-boundary/">ADR 0005: Generated Go Emission Boundary</a><a href="/docs/engineering/decisions/0006-gowdk-compiler-and-runtime-boundary/">ADR 0006: GOWDK Compiler And Runtime Boundary</a><a href="/docs/engineering/decisions/0007-static-first-spa-navigation/">ADR 0007: Static-First SPA Navigation</a><a href="/docs/engineering/decisions/0008-bounded-client-language/">ADR 0008: Bounded Client Language</a><a href="/docs/engineering/decisions/0009-optional-inline-go-authoring/">ADR 0009: Optional Inline Go Authoring</a><a href="/docs/engineering/decisions/0010-tokenizer-recursive-descent-parser/">ADR 0010: Tokenizer and Recursive-Descent Parser Direction</a><a href="/docs/engineering/decisions/0011-auth-addon-cryptography/">ADR 0011: Auth Addon Cryptography Stance</a><a href="/docs/engineering/decisions/0012-realtime-subscribe-surface/">ADR 0012: Realtime Subscribe Surface</a><a href="/docs/engineering/decisions/0013-built-in-tracing-observability/">ADR 0013: Built-In Tracing Observability</a><a href="/docs/engineering/decisions/0014-addon-runtime-config-split/">ADR 0014: Addon Runtime Config Split</a><a href="/docs/engineering/decisions/0015-generated-binary-lifecycle-services/">ADR 0015: Generated Binary Lifecycle Services</a><p class="docs-nav-group">Product</p><a href="/docs/product/vision/">Product Vision</a><a href="/docs/product/roadmap/">Product Roadmap</a><a href="/docs/product/requirements/">Product Requirements</a><a href="/docs/product/language-server/">Feature Spec: GOWDK Language Server</a><a href="/docs/product/await-blocks-spec/">Feature Spec: Bounded Await Blocks</a><a href="/docs/product/contract-runtime-spec/">Feature Spec: Contract Runtime</a><a href="/docs/product/diagnostics-and-navigation/">Feature Spec: Diagnostics And Navigation</a><a href="/docs/product/markup-transitions-spec/">Feature Spec: Bounded Markup Transitions</a><a href="/docs/product/observability-tracing-spec/">Feature Spec: GOWDK Trace</a><a href="/docs/product/playground/">Playground Onboarding and Sandboxing</a><a href="/docs/product/playground-hosted-execution-spec/">Feature Spec: Playground Hosted Execution And Export</a><a href="/docs/product/security-audit-spec/">Feature Spec: Declarative Security Audit (M8)</a></nav></aside><div class="doc-area"><main class="doc-page"><div class="doc-body"><div class="doc-main-col"><nav class="doc-breadcrumb" aria-label="Breadcrumb" data-doc-breadcrumb hidden></nav><header class="doc-hero"><p class="eyebrow">Reference</p><h1>CSS Reference</h1><p class="doc-lead">GOWDK has an initial compile-time CSS extension point. It is intentionally small: Tailwind and other CSS tools are addons, not core dependencies.</p></header><article class="prose"><p>GOWDK has an initial compile-time CSS extension point. It is intentionally small:
+Tailwind and other CSS tools are addons, not core dependencies.</p><h2 id="discovered-page-css">Discovered Page CSS</h2><p>SPA builds discover CSS files by filename. A file named <code>forms.css</code> exports
+the CSS input <code>forms</code>; a file named <code>blog.post.css</code> exports <code>blog.post</code>.</p><p>Configure discovery when the default <code>**/*.css</code> scan is too broad:</p><pre><code class="language-go">var Config = gowdk.Config{
+	CSS: gowdk.CSSConfig{
+		Include: []string{&#34;styles/**/*.css&#34;},
+		Exclude: []string{&#34;styles/old.css&#34;},
+	},
+}
+</code></pre><p>When a page omits <code>css</code>, GOWDK behaves as if the page declared:</p><pre><code class="language-gwdk">css default page
+</code></pre><p>Built-in CSS inputs:</p><ul><li><code>default</code>: <code>CSS.Default</code>, or <code>global</code> when <code>global.css</code> exists.</li><li><code>page</code>: CSS matching the page ID, such as <code>blog.post.css</code> for
+<code>page blog.post</code>.</li><li><code>none</code>: no GOWDK-managed page CSS, and it must be used alone.</li></ul><p>Examples:</p><pre><code class="language-gwdk">route &#34;/blog/{slug}&#34;
+guard public
+</code></pre><p>Uses <code>global.css</code> plus page-ID CSS when those files exist. With a derived page
+ID from <code>blog-post.page.gwdk</code>, the page-specific file is <code>blog-post.css</code>; with
+explicit <code>page blog.post</code>, it is <code>blog.post.css</code>.</p><pre><code class="language-gwdk">route &#34;/dashboard&#34;
+guard public
+css reset tokens forms
+</code></pre><p>Uses only <code>reset.css</code>, <code>tokens.css</code>, and <code>forms.css</code>.</p><pre><code class="language-gwdk">route &#34;/embed&#34;
+guard public
+css none
+</code></pre><p>Disables discovered page CSS inputs. A sibling <code>style {}</code> block still emits
+generated CSS for the page.</p><p>Generated page CSS defaults to:</p><pre><code class="language-text">assets/gowdk/&lt;page-id&gt;.css
+</code></pre><p>That path is the logical asset name. Build output writes a minified,
+content-hashed physical filename such as
+<code>assets/gowdk/home.46d269b964e6.css</code>, updates generated stylesheet links to the
+hashed URL, and records the logical-to-emitted mapping in <code>gowdk-assets.json</code>.</p><p>Change the output path and href prefix with:</p><pre><code class="language-go">var Config = gowdk.Config{
+	CSS: gowdk.CSSConfig{
+		Output: gowdk.CSSOutputConfig{
+			Dir:        &#34;assets/pages&#34;,
+			HrefPrefix: &#34;/assets/pages&#34;,
+		},
+	},
+}
+</code></pre><h2 id="style-blocks">Style Blocks</h2><p>Pages, components, and layouts can declare a sibling <code>style {}</code> block outside
+<code>view {}</code>:</p><pre><code class="language-gwdk">view {
+  &lt;main class=&#34;hero&#34;&gt;Home&lt;/main&gt;
+}
+
+style {
+  .hero {
+    color: red;
+  }
+}
+</code></pre><p>The style block is parsed separately from the view body. GOWDK emits the CSS as
+generated CSS assets instead of inline <code>&lt;style&gt;</code> tags:</p><ul><li>Page style blocks are appended to that page&#39;s generated CSS asset.</li><li>Component style blocks are scoped like component <code>css</code> files.</li><li>Layout style blocks are linked by pages that declare that layout.</li></ul><h2 id="configured-stylesheets">Configured Stylesheets</h2><p>SPA builds emit literal stylesheet links from <code>BuildConfig.Stylesheets</code>:</p><pre><code class="language-go">var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		Stylesheets: []gowdk.Stylesheet{
+			{Href: &#34;/assets/app.css&#34;},
+		},
+	},
+}
+</code></pre><p>Generated pages include:</p><pre><code class="language-html">&lt;link rel=&#34;stylesheet&#34; href=&#34;/assets/app.css&#34;&gt;
+</code></pre><p><code>href</code> values are HTML-escaped.</p><h2 id="component-css-and-assets">Component CSS And Assets</h2><p>Component CSS is explicit. A component declares stylesheet inputs with
+component-local <code>css</code> metadata declarations:</p><pre><code class="language-gwdk">package components
+
+component Hero
+css &#34;./hero.css&#34;
+
+view {
+  &lt;section class=&#34;hero&#34;&gt;...&lt;/section&gt;
+}
+</code></pre><p>The path is relative to the component source file. GOWDK parses the metadata declaration
+and lowers it into the typed <code>.gwdk</code> AST and stable IR with owner metadata,
+source path, CSS path, deterministic hash key, and deterministic scope ID.
+See <code>examples/components/css/</code> for a component-local CSS metadata example.</p><p>Component assets use the same explicit model:</p><pre><code class="language-gwdk">package components
+
+component Hero
+asset &#34;./hero.png&#34;
+</code></pre><p><code>asset</code> paths are also relative to the component source file. GOWDK emits
+those files under <code>assets/gowdk/components/&lt;package&gt;/&lt;component&gt;/</code> with
+content-hashed filenames, records the logical-to-emitted mapping in
+<code>gowdk-assets.json</code>, and serves them from generated binaries with immutable
+cache headers. GOWDK does not implicitly bundle arbitrary sibling files.</p><p>Current implementation status:</p><ul><li>Page CSS discovery, page <code>style {}</code> CSS, configured stylesheets,
+processor-emitted CSS, minified hashed filenames, asset manifest mappings,
+and generated binary cache headers are implemented for build output.</li><li>Component <code>css</code> metadata declarations are parsed, analyzed, emitted as scoped CSS
+files, content-hashed, linked from pages whose composed view recursively calls
+the component, recorded in <code>gowdk-assets.json</code>, and served with immutable
+generated binary cache headers. Component <code>style {}</code> CSS uses the same scoped
+emission path.</li><li>Component <code>asset</code> metadata declarations are parsed, analyzed, emitted as
+content-hashed files, recorded in <code>gowdk-assets.json</code>, and served with
+immutable generated binary cache headers.</li><li>Full component AST bodies are not yet passed to CSS processors. Processors
+receive source metadata and the current extracted class subset.</li></ul><p>The component CSS scoping contract is:</p><ul><li>Component CSS is scoped by default when emitted by GOWDK.</li><li>The generated scope marker comes from the component CSS scope ID and is
+attached to compiler-owned component output.</li><li>Local selectors are rewritten with the generated scope marker. Rewriting must
+avoid surprising specificity changes; when browser support allows it, GOWDK
+uses <code>:where(...)</code> around the generated scope marker so scoping adds no
+extra selector specificity.</li><li>Local <code>@keyframes</code> names are scoped with the same scope ID, and local
+<code>animation</code> and <code>animation-name</code> references are rewritten to the scoped
+keyframe name.</li><li>Global CSS does not leak out of component CSS by accident. Use page/global
+CSS for application-wide styles. A future explicit <code>:global(...)</code> escape can
+be added, but implicit global selectors in component CSS are not part of the
+contract.</li><li>Emitted component CSS and <code>asset</code> files are content-hashed, recorded in
+<code>gowdk-assets.json</code>, and served with the same generated binary cache policy
+as other immutable emitted assets.</li></ul><p>Relationship to other CSS features:</p><ul><li>Page CSS is the implemented build-output path today.</li><li>Component CSS is the component-local authoring and emitted build-output path
+today.</li><li>Stylesheet order is deterministic: configured global stylesheets, processor
+global stylesheets, processor page-specific stylesheets, generated page CSS,
+layout <code>style {}</code> CSS, then scoped CSS for components used by the page.</li><li>CSS processors and Tailwind are optional. They can operate on discovered
+source metadata and emitted assets, but they must not become mandatory core
+dependencies.</li><li>Generated filenames are content-hashed for emitted GOWDK-managed CSS assets.
+Logical-to-emitted mappings and cache headers are recorded in the asset
+manifest.</li></ul><h2 id="processor-contract">Processor Contract</h2><p>Compile-time CSS processor addons implement:</p><pre><code class="language-go">type CSSProcessor interface {
+	gowdk.Addon
+	ProcessCSS(gowdk.CSSContext) (gowdk.CSSResult, error)
+}
+</code></pre><p><code>CSSContext</code> includes:</p><ul><li><code>Sources</code>: discovered page/component source metadata.</li><li><code>Sources[*].CSSClasses</code>: extracted literal class names from the current view
+subset.</li><li><code>OutputDir</code>: the current build output directory.</li><li><code>Build</code>: the active build config.</li><li><code>CSS</code>: the active CSS config.</li></ul><p>Component <code>css</code> metadata declarations are represented in the typed <code>.gwdk</code> AST and
+stable IR with deterministic owner, scope ID, and hash-key metadata for future
+scoping and emitted filename decisions. Full component AST bodies are not yet
+passed to CSS processors; processors should use source metadata and extracted
+classes in the current contract. <code>CSSResult</code> can return global stylesheet
+links, page-specific stylesheet links through <code>PageStylesheets</code>, and CSS
+assets. Page-specific stylesheet map keys must match known page IDs. CSS asset
+paths must be relative and stay inside the output directory.</p><p>Processor-emitted CSS files are recorded in <code>gowdk-assets.json</code>:</p><pre><code class="language-json">{
+  &#34;version&#34;: 2,
+  &#34;files&#34;: {
+    &#34;assets/app.css&#34;: &#34;assets/app.7ada5a1234b1.css&#34;
+  },
+  &#34;hashes&#34;: {
+    &#34;assets/app.css&#34;: &#34;sha256:7ada5a1234b1...&#34;
+  },
+  &#34;cache&#34;: {
+    &#34;assets/app.css&#34;: &#34;public, max-age=31536000, immutable&#34;
+  }
+}
+</code></pre><p>GOWDK minifies processor-emitted and discovered page CSS before hashing. A
+processor stylesheet link such as <code>/assets/app.css</code> is rewritten to the hashed
+emitted file when the processor also emits <code>assets/app.css</code>.</p><p>Configured stylesheet links are not asset manifest entries unless a processor
+also emits the referenced file.</p><p><code>addons/css.Addon()</code> registers the <code>css</code> feature. Real processors can implement
+<code>gowdk.CSSProcessor</code> directly or use the aliases in <code>addons/css</code>.</p><h2 id="tailwind-addon">Tailwind Addon</h2><p><code>addons/tailwind</code> provides an experimental Tailwind v4-oriented processor that
+uses the standalone CLI:</p><pre><code class="language-go">Addons: []gowdk.Addon{
+	tailwind.Addon(tailwind.Options{
+		Input:  &#34;assets/app.css&#34;,
+		Minify: true,
+	}),
+}
+</code></pre><p>Defaults:</p><ul><li><code>Command</code>: use <code>tailwindcss</code> from <code>PATH</code>.</li><li><code>OutputPath</code>: <code>assets/app.css</code></li><li><code>Href</code>: <code>/assets/app.css</code></li></ul><p>At build time the addon creates a temporary Tailwind input file that imports the
+configured <code>Input</code> CSS and adds <code>@source</code> declarations for discovered GOWDK
+source files. This follows Tailwind v4&#39;s CSS/source directive model. It then
+runs the standalone executable with <code>-i &lt;temp-input&gt; -o &lt;temp-output&gt;</code>.</p><p>The addon does not use npm, run <code>npx</code>, or run through a shell. If <code>Command</code> is
+omitted and <code>tailwindcss</code> is not available on <code>PATH</code>, <code>gowdk build</code> fails with
+an install-required error. GOWDK does not download Tailwind. Install Tailwind
+through your approved toolchain and use an explicit executable when builds need
+a pinned binary:</p><pre><code class="language-go">tailwind.Addon(tailwind.Options{
+	Input:   &#34;assets/app.css&#34;,
+	Command: &#34;.gowdk/bin/tailwindcss&#34;,
+})
+</code></pre><p>Minimal setup:</p><pre><code class="language-sh">mkdir -p assets
+printf &#39;@import &#34;tailwindcss&#34;;\n&#39; &gt; assets/app.css
+tailwindcss --help &gt;/dev/null
+</code></pre><p>Windows PowerShell setup:</p><pre><code class="language-powershell">New-Item -ItemType Directory -Force assets
+Set-Content -Path assets/app.css -Value &#39;@import &#34;tailwindcss&#34;;&#39;
+tailwindcss --help | Out-Null
+</code></pre><p>Then configure GOWDK:</p><pre><code class="language-go">package main
+
+import (
+	&#34;github.com/cssbruno/gowdk&#34;
+	&#34;github.com/cssbruno/gowdk/addons/tailwind&#34;
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		tailwind.Addon(tailwind.Options{
+			Input:  &#34;assets/app.css&#34;,
+			Minify: true,
+		}),
+	},
+}
+</code></pre><p>Build output, generated app output, and generated binaries all receive the
+processor-emitted stylesheet link and generated CSS asset:</p><pre><code class="language-sh">gowdk build --out dist/site
+gowdk build --out dist/site --app .gowdk/app --bin bin/site
+</code></pre><p>The literal <code>gowdk.config.go</code> parser supports this known literal constructor
+shape when <code>tailwind</code> is imported from
+<code>github.com/cssbruno/gowdk/addons/tailwind</code>. It also recognizes built-in
+no-argument addon constructors. External CSS processor addons can be imported
+from other Go modules; when the AST-only loader cannot reduce the constructor,
+GOWDK uses the executable config bridge and proxies <code>ProcessCSS</code> back to that
+importable addon.</p><p>GOWDK does not generate Tailwind v3 <code>content</code> configuration in this slice.</p></article><nav class="doc-pager" aria-label="Pagination" data-doc-pager hidden></nav></div><aside class="doc-toc" data-doc-toc-wrap hidden><p class="doc-toc-title">On this page</p><nav aria-label="On this page" data-doc-toc></nav></aside></div></main></div></div><div class="docs-modal" data-docs-modal hidden><div class="docs-modal-panel" role="dialog" aria-modal="true" aria-label="Search documentation"><div class="docs-modal-search"><span class="docs-modal-ico" aria-hidden="true">⌕</span><input class="docs-modal-input" type="text" placeholder="Search documentation" data-docs-search-input aria-label="Search documentation"><kbd class="docs-modal-esc">Esc</kbd></div><div class="docs-modal-results" data-docs-results></div></div></div><aside class="cookie-notice" data-cookie-notice aria-label="Cookie notice" hidden><div class="cookie-copy"><strong>One cookie</strong><p>This site stores a single cookie to remember you dismissed this notice. No tracking, no analytics.</p></div><button class="button cookie-dismiss" type="button" data-cookie-dismiss>Got it</button></aside></div><footer class="site-footer"><div class="site-footer-inner"><span>GOWDK - Go-native web apps that rebuild fast.</span><nav class="site-footer-nav" aria-label="Footer"><a href="/">Docs</a><a href="/docs/getting-started/">Getting Started</a><a href="https://github.com/cssbruno/gowdk">GitHub</a></nav></div></footer></div>
+</body>
+</html>

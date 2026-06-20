@@ -14,9 +14,10 @@ services:
         "https://github.com/tailwindlabs/tailwindcss/releases/download/${tailwind_version}/tailwindcss-linux-x64"
       echo "${tailwind_sha256}  tools/tailwindcss" | sha256sum -c -
       chmod +x tools/tailwindcss
+      (cd .. && go build -o docs-site/tools/gowdk ./cmd/gowdk)
       go run ./cmd/syncdocs
       rm -rf dist/site
-      go run ../cmd/gowdk build
+      ./tools/gowdk build
       mkdir -p dist/site/assets
       cp -R assets/. dist/site/assets/
       cp assets/favicon.ico dist/site/favicon.ico

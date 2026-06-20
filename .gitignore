@@ -39,6 +39,9 @@ __pycache__/
 bin/
 gowdk_cache/
 dist/
+!docs-site/dist/
+!docs-site/dist/site/
+!docs-site/dist/site/**
 build/
 out/
 coverage/

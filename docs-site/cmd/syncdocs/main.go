@@ -269,8 +269,6 @@ var (
 	voidRe = regexp.MustCompile(`<(input|br|hr|img|col|area|base|embed|source|track|wbr)([^>]*?)\s*/?>`)
 )
 
-const repoSourceBaseURL = "https://github.com/cssbruno/GoWDK/blob/main/"
-
 func selfCloseVoids(s string) string {
 	return voidRe.ReplaceAllString(s, "<$1$2 />")
 }
@@ -297,7 +295,7 @@ func writePage(docsRoot string, p page, routes map[string]bool) error {
 	}
 	article := selfCloseVoids(buf.String())
 	article = labelTaskListCheckboxes(article)
-	article = rewriteLinks(article, p.Rel, routes)
+	article = rewriteLinks(article, p.Rel)
 	article = escapeBraces(article)
 
 	var out strings.Builder
@@ -339,9 +337,9 @@ func stripFirstH1(markdown string) string {
 	return markdown
 }
 
-// rewriteLinks turns relative ".md" links into site routes only when syncdocs
-// emits the target page. Other repo markdown links point back to source.
-func rewriteLinks(htmlBody, currentRel string, routes map[string]bool) string {
+// rewriteLinks turns relative ".md" links into site routes, resolved against
+// the current page's directory.
+func rewriteLinks(htmlBody, currentRel string) string {
 	dir := path.Dir(currentRel)
 	return hrefRe.ReplaceAllStringFunc(htmlBody, func(match string) string {
 		href := hrefRe.FindStringSubmatch(match)[1]
@@ -359,25 +357,8 @@ func rewriteLinks(htmlBody, currentRel string, routes map[string]bool) string {
 			return match
 		}
 		target := path.Clean(path.Join(dir, href))
-		route := routeFor(target)
-		if routes[route] {
-			return `href="` + route + "/" + anchor + `"`
-		}
-		return `href="` + repoSourceHref(target, anchor) + `"`
+		return `href="` + routeFor(target) + "/" + anchor + `"`
 	})
-}
-
-func repoSourceHref(target string, anchor string) string {
-	clean := path.Clean(target)
-	repoPath := clean
-	if strings.HasPrefix(clean, "../") {
-		for strings.HasPrefix(repoPath, "../") {
-			repoPath = strings.TrimPrefix(repoPath, "../")
-		}
-	} else {
-		repoPath = path.Join("docs", clean)
-	}
-	return repoSourceBaseURL + repoPath + anchor
 }
 
 func escapeBraces(s string) string {

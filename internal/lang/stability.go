@@ -24,6 +24,7 @@ const (
 	ConstructBlock     ConstructKind = "block"
 	ConstructKeyword   ConstructKind = "metadata-keyword"
 	ConstructDirective ConstructKind = "g-directive"
+	ConstructMarkup    ConstructKind = "markup"
 	ConstructEndpoint  ConstructKind = "endpoint"
 )
 
@@ -84,6 +85,9 @@ func ConstructStabilities() []ConstructStability {
 		// exact-name set, so viewparse.SupportedDirectiveNames() excludes them).
 		{Name: "g:on:*", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:message:*", Kind: ConstructDirective, Tier: TierPartial},
+
+		// Supported markup block syntax.
+		{Name: "{#await}", Kind: ConstructMarkup, Tier: TierPartial},
 
 		// Planned g: directives, rejected on use. They currently surface as the
 		// generic parse_error rather than a typed code (see

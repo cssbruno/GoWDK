@@ -49,6 +49,21 @@ type ComponentCall struct {
 
 func (ComponentCall) viewNode() {}
 
+// AwaitBlock renders local pending/resolved/error UI around a bounded client
+// async expression inside a browser island.
+type AwaitBlock struct {
+	Expression string
+	ResultName string
+	ErrorName  string
+	Pending    []Node
+	Then       []Node
+	Catch      []Node
+	Start      int
+	End        int
+}
+
+func (AwaitBlock) viewNode() {}
+
 // InlineScript records browser module code declared directly inside a
 // component source file.
 type InlineScript struct {

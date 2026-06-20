@@ -90,7 +90,7 @@ func islandScriptHrefsForView(source string, nodes []view.Node, components map[s
 		case "wasm":
 			href = "/" + islandWASMLoaderAssetPath(component.Package, component.Name)
 		case "":
-			if component.StateJSON != "" || component.HandlersJSON != "" || len(component.Emits) > 0 || len(component.Exports) > 0 || usage.call.ReactiveProps {
+			if component.StateJSON != "" || component.HandlersJSON != "" || len(component.Emits) > 0 || len(component.Exports) > 0 || usage.call.ReactiveProps || componentViewHasAwait(component.Body, component.Nodes) {
 				needsSharedRuntime = true
 				href = "/" + islandJSAssetPath(component.Package, component.Name)
 			}
@@ -245,7 +245,35 @@ func statefulComponentNames(components []gwdkir.Component) map[string]bool {
 }
 
 func componentNeedsJSIsland(component gwdkir.Component) bool {
-	return component.State.Type.Name != "" || component.Blocks.Client || len(component.Emits) > 0
+	return component.State.Type.Name != "" || component.Blocks.Client || len(component.Emits) > 0 || componentViewHasAwait(component.Blocks.ViewBody, component.Blocks.ViewNodes)
+}
+
+func componentViewHasAwait(source string, nodes []view.Node) bool {
+	if len(nodes) == 0 && strings.TrimSpace(source) != "" {
+		parsed, err := view.Parse(source)
+		if err == nil {
+			nodes = parsed
+		}
+	}
+	return nodesHaveAwait(nodes)
+}
+
+func nodesHaveAwait(nodes []view.Node) bool {
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case view.AwaitBlock:
+			return true
+		case view.Element:
+			if nodesHaveAwait(typed.Children) {
+				return true
+			}
+		case view.ComponentCall:
+			if nodesHaveAwait(typed.Children) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func componentsByName(components []gwdkir.Component) map[string]gwdkir.Component {

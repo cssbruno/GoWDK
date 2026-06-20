@@ -446,6 +446,11 @@ are limited to compiler-owned async helpers such as validated
 `await fetchJSON[T](urlExpr)` assignments; they cannot return values and do not
 change the ownership boundary.
 
+For loading/error UI that does not need a hand-written `Loading` or `Error`
+state field, component views can use `{#await fetchJSON[T](urlExpr)}` blocks.
+The block is local to the JS island, renders pending/then/catch branches, and
+does not expose arbitrary JavaScript promises.
+
 Generated browser runtime behavior is scoped to the island or page enhancement
 that requested it. JavaScript may update text, attributes, classes, styles,
 form bindings, list rows, local state, page stores, partial responses, and SPA

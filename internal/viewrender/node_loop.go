@@ -39,10 +39,6 @@ func ParseForDirective(source string) (ForDirective, error) {
 }
 
 func renderForElement(node Element, ctx *renderContext, out *renderOutput, loop ForDirective, keyExpr string) error {
-	items, err := loopItems(loop.Collection, ctx.values)
-	if err != nil {
-		return fmt.Errorf("g:for: %w", err)
-	}
 	group := ctx.nextLoopGroup()
 	templateNode := elementWithoutAttrs(node, "g:for", "g:key")
 	templateCtx := *ctx
@@ -70,6 +66,13 @@ func renderForElement(node Element, ctx *renderContext, out *renderOutput, loop 
 	out.write(`">`)
 	out.write(template.string())
 	out.write(`</template>`)
+	if ctx.templateLoop != nil {
+		return nil
+	}
+	items, err := loopItems(loop.Collection, ctx.values)
+	if err != nil {
+		return fmt.Errorf("g:for: %w", err)
+	}
 	seenKeys := map[string]bool{}
 	for index, item := range items {
 		itemCtx, err := ctx.loopContext(loop, keyExpr, group, item, index)
@@ -223,6 +226,9 @@ func (ctx *renderContext) loopSymbols(loop ForDirective) map[string]clientlang.V
 	itemType := symbols[loop.Collection+"[]"]
 	if itemType == "" {
 		itemType = clientlang.TypeObject
+		if symbols[loop.Collection] == clientlang.TypeUnknown {
+			itemType = clientlang.TypeUnknown
+		}
 	}
 	symbols[loop.Var] = itemType
 	if loop.IndexVar != "" {
@@ -273,6 +279,10 @@ func (ctx *renderContext) nextIslandID() string {
 	return ctx.idAllocator().nextIslandID()
 }
 
+func (ctx *renderContext) nextAwaitID() string {
+	return ctx.idAllocator().nextAwaitID()
+}
+
 func (ctx *renderContext) idAllocator() *renderIDAllocator {
 	if ctx.ids == nil {
 		ctx.ids = &renderIDAllocator{}
@@ -293,6 +303,11 @@ func (ids *renderIDAllocator) nextBindingID() string {
 func (ids *renderIDAllocator) nextIslandID() string {
 	ids.island++
 	return fmt.Sprintf("i%d", ids.island)
+}
+
+func (ids *renderIDAllocator) nextAwaitID() string {
+	ids.await++
+	return fmt.Sprintf("a%d", ids.await)
 }
 
 func (ctx *renderContext) loopKeyValue(expr string) string {

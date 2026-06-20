@@ -47,6 +47,16 @@ func collectNamedControls(nodes []Node, fields map[string]ActionFormField) error
 			if err := collectNamedControls(typed.Children, fields); err != nil {
 				return err
 			}
+		case AwaitBlock:
+			if err := collectNamedControls(typed.Pending, fields); err != nil {
+				return err
+			}
+			if err := collectNamedControls(typed.Then, fields); err != nil {
+				return err
+			}
+			if err := collectNamedControls(typed.Catch, fields); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

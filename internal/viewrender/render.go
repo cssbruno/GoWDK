@@ -40,6 +40,11 @@ func collectIDsAndTargets(nodes []Node, ids map[string]bool, targets map[string]
 	for _, node := range nodes {
 		element, ok := node.(Element)
 		if !ok {
+			if block, ok := node.(AwaitBlock); ok {
+				collectIDsAndTargets(block.Pending, ids, targets)
+				collectIDsAndTargets(block.Then, ids, targets)
+				collectIDsAndTargets(block.Catch, ids, targets)
+			}
 			continue
 		}
 		hasPost := false

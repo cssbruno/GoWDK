@@ -372,6 +372,29 @@ func validateAwaitFetchAssignment(statement string, writeSymbols map[string]Valu
 	return nil
 }
 
+// ParseAwaitFetchExpression parses the bounded expression accepted by markup
+// await blocks: fetchJSON[T](urlExpr).
+func ParseAwaitFetchExpression(source string) (ValueType, string, bool) {
+	return parseIslandFetchJSON(strings.TrimSpace(source))
+}
+
+// ValidateAwaitFetchExpression validates a markup await expression and returns
+// the normalized resolved value type.
+func ValidateAwaitFetchExpression(source string, readSymbols map[string]ValueType, helpers map[string]ExprFunction) (ValueType, error) {
+	fetchType, urlExpr, ok := ParseAwaitFetchExpression(source)
+	if !ok {
+		return TypeUnknown, fmt.Errorf("await block supports only fetchJSON[T](urlExpr)")
+	}
+	urlType, _, err := CheckExprWithFunctions(urlExpr, readSymbols, helpers)
+	if err != nil {
+		return TypeUnknown, fmt.Errorf("fetchJSON url: %w", err)
+	}
+	if urlType != TypeString && urlType != TypeUnknown {
+		return TypeUnknown, fmt.Errorf("fetchJSON url must be string, got %s", urlType)
+	}
+	return fetchType, nil
+}
+
 func parseIslandLetStatement(statement string) (letStatement, bool, error) {
 	name, typ, expr, ok := parseIslandLet(strings.TrimSpace(statement))
 	if !ok {
@@ -752,8 +775,11 @@ func parseIslandAwaitFetch(source string) (ValueType, string, bool) {
 	if !ok || rest == "" || !isSpace(rest[0]) {
 		return TypeUnknown, "", false
 	}
-	rest = strings.TrimSpace(rest)
-	rest, ok = strings.CutPrefix(rest, "fetchJSON[")
+	return parseIslandFetchJSON(strings.TrimSpace(rest))
+}
+
+func parseIslandFetchJSON(source string) (ValueType, string, bool) {
+	rest, ok := strings.CutPrefix(source, "fetchJSON[")
 	if !ok {
 		return TypeUnknown, "", false
 	}

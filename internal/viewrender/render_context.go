@@ -10,6 +10,8 @@ type renderContext struct {
 	ids          *renderIDAllocator
 	loopItem     *loopItemRender
 	templateLoop *templateLoopRender
+	awaitAllowed bool
+	awaitUsed    *bool
 	// serverScope is the active g:for row or g:if branch scope, set while
 	// rendering a request-time server region template. It is nil outside regions.
 	serverScope *serverScope
@@ -60,6 +62,7 @@ type renderIDAllocator struct {
 	list    int
 	cond    int
 	field   int
+	await   int
 }
 
 type loopItemRender struct {

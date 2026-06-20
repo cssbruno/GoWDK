@@ -9,6 +9,7 @@ import (
 )
 
 type Attr = viewmodel.Attr
+type AwaitBlock = viewmodel.AwaitBlock
 type Component = viewmodel.Component
 type ComponentCall = viewmodel.ComponentCall
 type Element = viewmodel.Element

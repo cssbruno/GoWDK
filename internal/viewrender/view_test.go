@@ -2541,7 +2541,7 @@ func TestParseRejectsUnknownAndDeferredDirectives(t *testing.T) {
 		{
 			name:    "async placeholder",
 			source:  `<div g:await={Promise}></div>`,
-			message: "async placeholders are deferred from the view {} contract",
+			message: "use a bounded {#await fetchJSON[T](urlExpr)} block inside a client island",
 		},
 		{
 			name:    "dom action",
@@ -2582,12 +2582,72 @@ func TestParseRejectsRawHTMLTemplateTagWithEscapeHatchGuidance(t *testing.T) {
 	}
 }
 
-func TestParseKeepsAwaitBlockRejectionMessage(t *testing.T) {
-	_, err := Parse(`<main>{#await load()}<p>loading</p>{/await}</main>`)
-	if err == nil {
-		t.Fatal("expected await syntax rejection")
+func TestParseAwaitBlock(t *testing.T) {
+	nodes, err := Parse(`<main>{#await fetchJSON[[]Item]("/api/items")}<p>Loading</p>{:then results}<ul><li g:for={item in results} g:key={item.ID}>{item.Name}</li></ul>{:catch err}<p>{err.message}</p>{/await}</main>`)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(err.Error(), "use build/load data, actions, APIs, or fragments for asynchronous data") {
+	main, ok := nodes[0].(Element)
+	if !ok {
+		t.Fatalf("expected main element, got %T", nodes[0])
+	}
+	block, ok := main.Children[0].(AwaitBlock)
+	if !ok {
+		t.Fatalf("expected await block, got %T", main.Children[0])
+	}
+	if block.Expression != `fetchJSON[[]Item]("/api/items")` || block.ResultName != "results" || block.ErrorName != "err" {
+		t.Fatalf("unexpected await block: %#v", block)
+	}
+	if len(block.Pending) != 1 || len(block.Then) != 1 || len(block.Catch) != 1 {
+		t.Fatalf("unexpected branch node counts: pending=%d then=%d catch=%d", len(block.Pending), len(block.Then), len(block.Catch))
+	}
+}
+
+func TestRenderWithComponentsEmitsAwaitIsland(t *testing.T) {
+	got, err := RenderWithComponents(`<Results />`, map[string]Component{
+		"Results": {
+			Name: "Results",
+			Body: `{#await fetchJSON[[]Item]("/api/items")}<p>Loading</p>{:then results}<ul><li g:for={item in results} g:key={item.ID}>{item.Name}</li></ul>{:catch err}<p>{err.message}</p>{/await}`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`<gowdk-island data-gowdk-component="Results"`,
+		`data-gowdk-runtime="js"`,
+		`<gowdk-await data-gowdk-await="a1" data-gowdk-binding-await="b1" data-gowdk-await-expr="fetchJSON[[]Item](&#34;/api/items&#34;)" data-gowdk-await-result="results" data-gowdk-await-error="err">`,
+		`<template data-gowdk-await-branch="pending"><p>Loading</p></template>`,
+		`<template data-gowdk-await-branch="then"><ul><template data-gowdk-for="l1" data-gowdk-binding-list="b2" data-gowdk-for-var="item" data-gowdk-for-source="results" data-gowdk-for-key="item.ID"><li data-gowdk-for-item="l1" data-gowdk-key-value="{{item.ID}}">{{item.Name}}</li></template></ul></template>`,
+		`<template data-gowdk-await-branch="catch"><p>{{err.message}}</p></template>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in await island HTML:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderRejectsAwaitOutsideComponent(t *testing.T) {
+	_, err := RenderSPA(`{#await fetchJSON[string]("/api/message")}{:then message}<p>{message}</p>{/await}`)
+	if err == nil {
+		t.Fatal("expected await outside component error")
+	}
+	if !strings.Contains(err.Error(), "only supported inside component views") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderRejectsUnsupportedAwaitExpression(t *testing.T) {
+	_, err := RenderWithComponents(`<Results />`, map[string]Component{
+		"Results": {
+			Name: "Results",
+			Body: `{#await Search()}{:then results}<p>{results}</p>{/await}`,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected unsupported await expression error")
+	}
+	if !strings.Contains(err.Error(), "supports only fetchJSON[T](urlExpr)") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

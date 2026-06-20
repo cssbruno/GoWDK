@@ -8,6 +8,7 @@
     { kind: "checked", selector: "[data-gowdk-binding-checked]", id: "data-gowdk-binding-checked", field: "data-gowdk-bind-checked" },
     { kind: "conditional", selector: "[data-gowdk-binding-if]", id: "data-gowdk-binding-if" },
     { kind: "list", selector: "[data-gowdk-binding-list]", id: "data-gowdk-binding-list" },
+    { kind: "await", selector: "gowdk-await[data-gowdk-await]", id: "data-gowdk-binding-await" },
     { kind: "class", attrPrefix: "data-gowdk-binding-class-", valuePrefix: "data-gowdk-class-" },
     { kind: "style", attrPrefix: "data-gowdk-binding-style-", valuePrefix: "data-gowdk-style-", unitPrefix: "data-gowdk-style-unit-" },
     { kind: "attr", attrPrefix: "data-gowdk-binding-attr-", valuePrefix: "data-gowdk-attr-" }
@@ -789,7 +790,7 @@
   }
 
   function emptyBindings() {
-    return { text: [], value: [], checked: [], classes: [], styles: [], attrs: [], conditionals: [], lists: [] };
+    return { text: [], value: [], checked: [], classes: [], styles: [], attrs: [], conditionals: [], lists: [], awaits: [] };
   }
 
   function collectDirectBinding(bindings, spec, root) {
@@ -801,6 +802,7 @@
       else if (spec.kind === "checked") bindings.checked.push({ id, node, field: node.getAttribute(spec.field) });
       else if (spec.kind === "conditional") bindings.conditionals.push({ id, node });
       else if (spec.kind === "list") bindings.lists.push({ id, node });
+      else if (spec.kind === "await") bindings.awaits.push({ id, node });
     });
   }
 
@@ -840,7 +842,10 @@
     matchingNodes(root, "[data-gowdk-binding-if]").forEach((node) => {
       if (shouldSkip(node)) return;
       const id = node.getAttribute("data-gowdk-binding-if");
-      if (!id || records.has(id)) return;
+      if (!id) return;
+      const existing = records.get(id);
+      if (existing && existing.marker && existing.marker.isConnected) return;
+      if (existing) records.delete(id);
       const marker = document.createComment("gowdk-if:" + id);
       const template = node.cloneNode(true);
       node.parentNode.insertBefore(marker, node);
@@ -849,6 +854,7 @@
         marker,
         template,
         current: node,
+        awaitBlock: options.awaitRoot && node.closest ? node.closest("gowdk-await[data-gowdk-await]") : null,
         group: node.getAttribute("data-gowdk-if-group") || "",
         index: Number(node.getAttribute("data-gowdk-if-index") || "0")
       });
@@ -877,7 +883,8 @@
     records.forEach((record) => {
       if (record.group) return;
       const condition = record.template.getAttribute("data-gowdk-if");
-      const visible = condition == null || Boolean(valueOf(condition, state, scope, helpers));
+      const recordScope = scope || awaitScopeForBlock(options.awaitRoot, record.awaitBlock);
+      const visible = condition == null || Boolean(valueOf(condition, state, recordScope, helpers));
       if (visible) mountConditional(record);
       else unmountConditional(record);
     });
@@ -892,12 +899,189 @@
       let matched = false;
       groupRecords.forEach((record) => {
         const condition = record.template.getAttribute("data-gowdk-if");
-        const visible = !matched && (condition == null || Boolean(valueOf(condition, state, scope, helpers)));
+        const recordScope = scope || awaitScopeForBlock(options.awaitRoot, record.awaitBlock);
+        const visible = !matched && (condition == null || Boolean(valueOf(condition, state, recordScope, helpers)));
         if (visible) mountConditional(record);
         else unmountConditional(record);
         if (visible) matched = true;
       });
     });
+  }
+
+  function parseAwaitFetchExpression(expr) {
+    const match = String(expr || "").trim().match(/^fetchJSON\[(.*)\]\((.*)\)$/);
+    if (!match) return null;
+    return { urlExpr: match[2] };
+  }
+
+  function awaitRecords(root) {
+    return root.__gowdkAwaitRecords || (root.__gowdkAwaitRecords = new Map());
+  }
+
+  function awaitBranchTemplate(block, branch) {
+    return Array.from(block.children).find((child) => child.tagName === "TEMPLATE" && child.getAttribute("data-gowdk-await-branch") === branch) || null;
+  }
+
+  function awaitContent(block) {
+    const id = block.getAttribute("data-gowdk-await") || "";
+    let content = Array.from(block.children).find((child) => child.getAttribute && child.getAttribute("data-gowdk-await-content") === id);
+    if (content) return content;
+    content = document.createElement("span");
+    content.setAttribute("data-gowdk-await-content", id);
+    block.appendChild(content);
+    return content;
+  }
+
+  function clearAwaitContent(block) {
+    const content = awaitContent(block);
+    while (content.firstChild) content.removeChild(content.firstChild);
+    return content;
+  }
+
+  function awaitErrorObject(error) {
+    return { message: error && error.message ? error.message : String(error || "async error") };
+  }
+
+  function mergeScopes(base, additions) {
+    const scope = Object.create(null);
+    Object.keys(base || {}).forEach((name) => {
+      scope[name] = base[name];
+    });
+    Object.keys(additions || {}).forEach((name) => {
+      scope[name] = additions[name];
+    });
+    return scope;
+  }
+
+  function awaitScopeForBlock(root, block) {
+    if (!block || !ownsNode(root, block)) return null;
+    const record = awaitRecords(root).get(block.getAttribute("data-gowdk-await") || "");
+    if (!record) return null;
+    const scope = Object.create(null);
+    if (record.status === "then") {
+      scope[block.getAttribute("data-gowdk-await-result") || "value"] = record.value;
+      return scope;
+    }
+    if (record.status === "catch") {
+      scope[block.getAttribute("data-gowdk-await-error") || "error"] = awaitErrorObject(record.error);
+      return scope;
+    }
+    return null;
+  }
+
+  function awaitScopeForNode(root, node) {
+    const block = node && node.closest ? node.closest("gowdk-await[data-gowdk-await]") : null;
+    return awaitScopeForBlock(root, block);
+  }
+
+  function interpolateAwaitTemplateNode(node, state, scope, helpers) {
+    if (node.nodeType === 3) {
+      if (node.nodeValue && node.nodeValue.indexOf("{{") >= 0) {
+        node.nodeValue = interpolateTemplateValue(node.nodeValue, state, scope, helpers);
+      }
+      return;
+    }
+    if (node.nodeType !== 1) return;
+    if (node.tagName === "TEMPLATE" && node.hasAttribute("data-gowdk-for")) return;
+    Array.from(node.attributes).forEach((attr) => {
+      if (attr.value.indexOf("{{") >= 0) node.setAttribute(attr.name, interpolateTemplateValue(attr.value, state, scope, helpers));
+    });
+    if (node.content) Array.from(node.content.childNodes).forEach((child) => interpolateAwaitTemplateNode(child, state, scope, helpers));
+    Array.from(node.childNodes).forEach((child) => interpolateAwaitTemplateNode(child, state, scope, helpers));
+  }
+
+  function renderAwaitBranch(block, record, state, helpers) {
+    const branch = record.status === "then" ? "then" : record.status === "catch" ? "catch" : "pending";
+    const template = awaitBranchTemplate(block, branch);
+    const content = clearAwaitContent(block);
+    if (!template || !template.content) return;
+    const scope = Object.create(null);
+    if (branch === "then") {
+      scope[block.getAttribute("data-gowdk-await-result") || "value"] = record.value;
+    } else if (branch === "catch") {
+      scope[block.getAttribute("data-gowdk-await-error") || "error"] = awaitErrorObject(record.error);
+    }
+    const fragment = document.createDocumentFragment();
+    Array.from(template.content.childNodes).forEach((child) => {
+      const fresh = child.cloneNode(true);
+      interpolateAwaitTemplateNode(fresh, state, scope, helpers);
+      fragment.appendChild(fresh);
+    });
+    content.appendChild(fragment);
+  }
+
+  function startAwaitFetch(root, block, record, expr, url, helpers, onAsyncSettle) {
+    if (record.controller && typeof record.controller.abort === "function") record.controller.abort();
+    const controller = typeof AbortController === "undefined" ? null : new AbortController();
+    const token = (record.token || 0) + 1;
+    record.expr = expr;
+    record.url = url;
+    record.token = token;
+    record.controller = controller;
+    record.status = "pending";
+    record.value = null;
+    record.error = null;
+    fetchJSON(url, controller ? controller.signal : undefined).then((value) => {
+      if (!block.isConnected || !root.isConnected || record.token !== token) return;
+      record.status = "then";
+      record.value = value;
+      record.error = null;
+      if (typeof onAsyncSettle === "function") onAsyncSettle();
+    }).catch((error) => {
+      if (error && error.name === "AbortError") return;
+      if (!block.isConnected || !root.isConnected || record.token !== token) return;
+      record.status = "catch";
+      record.value = null;
+      record.error = error;
+      if (typeof onAsyncSettle === "function") onAsyncSettle();
+    });
+  }
+
+  function renderAwaitBlocks(root, state, helpers, bindings, onAsyncSettle) {
+    const markers = bindings ? bindings.awaits.map((binding) => binding.node).filter((node) => node.isConnected) : Array.from(root.querySelectorAll("gowdk-await[data-gowdk-await]"));
+    const records = awaitRecords(root);
+    markers.forEach((block) => {
+      if (!ownsNode(root, block)) return;
+      const id = block.getAttribute("data-gowdk-await");
+      if (!id) return;
+      const expr = block.getAttribute("data-gowdk-await-expr") || "";
+      let record = records.get(id);
+      if (!record) {
+        record = { status: "pending", token: 0, value: null, error: null, controller: null };
+        records.set(id, record);
+      }
+      const parsed = parseAwaitFetchExpression(expr);
+      if (!parsed) {
+        record.status = "catch";
+        record.error = new Error("await block supports only fetchJSON[T](urlExpr)");
+        renderAwaitBranch(block, record, state, helpers);
+        return;
+      }
+      let url = "";
+      try {
+        url = String(valueOf(parsed.urlExpr, state, null, helpers));
+      } catch (error) {
+        if (record.controller && typeof record.controller.abort === "function") record.controller.abort();
+        record.status = "catch";
+        record.error = error;
+        renderAwaitBranch(block, record, state, helpers);
+        return;
+      }
+      if (record.expr !== expr || record.url !== url) {
+        startAwaitFetch(root, block, record, expr, url, helpers, onAsyncSettle);
+      }
+      renderAwaitBranch(block, record, state, helpers);
+    });
+  }
+
+  function abortAwaitRecords(root) {
+    const records = root.__gowdkAwaitRecords;
+    if (!records) return;
+    records.forEach((record) => {
+      record.token = (record.token || 0) + 1;
+      if (record.controller && typeof record.controller.abort === "function") record.controller.abort();
+    });
+    records.clear();
   }
 
   function renderListLoops(root, state, helpers, bindings) {
@@ -909,7 +1093,8 @@
       const indexName = marker.getAttribute("data-gowdk-for-index-var");
       const source = marker.getAttribute("data-gowdk-for-source");
       const keyExpr = marker.getAttribute("data-gowdk-for-key");
-      const items = valueOf(source, state, null, helpers);
+      const baseScope = awaitScopeForNode(root, marker);
+      const items = valueOf(source, state, baseScope, helpers);
       const existing = new Map();
       let cursor = marker.nextSibling;
       while (cursor) {
@@ -922,7 +1107,7 @@
       const fragment = document.createDocumentFragment();
       const used = new Set();
       items.forEach((item, index) => {
-        const scope = Object.create(null);
+        const scope = mergeScopes(baseScope, null);
         scope[itemName] = item;
         scope.index = index;
         if (indexName) scope[indexName] = index;
@@ -1061,9 +1246,11 @@
     updateAttrBindings(bindings, state, helpers);
   }
 
-  function render(root, state, helpers, bindings) {
+  function render(root, state, helpers, bindings, onAsyncSettle) {
+    renderAwaitBlocks(root, state, helpers, bindings, onAsyncSettle);
+    bindings = collectBindings(root);
     renderListLoops(root, state, helpers, bindings);
-    renderConditionals(root, state, null, helpers, { owner: root, skipLoopItems: true });
+    renderConditionals(root, state, null, helpers, { owner: root, skipLoopItems: true, awaitRoot: root });
     bindings = collectBindings(root);
     updateBindings(root, state, helpers, bindings);
     root.setAttribute("data-gowdk-state", JSON.stringify(state));
@@ -1136,7 +1323,7 @@
       storeNames.forEach((name) => storeRegistry.set(name, state));
     };
     const rerender = () => {
-      bindings = render(root, state, helpers, bindings);
+      bindings = render(root, state, helpers, bindings, scheduleRender);
       bindInteractiveNodes();
       syncChildProps(root, state, helpers);
       dispatchComponentExports(root, exportNames, state, true);
@@ -1322,6 +1509,7 @@
       root.removeAttribute("data-gowdk-mounted");
       registry.roots.delete(root);
       dispatchComponentExports(root, exportNames, state, false);
+      abortAwaitRecords(root);
       storeUnsubscribers.forEach((unsubscribe) => unsubscribe());
       if (destroyStatements.length > 0) {
         await runAllEffectCleanups();

@@ -87,7 +87,7 @@ func unsupportedDirectiveMessage(name string) string {
 	case name == "g:window" || name == "g:document" || name == "g:body" || name == "g:head":
 		return fmt.Sprintf("unsupported g: directive %q; document, window, body, and head targets are deferred from the view {} contract — use page metadata such as title, or g:on:* on rendered elements", name)
 	case name == "g:await" || name == "g:async":
-		return fmt.Sprintf("unsupported g: directive %q; async placeholders are deferred from the view {} contract — use build/load data, actions, APIs, or fragments for asynchronous data", name)
+		return fmt.Sprintf("unsupported g: directive %q; use a bounded {#await fetchJSON[T](urlExpr)} block inside a client island for local async placeholders", name)
 	case name == "g:use" || name == "g:action" || name == "g:attach":
 		return fmt.Sprintf("unsupported g: directive %q; DOM actions and attachments are deferred from the view {} contract — use component client {} blocks with g:ref", name)
 	case strings.HasPrefix(name, "g:bind:") || name == "g:bind":

@@ -48,6 +48,17 @@ func (parser *parser) nodes(until string) ([]Node, error) {
 		if parser.startsWith("</") {
 			return nil, parser.errorf("unexpected closing tag")
 		}
+		if parser.startsWith("{#await") {
+			node, err := parser.awaitBlock()
+			if err != nil {
+				return nil, err
+			}
+			nodes = append(nodes, node)
+			continue
+		}
+		if parser.startsWith("{:then") || parser.startsWith("{:catch") || parser.startsWith("{/await") {
+			return nil, parser.errorf("unexpected await branch marker")
+		}
 		if parser.peek() == '<' {
 			node, err := parser.element()
 			if err != nil {
@@ -82,8 +93,6 @@ func unsupportedTemplateSyntax(text string) (int, string, bool) {
 			return offset, "unsupported template conditional syntax; use g:if, g:else-if, and g:else on elements", true
 		case strings.HasPrefix(fragment, "{#each"), strings.HasPrefix(fragment, "{/each"):
 			return offset, "unsupported template loop syntax; use g:for with g:key on elements inside stateful components", true
-		case strings.HasPrefix(fragment, "{#await"), strings.HasPrefix(fragment, "{/await"):
-			return offset, "unsupported template await syntax; use build/load data, actions, APIs, or fragments for asynchronous data", true
 		case strings.HasPrefix(fragment, "{#snippet"), strings.HasPrefix(fragment, "{/snippet"):
 			return offset, "unsupported template snippet syntax; use GOWDK component slots for supported reusable markup", true
 		case strings.HasPrefix(fragment, "{@html"):
@@ -95,6 +104,213 @@ func unsupportedTemplateSyntax(text string) (int, string, bool) {
 		}
 	}
 	return 0, "", false
+}
+
+type awaitBranchMarker struct {
+	Kind string
+	Name string
+}
+
+func (parser *parser) awaitBlock() (AwaitBlock, error) {
+	start := parser.index
+	expr, err := parser.templateTagBody("{#await", "await block")
+	if err != nil {
+		return AwaitBlock{}, err
+	}
+	if strings.TrimSpace(expr) == "" {
+		return AwaitBlock{}, parser.errorf("await block requires an expression")
+	}
+	pending, marker, err := parser.awaitNodes()
+	if err != nil {
+		return AwaitBlock{}, err
+	}
+	if marker.Kind != "then" {
+		return AwaitBlock{}, parser.errorf("await block requires a {:then name} branch before {/await}")
+	}
+	if marker.Name == "" {
+		return AwaitBlock{}, parser.errorf("await then branch requires a result binding name")
+	}
+	resultName := marker.Name
+	thenNodes, marker, err := parser.awaitNodes()
+	if err != nil {
+		return AwaitBlock{}, err
+	}
+	var catchNodes []Node
+	var errorName string
+	if marker.Kind == "catch" {
+		if marker.Name == "" {
+			return AwaitBlock{}, parser.errorf("await catch branch requires an error binding name")
+		}
+		errorName = marker.Name
+		if errorName == resultName {
+			return AwaitBlock{}, parser.errorf("await catch binding %q must differ from then binding", errorName)
+		}
+		catchNodes, marker, err = parser.awaitNodes()
+		if err != nil {
+			return AwaitBlock{}, err
+		}
+	}
+	if marker.Kind != "end" {
+		return AwaitBlock{}, parser.errorf("await block has duplicate %s branch", marker.Kind)
+	}
+	return AwaitBlock{
+		Expression: strings.TrimSpace(expr),
+		ResultName: resultName,
+		ErrorName:  errorName,
+		Pending:    pending,
+		Then:       thenNodes,
+		Catch:      catchNodes,
+		Start:      start,
+		End:        parser.index,
+	}, nil
+}
+
+func (parser *parser) awaitNodes() ([]Node, awaitBranchMarker, error) {
+	var nodes []Node
+	for {
+		if parser.done() {
+			return nil, awaitBranchMarker{}, parser.errorf("missing closing {/await}")
+		}
+		if parser.startsWith("{:then") || parser.startsWith("{:catch") || parser.startsWith("{/await") {
+			marker, err := parser.awaitBranchMarker()
+			return nodes, marker, err
+		}
+		if parser.startsWith("{#await") {
+			node, err := parser.awaitBlock()
+			if err != nil {
+				return nil, awaitBranchMarker{}, err
+			}
+			nodes = append(nodes, node)
+			continue
+		}
+		if parser.startsWith("</") {
+			return nil, awaitBranchMarker{}, parser.errorf("unexpected closing tag")
+		}
+		if parser.peek() == '<' {
+			node, err := parser.element()
+			if err != nil {
+				return nil, awaitBranchMarker{}, err
+			}
+			nodes = append(nodes, node)
+			continue
+		}
+		start := parser.index
+		if text := parser.text(); strings.TrimSpace(text) != "" {
+			if offset, message, ok := unsupportedTemplateSyntax(text); ok {
+				parser.index = start + offset
+				return nil, awaitBranchMarker{}, parser.errorf("%s", message)
+			}
+			nodes = append(nodes, Text{Value: text, Start: start, End: parser.index})
+		}
+	}
+}
+
+func (parser *parser) awaitBranchMarker() (awaitBranchMarker, error) {
+	switch {
+	case parser.startsWith("{:then"):
+		name, err := parser.templateTagBody("{:then", "await then branch")
+		if err != nil {
+			return awaitBranchMarker{}, err
+		}
+		name, err = awaitBindingName("then", name)
+		if err != nil {
+			return awaitBranchMarker{}, parser.errorf("%s", err)
+		}
+		return awaitBranchMarker{Kind: "then", Name: name}, nil
+	case parser.startsWith("{:catch"):
+		name, err := parser.templateTagBody("{:catch", "await catch branch")
+		if err != nil {
+			return awaitBranchMarker{}, err
+		}
+		name, err = awaitBindingName("catch", name)
+		if err != nil {
+			return awaitBranchMarker{}, parser.errorf("%s", err)
+		}
+		return awaitBranchMarker{Kind: "catch", Name: name}, nil
+	case parser.startsWith("{/await"):
+		body, err := parser.templateTagBody("{/await", "await end")
+		if err != nil {
+			return awaitBranchMarker{}, err
+		}
+		if strings.TrimSpace(body) != "" {
+			return awaitBranchMarker{}, parser.errorf("await end tag must not contain content")
+		}
+		return awaitBranchMarker{Kind: "end"}, nil
+	default:
+		return awaitBranchMarker{}, parser.errorf("expected await branch marker")
+	}
+}
+
+func (parser *parser) templateTagBody(prefix, name string) (string, error) {
+	if !parser.consume(prefix) {
+		return "", parser.errorf("expected %s tag", name)
+	}
+	if !parser.done() && parser.peek() != '}' && !unicode.IsSpace(parser.peek()) {
+		return "", parser.errorf("expected whitespace or } after %s", prefix)
+	}
+	start := parser.index
+	depth := 0
+	inString := false
+	escaped := false
+	for !parser.done() {
+		char := parser.peek()
+		if escaped {
+			escaped = false
+			parser.advance()
+			continue
+		}
+		if inString {
+			switch char {
+			case '\\':
+				escaped = true
+			case '"':
+				inString = false
+			}
+			parser.advance()
+			continue
+		}
+		switch char {
+		case '"':
+			inString = true
+		case '{':
+			depth++
+		case '}':
+			if depth == 0 {
+				body := strings.TrimSpace(string(parser.source[start:parser.index]))
+				parser.advance()
+				return body, nil
+			}
+			depth--
+		}
+		parser.advance()
+	}
+	return "", parser.errorf("unterminated %s tag", name)
+}
+
+func awaitBindingName(kind, source string) (string, error) {
+	name := strings.TrimSpace(source)
+	if name == "" {
+		return "", fmt.Errorf("await %s branch requires a binding name", kind)
+	}
+	if strings.ContainsAny(name, " \t\r\n") || !isLocalIdentifier(name) {
+		return "", fmt.Errorf("await %s binding %q must be a local identifier", kind, name)
+	}
+	return name, nil
+}
+
+func isLocalIdentifier(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, r := range value {
+		switch {
+		case index == 0 && (r == '_' || unicode.IsLetter(r)):
+		case index > 0 && (r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func (parser *parser) element() (Node, error) {
@@ -487,10 +703,14 @@ func (parser *parser) name() (string, error) {
 
 func (parser *parser) text() string {
 	start := parser.index
-	for !parser.done() && parser.peek() != '<' {
+	for !parser.done() && parser.peek() != '<' && !parser.startsAwaitMarker() {
 		parser.advance()
 	}
 	return string(parser.source[start:parser.index])
+}
+
+func (parser *parser) startsAwaitMarker() bool {
+	return parser.startsWith("{#await") || parser.startsWith("{:then") || parser.startsWith("{:catch") || parser.startsWith("{/await")
 }
 
 func (parser *parser) skipSpace() {

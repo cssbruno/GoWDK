@@ -353,6 +353,76 @@ fn Flip() {
 	}
 }
 
+func TestJSIslandAwaitBlockInBrowser(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	chromium, err := lookupChromium()
+	if err != nil {
+		t.Skip(err)
+	}
+	requireNodePlaywright(t, node)
+
+	outputDir := t.TempDir()
+	component := gwdkir.Component{
+		Name: "Results",
+		Blocks: gwdkir.Blocks{
+			View: true,
+			ViewBody: `<section>
+{#await fetchJSON[[]Item]("/api/items")}<p id="loading">Loading</p>{:then results}<ul id="items"><li g:for={item in results} g:key={item.ID}>{item.Name}</li></ul>{:catch err}<p id="error">{err.message}</p>{/await}
+{#await fetchJSON[string]("/api/fail")}<p id="fail-loading">Loading</p>{:then message}<p id="message">{message}</p>{:catch err}<p id="fail-error">{err.message}</p>{/await}
+</section>`,
+		},
+	}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "results",
+			Route: "/results",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Results /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{component},
+	}
+	if _, err := Build(gowdk.Config{}, app, outputDir); err != nil {
+		t.Fatal(err)
+	}
+
+	fileServer := http.FileServer(http.Dir(outputDir))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/items":
+			time.Sleep(150 * time.Millisecond)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"ID":"ada","Name":"Ada"},{"ID":"lin","Name":"Lin"}]`))
+		case "/api/fail":
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"error":"failed"}`, http.StatusInternalServerError)
+		default:
+			fileServer.ServeHTTP(w, r)
+		}
+	}))
+	defer server.Close()
+
+	script := filepath.Join(t.TempDir(), "gowdk-js-await-browser-test.cjs")
+	if err := os.WriteFile(script, []byte(jsIslandAwaitBrowserHarness()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, node, script, server.URL, chromium)
+	command.Dir = mustWorkingDir(t)
+	output, err := command.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("browser JS await test timed out:\n%s", output)
+	}
+	if err != nil {
+		t.Fatalf("browser JS await test failed: %v\n%s", err, output)
+	}
+}
+
 func TestBuildRejectsComputedDependencyCycle(t *testing.T) {
 	outputDir := t.TempDir()
 	component := counterComponent()
@@ -1188,7 +1258,7 @@ func TestBuildEmitsGIfRuntimeUpdatesForJSIsland(t *testing.T) {
 		`function unmountConditional(record)`,
 		`{ kind: "conditional", selector: "[data-gowdk-binding-if]", id: "data-gowdk-binding-if" },`,
 		`else if (spec.kind === "conditional") bindings.conditionals.push({ id, node });`,
-		`renderConditionals(root, state, null, helpers, { owner: root, skipLoopItems: true });`,
+		`renderConditionals(root, state, null, helpers, { owner: root, skipLoopItems: true, awaitRoot: root });`,
 	} {
 		if !strings.Contains(js, expected) {
 			t.Fatalf("expected %q in generated JS:\n%s", expected, js)
@@ -1668,6 +1738,68 @@ func TestBuildEmitsAsyncFetchJSONRuntimeForJSIsland(t *testing.T) {
 		`GOWDK fetchJSON received invalid JSON`,
 		`if (error !== staleAsyncResult) recordAsyncError(state, error);`,
 		`await applyExpression(attr.value, state, handlers, helpers, domEventScope(domEvent), refs, computeds, asyncTokens, root, emitEvents);`,
+	} {
+		if !strings.Contains(js, expected) {
+			t.Fatalf("expected %q in generated JS island runtime:\n%s", expected, js)
+		}
+	}
+}
+
+func TestBuildEmitsAwaitBlockRuntimeForJSIsland(t *testing.T) {
+	outputDir := t.TempDir()
+	component := gwdkir.Component{
+		Name:   "Results",
+		Source: "components/results.cmp.gwdk",
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `{#await fetchJSON[[]Item]("/api/items")}<p id="loading">Loading</p>{:then results}<ul id="items"><li g:for={item in results} g:key={item.ID}>{item.Name}</li></ul>{:catch err}<p id="error">{err.message}</p>{/await}`,
+		},
+	}
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:    "results",
+			Route: "/results",
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Results /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{component},
+	}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsPath := filepath.Join(outputDir, "assets", "gowdk", "islands", "Results.js")
+	sharedJSPath := sharedIslandRuntimePath(outputDir)
+	if !hasAssetArtifact(result.AssetArtifacts, sharedJSPath) {
+		t.Fatalf("expected shared island runtime asset, got %#v", result.AssetArtifacts)
+	}
+	if !hasAssetArtifact(result.AssetArtifacts, jsPath) {
+		t.Fatalf("expected Results.js asset, got %#v", result.AssetArtifacts)
+	}
+	html := readFile(t, filepath.Join(outputDir, "results", "index.html"))
+	for _, expected := range []string{
+		`<script src="/assets/gowdk/islands/island.js" defer></script>`,
+		`<script src="/assets/gowdk/islands/Results.js" defer></script>`,
+		`<gowdk-island data-gowdk-component="Results" data-gowdk-island="i1" data-gowdk-runtime="js" data-gowdk-state="{}">`,
+		`<gowdk-await data-gowdk-await="a1" data-gowdk-binding-await="b1" data-gowdk-await-expr="fetchJSON[[]Item](&#34;/api/items&#34;)" data-gowdk-await-result="results" data-gowdk-await-error="err">`,
+		`data-gowdk-for-source="results"`,
+		`{{item.Name}}`,
+		`{{err.message}}`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("expected %q in await block island page:\n%s", expected, html)
+		}
+	}
+	js := readSharedIslandRuntime(t, outputDir)
+	for _, expected := range []string{
+		`function renderAwaitBlocks(root, state, helpers, bindings, onAsyncSettle)`,
+		`parseAwaitFetchExpression(expr)`,
+		`startAwaitFetch(root, block, record, expr, url, helpers, onAsyncSettle)`,
+		`abortAwaitRecords(root);`,
+		`data-gowdk-binding-await`,
 	} {
 		if !strings.Contains(js, expected) {
 			t.Fatalf("expected %q in generated JS island runtime:\n%s", expected, js)
@@ -2784,6 +2916,52 @@ async function waitForText(page, selector, expected) {
   await page.click("#flip");
   await waitForText(page, "#open", "false");
   await waitForText(page, "#count", "21");
+  assert.deepEqual(consoleErrors, []);
+  await browser.close();
+})().catch(async (error) => {
+  console.error(error && error.stack || error);
+  process.exit(1);
+});
+`
+}
+
+func jsIslandAwaitBrowserHarness() string {
+	return `
+"use strict";
+
+const assert = require("node:assert/strict");
+const nodeModule = require("node:module");
+
+const baseURL = process.argv[2];
+const executablePath = process.argv[3];
+const { chromium } = nodeModule.createRequire(process.cwd() + "/gowdk-test.js")("playwright");
+
+async function waitForText(page, selector, expected) {
+  await page.waitForFunction(({ selector, expected }) => {
+    return document.querySelector(selector)?.textContent === expected;
+  }, { selector, expected });
+}
+
+(async () => {
+  const browser = await chromium.launch({
+    executablePath,
+    headless: true,
+    args: ["--no-sandbox"]
+  });
+  const page = await browser.newPage();
+  const consoleErrors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("GOWDK")) consoleErrors.push(message.text());
+  });
+
+  await page.goto(baseURL + "/results/", { waitUntil: "domcontentloaded" });
+  await waitForText(page, "#loading", "Loading");
+  await page.waitForFunction(() => {
+    return Array.from(document.querySelectorAll("#items li")).map((node) => node.textContent).join(",") === "Ada,Lin";
+  });
+  await waitForText(page, "#fail-error", "GOWDK fetchJSON failed with HTTP 500");
+  assert.equal(await page.locator("#loading").count(), 0);
+  assert.equal(await page.locator("#fail-loading").count(), 0);
   assert.deepEqual(consoleErrors, []);
   await browser.close();
 })().catch(async (error) => {

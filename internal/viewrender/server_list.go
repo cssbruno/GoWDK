@@ -442,6 +442,8 @@ func validateServerRegionSubtree(nodes []Node) error {
 			}
 		case ComponentCall:
 			return fmt.Errorf("g:for rows and g:if branches cannot contain component calls; render request-time markup with static elements, g:for, and g:if")
+		case AwaitBlock:
+			return fmt.Errorf("g:for rows and g:if branches cannot contain await blocks; render request-time markup with static elements, g:for, and g:if")
 		}
 	}
 	return nil

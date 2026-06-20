@@ -264,19 +264,31 @@ func injectLiveReloadScriptWithInitialOverlay(html []byte, initialOverlay []byte
 		initial = string(initialOverlay)
 	}
 	script := strings.Replace(liveReloadScriptTemplate, "__GOWDK_INITIAL_OVERLAY__", initial, 1)
+	capacity := liveReloadScriptCapacityHint(len(html), len(script))
 	lower := strings.ToLower(string(html))
 	index := strings.LastIndex(lower, "</body>")
 	if index < 0 {
-		out := make([]byte, 0, len(html)+len(script))
+		out := make([]byte, 0, capacity)
 		out = append(out, html...)
 		out = append(out, script...)
 		return out
 	}
-	out := make([]byte, 0, len(html)+len(script))
+	out := make([]byte, 0, capacity)
 	out = append(out, html[:index]...)
 	out = append(out, script...)
 	out = append(out, html[index:]...)
 	return out
+}
+
+func liveReloadScriptCapacityHint(htmlLen int, scriptLen int) int {
+	if htmlLen < 0 || scriptLen < 0 {
+		return 0
+	}
+	maxInt := int(^uint(0) >> 1)
+	if htmlLen > maxInt-scriptLen {
+		return 0
+	}
+	return htmlLen + scriptLen
 }
 
 const liveReloadScriptTemplate = `<script>

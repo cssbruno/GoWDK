@@ -7304,6 +7304,19 @@ func TestDevRuntimeProxyHandlerInjectsRuntimeErrorOverlay(t *testing.T) {
 	}
 }
 
+func TestLiveReloadScriptCapacityHintAvoidsOverflow(t *testing.T) {
+	maxInt := int(^uint(0) >> 1)
+	if got := liveReloadScriptCapacityHint(10, 5); got != 15 {
+		t.Fatalf("expected normal capacity hint 15, got %d", got)
+	}
+	if got := liveReloadScriptCapacityHint(maxInt, 1); got != 0 {
+		t.Fatalf("expected overflow capacity hint to fall back to 0, got %d", got)
+	}
+	if got := liveReloadScriptCapacityHint(-1, 1); got != 0 {
+		t.Fatalf("expected invalid capacity hint to fall back to 0, got %d", got)
+	}
+}
+
 func TestLiveReloadEventSerializesBuildErrors(t *testing.T) {
 	var output strings.Builder
 	writeLiveReloadEvent(&output, liveReloadEvent{

@@ -546,14 +546,6 @@ func devRuntimePlanLoaded(plan buildOptions, outputDir string) (devRuntime, erro
 	return devRuntime{Enabled: true, AppDir: appDir, BinaryPath: binaryPath}, nil
 }
 
-func devAppAndBinary(args []string, _ string) (string, string, error) {
-	plan, err := loadBuildOptions(args)
-	if err != nil {
-		return "", "", err
-	}
-	return devAppAndBinaryLoaded(plan)
-}
-
 func devAppAndBinaryLoaded(plan buildOptions) (string, string, error) {
 	if len(plan.TargetNames) > 0 {
 		targets, err := selectBuildTargets(plan.Options.Config.Build.Targets, plan.TargetNames)

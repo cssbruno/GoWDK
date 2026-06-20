@@ -97,7 +97,8 @@ mkdir -p bin
 go build -o bin/gowdk-page .
 ```
 
-The binary serves the embedded `dist/site` output.
+Run "Build Site Output" first. `main.go` embeds `dist/site`, so a clean clone
+cannot compile the binary until that generated output exists.
 
 ## Run
 
@@ -127,20 +128,24 @@ rm -rf dist/site && go run github.com/cssbruno/gowdk/cmd/gowdk build
 GOWDK_ADDR=127.0.0.1:8091 go run .
 ```
 
-Deployment is a Go web service (see `render.yaml` at the repo root — Render only
-reads a Blueprint from the repository root, not from a subdirectory). The service
-is rooted at the **repo root**, not `docs-site/`: docs-site's `go.mod` replaces
-the framework with `../` and `syncdocs` reads `../docs`, both outside
-`docs-site/`, and Render makes files outside a service's root directory
-unavailable at build time. So the build `cd`s into `docs-site/`, runs syncdocs
-and the in-tree GOWDK build, copies `assets/`, then `go build`s `main.go` into
-the `app` binary that embeds and serves `dist/site` (reading `$PORT`); the start
-command is `cd docs-site && ./app`. The Blueprint build filter watches both `docs-site/**` and
-`docs/**`, so source documentation changes deploy the generated site even though
-`src/pages/docs/**` is gitignored. A static preview of any branch is just the
-build output above served by any static file server, so contributors can review
-a branch without a live runtime. None of this makes the site a product promise —
-it is documentation for an experimental project.
+Deployment is a Go web service. The Render Blueprint lives at
+`docs-site/render.yaml`; when creating a Blueprint, set the Blueprint Path to
+`docs-site/render.yaml`.
+
+For a manually configured Render service, set Root Directory to `docs-site`, use
+the Build Command from `docs-site/render.yaml`, and use:
+
+```sh
+./app
+```
+
+as the Start Command. The default Render Go build command (`go build ...`) is
+not enough because it either runs before `dist/site` exists or, from the repo
+root, builds the root library package into a non-executable `app` archive. A
+static preview of any branch is just the build output above served by any static
+file server, so contributors can review a branch without a live runtime. None of
+this makes the site a product promise — it is documentation for an experimental
+project.
 
 ## Structure
 

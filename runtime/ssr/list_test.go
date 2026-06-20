@@ -35,6 +35,24 @@ func TestRenderRegionsEscapesFields(t *testing.T) {
 	}
 }
 
+func TestRenderRegionsEscapesURLFields(t *testing.T) {
+	specs := []ListSpec{{
+		Placeholder: "@LIST@",
+		SourcePath:  "items",
+		RowTemplate: `<a href="/issue/@ID@">@TITLE@</a>`,
+		Fields: []ListField{
+			{Placeholder: "@ID@", Path: "id", URL: true},
+			{Placeholder: "@TITLE@", Path: "title"},
+		},
+	}}
+	data := map[string]any{"items": []any{map[string]any{"id": `\\evil.com`, "title": `<bad>`}}}
+	got := RenderRegions("@LIST@", specs, nil, data)
+	want := `<a href="/issue/%5C%5Cevil.com">&lt;bad&gt;</a>`
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
 func TestRenderRegionsIndexField(t *testing.T) {
 	specs := []ListSpec{{
 		Placeholder: "@LIST@",

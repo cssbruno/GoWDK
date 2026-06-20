@@ -3,12 +3,19 @@ package html
 import (
 	stdhtml "html"
 	htmltemplate "html/template"
+	"net/url"
 	"strings"
 )
 
 // Escape escapes text for safe HTML output.
 func Escape(value string) string {
 	return stdhtml.EscapeString(value)
+}
+
+// EscapeURL escapes a request-time interpolation segment before it is placed
+// inside a URL-bearing HTML attribute.
+func EscapeURL(value string) string {
+	return stdhtml.EscapeString(url.PathEscape(value))
 }
 
 // Attr renders an escaped HTML attribute when value is non-empty.

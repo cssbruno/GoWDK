@@ -98,6 +98,27 @@ func allowRequestTimeURLAttrTemplate(name string, value string) bool {
 		return false
 	}
 	value = strings.TrimSpace(decodeSourceTextEntities(value))
+	if strings.EqualFold(strings.TrimSpace(name), "srcset") {
+		return allowRequestTimeSrcsetURLAttrTemplate(value)
+	}
+	return allowSingleRequestTimeURLAttrTemplate(value)
+}
+
+func allowRequestTimeSrcsetURLAttrTemplate(value string) bool {
+	for _, candidate := range strings.Split(value, ",") {
+		fields := strings.Fields(strings.TrimSpace(candidate))
+		if len(fields) == 0 || !strings.Contains(fields[0], "{") {
+			continue
+		}
+		if !allowSingleRequestTimeURLAttrTemplate(fields[0]) {
+			return false
+		}
+	}
+	return true
+}
+
+func allowSingleRequestTimeURLAttrTemplate(value string) bool {
+	value = strings.TrimSpace(value)
 	if value == "" || value[0] != '/' {
 		return false
 	}

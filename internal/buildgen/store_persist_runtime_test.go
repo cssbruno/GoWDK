@@ -57,6 +57,7 @@ const localStorage = makeStorage();
 const sessionStorage = makeStorage();
 let storageListeners = [];
 let warnings = [];
+let errors = [];
 
 // Harness-controlled seed and persist attributes, read fresh on every boot.
 let seedJSON = '{"Count":0,"Open":false}';
@@ -76,7 +77,7 @@ function makeNode() {
   };
 }
 
-global.console = { warn: (m) => warnings.push(m), error: (m) => warnings.push(m), log: console.log };
+global.console = { warn: (m) => warnings.push(m), error: (m) => errors.push(m), log: console.log };
 global.document = { querySelectorAll: () => [makeNode()] };
 
 function boot() {
@@ -320,10 +321,23 @@ let bulkCleared = null;
 r.subscribe("cart", (next) => { bulkCleared = next; });
 storageListeners[0]({ key: null, oldValue: null, newValue: null, storageArea: sessionStorage });
 assert.equal(r.get("cart").Count, 6, "a clear() of a different storage area is ignored");
-storageListeners[0]({ key: null, oldValue: null, newValue: null, storageArea: localStorage });
-assert.equal(r.get("cart").Count, 0, "a cross-tab localStorage.clear() resets local stores to seed");
-assert.ok(bulkCleared && bulkCleared.Count === 0, "a bulk clear notifies subscribers");
+	storageListeners[0]({ key: null, oldValue: null, newValue: null, storageArea: localStorage });
+	assert.equal(r.get("cart").Count, 0, "a cross-tab localStorage.clear() resets local stores to seed");
+	assert.ok(bulkCleared && bulkCleared.Count === 0, "a bulk clear notifies subscribers");
 
-console.log("OK");
-`
+	// 17. A broken subscriber must not block later subscribers or escape store
+	// operations. The runtime reports the failure and keeps notifying.
+	errors = [];
+	let firstSubscriber = null;
+	let thirdSubscriber = null;
+	r.subscribe("cart", (next) => { firstSubscriber = next.Count; });
+	r.subscribe("cart", () => { throw new Error("subscriber failed"); });
+	r.subscribe("cart", (next) => { thirdSubscriber = next.Count; });
+	assert.doesNotThrow(() => r.set("cart", { Count: 11 }), "subscriber failure must not escape set()");
+	assert.equal(firstSubscriber, 11, "subscriber before the thrower ran");
+	assert.equal(thirdSubscriber, 11, "subscriber after the thrower still ran");
+	assert.ok(errors.some((m) => m.includes("store subscriber")), "subscriber failure is reported");
+
+	console.log("OK");
+	`
 }

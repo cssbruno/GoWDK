@@ -139,6 +139,7 @@ func convertSSRListFields(fields []view.SSRListField) []source.SSRListField {
 			Placeholder: field.Placeholder,
 			Path:        field.Path,
 			Index:       field.Index,
+			URL:         field.URL,
 		})
 	}
 	return out

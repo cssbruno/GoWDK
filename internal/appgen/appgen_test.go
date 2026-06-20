@@ -3075,6 +3075,48 @@ func TestGenerateWritesSSRLoadHandler(t *testing.T) {
 	}
 }
 
+func TestGenerateWritesURLAwareSSRLoadReplacements(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:  "profile",
+		Route:   "/profile",
+		Guards:  []string{"public"},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "example.com/app/profile",
+			PackageName:  "profile",
+			FunctionName: "LoadProfile",
+			Signature:    source.BackendSignatureLoadError,
+		},
+		HTML: `<main><a href="/user/__SLUG_URL__">__SLUG__</a></main>`,
+		LoadReplacements: []SSRLoadReplacement{
+			{Path: "user.slug", Placeholder: "__SLUG__"},
+			{Path: "user.slug", Placeholder: "__SLUG_URL__", URL: true},
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`strings.ReplaceAll(html, "__SLUG__", gowdkhtml.Escape(fmt.Sprint(loadValue0)))`,
+		`strings.ReplaceAll(html, "__SLUG_URL__", gowdkhtml.EscapeURL(fmt.Sprint(loadValue1)))`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
 func TestGenerateKeepsActionHandlersIndependentFromSSRLoad(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -3171,6 +3213,40 @@ func TestGenerateWritesDynamicSSRHandler(t *testing.T) {
 		`request = request.WithContext(ctx)`,
 		`strings.ReplaceAll(html, "__SLUG__", gowdkhtml.Escape(params["slug"]))`,
 		`gowdkresponse.WriteNoStoreHTML(response, request, html)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateWritesURLAwareSSRReplacements(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID: "blog.post",
+		Route:  "/blog/{slug}",
+		Guards: []string{"public"},
+		HTML:   `<main><a href="/blog/__SLUG_URL__">__SLUG__</a></main>`,
+		Replacements: []SSRReplacement{
+			{Param: "slug", Placeholder: "__SLUG__"},
+			{Param: "slug", Placeholder: "__SLUG_URL__", URL: true},
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`strings.ReplaceAll(html, "__SLUG__", gowdkhtml.Escape(params["slug"]))`,
+		`strings.ReplaceAll(html, "__SLUG_URL__", gowdkhtml.EscapeURL(params["slug"]))`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)

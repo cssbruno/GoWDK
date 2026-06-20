@@ -106,18 +106,18 @@ func validateSSRReplacements(route SSRRoute) error {
 	for _, param := range ssrRoutePatternParams(route.Route) {
 		routeParams[param] = true
 	}
-	seen := map[string]bool{}
+	seenPlaceholders := map[string]bool{}
 	for _, replacement := range route.Replacements {
 		if !routeParams[replacement.Param] {
 			return fmt.Errorf("generated SSR %s replacement param %q is not declared by route %q", route.PageID, replacement.Param, route.Route)
 		}
-		if seen[replacement.Param] {
-			return fmt.Errorf("generated SSR %s declares duplicate replacement param %q", route.PageID, replacement.Param)
-		}
 		if strings.TrimSpace(replacement.Placeholder) == "" {
 			return fmt.Errorf("generated SSR %s replacement for %q has empty placeholder", route.PageID, replacement.Param)
 		}
-		seen[replacement.Param] = true
+		if seenPlaceholders[replacement.Placeholder] {
+			return fmt.Errorf("generated SSR %s declares duplicate replacement placeholder %q", route.PageID, replacement.Placeholder)
+		}
+		seenPlaceholders[replacement.Placeholder] = true
 	}
 	return nil
 }

@@ -34,6 +34,7 @@ type CommandEnvelope struct {
 type RegionLoadField struct {
 	Path        string
 	Placeholder string
+	URL         bool
 }
 
 // RegionRenderer renders one request-time g:query region standalone from its
@@ -76,6 +77,10 @@ func (renderer RegionRenderer) render(request *http.Request) (string, bool) {
 		value, ok := LoadPath(data, field.Path)
 		if !ok {
 			return "", false
+		}
+		if field.URL {
+			html = strings.ReplaceAll(html, field.Placeholder, gowdkhtml.EscapeURL(fmt.Sprint(value)))
+			continue
 		}
 		html = strings.ReplaceAll(html, field.Placeholder, gowdkhtml.Escape(fmt.Sprint(value)))
 	}

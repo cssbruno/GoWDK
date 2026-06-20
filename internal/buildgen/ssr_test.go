@@ -373,13 +373,27 @@ func TestSSRArtifactsRenderDynamicSSRPageWithPlaceholders(t *testing.T) {
 	if len(artifact.DynamicParams) != 1 || artifact.DynamicParams[0] != "slug" || len(artifact.Guards) != 1 || artifact.Guards[0] != "auth.required" {
 		t.Fatalf("unexpected route metadata: %#v", artifact)
 	}
-	if len(artifact.Replacements) != 1 || artifact.Replacements[0].Param != "slug" {
+	if len(artifact.Replacements) != 2 {
 		t.Fatalf("unexpected replacements: %#v", artifact.Replacements)
 	}
-	if !strings.Contains(artifact.HTML, artifact.Replacements[0].Placeholder) {
-		t.Fatalf("expected SSR HTML placeholder %q in %s", artifact.Replacements[0].Placeholder, artifact.HTML)
+	var textReplacement, urlReplacement SSRReplacement
+	for _, replacement := range artifact.Replacements {
+		if replacement.Param != "slug" {
+			t.Fatalf("unexpected replacement param: %#v", artifact.Replacements)
+		}
+		if replacement.URL {
+			urlReplacement = replacement
+		} else {
+			textReplacement = replacement
+		}
 	}
-	if !strings.Contains(artifact.HTML, `href="/blog/`+artifact.Replacements[0].Placeholder+`"`) {
+	if textReplacement.Placeholder == "" || urlReplacement.Placeholder == "" {
+		t.Fatalf("expected text and URL route replacements, got %#v", artifact.Replacements)
+	}
+	if !strings.Contains(artifact.HTML, `data-slug="`+textReplacement.Placeholder+`"`) || !strings.Contains(artifact.HTML, `<p>`+textReplacement.Placeholder+`</p>`) {
+		t.Fatalf("expected text SSR placeholder %q in %s", textReplacement.Placeholder, artifact.HTML)
+	}
+	if !strings.Contains(artifact.HTML, `href="/blog/`+urlReplacement.Placeholder+`"`) {
 		t.Fatalf("expected route-param URL template in SSR HTML:\n%s", artifact.HTML)
 	}
 }
@@ -444,6 +458,56 @@ func TestSSRArtifactsRenderLoadPlaceholders(t *testing.T) {
 	}
 	if !paths["user.name"] || !paths["account.plan"] {
 		t.Fatalf("expected dotted load paths, got %#v", artifact.LoadReplacements)
+	}
+}
+
+func TestSSRArtifactsMarkLoadURLPlaceholders(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:     "profile",
+		Route:  "/profile",
+		Render: gowdk.SSR,
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { user.slug, user.avatar }`,
+			View:       true,
+			ViewBody:   `<main><a href="/user/{user.slug}">{user.slug}</a><img srcset="/avatar/{user.avatar} 1x, /avatar/{user.avatar} 2x" /></main>`,
+		},
+	}}}
+
+	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected one artifact, got %#v", artifacts)
+	}
+	artifact := artifacts[0]
+	if len(artifact.LoadReplacements) != 3 {
+		t.Fatalf("expected text slug, URL slug, and URL avatar replacements, got %#v", artifact.LoadReplacements)
+	}
+	var slugText, slugURL, avatarURL SSRLoadReplacement
+	for _, replacement := range artifact.LoadReplacements {
+		switch {
+		case replacement.Path == "user.slug" && replacement.URL:
+			slugURL = replacement
+		case replacement.Path == "user.slug":
+			slugText = replacement
+		case replacement.Path == "user.avatar" && replacement.URL:
+			avatarURL = replacement
+		}
+	}
+	if slugText.Placeholder == "" || slugURL.Placeholder == "" || avatarURL.Placeholder == "" {
+		t.Fatalf("expected URL-aware load replacements, got %#v", artifact.LoadReplacements)
+	}
+	if !strings.Contains(artifact.HTML, `href="/user/`+slugURL.Placeholder+`"`) {
+		t.Fatalf("expected slug URL placeholder in href:\n%s", artifact.HTML)
+	}
+	if !strings.Contains(artifact.HTML, `>`+slugText.Placeholder+`</a>`) {
+		t.Fatalf("expected slug text placeholder in link text:\n%s", artifact.HTML)
+	}
+	if strings.Count(artifact.HTML, avatarURL.Placeholder) != 2 {
+		t.Fatalf("expected avatar URL placeholder to be reused per srcset candidate:\n%s", artifact.HTML)
 	}
 }
 

@@ -5,7 +5,28 @@ packages, and tooling contracts may change before 1.0.
 
 ## Unreleased
 
-_No changes yet._
+### Changed
+
+- The client expression runtime now receives its operator and builtin metadata
+  from the Go compiler/runtime spec instead of hardcoded JavaScript tables,
+  reducing Go/JS drift for generated islands.
+
+### Fixed
+
+- Redirect responses now validate unsafe local URLs before writing
+  `Set-Cookie` headers.
+- Enhanced partial forms now include the clicked submit button in submitted
+  `FormData`, and enhanced partial/command forms reject duplicate in-flight
+  submissions.
+- `gowdk:after-swap` is dispatched from live DOM after fragment swaps, so
+  document-level listeners still observe swaps that replace the submitting form.
+- Store subscriber failures are isolated so one throwing listener does not
+  block later subscribers.
+- `gowdk check` now propagates server `g:if` scope into descendants, restoring
+  parity with build-time server-region validation.
+- Request-time URL templates now validate `srcset` per candidate and encode SSR
+  route/load/server-region substitutions when they appear inside URL-bearing
+  attributes.
 
 ## v0.7.0 - 2026-06-17
 

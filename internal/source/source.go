@@ -118,6 +118,7 @@ type RouteParam struct {
 type SSRReplacement struct {
 	Param       string
 	Placeholder string
+	URL         bool
 }
 
 // SSRLoadReplacement maps a generated placeholder back to a request-time load
@@ -125,6 +126,7 @@ type SSRReplacement struct {
 type SSRLoadReplacement struct {
 	Path        string
 	Placeholder string
+	URL         bool
 }
 
 // SSRListSpec describes one server-rendered g:for list for a request-time
@@ -161,6 +163,7 @@ type SSRListField struct {
 	Placeholder string
 	Path        string
 	Index       bool
+	URL         bool
 }
 
 // SSRQueryRegion is the standalone render recipe for one request-time g:query

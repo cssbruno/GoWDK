@@ -258,8 +258,10 @@ The policy applies to literal URL attributes and to values resolved through
 build data interpolation. `srcset` is checked per URL candidate. Request-time
 route params and `server {}` fields are allowed in URL-bearing attributes only
 inside root-relative URL templates with a stable literal prefix, such as
-`/issue/{issue.id}`. Bare request-time URLs such as `href={website}`,
-request-time-controlled first path segments such as `href="/{slug}"`,
+`/issue/{issue.id}`. During SSR and server-region rendering, accepted
+request-time URL segments are URL-encoded before HTML escaping. Bare
+request-time URLs such as `href={website}`, request-time-controlled first path
+segments such as `href="/{slug}"`,
 protocol-relative URLs, backslashes, control characters, inline handlers,
 `style`, and `srcdoc` are rejected. Custom attributes such as `data-uri` are
 ordinary escaped attributes; the exact HTML `<object data="...">` attribute is

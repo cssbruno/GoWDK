@@ -1,15 +1,14 @@
 // Package source holds the neutral leaf value types shared across the GOWDK
 // compiler packages: source spans, route params, inline scripts, and backend
 // binding metadata. These types carry no behavior and depend on nothing else in
-// the module, so every layer (parser, AST, IR, manifest, generated output) can
-// reference them without creating import cycles or coupling to the manifest
-// page/component model.
+// the module, so every layer (parser, AST, IR, generated output) can reference
+// them without creating import cycles.
 //
-// Historically these lived in internal/manifest, which forced packages that
+// These were originally part of internal/manifest, which forced packages that
 // only needed a SourceSpan to depend on the whole manifest model (and made
-// internal/gwdkir depend on manifest). They were extracted here so the
-// manifest model and the IR can both reference shared leaf types from a neutral
-// home. manifest re-exports them as aliases for backward compatibility.
+// internal/gwdkir depend on manifest). They were extracted into this neutral
+// home so the IR could reference shared leaf types directly; the manifest model
+// itself has since been removed (the manifest→IR migration, #145/#173).
 package source
 
 import (
@@ -119,6 +118,7 @@ type RouteParam struct {
 type SSRReplacement struct {
 	Param       string
 	Placeholder string
+	URL         bool
 }
 
 // SSRLoadReplacement maps a generated placeholder back to a request-time load
@@ -126,6 +126,7 @@ type SSRReplacement struct {
 type SSRLoadReplacement struct {
 	Path        string
 	Placeholder string
+	URL         bool
 }
 
 // SSRListSpec describes one server-rendered g:for list for a request-time
@@ -162,6 +163,7 @@ type SSRListField struct {
 	Placeholder string
 	Path        string
 	Index       bool
+	URL         bool
 }
 
 // SSRQueryRegion is the standalone render recipe for one request-time g:query

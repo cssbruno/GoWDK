@@ -5,15 +5,18 @@
       return;
     }
 
-    var target = document.querySelector(form.dataset.gowdkTarget);
+    if (formInFlight(form)) {
+      event.preventDefault();
+      return;
+    }
+
+    var targetSelector = form.dataset.gowdkTarget;
+    var target = document.querySelector(targetSelector);
     if (!target) {
       return;
     }
 
-    var before = new CustomEvent('gowdk:before-request', {
-      cancelable: true,
-      detail: { form: form, target: target }
-    });
+    var before = gowdkEvent('gowdk:before-request', { cancelable: true, detail: { form: form, target: target } });
     if (!form.dispatchEvent(before)) {
       event.preventDefault();
       return;
@@ -25,15 +28,16 @@
     }
 
     event.preventDefault();
+    markFormInFlight(form);
     form.setAttribute('aria-busy', 'true');
     var focused = focusTarget(document.activeElement);
     try {
       var response = await traceFetch(form.getAttribute('action') || window.location.href, {
         method: (form.getAttribute('method') || 'POST').toUpperCase(),
-        body: new FormData(form),
+        body: formDataWithSubmitter(form, event.submitter || null),
         headers: {
           'X-GOWDK-Partial': '1',
-          'X-GOWDK-Target': form.dataset.gowdkTarget,
+          'X-GOWDK-Target': targetSelector,
           'X-GOWDK-Swap': form.dataset.gowdkSwap || ''
         }
       }, { name: 'partial submit', lane: 'fragment' });
@@ -49,8 +53,10 @@
       if (typeof window !== 'undefined' && window.__gowdkDestroyIslands) {
         window.__gowdkDestroyIslands(target, swap === 'outerHTML');
       }
+      var liveTarget = target;
       if (swap === 'outerHTML') {
         target.outerHTML = html;
+        liveTarget = targetSelector ? document.querySelector(targetSelector) : null;
       } else {
         target.innerHTML = html;
       }
@@ -65,11 +71,13 @@
       }
       ensureRealtime();
       restoreFocus(focused);
-      form.dispatchEvent(new CustomEvent('gowdk:after-swap', {
-        detail: { form: form, target: target, swap: swap }
+      var liveForm = connectedNode(form);
+      liveTarget = connectedNode(liveTarget);
+      eventDispatchTarget(liveForm, liveTarget).dispatchEvent(gowdkEvent('gowdk:after-swap', {
+        detail: { form: liveForm, target: liveTarget, swap: swap }
       }));
     } catch (error) {
-      form.dispatchEvent(new CustomEvent('gowdk:request-error', {
+      form.dispatchEvent(gowdkEvent('gowdk:request-error', {
         detail: {
           form: form,
           target: target,
@@ -81,6 +89,7 @@
       }));
     } finally {
       form.removeAttribute('aria-busy');
+      clearFormInFlight(form);
     }
   }
 
@@ -88,7 +97,7 @@
     if (typeof form.checkValidity !== 'function' || form.checkValidity()) {
       return true;
     }
-    form.dispatchEvent(new CustomEvent('gowdk:validation-blocked', {
+    form.dispatchEvent(gowdkEvent('gowdk:validation-blocked', {
       detail: { form: form, target: target }
     }));
     if (typeof form.reportValidity === 'function') {
@@ -121,7 +130,13 @@
       return;
     }
 
+    if (formInFlight(form)) {
+      event.preventDefault();
+      return;
+    }
+
     event.preventDefault();
+    markFormInFlight(form);
     form.setAttribute('aria-busy', 'true');
     var command = form.dataset.gowdkCommand || '';
     try {
@@ -153,7 +168,7 @@
       var embedded = response.headers.get('X-GOWDK-Patches') === '1' && body && Array.isArray(body.patches);
       var result = embedded ? body.result : body;
       var patches = embedded ? body.patches : [];
-      form.dispatchEvent(new CustomEvent('gowdk:command-success', {
+      form.dispatchEvent(gowdkEvent('gowdk:command-success', {
         detail: { form: form, command: command, result: result, queries: queries, eventIDs: eventIDs }
       }));
       var refreshEnvelope = { form: form, command: command, eventIDs: eventIDs };
@@ -169,7 +184,7 @@
         }
       }
     } catch (error) {
-      form.dispatchEvent(new CustomEvent('gowdk:command-error', {
+      form.dispatchEvent(gowdkEvent('gowdk:command-error', {
         detail: {
           form: form,
           command: command,
@@ -181,6 +196,7 @@
       }));
     } finally {
       form.removeAttribute('aria-busy');
+      clearFormInFlight(form);
     }
   }
 
@@ -188,7 +204,7 @@
     if (typeof form.checkValidity !== 'function' || form.checkValidity()) {
       return true;
     }
-    form.dispatchEvent(new CustomEvent('gowdk:validation-blocked', {
+    form.dispatchEvent(gowdkEvent('gowdk:validation-blocked', {
       detail: { form: form }
     }));
     if (typeof form.reportValidity === 'function') {
@@ -274,6 +290,58 @@
     });
   }
 
+  function gowdkEvent(type, options) {
+    options = options || {};
+    options.bubbles = true;
+    return new CustomEvent(type, options);
+  }
+
+  function formInFlight(form) {
+    if (!form) {
+      return false;
+    }
+    if (inFlightForms) {
+      return inFlightForms.has(form);
+    }
+    return !!form.__gowdkInFlight;
+  }
+
+  function markFormInFlight(form) {
+    if (!form) {
+      return;
+    }
+    if (inFlightForms) {
+      inFlightForms.add(form);
+      return;
+    }
+    form.__gowdkInFlight = true;
+  }
+
+  function clearFormInFlight(form) {
+    if (!form) {
+      return;
+    }
+    if (inFlightForms) {
+      inFlightForms.delete(form);
+      return;
+    }
+    form.__gowdkInFlight = false;
+  }
+
+  function connectedNode(node) {
+    if (!node) {
+      return null;
+    }
+    if (typeof node.isConnected === 'boolean') {
+      return node.isConnected ? node : null;
+    }
+    return node;
+  }
+
+  function eventDispatchTarget(primary, fallback) {
+    return connectedNode(primary) || connectedNode(fallback) || document;
+  }
+
   async function commandResponseError(response, message) {
     var body = '';
     try {
@@ -354,6 +422,7 @@
   var realtimeSource = null;
   var traceEndpoint = '/_gowdk/traces/browser';
   var traceStack = [];
+  var inFlightForms = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
 
   installTraceBridge();
   document.addEventListener('submit', submitPartial);
@@ -390,7 +459,7 @@
     if (url.hash && url.pathname === window.location.pathname && url.search === window.location.search) {
       return;
     }
-    var before = new CustomEvent('gowdk:before-navigate', {
+    var before = gowdkEvent('gowdk:before-navigate', {
       cancelable: true,
       detail: { link: link, url: url.href }
     });
@@ -402,7 +471,7 @@
     try {
       await loadDocument(url.href, true, link);
     } catch (error) {
-      document.dispatchEvent(new CustomEvent('gowdk:navigate-error', {
+      document.dispatchEvent(gowdkEvent('gowdk:navigate-error', {
         detail: { link: link, url: url.href, error: error }
       }));
       window.location.href = url.href;
@@ -562,7 +631,7 @@
       } else if (window.scrollTo) {
         window.scrollTo(0, 0);
       }
-      document.dispatchEvent(new CustomEvent('gowdk:after-navigate', {
+      document.dispatchEvent(gowdkEvent('gowdk:after-navigate', {
         detail: { url: url, source: source || null }
       }));
     } finally {
@@ -596,13 +665,13 @@
     }
     if (active) {
       document.documentElement.setAttribute('data-gowdk-navigating', 'true');
-      document.dispatchEvent(new CustomEvent('gowdk:navigate-start', {
+      document.dispatchEvent(gowdkEvent('gowdk:navigate-start', {
         detail: { source: source || null }
       }));
       return;
     }
     document.documentElement.removeAttribute('data-gowdk-navigating');
-    document.dispatchEvent(new CustomEvent('gowdk:navigate-end', {
+    document.dispatchEvent(gowdkEvent('gowdk:navigate-end', {
       detail: { source: source || null }
     }));
   }
@@ -1017,7 +1086,7 @@
     }
     ensureRealtime();
     restoreFocus(focused);
-    document.dispatchEvent(new CustomEvent('gowdk:query-refresh', {
+    document.dispatchEvent(gowdkEvent('gowdk:query-refresh', {
       detail: { queries: queries, envelope: envelope }
     }));
   }
@@ -1162,13 +1231,13 @@
       window.__gowdkMountClientGoBlocks();
     }
     restoreFocus(focused);
-    region.dispatchEvent(new CustomEvent('gowdk:realtime-patch', {
+    eventDispatchTarget(region, null).dispatchEvent(gowdkEvent('gowdk:realtime-patch', {
       detail: { region: region, patch: patch, envelope: envelope }
     }));
   }
 
   function dispatchRealtimeError(error, detail) {
-    document.dispatchEvent(new CustomEvent('gowdk:realtime-error', {
+    document.dispatchEvent(gowdkEvent('gowdk:realtime-error', {
       detail: Object.assign({ error: error }, detail || {})
     }));
   }

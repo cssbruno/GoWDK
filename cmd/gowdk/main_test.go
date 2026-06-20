@@ -7223,6 +7223,7 @@ func TestLiveReloadFileHandlerInjectsScript(t *testing.T) {
 	for _, expected := range []string{
 		`__gowdk-error-overlay`,
 		`events.addEventListener("build-error"`,
+		`events.addEventListener("runtime-error"`,
 		`events.addEventListener("component-hmr"`,
 		`fetchFreshDocument`,
 		`GOWDK build failed`,
@@ -7264,6 +7265,55 @@ func TestDevRuntimeProxyHandlerInjectsScript(t *testing.T) {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("expected proxied HTML to contain %q:\n%s", expected, body)
 		}
+	}
+}
+
+func TestDevRuntimeProxyHandlerInjectsRuntimeErrorOverlay(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, `<!doctype html><html><body><main>safe generated error page</main></body></html>`)
+	}))
+	defer upstream.Close()
+
+	targetAddr := strings.TrimPrefix(upstream.URL, "http://")
+	request := httptest.NewRequest(http.MethodGet, "/panic/secret-token?password=hunter2", nil)
+	request.Header.Set("Cookie", "session=secret-cookie")
+	response := httptest.NewRecorder()
+	devRuntimeProxyHandler(targetAddr, newLiveReloadBroker()).ServeHTTP(response, request)
+
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d with body %s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	for _, expected := range []string{
+		`<main>safe generated error page</main>`,
+		`new EventSource("/__gowdk/reload")`,
+		`GOWDK runtime request failed`,
+		`Generated app returned HTTP 500 through the dev runtime proxy.`,
+		`HTTP 500`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected proxied 500 HTML to contain %q:\n%s", expected, body)
+		}
+	}
+	for _, forbidden := range []string{"secret-token", "hunter2", "secret-cookie"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("runtime overlay leaked request detail %q:\n%s", forbidden, body)
+		}
+	}
+}
+
+func TestLiveReloadScriptCapacityHintAvoidsOverflow(t *testing.T) {
+	maxInt := int(^uint(0) >> 1)
+	if got := liveReloadScriptCapacityHint(10, 5); got != 15 {
+		t.Fatalf("expected normal capacity hint 15, got %d", got)
+	}
+	if got := liveReloadScriptCapacityHint(maxInt, 1); got != 0 {
+		t.Fatalf("expected overflow capacity hint to fall back to 0, got %d", got)
+	}
+	if got := liveReloadScriptCapacityHint(-1, 1); got != 0 {
+		t.Fatalf("expected invalid capacity hint to fall back to 0, got %d", got)
 	}
 }
 
@@ -8005,4 +8055,63 @@ func TestLiveReloadBrokerNotifyIsNoOpOnNilBroker(t *testing.T) {
 	var broker *liveReloadBroker
 	broker.notify("reload")
 	broker.notifyData("build-error", "boom")
+}
+
+func TestFmtCommandWritesFormatsAndChecks(t *testing.T) {
+	root := t.TempDir()
+	unformatted := "page home\nroute \"/\"\nguard public\n\nview {\n<main>\n<h1>Home</h1>\n</main>\n}\n"
+	formatted := "page home\nroute \"/\"\nguard public\n\nview {\n  <main>\n    <h1>Home</h1>\n  </main>\n}\n"
+
+	path := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(path, []byte(unformatted), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// --check on an unformatted file reports it and fails.
+	out, err := captureCLIStdout(t, func() error { return run([]string{"fmt", "--check", path}) })
+	if err == nil {
+		t.Fatalf("expected --check to fail for an unformatted file")
+	}
+	if !strings.Contains(out, path) {
+		t.Fatalf("expected --check to list %q, got:\n%s", path, out)
+	}
+
+	// --write rewrites the file to its formatted form.
+	if err := run([]string{"fmt", "--write", path}); err != nil {
+		t.Fatalf("fmt --write: %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != formatted {
+		t.Fatalf("unexpected written output:\n--- got ---\n%s--- want ---\n%s", got, formatted)
+	}
+
+	// --check now passes because the file is already formatted.
+	if err := run([]string{"fmt", "--check", path}); err != nil {
+		t.Fatalf("expected --check to pass for a formatted file, got %v", err)
+	}
+}
+
+func TestFmtCommandRefusesToRewriteUnparseableSource(t *testing.T) {
+	root := t.TempDir()
+	// A view body with an HTML comment is not supported by the view parser, so
+	// the formatter must refuse to rewrite the file and leave the source intact.
+	original := "page home\nroute \"/\"\nguard public\n\nview {\n<main>\n<!-- keep -->\n<h1>Home</h1>\n</main>\n}\n"
+	path := filepath.Join(root, "broken.page.gwdk")
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := run([]string{"fmt", "--write", path}); err == nil {
+		t.Fatalf("expected fmt --write to refuse unparseable source")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != original {
+		t.Fatalf("fmt --write must not rewrite unparseable source:\n--- got ---\n%s--- want ---\n%s", got, original)
+	}
 }

@@ -158,6 +158,30 @@ func TestWriteHTTPRejectsOpenRedirect(t *testing.T) {
 	}
 }
 
+func TestWriteHTTPRejectsUnsafeRedirectBeforeCookies(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	result := WithCookie(RedirectTo("//evil.com"), http.Cookie{
+		Name:     "gowdk_session",
+		Value:    "signed",
+		Path:     "/",
+		HttpOnly: true,
+	})
+
+	err := WriteHTTP(recorder, result)
+	if err == nil {
+		t.Fatal("expected unsafe redirect error")
+	}
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if location := recorder.Header().Get("Location"); location != "" {
+		t.Fatalf("unsafe redirect leaked Location header: %q", location)
+	}
+	if setCookie := recorder.Header().Get("Set-Cookie"); setCookie != "" {
+		t.Fatalf("unsafe redirect leaked Set-Cookie header: %q", setCookie)
+	}
+}
+
 func TestValidateLocalRedirect(t *testing.T) {
 	for _, ok := range []string{"/", "/dashboard", "/a/b?c=1#d"} {
 		if err := ValidateLocalRedirect(ok); err != nil {

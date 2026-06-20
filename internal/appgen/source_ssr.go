@@ -105,11 +105,15 @@ func ssrRouteBodyStmts(route SSRRoute, includeParams bool, rateLimit bool, csrf 
 	body = append(body, ssrLoadFetchStmts(route, trace)...)
 	body = append(body, ssrRegionRenderStmts(route)...)
 	for _, replacement := range route.Replacements {
+		value := call(sel("gowdkhtml", "Escape"), &ast.IndexExpr{X: id("params"), Index: stringLit(replacement.Param)})
+		if replacement.URL {
+			value = call(sel("gowdkhtml", "EscapeURL"), &ast.IndexExpr{X: id("params"), Index: stringLit(replacement.Param)})
+		}
 		body = append(body, assign([]ast.Expr{id("html")}, call(
 			sel("strings", "ReplaceAll"),
 			id("html"),
 			stringLit(replacement.Placeholder),
-			call(sel("gowdkhtml", "Escape"), &ast.IndexExpr{X: id("params"), Index: stringLit(replacement.Param)}),
+			value,
 		)))
 	}
 	body = append(body, ssrLoadScalarReplaceStmts(route)...)
@@ -271,6 +275,10 @@ func ssrLoadScalarReplaceStmts(route SSRRoute) []ast.Stmt {
 	for index, replacement := range route.LoadReplacements {
 		valueName := id("loadValue" + intIdentSuffix(index))
 		okName := id("loadOK" + intIdentSuffix(index))
+		replacementValue := call(sel("gowdkhtml", "Escape"), call(sel("fmt", "Sprint"), valueName))
+		if replacement.URL {
+			replacementValue = call(sel("gowdkhtml", "EscapeURL"), call(sel("fmt", "Sprint"), valueName))
+		}
 		stmts = append(stmts,
 			define([]ast.Expr{valueName, okName}, call(sel("gowdkssr", "LoadPath"), id("loadData"), stringLit(replacement.Path))),
 			&ast.IfStmt{
@@ -284,7 +292,7 @@ func ssrLoadScalarReplaceStmts(route SSRRoute) []ast.Stmt {
 				sel("strings", "ReplaceAll"),
 				id("html"),
 				stringLit(replacement.Placeholder),
-				call(sel("gowdkhtml", "Escape"), call(sel("fmt", "Sprint"), valueName)),
+				replacementValue,
 			)),
 		)
 	}
@@ -382,6 +390,9 @@ func ssrListFieldsExpr(fields []SSRListField) ast.Expr {
 			fieldElts = append(fieldElts, keyValue("Index", id("true")))
 		} else {
 			fieldElts = append(fieldElts, keyValue("Path", stringLit(field.Path)))
+		}
+		if field.URL {
+			fieldElts = append(fieldElts, keyValue("URL", id("true")))
 		}
 		elts = append(elts, &ast.CompositeLit{Type: sel("gowdkssr", "ListField"), Elts: fieldElts})
 	}

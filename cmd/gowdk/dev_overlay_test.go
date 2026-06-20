@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -95,5 +96,22 @@ func TestDevOverlayBuildgenErrorIncludesDiagnosticsAndAttribution(t *testing.T) 
 	}
 	if len(payload.Diagnostics) != 1 || payload.Diagnostics[0].Code != "asset_missing" || payload.Diagnostics[0].Range.Start.Column != 5 {
 		t.Fatalf("unexpected diagnostics: %#v", payload.Diagnostics)
+	}
+}
+
+func TestDevRuntimeErrorEventDataIsGeneric(t *testing.T) {
+	data := devRuntimeErrorEventData(500)
+
+	var payload devOverlayPayload
+	if err := json.Unmarshal([]byte(data), &payload); err != nil {
+		t.Fatalf("expected JSON payload, got %q: %v", data, err)
+	}
+	if payload.Title != "GOWDK runtime request failed" || payload.Status != 500 {
+		t.Fatalf("unexpected runtime payload: %#v", payload)
+	}
+	for _, forbidden := range []string{"cookie", "password", "token", "request body", "panic:"} {
+		if strings.Contains(strings.ToLower(data), forbidden) {
+			t.Fatalf("runtime payload should stay generic and omit %q: %s", forbidden, data)
+		}
 	}
 }

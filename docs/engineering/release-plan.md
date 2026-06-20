@@ -316,8 +316,11 @@ Every 0.x minor release must have:
   Tailwind command. Implemented suggestion surfaces are documented in
   `docs/reference/diagnostics.md`; remaining suggestion expansion is deferred to
   #250.
-- [x] Add formatter idempotence and comment preservation tests. Parser-backed
-  formatting beyond the current line-oriented formatter is deferred to #250.
+- [x] Add formatter idempotence and comment preservation tests. `gowdk fmt` is
+  now parser-backed (#472): block kinds come from the parser and view markup is
+  indented from the parsed view node tree, with a conservative line-oriented
+  fallback that preserves unparseable source. Remaining unsupported formatting
+  families are listed in `docs/language/formatting.md`.
 - [x] Add malformed syntax tests. Current parser/check fixtures cover malformed
   metadata, imports, `use`, endpoint migration, and unsupported build syntax;
   broader recovery-driven malformed syntax coverage is deferred to #250.
@@ -614,8 +617,8 @@ Every 0.x minor release must have:
   stub mode, debug mode, and machine-readable build report schema docs.
 - [x] Add browser error overlay to `gowdk dev`.
 - [x] Show compiler errors and generated Go build errors in the browser.
-- [ ] Show dev-only runtime panics in the browser after the generated-app
-  runtime bridge exists.
+- [x] Show dev-only generated-app runtime 5xx failures in the browser through
+  the proxy bridge with generic, non-request-bearing payloads.
 - [x] Keep last successful build clearly visible.
 - [x] Log changed files for failed dev rebuilds.
 - [x] Document backend dev proxy behavior and stabilize terminal wording for

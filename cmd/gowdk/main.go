@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
-	"github.com/cssbruno/gowdk/addons/ssr"
 )
 
 const version = "0.7.0"
@@ -151,7 +150,7 @@ func commandUsage(command string) (string, bool) {
 	case "tokens":
 		return "usage: gowdk tokens <file.gwdk>", true
 	case "fmt":
-		return "usage: gowdk fmt [--write] <files>", true
+		return "usage: gowdk fmt [--write] [--check] <files>", true
 	case "check":
 		return projectCommandUsage("check", true), true
 	case "fix":
@@ -228,7 +227,7 @@ func usage() {
 	fmt.Println("  init [--force] [--tests] [--template <site|minimal>] [dir] scaffold a starter GOWDK project")
 	fmt.Println("  add <addon> [--config <file>] [--base-url <url>] | add --list [--registry] [--json]  wire or list addons")
 	fmt.Println("  tokens <file.gwdk>       print language tokens")
-	fmt.Println("  fmt [--write] <files>    format .gwdk files")
+	fmt.Println("  fmt [--write] [--check] <files>  format .gwdk files (--check reports files that need formatting)")
 	fmt.Println("  check [--config <file>] [--env-file <file>] [--module <name>] [--json] [--warnings-as-errors] [--ssr] [files...] parse and validate .gwdk files")
 	fmt.Println("  fix [--dry-run] [--code <diagnostic-code>] [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] apply registered safe diagnostic fixes")
 	fmt.Println("  manifest [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON")
@@ -294,21 +293,4 @@ func cleanNames(names []string) []string {
 		cleaned = append(cleaned, name)
 	}
 	return cleaned
-}
-
-func parseOptions(args []string) (cliOptions, []string) {
-	var options cliOptions
-	var paths []string
-	for _, arg := range args {
-		switch arg {
-		case "--ssr":
-			options.Config.Addons = append(options.Config.Addons, ssr.Addon())
-		case "--json":
-			options.JSON = true
-		default:
-			paths = append(paths, arg)
-			continue
-		}
-	}
-	return options, paths
 }

@@ -43,7 +43,7 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 				Code:          "component_client_error",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          firstSpan(component.Blocks.Spans.Client, component.Span),
+				Span:          clientSpan(component, computed.Span),
 				Message:       fmt.Sprintf("component %s computed %q conflicts with a prop or state field", component.Name, computed.Name),
 			})
 			continue
@@ -53,7 +53,7 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 				Code:          "component_client_error",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          firstSpan(component.Blocks.Spans.Client, component.Span),
+				Span:          clientSpan(component, computed.Span),
 				Message:       fmt.Sprintf("component %s computed %q is declared more than once", component.Name, computed.Name),
 			})
 			continue
@@ -90,7 +90,7 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 				Code:          "component_client_error",
 				ComponentName: component.Name,
 				Source:        component.Source,
-				Span:          firstSpan(component.Blocks.Spans.Client, component.Span),
+				Span:          clientSpan(component, computed.Span),
 				Message:       fmt.Sprintf("component %s computed %s returns %s, not %s", component.Name, computed.Name, typ, declared),
 			})
 			continue

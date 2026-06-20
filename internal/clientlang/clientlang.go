@@ -427,10 +427,10 @@ func Parse(source string) (Program, error) {
 				async := header.Async
 				name := header.Name
 				if isReservedFunctionName(name) {
-					return Program{}, fmt.Errorf("client function %q uses a reserved built-in name", name)
+					return Program{}, parseErrorf(index+1, "client function %q uses a reserved built-in name", name)
 				}
 				if seen[name] {
-					return Program{}, fmt.Errorf("client function %q is declared more than once", name)
+					return Program{}, parseErrorf(index+1, "client function %q is declared more than once", name)
 				}
 				params, err := parseParams(header.Params)
 				if err != nil {
@@ -462,7 +462,7 @@ func Parse(source string) (Program, error) {
 			if computed, ok := parseComputedHeader(line); ok {
 				name := computed.Name
 				if seen[name] {
-					return Program{}, fmt.Errorf("client computed %q conflicts with a function", name)
+					return Program{}, parseErrorf(index+1, "client computed %q is declared more than once or conflicts with a function", name)
 				}
 				seen[name] = true
 				lifecycle = &lifecycleBlock{Kind: "computed", Field: name, Type: computed.Type, Span: Span{StartLine: index + 1, EndLine: index + 1}}
@@ -471,7 +471,7 @@ func Parse(source string) (Program, error) {
 			if ref, ok := parseRefDeclaration(line); ok {
 				name := ref.Name
 				if seenRefs[name] {
-					return Program{}, fmt.Errorf("client ref %q is declared more than once", name)
+					return Program{}, parseErrorf(index+1, "client ref %q is declared more than once", name)
 				}
 				seenRefs[name] = true
 				program.Refs = append(program.Refs, ref)
@@ -479,7 +479,7 @@ func Parse(source string) (Program, error) {
 			}
 			if name, typ, ok := parseUseDeclaration(line); ok {
 				if seenUses[name] {
-					return Program{}, fmt.Errorf("client store %q is used more than once", name)
+					return Program{}, parseErrorf(index+1, "client store %q is used more than once", name)
 				}
 				seenUses[name] = true
 				use := Use{Name: name, StoreName: name, Type: typ, Span: Span{StartLine: index + 1, EndLine: index + 1}}

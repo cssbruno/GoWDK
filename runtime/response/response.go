@@ -204,18 +204,19 @@ func ValidationHTML(result validation.Result) string {
 // WriteHTTP writes a runtime response envelope to net/http.
 func WriteHTTP(writer http.ResponseWriter, result Response) error {
 	status := statusOrDefault(result)
+	if result.Kind == Redirect {
+		if err := ValidateLocalRedirect(result.URL); err != nil {
+			// Fail closed before writing any side-effect headers. This matches the
+			// guard and SSR redirect lanes, which only allow local absolute paths.
+			http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return err
+		}
+	}
 	for _, cookie := range result.Cookies {
 		http.SetCookie(writer, &cookie)
 	}
 	switch result.Kind {
 	case Redirect:
-		if err := ValidateLocalRedirect(result.URL); err != nil {
-			// Fail closed: never emit an attacker-influenced Location header.
-			// This matches the guard and SSR redirect lanes, which only allow
-			// local absolute paths.
-			http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return err
-		}
 		writer.Header().Set("Location", result.URL)
 		writer.WriteHeader(status)
 	case Reload:

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -33,34 +34,63 @@ func tokens(args []string) error {
 
 func format(args []string) error {
 	write := false
+	checkMode := false
 	var paths []string
 	for _, arg := range args {
-		if arg == "--write" {
+		switch arg {
+		case "--write":
 			write = true
-			continue
+		case "--check":
+			checkMode = true
+		default:
+			paths = append(paths, arg)
 		}
-		paths = append(paths, arg)
 	}
 	if len(paths) == 0 {
-		return fmt.Errorf("usage: gowdk fmt [--write] <files>")
+		return fmt.Errorf("usage: gowdk fmt [--write] [--check] <files>")
 	}
 
+	skipped := false
+	needsFormat := false
 	for _, path := range paths {
 		source, err := os.ReadFile(path)
 		if err != nil {
 			return err
 		}
-		formatted := lang.Format(source)
-		if write {
+		formatted, parsed := lang.FormatChecked(source)
+		// Refuse to rewrite source that does not parse so malformed files are
+		// preserved rather than normalized through text heuristics. The
+		// conservative fallback is still printed for inspection without --write.
+		if !parsed && (write || checkMode) {
+			fmt.Fprintf(os.Stderr, "fmt: skipping %s: source has syntax errors; run `gowdk check %s`\n", path, path)
+			skipped = true
+			continue
+		}
+		switch {
+		case checkMode:
+			if !bytes.Equal(formatted, source) {
+				fmt.Println(path)
+				needsFormat = true
+			}
+		case write:
+			if bytes.Equal(formatted, source) {
+				continue
+			}
 			if err := os.WriteFile(path, formatted, 0o644); err != nil {
 				return err
 			}
-			continue
+		default:
+			if len(paths) > 1 {
+				fmt.Printf("==> %s <==\n", path)
+			}
+			fmt.Print(string(formatted))
 		}
-		if len(paths) > 1 {
-			fmt.Printf("==> %s <==\n", path)
-		}
-		fmt.Print(string(formatted))
+	}
+	if skipped {
+		return fmt.Errorf("fmt: some files were skipped because of syntax errors")
+	}
+	if checkMode && needsFormat {
+		return fmt.Errorf("fmt: some files need formatting")
 	}
 	return nil
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -13,7 +14,9 @@ import (
 )
 
 type devOverlayPayload struct {
+	Title               string                 `json:"title,omitempty"`
 	Message             string                 `json:"message"`
+	Status              int                    `json:"status,omitempty"`
 	Diagnostics         []devOverlayDiagnostic `json:"diagnostics,omitempty"`
 	LastSuccessfulBuild string                 `json:"lastSuccessfulBuild,omitempty"`
 	ChangedFiles        []string               `json:"changedFiles,omitempty"`
@@ -73,6 +76,22 @@ func devOverlayErrorEventData(err error, change inputChange, lastSuccessfulBuild
 	}
 	payload.Route, payload.Endpoint = devOverlayAttributionFromError(err)
 
+	data, marshalErr := json.Marshal(payload)
+	if marshalErr != nil {
+		return payload.Message
+	}
+	return string(data)
+}
+
+func devRuntimeErrorEventData(status int) string {
+	if status <= 0 {
+		status = 500
+	}
+	payload := devOverlayPayload{
+		Title:   "GOWDK runtime request failed",
+		Message: fmt.Sprintf("Generated app returned HTTP %d through the dev runtime proxy. Check terminal logs for redacted runtime details.", status),
+		Status:  status,
+	}
 	data, marshalErr := json.Marshal(payload)
 	if marshalErr != nil {
 		return payload.Message

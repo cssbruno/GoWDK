@@ -30,7 +30,7 @@ func toRuntimeListSpecs(specs []source.SSRListSpec) []gowdkssr.ListSpec {
 func toRuntimeListFields(fields []source.SSRListField) []gowdkssr.ListField {
 	out := make([]gowdkssr.ListField, 0, len(fields))
 	for _, field := range fields {
-		out = append(out, gowdkssr.ListField{Placeholder: field.Placeholder, Path: field.Path, Index: field.Index})
+		out = append(out, gowdkssr.ListField{Placeholder: field.Placeholder, Path: field.Path, Index: field.Index, URL: field.URL})
 	}
 	return out
 }
@@ -135,23 +135,37 @@ func TestSSRArtifactServerListEndToEnd(t *testing.T) {
 func TestSSRArtifactServerListRootRelativeURLTemplate(t *testing.T) {
 	view := `<main><a g:for={issue in issues} href="/issue/{issue.id}">{issue.title}</a></main>`
 	artifact := buildSSRRegionArtifact(t, `=> { issues }`, view)
+	if len(artifact.ListSpecs) != 1 {
+		t.Fatalf("expected one list spec, got %#v", artifact.ListSpecs)
+	}
+	urlField := false
+	for _, field := range artifact.ListSpecs[0].Fields {
+		if field.Path == "id" && field.URL {
+			urlField = true
+		}
+	}
+	if !urlField {
+		t.Fatalf("expected issue id field to be marked as a URL substitution, got %#v", artifact.ListSpecs[0].Fields)
+	}
 
 	html := gowdkssr.RenderRegions(artifact.HTML, toRuntimeListSpecs(artifact.ListSpecs), toRuntimeCondSpecs(artifact.CondSpecs), map[string]any{
 		"issues": []any{
 			map[string]any{"id": "T-1", "title": "Wire <auth>"},
 			map[string]any{"id": `bad" onclick="x`, "title": "Injected"},
+			map[string]any{"id": `\\evil.com`, "title": "Backslash"},
 		},
 	})
 
 	for _, want := range []string{
 		`href="/issue/T-1">Wire &lt;auth&gt;`,
-		`href="/issue/bad&#34; onclick=&#34;x">Injected`,
+		`href="/issue/bad%22%20onclick=%22x">Injected`,
+		`href="/issue/%5C%5Cevil.com">Backslash`,
 	} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("rendered HTML missing %q\n%s", want, html)
 		}
 	}
-	if strings.Contains(html, `onclick="x"`) {
+	if strings.Contains(html, `onclick`) && !strings.Contains(html, `bad%22%20onclick=%22x`) {
 		t.Fatalf("server row URL interpolation escaped out of the href attribute:\n%s", html)
 	}
 }

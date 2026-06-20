@@ -1,0 +1,78 @@
+package app
+
+page dashboard
+route "/dashboard"
+guard public
+
+// Top-level comment kept above imports.
+import "time"
+
+// Use comment kept above the declaration.
+use widgets "components"
+
+// Store comment kept above the declaration.
+store Session app.NewSession
+
+style {
+  .panel {
+    color: red;
+  }
+  .panel .title {
+    font-weight: bold;
+  }
+}
+
+// View comment kept above the block.
+view {
+  <main class="shell">
+    <section class="panel">
+      <h1 class="title">{title}</h1>
+      <p>Welcome, {user.Name}</p>
+      <form g:post={Save}>
+        <input
+          type="text"
+          name="email"
+          value={email}
+        />
+        <button g:if={ready}>Save</button>
+      </form>
+      <ul>
+        <li g:for={item in items} g:key={item.ID}>{item.Name}</li>
+      </ul>
+    </section>
+    <Footer year={year} />
+  </main>
+}
+
+client {
+  function setup() {
+    const handlers = {
+      save: () => submit(),
+    }
+    return handlers
+  }
+}
+
+go {
+  func Save(ctx app.Context) error {
+    return nil
+  }
+}
+
+go ssr {
+  func Load(ctx app.Context) error {
+    return nil
+  }
+}
+
+go client {
+  func boot() {
+    println("client")
+  }
+}
+
+go addon.counter {
+  func Increment() int {
+    return 1
+  }
+}

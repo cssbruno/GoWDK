@@ -264,6 +264,8 @@ Known gaps and release hardening work live in
 [the 0.x improvement checklist](docs/engineering/release-plan.md), with public
 tracking in the
 [0.x Hardening project](https://github.com/users/cssbruno/projects/2).
+Cookbook, reference, and example coverage gaps are tracked in the
+[native cookbook coverage table](docs/cookbook/README.md#coverage-and-gaps).
 
 ## Addons
 

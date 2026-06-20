@@ -1,6 +1,7 @@
 package gwdkir
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -239,4 +240,29 @@ func TestCheckInvariantsJoinsAllViolations(t *testing.T) {
 			t.Fatalf("CheckInvariants() = %q, want error containing %q", err, want)
 		}
 	}
+}
+
+func TestMustValidProgramForTestPanicsOnInvalidIR(t *testing.T) {
+	invalid := validProgram()
+	invalid.Routes[0].PageID = "ghost"
+
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatal("mustValidProgramForTest() did not panic")
+		}
+		message := fmt.Sprint(recovered)
+		if !strings.Contains(message, "invalid IR") || !strings.Contains(message, `unknown page "ghost"`) {
+			t.Fatalf("unexpected panic message: %v", recovered)
+		}
+	}()
+
+	mustValidProgramForTest(invalid)
+}
+
+func mustValidProgramForTest(program Program) Program {
+	if err := CheckInvariants(program); err != nil {
+		panic(err)
+	}
+	return program
 }

@@ -134,3 +134,24 @@ forwarded in the build flags. Incremental counters include
 `incremental_component_changes`, `incremental_layout_changes`,
 `incremental_affected_pages`, `files_written`, and
 `identical_writes_skipped`.
+
+## Benchmarks
+
+Use Go's benchmark runner for repeatable compiler regression tracking:
+
+```sh
+go test ./internal/parser ./internal/gwdkanalysis ./internal/compiler ./internal/buildgen -run '^$' -bench 'Benchmark(ParseLowerPage|IRAssembly|ValidateProgram|GeneratedOutputFromValidatedIR|IncrementalRebuildChangedPage)$' -benchmem -count=5
+```
+
+Stable benchmark names:
+
+- `BenchmarkParseLowerPage`: parses and lowers one representative page source.
+- `BenchmarkIRAssembly`: assembles pages/components into `gwdkir.Program`.
+- `BenchmarkValidateProgram`: runs compiler validation on assembled IR.
+- `BenchmarkGeneratedOutputFromValidatedIR`: writes SPA output from validated IR.
+- `BenchmarkIncrementalRebuildChangedPage`: rewrites the changed-page
+  incremental build path.
+
+Capture local baselines with the command above and compare with `benchstat`.
+CI should run benchmarks for trend data only; do not gate merges on fixed
+duration thresholds because hardware and filesystem variance are expected.

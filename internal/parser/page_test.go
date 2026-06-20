@@ -652,8 +652,15 @@ view {
 	if err == nil {
 		t.Fatal("expected malformed import error")
 	}
-	if err.Error() != `line 5: malformed import "import interop github.com/cssbruno/gowdk/examples/go-interop"` {
-		t.Fatalf("unexpected error: %v", err)
+	diagnostic, ok := ParserDiagnostic(err)
+	if !ok {
+		t.Fatalf("expected typed parser diagnostic, got %v", err)
+	}
+	if diagnostic.Code != DiagnosticMalformedGoImport {
+		t.Fatalf("expected %s, got %#v", DiagnosticMalformedGoImport, diagnostic)
+	}
+	if diagnostic.Span.Start.Line != 5 {
+		t.Fatalf("expected malformed import on line 5, got %#v", diagnostic.Span)
 	}
 }
 

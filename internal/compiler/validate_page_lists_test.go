@@ -196,3 +196,138 @@ func TestValidateRejectsGHTMLInsideServerRow(t *testing.T) {
 		t.Fatalf("expected ghtml_over_load_data for raw HTML inside a server row, got %v", report)
 	}
 }
+
+func TestValidateRejectsServerLoadFieldConflictingWithRouteParam(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Route: "/issue/{id}",
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { id, found }`,
+			View:       true,
+			ViewBody:   `<main g:if={found}>{id}</main>`,
+		},
+	})
+	diag, ok := findCode(report, "server_load_field_conflict")
+	if !ok {
+		t.Fatalf("expected server_load_field_conflict, got %v", report)
+	}
+	if !strings.Contains(diag.Message, "route params") {
+		t.Fatalf("diagnostic should name route param conflict: %q", diag.Message)
+	}
+}
+
+func TestValidateRejectsServerLoadFieldConflictingWithBuildData(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Build: true,
+			BuildRecords: []gwdkir.LiteralRecord{{
+				Fields:     map[string]string{"title": "Build title"},
+				FieldOrder: []string{"title"},
+			}},
+			Server:     true,
+			ServerBody: `=> { title }`,
+			View:       true,
+			ViewBody:   `<main>{title}</main>`,
+		},
+	})
+	diag, ok := findCode(report, "server_load_field_conflict")
+	if !ok {
+		t.Fatalf("expected server_load_field_conflict, got %v", report)
+	}
+	if !strings.Contains(diag.Message, "build data") {
+		t.Fatalf("diagnostic should name build data conflict: %q", diag.Message)
+	}
+}
+
+func TestValidateAcceptsRequestTimeURLTemplateInsideServerRow(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { issues }`,
+			View:       true,
+			ViewBody:   `<main><a g:for={issue in issues} href="/issue/{issue.id}">{issue.title}</a></main>`,
+		},
+	})
+	if _, ok := findCode(report, "server_url_tainted"); ok {
+		t.Fatalf("root-relative server row URL templates should be accepted, got %v", report)
+	}
+}
+
+func TestValidateRejectsRequestTimeURLAttributeControlledByServerRow(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { issues }`,
+			View:       true,
+			ViewBody:   `<main><a g:for={issue in issues} href={issue.id}>{issue.title}</a></main>`,
+		},
+	})
+	diag, ok := findCode(report, "server_url_tainted")
+	if !ok {
+		t.Fatalf("expected server_url_tainted, got %v", report)
+	}
+	if !strings.Contains(diag.Message, `"href"`) || !strings.Contains(diag.Message, "request-time") {
+		t.Fatalf("diagnostic should name href and request-time data: %q", diag.Message)
+	}
+}
+
+func TestValidateRejectsRequestTimeURLTemplateWithDynamicRoot(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { issues }`,
+			View:       true,
+			ViewBody:   `<main><a g:for={issue in issues} href="/{issue.id}">{issue.title}</a></main>`,
+		},
+	})
+	if _, ok := findCode(report, "server_url_tainted"); !ok {
+		t.Fatalf("expected server_url_tainted for a URL whose first path segment is request-time data, got %v", report)
+	}
+}
+
+func TestValidateRejectsRequestTimeLoadURLInterpolation(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { website }`,
+			View:       true,
+			ViewBody:   `<main><a href="{website}">Profile</a></main>`,
+		},
+	})
+	if _, ok := findCode(report, "server_url_tainted"); !ok {
+		t.Fatalf("expected server_url_tainted for load field href, got %v", report)
+	}
+}
+
+func TestValidateRejectsDirectiveInsideServerRow(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { issues }`,
+			Actions:    []gwdkir.Action{{Name: "Open", Method: "POST", Route: "/open"}},
+			View:       true,
+			ViewBody:   `<main><form g:for={issue in issues} g:post={Open}><input name="id" value={issue.id} /></form></main>`,
+		},
+	})
+	diag, ok := findCode(report, "server_region_directive")
+	if !ok {
+		t.Fatalf("expected server_region_directive, got %v", report)
+	}
+	if !strings.Contains(diag.Message, `"g:post"`) {
+		t.Fatalf("diagnostic should name the unsupported directive: %q", diag.Message)
+	}
+}
+
+func TestValidateRejectsComponentInsideServerRow(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { issues }`,
+			View:       true,
+			ViewBody:   `<main><div g:for={issue in issues}><IssueCard /></div></main>`,
+		},
+	})
+	if _, ok := findCode(report, "server_region_directive"); !ok {
+		t.Fatalf("expected server_region_directive for component call, got %v", report)
+	}
+}

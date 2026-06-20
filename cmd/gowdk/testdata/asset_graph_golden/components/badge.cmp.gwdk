@@ -1,0 +1,12 @@
+package components
+
+component Badge
+
+asset "./badge.svg"
+css "./badge.css"
+js "./badge.js"
+wasm "github.com/acme/badge/wasm"
+
+view {
+  <span class="badge">Asset</span>
+}

@@ -296,7 +296,9 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 			return err
 		}
 		if tainted && unsafeRouteParamAttr(attr.Name) {
-			return fmt.Errorf("request-time interpolation (route param or load field) is not allowed in %q attributes", attr.Name)
+			if !allowRequestTimeURLAttrTemplate(attr.Name, attr.Value) {
+				return fmt.Errorf("request-time interpolation (route param or load field) is not allowed in %q attributes", attr.Name)
+			}
 		}
 		if err := validateRenderedHTMLAttrSafety(attr.Name, value); err != nil {
 			return err

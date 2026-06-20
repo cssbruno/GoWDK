@@ -658,23 +658,27 @@ Every 0.x minor release must have:
 ## Testing, CI, Operations, Performance, Playground, And Addons
 
 - [ ] Keep `scripts/test-go-modules.sh`, CLI build tests, and VS Code tests.
-- [ ] Add parser, route, form decoder, and URL escaping fuzzing.
+- [x] Add parser fuzzing through `scripts/test-parser-fuzz.sh`, with a bounded
+  CI smoke duration and longer local runs controlled by `GOWDK_FUZZTIME`.
+- [ ] Add route, form decoder, and URL escaping fuzzing.
 - [ ] Add generated Go, HTML, CSS, manifest, sitemap, route report, and build
   report schema tests.
 - [ ] Add action, API, fragment, SSR, hybrid, guard, CSRF, generated binary,
   generated WASM, browser client runtime, fragment, SPA navigation, and WASM
   island integration tests.
-- [ ] Add performance, memory, binary size, generated output determinism, docs
-  command, examples command, release checklist, and regression tests.
+- [x] Add generated-output/report determinism through
+  `scripts/test-generated-output-determinism.sh`.
+- [ ] Add performance, memory, binary size, docs command, examples command,
+  release checklist, and regression tests.
 - [ ] Keep baseline CI fast and split jobs for Go unit tests, compiler tests,
   runtime tests, appgen tests, CLI tests, examples smoke, docs checks, VS Code
   tests, security scan, and dependency/license scan.
 - [ ] Add OS matrix for Linux, macOS, and Windows.
 - [ ] Add architecture matrix where useful for amd64 and arm64.
 - [ ] Cache Go and Node dependencies properly.
-- [ ] Add docs link check, Markdown lint, generated output determinism check,
-  release dry run, release artifact smoke workflow, nightly extended examples,
-  nightly fuzz/benchmark where practical, and branch protection once stable.
+- [ ] Add docs link check, Markdown lint, release dry run, release artifact
+  smoke workflow, nightly extended examples, nightly fuzz/benchmark where
+  practical, and branch protection once stable.
 - [x] Expand operations docs for static-only deploy, one-binary deploy, split
   frontend/backend deploy, backend-only deploy, Docker, systemd, Caddy, Nginx,
   environment variables, secrets, CSRF secrets, logs, metrics, health,

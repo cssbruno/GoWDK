@@ -40,6 +40,11 @@ func unsupportedTopLevelBlockName(line string) string {
 	return name
 }
 
+func isMalformedPackage(line string) bool {
+	fields := strings.Fields(line)
+	return len(fields) > 0 && fields[0] == "package"
+}
+
 func isMalformedImport(line string) bool {
 	fields := strings.Fields(line)
 	return len(fields) > 0 && fields[0] == "import"

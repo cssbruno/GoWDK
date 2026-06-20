@@ -255,9 +255,15 @@ Rejected URL forms:
 - URL values containing control characters.
 
 The policy applies to literal URL attributes and to values resolved through
-build data interpolation. `srcset` is checked per URL candidate. Custom
-attributes such as `data-uri` are ordinary escaped attributes; the exact
-HTML `<object data="...">` attribute is URL-bearing and follows this policy.
+build data interpolation. `srcset` is checked per URL candidate. Request-time
+route params and `server {}` fields are allowed in URL-bearing attributes only
+inside root-relative URL templates with a stable literal prefix, such as
+`/issue/{issue.id}`. Bare request-time URLs such as `href={website}`,
+request-time-controlled first path segments such as `href="/{slug}"`,
+protocol-relative URLs, backslashes, control characters, inline handlers,
+`style`, and `srcdoc` are rejected. Custom attributes such as `data-uri` are
+ordinary escaped attributes; the exact HTML `<object data="...">` attribute is
+URL-bearing and follows this policy.
 
 Raw inline event handler attributes (`onclick`, `onerror`, and other `on*`
 attributes) are rejected. The supported event model is `g:on:*` inside
@@ -310,6 +316,12 @@ Restrictions (each is an explicit error):
 Server-rendered fragment swaps (`g:post` + `g:target`/`g:swap`) inject
 server-rendered HTML via `innerHTML`/`outerHTML`, so raw HTML rendered with
 `g:unsafe-html` flows through them unchanged.
+
+Request-time `server {}` regions selected by `g:for` or `g:if` currently support
+static markup, escaped scoped interpolation, nested `g:for`, and nested `g:if`.
+They do not allow component calls, `g:post`, `g:command`, `g:query`, or `g:on:*`
+inside the region; use a root-relative request-time page link such as
+`/issue/{issue.id}`, or move the interaction outside the server-rendered row.
 
 Not implemented yet:
 

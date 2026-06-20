@@ -773,7 +773,7 @@ func TestBuildRendersExplicitRouteParamReferences(t *testing.T) {
 			Paths:     true,
 			PathsBody: `=> { slug: "hello-gowdk" }`,
 			View:      true,
-			ViewBody:  `<main data-slug="{param(\"slug\")}"><h1>{param("slug")}</h1></main>`,
+			ViewBody:  `<main data-slug="{param(\"slug\")}"><h1>{param("slug")}</h1><a href="/blog/{param(\"slug\")}">Post</a></main>`,
 		},
 	}}}
 
@@ -785,7 +785,7 @@ func TestBuildRendersExplicitRouteParamReferences(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(payload), `<main data-slug="hello-gowdk"><h1>hello-gowdk</h1></main>`) {
+	if !strings.Contains(string(payload), `<main data-slug="hello-gowdk"><h1>hello-gowdk</h1><a href="/blog/hello-gowdk">Post</a></main>`) {
 		t.Fatalf("expected route param reference in output:\n%s", payload)
 	}
 }
@@ -826,7 +826,7 @@ func TestBuildRejectsRouteParamInDangerousAttributeBeforeWriting(t *testing.T) {
 			Paths:     true,
 			PathsBody: `=> { slug: "alert(1)" }`,
 			View:      true,
-			ViewBody:  `<a href="/blog/{param(\"slug\")}">Post</a>`,
+			ViewBody:  `<a href="{param(\"slug\")}">Post</a>`,
 		},
 	}}}
 

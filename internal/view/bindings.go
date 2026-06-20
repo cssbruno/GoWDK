@@ -46,7 +46,9 @@ func elementInitialStyleValue(node Element, ctx *renderContext, bindings []style
 			return "", err
 		}
 		if tainted && unsafeRouteParamAttr(attr.Name) {
-			return "", fmt.Errorf("request-time interpolation (route param or load field) is not allowed in %q attributes", attr.Name)
+			if !allowRequestTimeURLAttrTemplate(attr.Name, attr.Value) {
+				return "", fmt.Errorf("request-time interpolation (route param or load field) is not allowed in %q attributes", attr.Name)
+			}
 		}
 		declarations = append(declarations, strings.TrimSpace(value))
 	}

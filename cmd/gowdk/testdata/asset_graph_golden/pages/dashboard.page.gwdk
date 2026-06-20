@@ -1,0 +1,16 @@
+package pages
+
+use widgets "components"
+
+page dashboard
+route "/dashboard"
+guard public
+
+css default
+js "./dashboard.js"
+
+view {
+  <main>
+    <widgets.Badge />
+  </main>
+}

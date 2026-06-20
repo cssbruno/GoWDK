@@ -1,27 +1,85 @@
 # CI
 
-Hosted CI is configured in `.github/workflows/ci.yml`. Local verification remains
-the fastest pre-handoff gate.
+Hosted CI is split by concern in `.github/workflows/ci.yml`. Local verification
+remains the fastest pre-handoff gate.
 
-## Baseline Jobs
+## Hosted Jobs
 
-- `scripts/test-go-modules.sh`
-- `scripts/check-root-deps.sh`
-- `scripts/vulncheck-go-modules.sh`
-- `scripts/check-docs-links.sh`
-- `go build ./cmd/gowdk`
-- `node --check editors/vscode/extension.js`
-- `node --check editors/vscode/extension-core.js`
-- `node --test editors/vscode/*.test.js`
+Required pull-request lanes:
+
+- `Go tests (ubuntu-latest)`: root dependency check and all Go module tests.
+- `Go tests (macos-14)`: OS signal for Go tests on Darwin/arm64.
+- `Reachable vulnerabilities`: `scripts/vulncheck-go-modules.sh`.
+- `CLI build`: `go build ./cmd/gowdk`.
+- `VS Code extension`: extension version sync, Node syntax checks, and unit
+  tests.
+- `Documentation links`: `scripts/check-docs-links.sh`.
+- `Example reports`: `scripts/check-example-reports.sh`.
+- `Parser fuzz smoke`: `scripts/test-parser-fuzz.sh` with
+  `GOWDK_FUZZTIME=1s`.
+- `Generated app integration`: `scripts/test-generated-app-integration.sh`.
+- `Generated output determinism`:
+  `scripts/test-generated-output-determinism.sh`.
+- `Generated output smoke`: representative build output, binary, WASM, SSR,
+  CSS, SEO, component asset, and login example checks.
+
+The release lanes live outside the pull-request CI workflow:
+
+- `.github/workflows/release-dry-run.yml`: scheduled weekly and manual; packages
+  CLI/VS Code artifacts, writes checksums, and uploads workflow artifacts. This
+  is GitHub-only because it uses Actions artifact upload.
+- `.github/workflows/release.yml`: tag/manual publishing workflow for real
+  releases.
+- `.github/workflows/release-smoke.yml`: manual post-publish artifact smoke
+  across Linux, macOS Intel, macOS arm64, and Windows.
+
+## Local Gates
+
+Run the same local checks before handoff when relevant:
+
+- Go/module checks:
+
+  ```sh
+  scripts/check-root-deps.sh
+  scripts/test-go-modules.sh
+  scripts/vulncheck-go-modules.sh
+  go build ./cmd/gowdk
+  ```
+
+- VS Code extension checks:
+
+  ```sh
+  node editors/vscode/scripts/sync-version.js --check
+  node --check editors/vscode/extension.js
+  node --check editors/vscode/extension-core.js
+  node --test editors/vscode/*.test.js
+  ```
+
+- Docs and example report checks:
+
+  ```sh
+  scripts/check-docs-links.sh
+  scripts/check-example-reports.sh
+  ```
+
+- Fuzz, integration, and determinism checks:
+
+  ```sh
+  scripts/test-parser-fuzz.sh
+  GOWDK_FUZZTIME=30s scripts/test-parser-fuzz.sh
+  scripts/test-generated-app-integration.sh
+  scripts/test-generated-output-determinism.sh
+  ```
+
 - Example smoke checks:
 
   ```sh
   scripts/check-root-deps.sh
   scripts/vulncheck-go-modules.sh
-  go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
-  go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
-  go run ./cmd/gowdk sitemap --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
-  go run ./cmd/gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
+  go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/store-persist/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
+  go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/store-persist/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
+  go run ./cmd/gowdk sitemap --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/store-persist/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
+  go run ./cmd/gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/store-persist/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
   go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk
   go run ./cmd/gowdk build --config examples/seo/gowdk.config.go --out /tmp/gowdk-seo-build examples/seo/*.gwdk
   go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk
@@ -31,11 +89,68 @@ the fastest pre-handoff gate.
   go run ./cmd/gowdk build --ssr --out /tmp/gowdk-hybrid-build --app /tmp/gowdk-hybrid-app --bin /tmp/gowdk-hybrid-site examples/ssr/hybrid-static.page.gwdk
   go run ./cmd/gowdk build --out /tmp/gowdk-component-assets examples/components/assets/*.gwdk
   go run ./cmd/gowdk build --out /tmp/gowdk-wasm-island examples/components/wasm/*.gwdk
+  go run ./cmd/gowdk build --out /tmp/gowdk-store-persist examples/store-persist/*.gwdk
   ```
 
   These commands run from the repository root and rely on the root
   `gowdk.config.go`. Any smoke command run from another directory must pass
   `--config <file>`.
+
+## Fuzz, Integration, And Determinism
+
+Baseline CI keeps these checks bounded and Linux-only so the OS matrix is not
+multiplied by generated-binary work:
+
+- `scripts/test-parser-fuzz.sh` runs the existing `FuzzParseSyntax` target.
+  CI sets `GOWDK_FUZZTIME=1s`; local hardening can raise it, for example
+  `GOWDK_FUZZTIME=30s scripts/test-parser-fuzz.sh`.
+- `scripts/test-generated-app-integration.sh` runs representative generated
+  binary flows for embedded SPA serving, action redirect, CSRF, fragments,
+  dynamic SSR, and contract query execution.
+- `scripts/test-generated-output-determinism.sh` builds the same page twice
+  and diffs generated HTML, manifests, OpenAPI/AsyncAPI, build reports, and
+  report CLI output after canonicalizing temp paths.
+
+If one of these reveals nondeterministic output, either fix the generator in
+the same change or open a narrower issue naming the unstable file/report.
+
+## Release Smoke
+
+After publishing a tag, verify the current machine's release artifact locally:
+
+```sh
+scripts/smoke-release-artifact.sh v0.7.0
+```
+
+Pass an explicit asset name to test a non-native artifact:
+
+```sh
+scripts/smoke-release-artifact.sh v0.7.0 gowdk-linux-amd64
+```
+
+Use `GOWDK_RELEASE_REPO=owner/repo` for forks. The GitHub-only matrix version
+is `.github/workflows/release-smoke.yml`; trigger it with the published tag as
+the `version` input.
+
+## Branch Protection
+
+Require these checks before merging to `main`:
+
+- `Go tests (ubuntu-latest)`
+- `Go tests (macos-14)`
+- `Reachable vulnerabilities`
+- `CLI build`
+- `VS Code extension`
+- `Documentation links`
+- `Example reports`
+- `Parser fuzz smoke`
+- `Generated app integration`
+- `Generated output determinism`
+- `Generated output smoke`
+
+Do not require scheduled `Release Dry Run` or manual `Release Artifact Smoke`
+for normal pull requests. Use them for release readiness and post-publish
+verification.
 
 ## Documentation Links
 
@@ -88,7 +203,7 @@ For local one-off cleanup with a GitHub token:
 GOWDK_CACHE_PRUNE_KEEP=20 scripts/prune-github-caches.sh cssbruno/GoWDK
 ```
 
-## Future Release Jobs
+## Release Jobs
 
 Release packaging lives in `.github/workflows/release.yml`. It builds the
 supported CLI binaries, packages the VS Code `.vsix`, writes `checksums.txt`,

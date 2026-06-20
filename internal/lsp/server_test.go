@@ -112,6 +112,39 @@ func TestServerPublishesDiagnosticsAndClearsOnClose(t *testing.T) {
 	}
 }
 
+func TestServerPublishesMalformedGoImportDiagnostic(t *testing.T) {
+	uri := "file:///tmp/bad-import.page.gwdk"
+	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\nimport interop github.com/acme/app/interop\n\npage bad\nroute \"/bad\"\nview {\n  <main>Bad</main>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}`) +
+		framed(`{"jsonrpc":"2.0","method":"exit"}`)
+
+	var output bytes.Buffer
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	if err := server.Serve(stringsReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	messages := readOutputMessages(t, output.Bytes())
+	if len(messages) != 3 {
+		t.Fatalf("expected 3 output messages, got %d", len(messages))
+	}
+	diagnostics := messages[1]["params"].(map[string]any)["diagnostics"].([]any)
+	if len(diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic for invalid import, got %#v", diagnostics)
+	}
+	diagnostic := diagnostics[0].(map[string]any)
+	if diagnostic["code"] != "malformed_go_import" {
+		t.Fatalf("expected malformed_go_import code, got %#v", diagnostic)
+	}
+	diagnosticRange := diagnostic["range"].(map[string]any)
+	start := diagnosticRange["start"].(map[string]any)
+	if start["line"] != float64(1) || start["character"] != float64(0) {
+		t.Fatalf("expected malformed import range to start on line 2, got %#v", diagnosticRange)
+	}
+}
+
 func TestServerPublishesComponentClientDiagnostics(t *testing.T) {
 	uri := "file:///tmp/counter.cmp.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +

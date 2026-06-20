@@ -64,6 +64,24 @@ form metadata can emit `assets/gowdk/gowdk.js`; stateful components can emit
 generated JavaScript island assets; component-level `wasm` declarations can
 emit WASM island loader assets. See `browser-compiler.md`.
 
+## Invalid IR Policy
+
+`internal/gwdkir.CheckInvariants` is the compiler's internal sanity check for
+IR defects that should be impossible after parsing and analysis. It checks
+structural contracts such as sorted slices, closed enum values, and references
+between IR slices. It does not replace user-facing validation for authoring
+errors such as duplicate routes, missing guards, or unsupported source syntax.
+
+Public compiler, CLI, buildgen, and appgen boundaries must return diagnostics or
+ordinary errors for invalid IR. They must not panic on malformed IR, because a
+bad handoff should be reported as an internal compiler error with any available
+build report or source context.
+
+Panicking helpers are allowed only in `_test.go` files, must include `ForTest`
+or `must` in the helper name, and must not be imported by runtime, CLI, or
+generated-output packages. Use those helpers only to keep focused tests small
+after the non-panicking boundary behavior is already pinned.
+
 ## Target Pipeline
 
 ```text

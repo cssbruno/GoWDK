@@ -19,6 +19,13 @@ The package name must match sibling `.go` files in the same directory.
 `gowdk.config.go` is project configuration and is not treated as a sibling
 application package for this check.
 
+Malformed package declarations are rejected with
+`malformed_package_declaration`:
+
+```gwdk
+package 123
+```
+
 ## Metadata
 
 Metadata must start at the beginning of the trimmed line:
@@ -158,6 +165,12 @@ import interop "github.com/cssbruno/gowdk/examples/go-interop"
 
 These are normal Go package imports used for Go types/functions. They do not
 import other `.gwdk` files.
+
+Malformed Go imports are rejected with `malformed_go_import`:
+
+```gwdk
+import interop github.com/acme/app/interop
+```
 
 GOWDK source packages use a separate `use` declaration:
 

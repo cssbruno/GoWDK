@@ -9,8 +9,10 @@ import (
 )
 
 const (
+	DiagnosticMalformedGoImport            = "malformed_go_import"
 	DiagnosticMalformedGOWDKUse            = "malformed_gowdk_use"
 	DiagnosticMalformedLegacyMetadata      = "malformed_legacy_metadata"
+	DiagnosticMalformedPackageDeclaration  = "malformed_package_declaration"
 	DiagnosticOldActionBlockSyntax         = "old_action_block_syntax"
 	DiagnosticOldAPIBlockSyntax            = "old_api_block_syntax"
 	DiagnosticPackageMustBeFirst           = "package_must_be_first"

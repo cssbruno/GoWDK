@@ -1,4 +1,4 @@
-package view
+package viewrender
 
 import "github.com/cssbruno/gowdk/internal/clientlang"
 

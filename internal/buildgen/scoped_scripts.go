@@ -10,7 +10,7 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
+	view "github.com/cssbruno/gowdk/internal/viewrender"
 	"github.com/evanw/esbuild/pkg/api"
 )
 

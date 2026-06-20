@@ -11,7 +11,8 @@ Implemented today:
 - IR-derived manifest JSON and site-map reports through `internal/lang`.
 - Render-rule, duplicate identity, redundant component, and component contract
   validation through `internal/compiler`.
-- SPA `view {}` markup and component invocation parsing through `internal/view`.
+- SPA `view {}` markup parsing through `internal/viewparse` and rendering
+  through `internal/viewrender`.
 - Imported Go props/state contract resolution through `internal/gotypes`.
 - Route-binding metadata for `gowdk routes` through `internal/compiler`.
 - App-shell HTML, route manifest, and asset manifest emission for simple build-time

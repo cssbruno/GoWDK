@@ -8,7 +8,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/view"
+	view "github.com/cssbruno/gowdk/internal/viewrender"
 )
 
 type pageOutput struct {

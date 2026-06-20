@@ -13,8 +13,8 @@ import (
 	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
 	"github.com/cssbruno/gowdk/internal/viewanalysis"
+	view "github.com/cssbruno/gowdk/internal/viewrender"
 	gowhtml "github.com/cssbruno/gowdk/runtime/html"
 )
 

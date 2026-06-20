@@ -35,14 +35,14 @@ var corpusConstructs = map[string]bool{
 // exist by TestIntegrationCoverageFilesExist, so a renamed or deleted file
 // breaks the gate instead of silently passing.
 var integrationCoverage = map[string]string{
-	// g: directives parsed by internal/view.
-	"g:if":          "../view/view_test.go",
-	"g:else-if":     "../view/view_test.go",
-	"g:else":        "../view/view_test.go",
-	"g:for":         "../view/server_list_test.go",
-	"g:key":         "../view/view_test.go",
-	"g:unsafe-html": "../view/view_test.go",
-	"g:on:*":        "../view/view_test.go",
+	// g: directives parsed by internal/viewrender.
+	"g:if":          "../viewrender/view_test.go",
+	"g:else-if":     "../viewrender/view_test.go",
+	"g:else":        "../viewrender/view_test.go",
+	"g:for":         "../viewrender/server_list_test.go",
+	"g:key":         "../viewrender/view_test.go",
+	"g:unsafe-html": "../viewrender/view_test.go",
+	"g:on:*":        "../viewrender/view_test.go",
 
 	// g: directives validated against component contracts by internal/compiler.
 	"g:bind:value":   "../compiler/validate_test.go",
@@ -59,18 +59,18 @@ var integrationCoverage = map[string]string{
 	"g:query":        "../compiler/validate_contract_refs_test.go",
 	"g:subscribe":    "../compiler/validate_contract_refs_test.go",
 
-	// Planned g: directives rejected by internal/view markup validation.
-	"g:transition": "../view/view_test.go",
-	"g:animate":    "../view/view_test.go",
-	"g:window":     "../view/view_test.go",
-	"g:document":   "../view/view_test.go",
-	"g:body":       "../view/view_test.go",
-	"g:head":       "../view/view_test.go",
-	"g:await":      "../view/view_test.go",
-	"g:async":      "../view/view_test.go",
-	"g:use":        "../view/view_test.go",
-	"g:action":     "../view/view_test.go",
-	"g:attach":     "../view/view_test.go",
+	// Planned g: directives rejected by internal/viewrender markup validation.
+	"g:transition": "../viewrender/view_test.go",
+	"g:animate":    "../viewrender/view_test.go",
+	"g:window":     "../viewrender/view_test.go",
+	"g:document":   "../viewrender/view_test.go",
+	"g:body":       "../viewrender/view_test.go",
+	"g:head":       "../viewrender/view_test.go",
+	"g:await":      "../viewrender/view_test.go",
+	"g:async":      "../viewrender/view_test.go",
+	"g:use":        "../viewrender/view_test.go",
+	"g:action":     "../viewrender/view_test.go",
+	"g:attach":     "../viewrender/view_test.go",
 
 	// Blocks and keywords needing Go types, sibling files, or config.
 	"import":     "../parser/syntax_test.go",

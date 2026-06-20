@@ -24,7 +24,7 @@ have an `accept/` case, and a `Planned`/`Deprecated` construct should have a
 
 The tiers below are the code-level registry `lang.ConstructStabilities()` (with
 metadata keywords derived from `lang.MetadataKeywords` and directives checked
-against `view.SupportedDirectiveNames()`). `TestStabilityRegistryCoversCodeConstructs`
+against `viewparse.SupportedDirectiveNames()`). `TestStabilityRegistryCoversCodeConstructs`
 asserts the registry covers every keyword and directive in code, and
 `TestStabilityTableMatchesRegistry` asserts this page matches the registry, so
 neither the table nor the registry can drift without failing a test.
@@ -78,7 +78,7 @@ Legacy `@`-prefixed metadata is **Deprecated** and rejected with
 ## View `g:` Directives
 
 Supported exact-name directives (the closed set in
-`view.SupportedDirectiveNames()`):
+`viewparse.SupportedDirectiveNames()`):
 
 | Directive | Tier | Notes |
 | --- | --- | --- |

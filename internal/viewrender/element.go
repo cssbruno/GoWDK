@@ -1,4 +1,4 @@
-package view
+package viewrender
 
 import (
 	"fmt"
@@ -137,7 +137,7 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 				return err
 			}
 			readSymbols := mergeClientSymbols(ctx.readSymbols(), domEventSymbols())
-			if err := ValidateIslandEventExpressionTypedWithEvents(attr.Value, readSymbols, ctx.stateTypes, ctx.handlers, nil, ctx.emits); err != nil {
+			if err := clientlang.ValidateIslandEventExpressionTypedWithEvents(attr.Value, readSymbols, ctx.stateTypes, ctx.handlers, nil, ctx.emits); err != nil {
 				return fmt.Errorf("%s: %w", attr.Name, err)
 			}
 			out.write(` data-gowdk-on-`)
@@ -165,7 +165,7 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
 				return fmt.Errorf("g:if requires an expression value")
 			}
-			if err := ValidateIslandBoolExpression(attr.Value, ctx.readFields); err != nil {
+			if err := clientlang.ValidateIslandBoolExpression(attr.Value, ctx.readFields); err != nil {
 				return fmt.Errorf("g:if: %w", err)
 			}
 			out.write(` data-gowdk-if="`)

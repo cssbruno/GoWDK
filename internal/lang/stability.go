@@ -81,7 +81,7 @@ func ConstructStabilities() []ConstructStability {
 		{Name: "g:slot", Kind: ConstructDirective, Tier: TierPartial},
 
 		// Supported g: directive families (validated separately from the
-		// exact-name set, so view.SupportedDirectiveNames() excludes them).
+		// exact-name set, so viewparse.SupportedDirectiveNames() excludes them).
 		{Name: "g:on:*", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:message:*", Kind: ConstructDirective, Tier: TierPartial},
 

@@ -1,4 +1,4 @@
-package view
+package viewrender
 
 import gowdkrender "github.com/cssbruno/gowdk/runtime/render"
 

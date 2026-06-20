@@ -19,7 +19,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
+	view "github.com/cssbruno/gowdk/internal/viewrender"
 )
 
 func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
@@ -1589,11 +1589,14 @@ fn SetCount() {
 	}
 	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
-		`const builtins = Object.freeze({`,
+		`const expressionSpec = Object.freeze({`,
+		`const builtinSpecByName = Object.freeze(Object.fromEntries`,
+		`const builtinImpls = Object.freeze({`,
 		`len(value) {`,
 		`string(value) {`,
 		`int(value) {`,
 		`float(value) {`,
+		`expectArgCount(name, arguments.length, builtinSpecByName[name].args);`,
 		`if (Object.prototype.hasOwnProperty.call(builtins, expr.name)) return builtins[expr.name].apply(null, args);`,
 	} {
 		if !strings.Contains(js, expected) {

@@ -1,4 +1,4 @@
-package view
+package viewrender
 
 import (
 	"fmt"
@@ -126,7 +126,7 @@ func elementClassToggles(node Element, ctx *renderContext) ([]classToggle, error
 			return nil, fmt.Errorf("class toggle directive %q requires an expression value", attr.Name)
 		}
 		expr := expressionAttrSource(attr.Value)
-		if err := ValidateIslandBoolExpression(expr, ctx.readFields); err != nil {
+		if err := clientlang.ValidateIslandBoolExpression(expr, ctx.readFields); err != nil {
 			return nil, fmt.Errorf("class toggle %s: %w", attr.Name, err)
 		}
 		toggles = append(toggles, classToggle{Name: name, Expression: expr})

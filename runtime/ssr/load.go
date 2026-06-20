@@ -77,10 +77,21 @@ func loadPathValue(value any, field string) (any, bool) {
 }
 
 func loadMapField(value reflect.Value, field string) (any, bool) {
-	if value.Type().Key().Kind() != reflect.String {
+	keyType := value.Type().Key()
+	if keyType.Kind() != reflect.String {
 		return nil, false
 	}
-	found := value.MapIndex(reflect.ValueOf(field))
+	key := reflect.ValueOf(field)
+	if key.Type() != keyType {
+		// The map may be keyed by a named string type (e.g. type ID string),
+		// which a plain string is not assignable to. Convert the key so
+		// MapIndex does not panic.
+		if !key.Type().ConvertibleTo(keyType) {
+			return nil, false
+		}
+		key = key.Convert(keyType)
+	}
+	found := value.MapIndex(key)
 	if !found.IsValid() {
 		return nil, false
 	}

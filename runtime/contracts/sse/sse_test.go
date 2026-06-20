@@ -85,9 +85,12 @@ func TestHubStreamsPresentationEvents(t *testing.T) {
 	}
 }
 
-func TestHubDropsWhenClientBufferIsFull(t *testing.T) {
+func TestHubDisconnectsSlowClient(t *testing.T) {
 	hub := New(WithBufferSize(1))
-	client := make(chan []byte, 1)
+	client := &sseClient{
+		queue:      make(chan []byte, 1),
+		disconnect: make(chan struct{}),
+	}
 	hub.add(client)
 	defer hub.remove(client)
 
@@ -99,8 +102,12 @@ func TestHubDropsWhenClientBufferIsFull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("send presentation events: %v", err)
 	}
-	if got := len(client); got != 1 {
-		t.Fatalf("client buffer length = %d, want 1", got)
+	// A client whose buffer overflows is disconnected so the browser
+	// reconnects and resynchronizes, instead of silently dropping events.
+	select {
+	case <-client.disconnect:
+	default:
+		t.Fatal("expected the slow client to be disconnected on buffer overflow")
 	}
 }
 

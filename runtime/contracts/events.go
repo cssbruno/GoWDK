@@ -161,6 +161,14 @@ func OutboxCommandEventSink(outbox Outbox) CommandEventSink {
 
 // CompositeCommandEventSink returns a sink that sends the same captured event
 // batch to each sink in order. Nil sinks are ignored.
+//
+// Dispatch is sequential and not transactional: if an earlier sink commits
+// (for example storing to an outbox or publishing to a broker) and a later
+// sink fails, the earlier side effects remain while the command handler
+// returns the error and the client may retry the mutation. Order sinks so the
+// durable, replayable sink (typically the outbox) runs first, and make
+// downstream sinks idempotent — keyed by EventEnvelope.ID — so a retry does
+// not duplicate effects.
 func CompositeCommandEventSink(sinks ...CommandEventSink) CommandEventSink {
 	copied := make([]CommandEventSink, 0, len(sinks))
 	for _, sink := range sinks {

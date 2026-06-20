@@ -112,6 +112,21 @@ func TestRenderInvalidatedRegionsSkipsPostForms(t *testing.T) {
 	}
 }
 
+func TestRenderInvalidatedRegionsSkipsFormmethodPostControls(t *testing.T) {
+	resetRegions()
+	defer resetRegions()
+	const queryType = "example.com/app/patients.GetPatientPage"
+	renderer := boardRegion(queryType)
+	// A nominally GET form that POSTs via a submit button override.
+	renderer.Template = `<section data-gowdk-query-type="` + queryType + `"><form method="get"><button formmethod="post">Save</button></form></section>`
+	RegisterRegion(renderer)
+
+	patches := RenderInvalidatedRegions(httptest.NewRequest(http.MethodPost, "/patients", nil), []string{queryType})
+	if len(patches) != 0 {
+		t.Fatalf("expected no patches for HTML with formmethod=post controls, got %+v", patches)
+	}
+}
+
 func TestRegisterRegionIgnoresIncomplete(t *testing.T) {
 	resetRegions()
 	defer resetRegions()

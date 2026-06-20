@@ -18,8 +18,21 @@ const defaultBufferSize = 16
 type Hub struct {
 	mu         sync.Mutex
 	bufferSize int
-	clients    map[*websocket.Conn]chan []byte
+	clients    map[*websocket.Conn]*wsClient
 	accept     *websocket.AcceptOptions
+}
+
+// wsClient is one connected browser. disconnect is closed (once) to ask the
+// streaming goroutine to drop the connection so the browser reconnects and
+// resynchronizes.
+type wsClient struct {
+	queue      chan []byte
+	disconnect chan struct{}
+	once       sync.Once
+}
+
+func (client *wsClient) drop() {
+	client.once.Do(func() { close(client.disconnect) })
 }
 
 // Option configures a Hub.
@@ -46,7 +59,7 @@ func WithAcceptOptions(options websocket.AcceptOptions) Option {
 func New(options ...Option) *Hub {
 	hub := &Hub{
 		bufferSize: defaultBufferSize,
-		clients:    map[*websocket.Conn]chan []byte{},
+		clients:    map[*websocket.Conn]*wsClient{},
 	}
 	for _, option := range options {
 		if option != nil {
@@ -65,7 +78,10 @@ func (hub *Hub) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	defer conn.Close(websocket.StatusNormalClosure, "")
 
 	ctx := conn.CloseRead(request.Context())
-	client := make(chan []byte, hub.bufferSize)
+	client := &wsClient{
+		queue:      make(chan []byte, hub.bufferSize),
+		disconnect: make(chan struct{}),
+	}
 	hub.add(conn, client)
 	defer hub.remove(conn)
 
@@ -73,7 +89,9 @@ func (hub *Hub) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		select {
 		case <-ctx.Done():
 			return
-		case payload := <-client:
+		case <-client.disconnect:
+			return
+		case payload := <-client.queue:
 			if err := conn.Write(ctx, websocket.MessageText, payload); err != nil {
 				return
 			}
@@ -102,14 +120,24 @@ func (hub *Hub) SendPresentationEvents(ctx context.Context, events []contracts.E
 		return nil
 	}
 	hub.mu.Lock()
-	defer hub.mu.Unlock()
+	var slow []*wsClient
 	for _, client := range hub.clients {
+	queueLoop:
 		for _, payload := range payloads {
 			select {
-			case client <- payload:
+			case client.queue <- payload:
 			default:
+				// The client cannot keep up. Drop it so the browser reconnects
+				// and resynchronizes, rather than silently missing events (for
+				// example a query invalidation) and leaving the UI stale.
+				slow = append(slow, client)
+				break queueLoop
 			}
 		}
+	}
+	hub.mu.Unlock()
+	for _, client := range slow {
+		client.drop()
 	}
 	return nil
 }
@@ -121,7 +149,7 @@ func (hub *Hub) ClientCount() int {
 	return len(hub.clients)
 }
 
-func (hub *Hub) add(conn *websocket.Conn, client chan []byte) {
+func (hub *Hub) add(conn *websocket.Conn, client *wsClient) {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
 	hub.clients[conn] = client
@@ -129,9 +157,12 @@ func (hub *Hub) add(conn *websocket.Conn, client chan []byte) {
 
 func (hub *Hub) remove(conn *websocket.Conn) {
 	hub.mu.Lock()
-	defer hub.mu.Unlock()
-	if client, ok := hub.clients[conn]; ok {
-		delete(hub.clients, conn)
-		close(client)
+	client, ok := hub.clients[conn]
+	delete(hub.clients, conn)
+	hub.mu.Unlock()
+	// The queue channel is left for the garbage collector: the sender only
+	// holds it under the lock, so no send can reach a removed client.
+	if ok {
+		client.drop()
 	}
 }

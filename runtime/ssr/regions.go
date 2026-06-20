@@ -151,6 +151,82 @@ func htmlContainsPostForm(html string) bool {
 			return true
 		}
 	}
+	// A nominally GET form can still POST through a submit control that
+	// overrides the method, e.g. <button formmethod="post">. Scan every start
+	// tag for that override so such a form is not embedded in a patch without a
+	// freshly generated CSRF token.
+	for _, match := range startTagRanges(payload) {
+		if tagHasPostFormmethod(payload[match[0]:match[1]]) {
+			return true
+		}
+	}
+	return false
+}
+
+// startTagRanges returns the byte ranges of every HTML start tag in payload.
+func startTagRanges(payload []byte) [][2]int {
+	var matches [][2]int
+	for index := 0; index < len(payload); index++ {
+		if payload[index] != '<' {
+			continue
+		}
+		nameStart := index + 1
+		if nameStart >= len(payload) || !isHTMLNameChar(payload[nameStart]) {
+			// Not a start tag: a closing tag, comment, or stray '<'.
+			continue
+		}
+		end := htmlTagEnd(payload, nameStart)
+		if end < 0 {
+			break
+		}
+		matches = append(matches, [2]int{index, end + 1})
+		index = end
+	}
+	return matches
+}
+
+// tagHasPostFormmethod reports whether the start tag carries formmethod="post".
+func tagHasPostFormmethod(tag []byte) bool {
+	return tagAttrMatch(tag, func(name, value []byte) bool {
+		return bytes.EqualFold(name, []byte("formmethod")) && strings.EqualFold(string(value), http.MethodPost)
+	})
+}
+
+// tagAttrMatch walks the attributes of an HTML start tag (the slice must begin
+// at '<') and reports whether want returns true for any name/value pair.
+func tagAttrMatch(tag []byte, want func(name, value []byte) bool) bool {
+	cursor := 1
+	for cursor < len(tag) && !isHTMLSpace(tag[cursor]) && tag[cursor] != '>' && tag[cursor] != '/' {
+		cursor++
+	}
+	for cursor < len(tag) {
+		for cursor < len(tag) && isHTMLSpace(tag[cursor]) {
+			cursor++
+		}
+		if cursor >= len(tag) || tag[cursor] == '>' || tag[cursor] == '/' {
+			return false
+		}
+		nameStart := cursor
+		for cursor < len(tag) && !isHTMLSpace(tag[cursor]) && tag[cursor] != '=' && tag[cursor] != '/' && tag[cursor] != '>' {
+			cursor++
+		}
+		name := tag[nameStart:cursor]
+		for cursor < len(tag) && isHTMLSpace(tag[cursor]) {
+			cursor++
+		}
+		if cursor >= len(tag) || tag[cursor] != '=' {
+			continue
+		}
+		cursor++
+		for cursor < len(tag) && isHTMLSpace(tag[cursor]) {
+			cursor++
+		}
+		value, next := htmlAttrValue(tag, cursor)
+		cursor = next
+		if want(name, value) {
+			return true
+		}
+	}
 	return false
 }
 

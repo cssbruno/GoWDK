@@ -139,7 +139,7 @@ func (parser *exprParser) parsePostfix() (Expr, error) {
 			expr = MemberExpr{X: expr, Name: token.value, Span: mergeExprSpans(ExprSpan(expr), tokenSpan(token))}
 		case tokenLBracket:
 			parser.consume()
-			index, err := parser.parseOr()
+			index, err := parser.parseConditional()
 			if err != nil {
 				return nil, err
 			}
@@ -214,7 +214,7 @@ func (parser *exprParser) parsePrimary() (Expr, error) {
 	case tokenNil:
 		return LiteralExpr{Type: TypeNil, Value: token.value, Span: tokenSpan(token)}, nil
 	case tokenLParen:
-		expr, err := parser.parseOr()
+		expr, err := parser.parseConditional()
 		if err != nil {
 			return nil, err
 		}

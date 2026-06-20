@@ -155,6 +155,31 @@ func TestCheckExprParsesGoishConditionalExpression(t *testing.T) {
 	}
 }
 
+func TestCheckExprParsesConditionalInParenthesesAndIndex(t *testing.T) {
+	typ, _, err := CheckExpr(`(if Open { Count } else { 0 })`, map[string]ValueType{
+		"Open":  TypeBool,
+		"Count": TypeInt,
+	})
+	if err != nil {
+		t.Fatalf("parenthesized conditional: %v", err)
+	}
+	if typ != TypeInt {
+		t.Fatalf("expected int type for parenthesized conditional, got %s", typ)
+	}
+
+	typ, _, err = CheckExpr(`Items[if First { 0 } else { 1 }]`, map[string]ValueType{
+		"Items":   TypeArray,
+		"Items[]": TypeString,
+		"First":   TypeBool,
+	})
+	if err != nil {
+		t.Fatalf("conditional index: %v", err)
+	}
+	if typ != TypeString {
+		t.Fatalf("expected string type for conditional index, got %s", typ)
+	}
+}
+
 func TestCheckExprWithFunctionsParsesHelperCalls(t *testing.T) {
 	typ, fields, err := CheckExprWithFunctions(`Next(Count) + Double(step)`, map[string]ValueType{
 		"Count": TypeInt,

@@ -118,6 +118,20 @@ func TestMatchRestRouteTypedHelpers(t *testing.T) {
 	}
 }
 
+func TestMatchRejectsDuplicateSlashes(t *testing.T) {
+	if _, ok := Match("/admin", "/admin"); !ok {
+		t.Fatal("expected /admin to match /admin")
+	}
+	for _, requestPath := range []string{"//admin", "/admin//", "///admin"} {
+		if _, ok := Match("/admin", requestPath); ok {
+			t.Fatalf("expected duplicate-slash path %q to be rejected", requestPath)
+		}
+	}
+	if _, ok := Match("/blog/post", "/blog//post"); ok {
+		t.Fatal("expected interior duplicate slash to be rejected")
+	}
+}
+
 func TestMatchRejectsUnsafeParamValues(t *testing.T) {
 	if _, ok := Match("/blog/{slug}", "/blog/."); ok {
 		t.Fatal("expected dot param not to match")

@@ -20,9 +20,11 @@ type LoadResult struct {
 	Explicit bool
 }
 
+// appliedValues records the value this loader last wrote for each name, so a
+// reload can tell its own previous value apart from an external override.
 var (
 	appliedMu     sync.Mutex
-	appliedByFile = map[string]bool{}
+	appliedValues = map[string]string{}
 )
 
 // LookupPath resolves the env file for a project root. explicit wins. Without
@@ -56,7 +58,9 @@ func LookupPath(projectRoot string, explicit string) (string, bool, error) {
 }
 
 // LoadIntoEnv loads path and sets only names that are not already present in
-// the process environment. Existing process values always win.
+// the process environment. Existing process values always win, including a
+// value changed with os.Setenv after a previous load: a reload only overwrites
+// a name whose current value is still the one this loader last applied.
 func LoadIntoEnv(path string, explicit bool) (LoadResult, error) {
 	appliedMu.Lock()
 	defer appliedMu.Unlock()
@@ -71,14 +75,20 @@ func LoadIntoEnv(path string, explicit bool) (LoadResult, error) {
 	}
 	result.Loaded = true
 	for _, entry := range values {
-		if _, ok := os.LookupEnv(entry.Name); ok && !appliedByFile[entry.Name] {
-			result.Skipped = append(result.Skipped, entry.Name)
-			continue
+		if current, ok := os.LookupEnv(entry.Name); ok {
+			// A value already in the environment wins, unless this loader set
+			// it on a previous load and nothing has changed it since. If the
+			// current value differs from what we last applied, it is an
+			// external/manual override and must not be clobbered.
+			if applied, mine := appliedValues[entry.Name]; !mine || applied != current {
+				result.Skipped = append(result.Skipped, entry.Name)
+				continue
+			}
 		}
 		if err := os.Setenv(entry.Name, entry.Value); err != nil {
 			return result, err
 		}
-		appliedByFile[entry.Name] = true
+		appliedValues[entry.Name] = entry.Value
 		result.Applied = append(result.Applied, entry.Name)
 	}
 	return result, nil

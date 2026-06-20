@@ -1,15 +1,14 @@
 // Package source holds the neutral leaf value types shared across the GOWDK
 // compiler packages: source spans, route params, inline scripts, and backend
 // binding metadata. These types carry no behavior and depend on nothing else in
-// the module, so every layer (parser, AST, IR, manifest, generated output) can
-// reference them without creating import cycles or coupling to the manifest
-// page/component model.
+// the module, so every layer (parser, AST, IR, generated output) can reference
+// them without creating import cycles.
 //
-// Historically these lived in internal/manifest, which forced packages that
+// These were originally part of internal/manifest, which forced packages that
 // only needed a SourceSpan to depend on the whole manifest model (and made
-// internal/gwdkir depend on manifest). They were extracted here so the
-// manifest model and the IR can both reference shared leaf types from a neutral
-// home. manifest re-exports them as aliases for backward compatibility.
+// internal/gwdkir depend on manifest). They were extracted into this neutral
+// home so the IR could reference shared leaf types directly; the manifest model
+// itself has since been removed (the manifest→IR migration, #145/#173).
 package source
 
 import (

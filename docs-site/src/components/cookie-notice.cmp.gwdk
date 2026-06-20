@@ -1,0 +1,33 @@
+package site
+
+component CookieNotice
+
+view {
+  <aside class="cookie-notice" data-cookie-notice aria-label="Cookie notice" hidden>
+    <div class="cookie-copy">
+      <strong>One cookie</strong>
+      <p>This site stores a single cookie to remember you dismissed this notice. No tracking, no analytics.</p>
+    </div>
+    <button class="button cookie-dismiss" type="button" data-cookie-dismiss>Got it</button>
+  </aside>
+}
+
+js {
+  const noticeCookie = "gowdk_notice_ack";
+  const notice = document.querySelector("[data-cookie-notice]");
+  if (notice) {
+    const acked = document["cookie"].split("; ").indexOf(noticeCookie + "=1") !== -1;
+    if (acked) {
+      notice.remove();
+    } else {
+      notice.hidden = false;
+      const dismiss = notice.querySelector("[data-cookie-dismiss]");
+      if (dismiss) {
+        dismiss.addEventListener("click", () => {
+          document["cookie"] = noticeCookie + "=1; path=/; max-age=31536000; samesite=lax";
+          notice.remove();
+        });
+      }
+    }
+  }
+}

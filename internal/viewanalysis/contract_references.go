@@ -333,6 +333,18 @@ func elementDirectiveValues(node viewmodel.Element) (viewDirectives, error) {
 			}
 			continue
 		}
+		if attr.Name == "g:transition" {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return viewDirectives{}, fmt.Errorf("g:transition requires a literal motion name")
+			}
+			continue
+		}
+		if attr.Name == "g:animate" {
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return viewDirectives{}, fmt.Errorf("g:animate requires a literal motion name")
+			}
+			continue
+		}
 		if attr.Name == "g:bind:value" {
 			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
 				return viewDirectives{}, fmt.Errorf("g:bind:value requires a field value")

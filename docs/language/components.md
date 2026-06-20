@@ -451,6 +451,12 @@ state field, component views can use `{#await fetchJSON[T](urlExpr)}` blocks.
 The block is local to the JS island, renders pending/then/catch branches, and
 does not expose arbitrary JavaScript promises.
 
+Client `g:if` branches and keyed client `g:for` rows can opt into CSS-driven
+motion with `g:transition="name"`; keyed client `g:for` rows can opt into
+reorder hooks with `g:animate="name"`. The generated runtime toggles
+`gowdk-transition-*` and `gowdk-animate-*` classes only. User or addon CSS owns
+all durations, easing, transforms, and `prefers-reduced-motion` behavior.
+
 Generated browser runtime behavior is scoped to the island or page enhancement
 that requested it. JavaScript may update text, attributes, classes, styles,
 form bindings, list rows, local state, page stores, partial responses, and SPA

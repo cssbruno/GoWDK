@@ -67,11 +67,10 @@ Two stable codes describe the `view {}` markup contract families:
   Each rejection message names the GOWDK-owned alternative (for example,
   `{@html body}` points at the explicit `g:unsafe-html={Expr}` directive).
 - `unsupported_markup_directive` — `g:` attributes outside the owned directive
-  contract, including unknown directives and deferred families: transitions
-  and animations (`g:transition`, `g:animate`), document/window/body/head
-  targets, async placeholders (`g:await`, `g:async`), and DOM actions
-  (`g:use`, `g:action`, `g:attach`). Each family gets explicit guidance in its
-  message.
+  contract, including unknown directives and deferred families:
+  document/window/body/head targets, async placeholders (`g:await`, `g:async`),
+  and DOM actions (`g:use`, `g:action`, `g:attach`). Each family gets explicit
+  guidance in its message.
 
 Today these rejections surface through the compiler as the `view_parse_error`
 carrier code with the canonical message text above; the registered codes

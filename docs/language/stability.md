@@ -95,6 +95,8 @@ Supported exact-name directives (the closed set in
 | `g:unsafe-html` | Stable | Raw HTML escape hatch; `unsafe_raw_html` is reported. |
 | `g:ref` | Partial | Client reference. |
 | `g:slot` | Partial | Named/scoped slot. |
+| `g:transition` | Partial | CSS class/state hooks for client `g:if` branches and keyed client `g:for` rows. |
+| `g:animate` | Partial | CSS class/state hooks for keyed client `g:for` row moves. |
 
 Component calls also accept `g:bind:<ExportedState>` for exported child state
 fields. HTML elements remain limited to `g:bind:value` and `g:bind:checked`.
@@ -112,7 +114,6 @@ code lands when markup rejections carry their own code (see
 
 | Directive family | Tier | Replacement |
 | --- | --- | --- |
-| `g:transition`, `g:animate` | Planned | CSS transitions or a future addon. |
 | `g:window`, `g:document`, `g:body`, `g:head` | Planned | Page metadata or `g:on:*` on elements. |
 | `g:await`, `g:async` | Planned | Use `{#await fetchJSON[T](urlExpr)}` for local island placeholders, or build/load data, actions, APIs, and fragments for server-owned data. |
 | `g:use`, `g:action`, `g:attach` | Planned | `client {}` with `g:ref`. |

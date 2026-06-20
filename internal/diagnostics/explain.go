@@ -248,10 +248,10 @@ guard public
 		},
 	},
 	"unsupported_markup_directive": {
-		Details: "view {} markup accepts only the documented g: directive set. Unknown g: attributes, and deferred families such as transitions (g:transition), DOM/document/window/body targets, g:await/g:async placeholder directives, and DOM actions, are rejected at parse time. These rejections currently surface through the view_parse_error carrier code with this canonical message text.",
+		Details: "view {} markup accepts only the documented g: directive set. Unknown g: attributes, and deferred families such as DOM/document/window/body targets, g:await/g:async placeholder directives, and DOM actions, are rejected at parse time. These rejections currently surface through the view_parse_error carrier code with this canonical message text.",
 		NextSteps: []string{
 			"Use a supported directive from docs/language/markup.md.",
-			"Deferred behavior (transitions, document targets, DOM actions) belongs to CSS, page metadata, or future addon contracts.",
+			"Deferred behavior (document targets, DOM actions, and directive-form async placeholders) belongs to page metadata, component client blocks, or future addon contracts.",
 		},
 	},
 	"audit_action_missing_csrf": {

@@ -580,6 +580,9 @@ func validateParsedHTMLAttrsSafety(attrs []Attr) error {
 
 func (parser *parser) directiveAttr(name string) (Attr, error) {
 	if parser.startsWith("{") {
+		if name == "g:transition" || name == "g:animate" {
+			return Attr{}, parser.errorf("%s must use a quoted literal motion name", name)
+		}
 		value, err := parser.bracedAttrExpression(name)
 		if err != nil {
 			return Attr{}, err

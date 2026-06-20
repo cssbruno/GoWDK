@@ -122,7 +122,9 @@ Implemented today:
   shared runtime carries a compact binding descriptor table and updates collected
   bindings through per-binding functions for text, form values, checked state,
   classes, styles, attributes, conditionals, and lists; keyed list updates reuse
-  existing DOM nodes by `g:key` and remove stale keyed nodes.
+  existing DOM nodes by `g:key`, remove stale keyed nodes, and toggle
+  compiler-owned `gowdk-transition-*` / `gowdk-animate-*` classes when
+  `g:transition` or `g:animate` are present.
 - Page store seed JSON embedded in compiler-owned
   `<script type="application/json">` tags escapes literal `<` as `\u003c`, so
   store data cannot terminate the script element or enter HTML escaped-script

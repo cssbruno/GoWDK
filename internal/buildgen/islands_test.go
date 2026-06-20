@@ -353,6 +353,68 @@ fn Flip() {
 	}
 }
 
+func TestJSIslandMotionDirectivesInBrowser(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	chromium, err := lookupChromium()
+	if err != nil {
+		t.Skip(err)
+	}
+	requireNodePlaywright(t, node)
+
+	outputDir := t.TempDir()
+	component := nestedComponent()
+	component.Blocks.Client = true
+	component.Blocks.ClientBody = `fn Show() {
+  Count = 1
+}
+
+fn Hide() {
+  Count = 0
+}
+
+fn SwapFirstTwo() {
+  move(Items, 1, 0)
+}`
+	component.Blocks.ViewBody = `<button id="show" g:on:click={Show()}>Show</button><button id="hide" g:on:click={Hide()}>Hide</button><section id="panel" g:if={Count > 0} g:transition="fade">Panel</section><ul id="items"><li g:for={item in Items} g:key={item.ID} g:animate="move">{item.Name}</li></ul><button id="swap" g:on:click={SwapFirstTwo()}>Swap</button>`
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:     "motion",
+			Route:  "/motion",
+			Guards: []string{"public"},
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Nested /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{component},
+	}
+	if _, err := Build(gowdk.Config{}, app, outputDir); err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(http.FileServer(http.Dir(outputDir)))
+	defer server.Close()
+
+	script := filepath.Join(t.TempDir(), "gowdk-js-motion-browser-test.cjs")
+	if err := os.WriteFile(script, []byte(jsIslandMotionBrowserHarness()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, node, script, server.URL, chromium)
+	command.Dir = mustWorkingDir(t)
+	output, err := command.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("browser JS motion test timed out:\n%s", output)
+	}
+	if err != nil {
+		t.Fatalf("browser JS motion test failed: %v\n%s", err, output)
+	}
+}
+
 func TestJSIslandAwaitBlockInBrowser(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
@@ -1373,10 +1435,14 @@ fn SwapFirstTwo() {
 		`state[field] = state[field].slice(0, index).concat(state[field].slice(index + 1));`,
 		`next.splice(to, 0, item);`,
 		`const existing = new Map();`,
+		`existing.set(cursor.getAttribute("data-gowdk-key-value") || "", { node: cursor, index: existingIndex });`,
 		`const key = String(valueOf(keyExpr, state, scope, helpers) ?? "");`,
 		`if (reused && !used.has(key)) {`,
 		`syncElement(reused, fresh);`,
-		`if (!used.has(key) && node.parentNode) node.parentNode.removeChild(node);`,
+		`if (reused.__gowdkTransitionDirection === "leave") enterTransition(reused);`,
+		`if (reusedRecord.index !== index) runMoveAnimation(reused);`,
+		`leaveTransition(node, () => {`,
+		`if (node.parentNode) node.parentNode.removeChild(node);`,
 		`if (indexName) scope[indexName] = index;`,
 		`const rerender = () => {`,
 		`const scheduleRender = () => {`,
@@ -1388,6 +1454,61 @@ fn SwapFirstTwo() {
 	} {
 		if !strings.Contains(js, expected) {
 			t.Fatalf("expected %q in generated JS:\n%s", expected, js)
+		}
+	}
+}
+
+func TestBuildEmitsTransitionAndAnimationRuntimeForJSIsland(t *testing.T) {
+	outputDir := t.TempDir()
+	component := nestedComponent()
+	component.Blocks.Client = true
+	component.Blocks.ClientBody = `fn Toggle() {
+  Count = if Count > 0 { 0 } else { 1 }
+}
+
+fn SwapFirstTwo() {
+  move(Items, 1, 0)
+}`
+	component.Blocks.ViewBody = `<section g:if={Count > 0} g:transition="fade"><button g:on:click={Toggle()}>{Count}</button></section><button g:on:click={Toggle()}>Toggle</button><ul><li g:for={item, i in Items} g:key={item.ID} g:transition="fade" g:animate="move">{i}: {item.Name}</li></ul><button g:on:click={SwapFirstTwo()}>Swap</button>`
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:     "motion",
+			Route:  "/motion",
+			Guards: []string{"public"},
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main><Nested /></main>`,
+			},
+		}},
+		Components: []gwdkir.Component{component},
+	}
+
+	_, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := readFile(t, filepath.Join(outputDir, "motion", "index.html"))
+	for _, expected := range []string{
+		`data-gowdk-transition="fade" data-gowdk-if-group="c1"`,
+		`data-gowdk-transition="fade" data-gowdk-animate="move"`,
+		`data-gowdk-on-click="SwapFirstTwo()"`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("expected %q in motion page:\n%s", expected, html)
+		}
+	}
+	js := readSharedIslandRuntime(t, outputDir)
+	for _, expected := range []string{
+		`function runTransition(node, name, direction, done)`,
+		`node.classList.add("gowdk-transition", "gowdk-transition-" + name, "gowdk-transition-" + direction, fromClass);`,
+		`function leaveTransition(node, done)`,
+		`if (record.current.__gowdkTransitionDirection === "leave") enterTransition(record.current);`,
+		`function runMoveAnimation(node)`,
+		`node.classList.add("gowdk-animate", "gowdk-animate-" + name, "gowdk-animate-move");`,
+		`if (reusedRecord.index !== index) runMoveAnimation(reused);`,
+	} {
+		if !strings.Contains(js, expected) {
+			t.Fatalf("expected %q in generated JS island runtime:\n%s", expected, js)
 		}
 	}
 }
@@ -2916,6 +3037,73 @@ async function waitForText(page, selector, expected) {
   await page.click("#flip");
   await waitForText(page, "#open", "false");
   await waitForText(page, "#count", "21");
+  assert.deepEqual(consoleErrors, []);
+  await browser.close();
+})().catch(async (error) => {
+  console.error(error && error.stack || error);
+  process.exit(1);
+});
+`
+}
+
+func jsIslandMotionBrowserHarness() string {
+	return `
+"use strict";
+
+const assert = require("node:assert/strict");
+const nodeModule = require("node:module");
+
+const baseURL = process.argv[2];
+const executablePath = process.argv[3];
+const { chromium } = nodeModule.createRequire(process.cwd() + "/gowdk-test.js")("playwright");
+
+async function waitForPanelCount(page, expected) {
+  await page.waitForFunction((expected) => document.querySelectorAll("#panel").length === expected, expected);
+}
+
+async function waitForClass(page, selector, className) {
+  await page.waitForFunction(({ selector, className }) => {
+    return Array.from(document.querySelectorAll(selector)).some((node) => node.classList.contains(className));
+  }, { selector, className });
+}
+
+async function waitForListText(page, expected) {
+  await page.waitForFunction((expected) => {
+    return Array.from(document.querySelectorAll("#items li")).map((node) => node.textContent).join(",") === expected;
+  }, expected);
+}
+
+(async () => {
+  const browser = await chromium.launch({
+    executablePath,
+    headless: true,
+    args: ["--no-sandbox"]
+  });
+  const page = await browser.newPage();
+  page.setDefaultTimeout(5000);
+  const consoleErrors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("GOWDK")) consoleErrors.push(message.text());
+  });
+
+  await page.goto(baseURL + "/motion/", { waitUntil: "networkidle" });
+  await waitForPanelCount(page, 0);
+
+  await page.click("#show");
+  await waitForClass(page, "#panel", "gowdk-transition-enter");
+  await waitForPanelCount(page, 1);
+
+  await page.click("#hide");
+  await waitForClass(page, "#panel", "gowdk-transition-leave");
+  await page.click("#show");
+  await waitForClass(page, "#panel", "gowdk-transition-enter");
+  await waitForPanelCount(page, 1);
+
+  await waitForListText(page, "first,second");
+  await page.click("#swap");
+  await waitForClass(page, "#items li", "gowdk-animate-move");
+  await waitForListText(page, "second,first");
+
   assert.deepEqual(consoleErrors, []);
   await browser.close();
 })().catch(async (error) => {

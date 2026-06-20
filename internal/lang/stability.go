@@ -80,6 +80,8 @@ func ConstructStabilities() []ConstructStability {
 		{Name: "g:event", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:ref", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:slot", Kind: ConstructDirective, Tier: TierPartial},
+		{Name: "g:transition", Kind: ConstructDirective, Tier: TierPartial},
+		{Name: "g:animate", Kind: ConstructDirective, Tier: TierPartial},
 
 		// Supported g: directive families (validated separately from the
 		// exact-name set, so viewparse.SupportedDirectiveNames() excludes them).
@@ -93,8 +95,6 @@ func ConstructStabilities() []ConstructStability {
 		// generic parse_error rather than a typed code (see
 		// docs/language/conformance.md), so DiagnosticCode is left unset until
 		// markup rejections carry their own code.
-		{Name: "g:transition", Kind: ConstructDirective, Tier: TierPlanned},
-		{Name: "g:animate", Kind: ConstructDirective, Tier: TierPlanned},
 		{Name: "g:window", Kind: ConstructDirective, Tier: TierPlanned},
 		{Name: "g:document", Kind: ConstructDirective, Tier: TierPlanned},
 		{Name: "g:body", Kind: ConstructDirective, Tier: TierPlanned},

@@ -25,6 +25,8 @@ var supportedDirectiveNames = map[string]bool{
 	"g:if":          true,
 	"g:island":      true,
 	"g:key":         true,
+	"g:transition":  true,
+	"g:animate":     true,
 	"g:post":        true,
 	"g:query":       true,
 	"g:ref":         true,
@@ -82,8 +84,8 @@ func unsupportedDirectiveMessage(name string) string {
 		return "g:each was unified into g:for; use g:for={item in collection} — the compiler renders it server-side when the collection is a server {} field and as a client island over state/store"
 	case name == "g:when":
 		return "g:when was unified into g:if; use g:if={field} (or g:if={!field}) — the compiler renders it server-side when the condition is a server {} field and as a client conditional over state/store"
-	case name == "g:transition" || name == "g:animate":
-		return fmt.Sprintf("unsupported g: directive %q; transitions and animations are deferred from the view {} contract — use CSS transitions or a future addon-specific contract", name)
+	case strings.HasPrefix(name, "g:transition") || strings.HasPrefix(name, "g:animate"):
+		return fmt.Sprintf("unsupported g: directive %q; supported motion directives are g:transition and g:animate", name)
 	case name == "g:window" || name == "g:document" || name == "g:body" || name == "g:head":
 		return fmt.Sprintf("unsupported g: directive %q; document, window, body, and head targets are deferred from the view {} contract — use page metadata such as title, or g:on:* on rendered elements", name)
 	case name == "g:await" || name == "g:async":

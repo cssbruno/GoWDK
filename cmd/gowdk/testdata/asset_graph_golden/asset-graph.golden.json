@@ -1,0 +1,276 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "asset:component:components:Badge:asset:./badge.svg",
+      "kind": "asset",
+      "name": "./badge.svg",
+      "source": "components/badge.cmp.gwdk",
+      "span": {
+        "start": {
+          "line": 5,
+          "column": 8
+        },
+        "end": {
+          "line": 5,
+          "column": 19
+        }
+      },
+      "props": {
+        "inline": false,
+        "kind": "asset",
+        "ownerId": "Badge",
+        "ownerKind": "component",
+        "package": "components",
+        "path": "./badge.svg"
+      }
+    },
+    {
+      "id": "asset:component:components:Badge:css:./badge.css",
+      "kind": "asset",
+      "name": "./badge.css",
+      "source": "components/badge.cmp.gwdk",
+      "span": {
+        "start": {
+          "line": 6,
+          "column": 6
+        },
+        "end": {
+          "line": 6,
+          "column": 17
+        }
+      },
+      "props": {
+        "hashKey": "component:components:Badge:components/badge.cmp.gwdk:./badge.css",
+        "inline": false,
+        "kind": "css",
+        "ownerId": "Badge",
+        "ownerKind": "component",
+        "package": "components",
+        "path": "./badge.css",
+        "scopeId": "gwdk-9e1b315191de"
+      }
+    },
+    {
+      "id": "asset:component:components:Badge:js:./badge.js",
+      "kind": "asset",
+      "name": "./badge.js",
+      "source": "components/badge.cmp.gwdk",
+      "span": {
+        "start": {
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "line": 7,
+          "column": 16
+        }
+      },
+      "props": {
+        "inline": false,
+        "kind": "js",
+        "ownerId": "Badge",
+        "ownerKind": "component",
+        "package": "components",
+        "path": "./badge.js"
+      }
+    },
+    {
+      "id": "asset:component:components:Badge:wasm:github.com/acme/badge/wasm",
+      "kind": "asset",
+      "name": "github.com/acme/badge/wasm",
+      "source": "components/badge.cmp.gwdk",
+      "span": {
+        "start": {
+          "line": 8,
+          "column": 1
+        },
+        "end": {
+          "line": 8,
+          "column": 34
+        }
+      },
+      "props": {
+        "inline": false,
+        "kind": "wasm",
+        "ownerId": "Badge",
+        "ownerKind": "component",
+        "package": "components",
+        "path": "github.com/acme/badge/wasm"
+      }
+    },
+    {
+      "id": "asset:page:pages:dashboard:css:default:default",
+      "kind": "asset",
+      "name": "default",
+      "source": "pages/dashboard.page.gwdk",
+      "span": {
+        "start": {
+          "line": 9,
+          "column": 5
+        },
+        "end": {
+          "line": 9,
+          "column": 12
+        }
+      },
+      "props": {
+        "inline": false,
+        "kind": "css",
+        "name": "default",
+        "ownerId": "dashboard",
+        "ownerKind": "page",
+        "package": "pages",
+        "path": "default"
+      }
+    },
+    {
+      "id": "asset:page:pages:dashboard:js:./dashboard.js",
+      "kind": "asset",
+      "name": "./dashboard.js",
+      "source": "pages/dashboard.page.gwdk",
+      "span": {
+        "start": {
+          "line": 10,
+          "column": 1
+        },
+        "end": {
+          "line": 10,
+          "column": 20
+        }
+      },
+      "props": {
+        "inline": false,
+        "kind": "js",
+        "ownerId": "dashboard",
+        "ownerKind": "page",
+        "package": "pages",
+        "path": "./dashboard.js"
+      }
+    },
+    {
+      "id": "component:components:Badge",
+      "kind": "component",
+      "name": "Badge",
+      "source": "components/badge.cmp.gwdk",
+      "span": {
+        "start": {
+          "line": 3,
+          "column": 1
+        },
+        "end": {
+          "line": 3,
+          "column": 16
+        }
+      },
+      "props": {
+        "package": "components"
+      }
+    },
+    {
+      "id": "page:pages:dashboard",
+      "kind": "page",
+      "name": "dashboard",
+      "source": "pages/dashboard.page.gwdk",
+      "span": {
+        "start": {
+          "line": 5,
+          "column": 1
+        },
+        "end": {
+          "line": 5,
+          "column": 15
+        }
+      },
+      "props": {
+        "package": "pages"
+      }
+    },
+    {
+      "id": "template:component:components:Badge",
+      "kind": "template",
+      "name": "Badge",
+      "source": "components/badge.cmp.gwdk",
+      "span": {
+        "start": {
+          "line": 10,
+          "column": 1
+        },
+        "end": {
+          "line": 10,
+          "column": 7
+        }
+      },
+      "props": {
+        "ownerKind": "component",
+        "package": "components"
+      }
+    },
+    {
+      "id": "template:page:pages:dashboard",
+      "kind": "template",
+      "name": "dashboard",
+      "source": "pages/dashboard.page.gwdk",
+      "span": {
+        "start": {
+          "line": 12,
+          "column": 1
+        },
+        "end": {
+          "line": 12,
+          "column": 7
+        }
+      },
+      "props": {
+        "guards": [
+          "public"
+        ],
+        "ownerKind": "page",
+        "package": "pages",
+        "route": "/dashboard"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "component:components:Badge",
+      "to": "asset:component:components:Badge:asset:./badge.svg",
+      "kind": "declares_asset"
+    },
+    {
+      "from": "component:components:Badge",
+      "to": "asset:component:components:Badge:css:./badge.css",
+      "kind": "declares_asset"
+    },
+    {
+      "from": "component:components:Badge",
+      "to": "asset:component:components:Badge:js:./badge.js",
+      "kind": "declares_asset"
+    },
+    {
+      "from": "component:components:Badge",
+      "to": "asset:component:components:Badge:wasm:github.com/acme/badge/wasm",
+      "kind": "declares_asset"
+    },
+    {
+      "from": "component:components:Badge",
+      "to": "template:component:components:Badge",
+      "kind": "has_template"
+    },
+    {
+      "from": "page:pages:dashboard",
+      "to": "asset:page:pages:dashboard:css:default:default",
+      "kind": "declares_asset"
+    },
+    {
+      "from": "page:pages:dashboard",
+      "to": "asset:page:pages:dashboard:js:./dashboard.js",
+      "kind": "declares_asset"
+    },
+    {
+      "from": "page:pages:dashboard",
+      "to": "template:page:pages:dashboard",
+      "kind": "has_template"
+    }
+  ]
+}

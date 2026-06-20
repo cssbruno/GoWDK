@@ -21,6 +21,9 @@ scripts/vulncheck-go-modules.sh
 go build ./cmd/gowdk
 node --check editors/vscode/extension.js
 node --test editors/vscode/*.test.js
+scripts/test-parser-fuzz.sh
+scripts/test-generated-app-integration.sh
+scripts/test-generated-output-determinism.sh
 go build -o /tmp/gowdk-cli ./cmd/gowdk
 rm -rf /tmp/gowdk-init && /tmp/gowdk-cli init /tmp/gowdk-init && (cd /tmp/gowdk-init && /tmp/gowdk-cli build)
 go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
@@ -47,6 +50,9 @@ must pass `--config <file>`.
 | Go vulnerability scan | `scripts/vulncheck-go-modules.sh` | Release-style checks and dependency changes. |
 | CLI build | `go build ./cmd/gowdk` | CLI, compiler, runtime, addon, or release changes. |
 | Go formatting | `gofmt -w <files>` | Changed Go files before handoff. |
+| Parser fuzz smoke | `scripts/test-parser-fuzz.sh` | Parser, tokenizer, syntax recovery, and diagnostic recovery changes. |
+| Generated app integration | `scripts/test-generated-app-integration.sh` | Generated binary, SSR, action, fragment, CSRF, and contract adapter changes. |
+| Generated output determinism | `scripts/test-generated-output-determinism.sh` | Generated HTML, manifest, report, inspect, or route/sitemap output changes. |
 | VS Code extension syntax | `node --check editors/vscode/extension.js` | Editor extension changes and broad verification. |
 | VS Code extension behavior | `node --test editors/vscode/*.test.js` | Editor extension pure helper changes and broad verification. |
 | SPA/action examples | `go run ./cmd/gowdk check examples/pages/home.page.gwdk examples/actions/newsletter.page.gwdk` | Language/tooling changes. |
@@ -58,6 +64,21 @@ must pass `--config <file>`.
 | Action redirect smoke | `go run ./cmd/gowdk build --out /tmp/gowdk-action-build --app /tmp/gowdk-action-app --bin /tmp/gowdk-action-site examples/actions/signup.page.gwdk` | Action parsing or generated action endpoint changes. |
 | Local serve tests | `go test ./cmd/gowdk` | CLI serving or option parsing changes. |
 | Generated app tests | `go test ./cmd/gowdk ./internal/appgen` | Generated embedded app or binary-serving changes. |
+
+## Fuzz, Integration, And Determinism
+
+- `scripts/test-parser-fuzz.sh` is the explicit parser fuzz runner. It defaults
+  to `GOWDK_FUZZTIME=1s` for CI smoke cost; use a longer local run such as
+  `GOWDK_FUZZTIME=30s scripts/test-parser-fuzz.sh` before risky parser work.
+- `scripts/test-generated-app-integration.sh` is the generated-app integration
+  slice. It builds temporary binaries through `internal/appgen` tests and
+  exercises representative request-time flows.
+- `scripts/test-generated-output-determinism.sh` is the generated output and
+  report determinism slice. It compares two clean builds plus manifest, sitemap,
+  routes, and asset-graph report output.
+
+Keep these as separate commands so CI can show whether a failure is fuzz input,
+runtime integration, or nondeterministic output.
 
 ## Coverage Priorities
 
@@ -112,3 +133,8 @@ must pass `--config <file>`.
 - Nested optional adapter modules cover Chi, Echo, Fiber, Gin, Redis Streams,
   NATS, and WebSocket integration packages without adding those third-party
   dependencies to the root module graph.
+- `internal/parser/fuzz_test.go` defines `FuzzParseSyntax` with page,
+  component, layout, endpoint, and broken-source seeds.
+- `scripts/test-generated-output-determinism.sh` compares generated HTML,
+  route/asset manifests, OpenAPI/AsyncAPI, build reports, and public report
+  command output across two clean runs.

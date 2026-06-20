@@ -11,8 +11,35 @@ permissions:
   contents: read
 
 jobs:
-  verify:
-    name: Verify
+  go-tests:
+    name: Go tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-14
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: true
+
+      - name: Run Go module tests
+        run: |
+          go version
+          go env GOVERSION
+          scripts/check-root-deps.sh
+          scripts/test-go-modules.sh
+
+  vulnerabilities:
+    name: Reachable vulnerabilities
     runs-on: ubuntu-latest
 
     steps:
@@ -25,23 +52,38 @@ jobs:
           go-version: '1.26.4'
           cache: true
 
+      - name: Check reachable Go vulnerabilities
+        run: scripts/vulncheck-go-modules.sh
+
+  cli-build:
+    name: CLI build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: true
+
+      - name: Build CLI
+        run: go build ./cmd/gowdk
+
+  vscode-extension:
+    name: VS Code extension
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
-
-      - name: Run Go tests
-        run: |
-          go version
-          go env GOVERSION
-          scripts/check-root-deps.sh
-          scripts/test-go-modules.sh
-
-      - name: Check reachable Go vulnerabilities
-        run: scripts/vulncheck-go-modules.sh
-
-      - name: Build CLI
-        run: go build ./cmd/gowdk
 
       - name: Check VS Code extension syntax
         run: |
@@ -52,11 +94,106 @@ jobs:
       - name: Run VS Code extension unit tests
         run: node --test editors/vscode/*.test.js
 
+  docs:
+    name: Documentation links
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: true
+
       - name: Check documentation links
         run: sh scripts/check-docs-links.sh
 
-      - name: Check example files
+  example-reports:
+    name: Example reports
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: true
+
+      - name: Check example reports
         run: sh scripts/check-example-reports.sh
+
+  parser-fuzz:
+    name: Parser fuzz smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: true
+
+      - name: Run parser fuzz smoke
+        env:
+          GOWDK_FUZZTIME: 1s
+        run: scripts/test-parser-fuzz.sh
+
+  generated-app-integration:
+    name: Generated app integration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: true
+
+      - name: Run generated app integration tests
+        run: scripts/test-generated-app-integration.sh
+
+  generated-output-determinism:
+    name: Generated output determinism
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: true
+
+      - name: Check generated output determinism
+        run: scripts/test-generated-output-determinism.sh
+
+  generated-output:
+    name: Generated output smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: true
 
       - name: Smoke build SPA example output
         run: |
@@ -144,3 +281,10 @@ jobs:
           test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/componentwasm/WasmCounter.wasm
           test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/componentwasm/WasmCounter.wasm.js
           test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/wasm_exec.js
+
+      - name: Smoke build persisted store example output
+        run: |
+          rm -rf /tmp/gowdk-store-persist
+          go run ./cmd/gowdk build --out /tmp/gowdk-store-persist examples/store-persist/*.gwdk
+          test -f /tmp/gowdk-store-persist/shop/index.html
+          grep -F 'data-gowdk-persist="local"' /tmp/gowdk-store-persist/shop/index.html

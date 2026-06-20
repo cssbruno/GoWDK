@@ -93,6 +93,23 @@ func unsafeRouteParamAttr(name string) bool {
 	return urlBearingAttr(name)
 }
 
+func allowRequestTimeURLAttrTemplate(name string, value string) bool {
+	if !urlBearingAttr(name) {
+		return false
+	}
+	value = strings.TrimSpace(decodeSourceTextEntities(value))
+	if value == "" || value[0] != '/' {
+		return false
+	}
+	if len(value) > 1 && (value[1] == '/' || value[1] == '\\' || value[1] == '{') {
+		return false
+	}
+	if strings.Contains(value, "\\") || containsURLControl(value) {
+		return false
+	}
+	return true
+}
+
 func routeParamExpression(value string) (string, bool) {
 	if !strings.HasPrefix(value, `param("`) || !strings.HasSuffix(value, `")`) {
 		return "", false

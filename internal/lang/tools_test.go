@@ -743,6 +743,23 @@ route "/bad"
 	}
 }
 
+func TestParseSourceReportsMalformedPackageAndGoImportDiagnostics(t *testing.T) {
+	_, diagnostics := ParseSource("bad.page.gwdk", []byte(`package 123
+import interop github.com/cssbruno/gowdk/examples/go-interop
+page bad
+route "/bad"
+`))
+	if len(diagnostics) != 2 {
+		t.Fatalf("expected two parser diagnostics, got %#v", diagnostics)
+	}
+	if diagnostics[0].Code != "malformed_package_declaration" || diagnostics[0].Pos.Line != 1 {
+		t.Fatalf("unexpected package diagnostic: %#v", diagnostics[0])
+	}
+	if diagnostics[1].Code != "malformed_go_import" || diagnostics[1].Pos.Line != 2 {
+		t.Fatalf("unexpected import diagnostic: %#v", diagnostics[1])
+	}
+}
+
 func TestCheckJSONReportsParserDiagnosticRangeAndCode(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "bad.page.gwdk")
@@ -765,6 +782,32 @@ route "/bad"
 		!strings.Contains(output, `"start": {`) ||
 		!strings.Contains(output, `"end": {`) {
 		t.Fatalf("expected parser diagnostic range in JSON: %s", output)
+	}
+}
+
+func TestCheckJSONReportsMalformedGoImportCode(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "bad.page.gwdk")
+	writeGWDK(t, path, `package app
+import interop github.com/cssbruno/gowdk/examples/go-interop
+
+page bad
+route "/bad"
+view {
+  <main>Bad</main>
+}
+`)
+
+	payload, diagnostics := CheckJSON(gowdk.Config{}, []string{path})
+	if !diagnostics.HasErrors() {
+		t.Fatal("expected parser diagnostic")
+	}
+	output := string(payload)
+	if !strings.Contains(output, `"code": "malformed_go_import"`) {
+		t.Fatalf("expected malformed_go_import in JSON: %s", output)
+	}
+	if !strings.Contains(output, `"line": 2`) {
+		t.Fatalf("expected malformed import line in JSON: %s", output)
 	}
 }
 

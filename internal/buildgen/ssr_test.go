@@ -354,7 +354,7 @@ func TestSSRArtifactsRenderDynamicSSRPageWithPlaceholders(t *testing.T) {
 			Blocks: gwdkir.Blocks{
 				BuildBody: `=> { title: "Post {slug}" }`,
 				View:      true,
-				ViewBody:  `<main data-slug="{param(\"slug\")}"><h1>{title}</h1><p>{param("slug")}</p></main>`,
+				ViewBody:  `<main data-slug="{param(\"slug\")}"><h1>{title}</h1><p>{param("slug")}</p><a href="/blog/{param(\"slug\")}">Post</a></main>`,
 			},
 		}},
 	}
@@ -379,6 +379,9 @@ func TestSSRArtifactsRenderDynamicSSRPageWithPlaceholders(t *testing.T) {
 	if !strings.Contains(artifact.HTML, artifact.Replacements[0].Placeholder) {
 		t.Fatalf("expected SSR HTML placeholder %q in %s", artifact.Replacements[0].Placeholder, artifact.HTML)
 	}
+	if !strings.Contains(artifact.HTML, `href="/blog/`+artifact.Replacements[0].Placeholder+`"`) {
+		t.Fatalf("expected route-param URL template in SSR HTML:\n%s", artifact.HTML)
+	}
 }
 
 func TestSSRArtifactsRejectRouteParamInDangerousAttribute(t *testing.T) {
@@ -390,7 +393,7 @@ func TestSSRArtifactsRejectRouteParamInDangerousAttribute(t *testing.T) {
 			Render: gowdk.SSR,
 			Blocks: gwdkir.Blocks{
 				View:     true,
-				ViewBody: `<a href="/blog/{param(\"slug\")}">Post</a>`,
+				ViewBody: `<a href="{param(\"slug\")}">Post</a>`,
 			},
 		}},
 	}

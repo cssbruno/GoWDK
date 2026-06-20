@@ -5596,6 +5596,54 @@ func submit() {}
 	}
 }
 
+func TestCheckRejectsBuildOnlyServerLaneMarkupRules(t *testing.T) {
+	root := t.TempDir()
+	writeCLITestModule(t, root, "example.com/gowdk-ssr-check")
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/ssr"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{ssr.Addon()},
+}
+`)
+	page := filepath.Join(root, "pages", "board.page.gwdk")
+	writeCLIFile(t, page, `package pages
+
+page board
+route "/board"
+guard public
+
+server {
+  => { issues }
+}
+
+view {
+  <main>
+    <a g:for={issue in issues} href={issue.id}>{issue.title}</a>
+    <form g:for={issue in issues} g:post={Open}></form>
+  </main>
+}
+`)
+
+	var output string
+	var err error
+	withWorkingDir(t, root, func() {
+		output, err = captureCLIStdout(t, func() error {
+			return run([]string{"check", "--config", config, "--json", page})
+		})
+	})
+	if err == nil {
+		t.Fatal("expected server-lane markup diagnostics to fail check")
+	}
+	requireCheckDiagnostic(t, output, "server_url_tainted")
+	requireCheckDiagnostic(t, output, "server_region_directive")
+}
+
 type checkDiagnosticJSON struct {
 	File     string `json:"file"`
 	Code     string `json:"code"`
@@ -5644,6 +5692,33 @@ func TestInspectIRCommandMatchesGoldenFixture(t *testing.T) {
 	actualJSON := canonicalInspectIRGolden(t, []byte(output))
 	if actualJSON != expectedJSON {
 		t.Fatalf("inspect ir golden mismatch\nexpected:\n%s\nactual:\n%s", expectedJSON, actualJSON)
+	}
+}
+
+func TestInspectAssetGraphCommandMatchesGoldenFixture(t *testing.T) {
+	fixture := filepath.FromSlash("testdata/asset_graph_golden")
+	var output string
+	withWorkingDir(t, fixture, func() {
+		stdout, stderr, err := captureCLIOutput(t, func() error {
+			return run([]string{"inspect", "asset-graph", "--json", "--config", "gowdk.config.go", "pages/dashboard.page.gwdk", "components/badge.cmp.gwdk"})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stderr != "" {
+			t.Fatalf("expected no inspect diagnostics on stderr, got:\n%s", stderr)
+		}
+		output = stdout
+	})
+
+	expected, err := os.ReadFile(filepath.Join(fixture, "asset-graph.golden.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedJSON := canonicalAssetGraphGolden(t, expected)
+	actualJSON := canonicalAssetGraphGolden(t, []byte(output))
+	if actualJSON != expectedJSON {
+		t.Fatalf("inspect asset graph golden mismatch\nexpected:\n%s\nactual:\n%s", expectedJSON, actualJSON)
 	}
 }
 
@@ -6278,14 +6353,25 @@ func TestSystemdDeploymentRecipeUsesAbsoluteBinaryPath(t *testing.T) {
 			t.Fatal(err)
 		}
 		servicePath := filepath.Join(root, "bin", "gowdk-site.service")
-		if len(artifacts) != 1 || artifacts[0].Path != servicePath {
+		canonicalServicePath, err := filepath.EvalSymlinks(servicePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(artifacts) != 1 {
+			t.Fatalf("unexpected artifacts: %#v, want %s", artifacts, servicePath)
+		}
+		canonicalArtifactPath, err := filepath.EvalSymlinks(artifacts[0].Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if canonicalArtifactPath != canonicalServicePath {
 			t.Fatalf("unexpected artifacts: %#v, want %s", artifacts, servicePath)
 		}
 		payload, err := os.ReadFile(servicePath)
 		if err != nil {
 			t.Fatal(err)
 		}
-		absoluteBinaryPath := filepath.ToSlash(filepath.Join(root, "bin", "site"))
+		absoluteBinaryPath := filepath.ToSlash(filepath.Join(filepath.Dir(canonicalServicePath), "site"))
 		if !strings.Contains(string(payload), "ExecStart="+absoluteBinaryPath) {
 			t.Fatalf("expected absolute ExecStart for %s:\n%s", absoluteBinaryPath, payload)
 		}
@@ -7404,6 +7490,19 @@ func canonicalInspectIRGolden(t *testing.T, payload []byte) string {
 	var report inspectIRGolden
 	if err := json.Unmarshal(payload, &report); err != nil {
 		t.Fatalf("invalid inspect ir golden JSON: %v\n%s", err, payload)
+	}
+	canonical, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(canonical)
+}
+
+func canonicalAssetGraphGolden(t *testing.T, payload []byte) string {
+	t.Helper()
+	var report endpointGraphGolden
+	if err := json.Unmarshal(payload, &report); err != nil {
+		t.Fatalf("invalid asset graph golden JSON: %v\n%s", err, payload)
 	}
 	canonical, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {

@@ -56,6 +56,8 @@ contracts. For task-oriented examples, start with the
 - Language syntax and semantics live under [language](../language/README.md).
 - Compiler pipeline and generated-output details live under
   [compiler](../compiler/README.md).
+- Cookbook/example coverage and remaining docs gaps live in the
+  [native cookbook coverage table](../cookbook/README.md#coverage-and-gaps).
 - Product status lives in [requirements](../product/requirements.md).
 - Production hardening guidance lives in
   [engineering/security](../engineering/security.md) and

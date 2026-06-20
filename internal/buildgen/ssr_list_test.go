@@ -132,6 +132,30 @@ func TestSSRArtifactServerListEndToEnd(t *testing.T) {
 	}
 }
 
+func TestSSRArtifactServerListRootRelativeURLTemplate(t *testing.T) {
+	view := `<main><a g:for={issue in issues} href="/issue/{issue.id}">{issue.title}</a></main>`
+	artifact := buildSSRRegionArtifact(t, `=> { issues }`, view)
+
+	html := gowdkssr.RenderRegions(artifact.HTML, toRuntimeListSpecs(artifact.ListSpecs), toRuntimeCondSpecs(artifact.CondSpecs), map[string]any{
+		"issues": []any{
+			map[string]any{"id": "T-1", "title": "Wire <auth>"},
+			map[string]any{"id": `bad" onclick="x`, "title": "Injected"},
+		},
+	})
+
+	for _, want := range []string{
+		`href="/issue/T-1">Wire &lt;auth&gt;`,
+		`href="/issue/bad&#34; onclick=&#34;x">Injected`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("rendered HTML missing %q\n%s", want, html)
+		}
+	}
+	if strings.Contains(html, `onclick="x"`) {
+		t.Fatalf("server row URL interpolation escaped out of the href attribute:\n%s", html)
+	}
+}
+
 // TestSSRArtifactServerConditionalEndToEnd builds a request-time page with an
 // empty-state g:if pair and a per-row conditional, then renders through the
 // runtime region renderer to verify the active branches.

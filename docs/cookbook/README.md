@@ -42,9 +42,19 @@ go run ./cmd/gowdk build --out /tmp/gowdk-wasm-island \
   examples/components/wasm/*.gwdk
 ```
 
+Build the persisted page-store example:
+
+```sh
+go run ./cmd/gowdk build --out /tmp/gowdk-store-persist \
+  examples/store-persist/shop.page.gwdk \
+  examples/store-persist/add-button.cmp.gwdk \
+  examples/store-persist/cart-badge.cmp.gwdk
+```
+
 Use [components](../language/components.md), [markup](../language/markup.md),
-and [examples/components](../../examples/components/) for supported component
-and client behavior.
+[examples/components](../../examples/components/), and
+[examples/store-persist](../../examples/store-persist/) for supported component,
+client, and page-store behavior.
 
 ## Actions, APIs, And Fragments
 
@@ -178,13 +188,21 @@ hosted execution constraints and export rules.
 
 ## Coverage And Gaps
 
-- Current cookbook coverage lives here, in
-  [examples/README.md](../../examples/README.md), and in the focused example
-  directories.
-- Current reference coverage lives in [reference](../reference/README.md).
-- Language syntax and semantics live in [language](../language/README.md);
-  compiler output contracts live in [compiler](../compiler/README.md).
-- Production auth/session policy, database schemas, storage, backups, incident
-  response, and hosted playground infrastructure are app-owned or platform
-  owned. See [requirements](../product/requirements.md) and
-  [release-plan](../engineering/release-plan.md) for tracked partial areas.
+Use this section as the cookbook/reference gap index. Link here from entry
+points instead of duplicating the same status list.
+
+| Area | Current source of truth | Gap or issue |
+| --- | --- | --- |
+| Cookbook recipes and runnable examples | This cookbook, [examples index](../../examples/README.md), and focused example directories. | Covered for the current examples; add a row here when a new example has no recipe or index entry. |
+| Reference pages | [Reference index](../reference/README.md). | Covered for the current command, routing, addon, runtime, deploy, and metadata surfaces. |
+| Language syntax and semantics | [Language docs](../language/README.md). | Covered at the topic level; new public syntax belongs there before cookbook prose. |
+| Compiler output contracts | [Compiler docs](../compiler/README.md). | Covered for the current pipeline, manifest, project structure, and generated-output contracts. |
+| Parser-backed formatting | [Formatting](../language/formatting.md) and [CLI reference](../reference/cli.md). | Parser-backed `gowdk fmt` remains tracked in [#472](https://github.com/cssbruno/GoWDK/issues/472). |
+| Exact diagnostic source ranges | [Diagnostic codes](../reference/diagnostic-codes.md#source-ranges). | Remaining exact-span work is tracked in [#419](https://github.com/cssbruno/GoWDK/issues/419). |
+| Dev overlay and HMR hardening | [Dev server reference](../reference/dev.md). | Runtime panic surfacing and broader state-preserving HMR are tracked in [#424](https://github.com/cssbruno/GoWDK/issues/424). |
+| Testing suites | [Testing reference](../reference/testing.md) and [engineering testing](../engineering/testing.md). | Parser fuzz smoke, generated-app integration, and generated-output determinism runners exist; broader fuzz/browser/E2E expansion remains in the hardening backlog. |
+| Client expression implementation | [Components](../language/components.md). | Single-source client expression lowering is tracked in [#384](https://github.com/cssbruno/GoWDK/issues/384). |
+| View package ownership | [Architecture](../engineering/architecture.md#components). | Splitting source model, render engine, and client validators is tracked in [#383](https://github.com/cssbruno/GoWDK/issues/383). |
+| SSR page client runtime bridges | [SSR](../language/ssr.md), [contracts](../reference/contracts.md), and [realtime](../reference/realtime.md). | SSR `g:command`/`g:query` and invalidation client coverage is tracked in [#484](https://github.com/cssbruno/GoWDK/issues/484) and [#482](https://github.com/cssbruno/GoWDK/issues/482). |
+| Public website status | [README status](../../README.md) and [release plan](../engineering/release-plan.md). | Experimental warnings, badges, and previews for the public website are tracked in [#415](https://github.com/cssbruno/GoWDK/issues/415). |
+| Production operations outside GOWDK | [Requirements](../product/requirements.md), [security](../engineering/security.md), and [operations](../engineering/operations.md). | Production auth/session policy, database schemas, storage, backups, incident response, and hosted playground infrastructure are app-owned or platform-owned. |

@@ -102,8 +102,9 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
 ## Current Areas
 
 - Parser and lexer: `parse_error`, `package_must_be_first`,
-  `malformed_legacy_metadata`, `old_action_block_syntax`,
-  `old_api_block_syntax`, `malformed_gowdk_use`,
+  `malformed_package_declaration`, `malformed_legacy_metadata`,
+  `old_action_block_syntax`, `old_api_block_syntax`, `malformed_go_import`,
+  `malformed_gowdk_use`,
   `unsupported_literal_record_syntax`, `unsupported_top_level_block`,
   `unsupported_layout_metadata`, `invalid_component_prop`,
   `unsupported_component_prop_type`, `unterminated_string`.
@@ -121,7 +122,8 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `guard_requires_request_render`.
 - Server-lane view directives (`g:for`/`g:if` over `server {}` data):
   `server_for_invalid`, `server_for_nested_scope`, `server_if_invalid`,
-  `server_if_nested_scope`, `ghtml_over_load_data`.
+  `server_if_nested_scope`, `server_load_field_conflict`,
+  `server_region_directive`, `server_url_tainted`, `ghtml_over_load_data`.
 - Backend endpoints: `invalid_backend_handler_name`,
   `invalid_go_endpoint_handler`, `malformed_go_endpoint_comment`,
   `go_endpoint_parse_error`, `duplicate_go_endpoint_comment`,

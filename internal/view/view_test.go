@@ -1423,7 +1423,8 @@ func TestRenderWithDataInterpolatesRouteParams(t *testing.T) {
 
 func TestRenderWithDataRejectsRouteParamsInDangerousAttributes(t *testing.T) {
 	for _, source := range []string{
-		`<a href="/blog/{param(\"slug\")}">Post</a>`,
+		`<a href="{param(\"slug\")}">Post</a>`,
+		`<a href="/{param(\"slug\")}">Post</a>`,
 		`<main style="color: {param(\"slug\")}">Post</main>`,
 	} {
 		t.Run(source, func(t *testing.T) {
@@ -1435,6 +1436,19 @@ func TestRenderWithDataRejectsRouteParamsInDangerousAttributes(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestRenderWithDataAllowsRouteParamsInRootRelativeURLTemplates(t *testing.T) {
+	got, err := RenderWithData(`<a href="/blog/{param(\"slug\")}">Post</a>`, nil, map[string]string{
+		"slug": `hello" onclick="alert(1)`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<a href="/blog/hello&#34; onclick=&#34;alert(1)">Post</a>`
+	if got != want {
+		t.Fatalf("unexpected HTML:\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
 }
 

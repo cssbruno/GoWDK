@@ -180,8 +180,8 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			seenDeclaration = true
 			continue
 		}
-		if strings.HasPrefix(line, "package ") {
-			addError(fmt.Errorf("line %d: malformed package declaration %q", lineNumber, line))
+		if isMalformedPackage(line) {
+			addError(lineDiagnosticError(DiagnosticMalformedPackageDeclaration, lineNumber, rawLine, "malformed package declaration %q; use `package <name>`", line))
 			continue
 		}
 		seenDeclaration = true
@@ -217,7 +217,7 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			continue
 		}
 		if isMalformedImport(line) {
-			addError(fmt.Errorf("line %d: malformed import %q", lineNumber, line))
+			addError(lineDiagnosticError(DiagnosticMalformedGoImport, lineNumber, rawLine, "malformed Go import %q; use `import [alias] \"module/path\"`", line))
 			continue
 		}
 		if match := usePattern.FindStringSubmatch(line); match != nil {

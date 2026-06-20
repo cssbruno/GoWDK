@@ -180,7 +180,9 @@ Use the built binary when running commands from outside this repository.
 
 For focused recipes after the first app, use the
 [Native Cookbook](cookbook/README.md). For command and data contracts, use the
-[Reference Index](reference/README.md).
+[Reference Index](reference/README.md). Cookbook/reference coverage gaps are
+tracked in the
+[cookbook coverage table](cookbook/README.md#coverage-and-gaps).
 
 ## Create An App
 

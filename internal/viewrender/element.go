@@ -72,6 +72,14 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 	if err != nil {
 		return err
 	}
+	transitionName, err := elementMotionDirective(node, "g:transition", ctx)
+	if err != nil {
+		return err
+	}
+	animateName, err := elementMotionDirective(node, "g:animate", ctx)
+	if err != nil {
+		return err
+	}
 	for _, binding := range styleBindings {
 		out.write(` data-gowdk-style-`)
 		out.write(binding.Property)
@@ -120,6 +128,16 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 		out.write(gowhtml.Escape(ctx.loopItem.Group))
 		out.write(`" data-gowdk-key-value="`)
 		out.write(gowhtml.Escape(ctx.loopKeyValue(ctx.loopItem.KeyExpr)))
+		out.writeByte('"')
+	}
+	if transitionName != "" {
+		out.write(` data-gowdk-transition="`)
+		out.write(gowhtml.Escape(transitionName))
+		out.writeByte('"')
+	}
+	if animateName != "" {
+		out.write(` data-gowdk-animate="`)
+		out.write(gowhtml.Escape(animateName))
 		out.writeByte('"')
 	}
 	if len(ctx.scopeIDs) > 0 {
@@ -185,6 +203,9 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 			return fmt.Errorf("%s must follow a sibling g:if or g:else-if", attr.Name)
 		}
 		if attr.Name == "g:for" || attr.Name == "g:key" {
+			continue
+		}
+		if attr.Name == "g:transition" || attr.Name == "g:animate" {
 			continue
 		}
 		if attr.Name == "g:bind:value" {
@@ -424,6 +445,58 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 		out.write(`<!--gowdk-if:`)
 		out.write(gowhtml.Escape(ctx.conditional.Marker()))
 		out.write(`:end-->`)
+	}
+	return nil
+}
+
+func elementMotionDirective(node Element, name string, ctx *renderContext) (string, error) {
+	var value string
+	count := 0
+	for _, attr := range node.Attrs {
+		if attr.Name != name {
+			continue
+		}
+		count++
+		if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+			return "", fmt.Errorf("%s requires a literal motion name", name)
+		}
+		value = strings.TrimSpace(attr.Value)
+	}
+	if count == 0 {
+		return "", nil
+	}
+	if count > 1 {
+		return "", fmt.Errorf("element declares multiple %s directives", name)
+	}
+	if err := validateMotionName(name, value); err != nil {
+		return "", err
+	}
+	switch name {
+	case "g:transition":
+		if ctx.conditional == nil && ctx.loopItem == nil {
+			return "", fmt.Errorf("g:transition must be declared on the same element as a client g:if/g:else-if/g:else branch or keyed client g:for row")
+		}
+	case "g:animate":
+		if ctx.loopItem == nil {
+			return "", fmt.Errorf("g:animate must be declared on the same element as a keyed client g:for row")
+		}
+	default:
+		return "", fmt.Errorf("unsupported motion directive %q", name)
+	}
+	return value, nil
+}
+
+func validateMotionName(directive, value string) error {
+	if value == "" {
+		return fmt.Errorf("%s requires a literal motion name", directive)
+	}
+	for index, r := range value {
+		switch {
+		case index == 0 && (r == '_' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z'):
+		case index > 0 && (r == '_' || r == '-' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9'):
+		default:
+			return fmt.Errorf("%s motion name %q must be a CSS-safe identifier using letters, digits, underscore, or hyphen, and must not start with a digit", directive, value)
+		}
 	}
 	return nil
 }

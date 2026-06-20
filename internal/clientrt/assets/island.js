@@ -782,6 +782,104 @@
     if (!childNodesEqual(target, source)) replaceChildNodes(target, source);
   }
 
+  const motionEndEvents = ["transitionend", "transitioncancel", "animationend", "animationcancel"];
+  const motionFallbackMS = 240;
+
+  function transitionName(node) {
+    return node && node.getAttribute ? node.getAttribute("data-gowdk-transition") || "" : "";
+  }
+
+  function animationName(node) {
+    return node && node.getAttribute ? node.getAttribute("data-gowdk-animate") || "" : "";
+  }
+
+  function scheduleMotionFrame(callback) {
+    const raf = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (next) => setTimeout(next, 16);
+    raf(() => raf(callback));
+  }
+
+  function clearTransitionClasses(node) {
+    if (!node || !node.classList) return;
+    Array.from(node.classList).forEach((name) => {
+      if (name === "gowdk-transition" || name.startsWith("gowdk-transition-")) node.classList.remove(name);
+    });
+  }
+
+  function clearAnimationClasses(node) {
+    if (!node || !node.classList) return;
+    Array.from(node.classList).forEach((name) => {
+      if (name === "gowdk-animate" || name.startsWith("gowdk-animate-")) node.classList.remove(name);
+    });
+  }
+
+  function afterMotion(node, tokenProp, token, done) {
+    let timer = 0;
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      motionEndEvents.forEach((eventName) => node.removeEventListener(eventName, finish));
+    };
+    const finish = (event) => {
+      if (event && event.target !== node) return;
+      cleanup();
+      if (node[tokenProp] !== token) return;
+      done();
+    };
+    motionEndEvents.forEach((eventName) => node.addEventListener(eventName, finish));
+    timer = setTimeout(finish, motionFallbackMS);
+  }
+
+  function runTransition(node, name, direction, done) {
+    if (!node || !name || !node.classList) {
+      if (done) done();
+      return;
+    }
+    const token = (node.__gowdkTransitionToken || 0) + 1;
+    node.__gowdkTransitionToken = token;
+    node.__gowdkTransitionDirection = direction;
+    clearTransitionClasses(node);
+    const fromClass = "gowdk-transition-" + direction + "-from";
+    const toClass = "gowdk-transition-" + direction + "-to";
+    node.classList.add("gowdk-transition", "gowdk-transition-" + name, "gowdk-transition-" + direction, fromClass);
+    if (direction === "enter") node.hidden = false;
+    scheduleMotionFrame(() => {
+      if (node.__gowdkTransitionToken !== token) return;
+      node.classList.remove(fromClass);
+      node.classList.add(toClass);
+      afterMotion(node, "__gowdkTransitionToken", token, () => {
+        clearTransitionClasses(node);
+        if (node.__gowdkTransitionToken === token) node.__gowdkTransitionDirection = "";
+        if (done) done();
+      });
+    });
+  }
+
+  function enterTransition(node) {
+    const name = transitionName(node);
+    if (name) runTransition(node, name, "enter");
+  }
+
+  function leaveTransition(node, done) {
+    const name = transitionName(node);
+    if (!name) {
+      done();
+      return;
+    }
+    if (node.__gowdkTransitionDirection === "leave") return;
+    runTransition(node, name, "leave", done);
+  }
+
+  function runMoveAnimation(node) {
+    const name = animationName(node);
+    if (!node || !name || !node.classList) return;
+    const token = (node.__gowdkAnimationToken || 0) + 1;
+    node.__gowdkAnimationToken = token;
+    clearAnimationClasses(node);
+    node.classList.add("gowdk-animate", "gowdk-animate-" + name, "gowdk-animate-move");
+    afterMotion(node, "__gowdkAnimationToken", token, () => {
+      clearAnimationClasses(node);
+    });
+  }
+
   function matchingNodes(container, selector) {
     const nodes = [];
     if (container.matches && container.matches(selector)) nodes.push(container);
@@ -863,18 +961,30 @@
   }
 
   function mountConditional(record) {
-    if (record.current && record.current.isConnected) return record.current;
+    if (record.current && record.current.isConnected) {
+      if (record.current.__gowdkTransitionDirection === "leave") enterTransition(record.current);
+      return record.current;
+    }
     const node = record.template.cloneNode(true);
     node.hidden = false;
     record.marker.parentNode.insertBefore(node, record.marker.nextSibling);
     record.current = node;
+    enterTransition(node);
     return node;
   }
 
   function unmountConditional(record) {
     if (!record.current || !record.current.isConnected) return;
-    record.current.parentNode.removeChild(record.current);
-    record.current = null;
+    const node = record.current;
+    if (node.hidden) {
+      node.parentNode.removeChild(node);
+      record.current = null;
+      return;
+    }
+    leaveTransition(node, () => {
+      if (node.parentNode) node.parentNode.removeChild(node);
+      if (record.current === node) record.current = null;
+    });
   }
 
   function renderConditionals(container, state, scope, helpers, options) {
@@ -1096,11 +1206,13 @@
       const baseScope = awaitScopeForNode(root, marker);
       const items = valueOf(source, state, baseScope, helpers);
       const existing = new Map();
+      let existingIndex = 0;
       let cursor = marker.nextSibling;
       while (cursor) {
         const next = cursor.nextSibling;
         if (cursor.nodeType !== 1 || cursor.getAttribute("data-gowdk-for-item") !== group) break;
-        existing.set(cursor.getAttribute("data-gowdk-key-value") || "", cursor);
+        existing.set(cursor.getAttribute("data-gowdk-key-value") || "", { node: cursor, index: existingIndex });
+        existingIndex++;
         cursor = next;
       }
       if (!Array.isArray(items)) return;
@@ -1115,19 +1227,28 @@
         const fresh = cloneListTemplate(marker, state, scope, helpers);
         if (!fresh) return;
         renderConditionals(fresh, state, scope, helpers);
-        const reused = existing.get(key);
+        const reusedRecord = existing.get(key);
+        const reused = reusedRecord && reusedRecord.node;
         if (reused && !used.has(key)) {
           syncElement(reused, fresh);
+          if (reused.__gowdkTransitionDirection === "leave") enterTransition(reused);
+          if (reusedRecord.index !== index) runMoveAnimation(reused);
           fragment.appendChild(reused);
           used.add(key);
           return;
         }
+        enterTransition(fresh);
         fragment.appendChild(fresh);
         used.add(key);
       });
       marker.parentNode.insertBefore(fragment, marker.nextSibling);
-      existing.forEach((node, key) => {
-        if (!used.has(key) && node.parentNode) node.parentNode.removeChild(node);
+      existing.forEach((record, key) => {
+        const node = record.node;
+        if (!used.has(key) && node.parentNode) {
+          leaveTransition(node, () => {
+            if (node.parentNode) node.parentNode.removeChild(node);
+          });
+        }
       });
     });
   }

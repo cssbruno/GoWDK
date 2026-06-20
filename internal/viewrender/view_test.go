@@ -914,6 +914,29 @@ func TestRenderWithComponentsLowersGElseChain(t *testing.T) {
 	}
 }
 
+func TestRenderWithComponentsLowersGTransitionForConditionals(t *testing.T) {
+	got, err := RenderWithComponents(`<Disclosure />`, map[string]Component{
+		"Disclosure": {
+			Name:      "Disclosure",
+			State:     map[string]string{"Open": "false", "Loading": "true"},
+			StateJSON: `{"Open":false,"Loading":true}`,
+			Body:      `<section g:if={Open} g:transition="fade">Open</section><section g:else-if={Loading} g:transition="slide">Loading</section><section g:else g:transition="fade-out">Closed</section>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`data-gowdk-transition="fade" data-gowdk-if-group="c1"`,
+		`data-gowdk-transition="slide" data-gowdk-if-group="c1"`,
+		`data-gowdk-transition="fade-out" data-gowdk-if-group="c1"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in transition output:\n%s", want, got)
+		}
+	}
+}
+
 func TestRenderWithComponentsRejectsMisplacedGElse(t *testing.T) {
 	_, err := RenderWithComponents(`<Disclosure />`, map[string]Component{
 		"Disclosure": {
@@ -992,6 +1015,36 @@ func TestRenderWithComponentsLowersGForIndexVariable(t *testing.T) {
 	}
 }
 
+func TestRenderWithComponentsLowersMotionDirectivesForGForRows(t *testing.T) {
+	got, err := RenderWithComponents(`<Nested />`, map[string]Component{
+		"Nested": {
+			Name:      "Nested",
+			State:     map[string]string{"Items": `[{"ID":"first","Name":"first","Done":false},{"ID":"second","Name":"second","Done":true}]`},
+			StateJSON: `{"Items":[{"ID":"first","Name":"first","Done":false},{"ID":"second","Name":"second","Done":true}]}`,
+			StateTypes: map[string]clientlang.ValueType{
+				"Items":        clientlang.TypeArray,
+				"Items[]":      clientlang.TypeObject,
+				"Items[].ID":   clientlang.TypeString,
+				"Items[].Name": clientlang.TypeString,
+				"Items[].Done": clientlang.TypeBool,
+			},
+			Body: `<ul><li g:for={item in Items} g:key={item.ID} g:transition="fade" g:animate="move">{item.Name}</li></ul>`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`<li data-gowdk-for-item="l1" data-gowdk-key-value="{{item.ID}}" data-gowdk-transition="fade" data-gowdk-animate="move">{{item.Name}}</li></template>`,
+		`<li data-gowdk-for-item="l1" data-gowdk-key-value="first" data-gowdk-transition="fade" data-gowdk-animate="move">first</li>`,
+		`<li data-gowdk-for-item="l1" data-gowdk-key-value="second" data-gowdk-transition="fade" data-gowdk-animate="move">second</li>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in g:for motion output:\n%s", want, got)
+		}
+	}
+}
+
 func TestRenderWithComponentsRejectsGForWithoutKey(t *testing.T) {
 	_, err := RenderWithComponents(`<Nested />`, map[string]Component{
 		"Nested": {
@@ -1009,6 +1062,58 @@ func TestRenderWithComponentsRejectsGForWithoutKey(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "g:for requires g:key") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderWithComponentsRejectsMotionDirectiveMisuse(t *testing.T) {
+	tests := []struct {
+		name    string
+		body    string
+		message string
+	}{
+		{
+			name:    "transition without lifecycle",
+			body:    `<section g:transition="fade">Open</section>`,
+			message: "g:transition must be declared on the same element",
+		},
+		{
+			name:    "animate without list",
+			body:    `<section g:if={Open} g:animate="move">Open</section>`,
+			message: "g:animate must be declared on the same element as a keyed client g:for row",
+		},
+		{
+			name:    "invalid name",
+			body:    `<section g:if={Open} g:transition="fade fast">Open</section>`,
+			message: "must be a CSS-safe identifier",
+		},
+		{
+			name:    "boolean transition",
+			body:    `<section g:if={Open} g:transition>Open</section>`,
+			message: "g:transition requires a literal motion name",
+		},
+		{
+			name:    "expression transition",
+			body:    `<section g:if={Open} g:transition={fade}>Open</section>`,
+			message: "g:transition must use a quoted literal motion name",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := RenderWithComponents(`<Disclosure />`, map[string]Component{
+				"Disclosure": {
+					Name:      "Disclosure",
+					State:     map[string]string{"Open": "false"},
+					StateJSON: `{"Open":false}`,
+					Body:      test.body,
+				},
+			})
+			if err == nil {
+				t.Fatal("expected motion directive error")
+			}
+			if !strings.Contains(err.Error(), test.message) {
+				t.Fatalf("expected %q in error, got %v", test.message, err)
+			}
+		})
 	}
 }
 
@@ -2517,16 +2622,6 @@ func TestParseRejectsUnknownAndDeferredDirectives(t *testing.T) {
 			name:    "boolean unknown directive",
 			source:  `<div g:fancy></div>`,
 			message: `unsupported g: directive "g:fancy"`,
-		},
-		{
-			name:    "transition",
-			source:  `<div g:transition="fade"></div>`,
-			message: "transitions and animations are deferred from the view {} contract",
-		},
-		{
-			name:    "animate",
-			source:  `<div g:animate="flip"></div>`,
-			message: "transitions and animations are deferred",
 		},
 		{
 			name:    "window target",

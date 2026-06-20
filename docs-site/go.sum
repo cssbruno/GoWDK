@@ -1,3 +1,5 @@
+github.com/cssbruno/gowdk v0.7.0 h1:1/f+VY/CaxYzEFjX3gG43rYv9kJ7R0fW+r+qsNwTeKI=
+github.com/cssbruno/gowdk v0.7.0/go.mod h1:sMgrgsBcCjHh0i01XkSDvXe0YRwhCXBA9AOg5eL2J+A=
 github.com/evanw/esbuild v0.28.0 h1:V96ghtc5p5JnNUQIUsc5H3kr+AcFcMqOJll2ZmJW6Lo=
 github.com/evanw/esbuild v0.28.0/go.mod h1:D2vIQZqV/vIf/VRHtViaUtViZmG7o+kKmlBfVQuRi48=
 github.com/yuin/goldmark v1.7.12 h1:YwGP/rrea2/CnCtUHgjuolG/PnMxdQtPMO5PvaE2/nY=

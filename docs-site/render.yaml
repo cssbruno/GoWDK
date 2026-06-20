@@ -3,8 +3,8 @@ services:
     name: gowdk-page
     runtime: go
     rootDir: docs-site
-    # main.go embeds dist/site, so the build must generate the GOWDK site
-    # output before compiling the Go server binary.
+    # main.go serves dist/site, so the build must generate the GOWDK site output
+    # before compiling the Go server binary.
     buildCommand: |
       set -euo pipefail
       mkdir -p tools
@@ -16,7 +16,7 @@ services:
       chmod +x tools/tailwindcss
       go run ./cmd/syncdocs
       rm -rf dist/site
-      go run github.com/cssbruno/gowdk/cmd/gowdk build
+      go run ../cmd/gowdk build
       mkdir -p dist/site/assets
       cp -R assets/. dist/site/assets/
       cp assets/favicon.ico dist/site/favicon.ico

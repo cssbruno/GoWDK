@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"embed"
+	"fmt"
 	"io/fs"
 	"log"
 	"mime"
@@ -16,11 +16,10 @@ import (
 	"github.com/cssbruno/gowdk/addons/ratelimit"
 )
 
-//go:embed dist/site
-var embeddedSite embed.FS
+const siteOutputDir = "dist/site"
 
 func main() {
-	root, err := fs.Sub(embeddedSite, "dist/site")
+	root, err := siteRoot(siteOutputDir)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -39,10 +38,18 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
-	log.Printf("serving embedded GOWDK page at http://%s", addr)
+	log.Printf("serving GOWDK page at http://%s", addr)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
+}
+
+func siteRoot(outputDir string) (fs.FS, error) {
+	root := os.DirFS(outputDir)
+	if _, err := fs.Stat(root, "index.html"); err != nil {
+		return nil, fmt.Errorf("generated site output missing at %q: run the docs-site build before starting the server: %w", outputDir, err)
+	}
+	return root, nil
 }
 
 func listenAddress() string {
@@ -109,10 +116,10 @@ func (server *siteServer) ServeHTTP(writer http.ResponseWriter, request *http.Re
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	serveEmbeddedFile(writer, request, server.root)
+	serveStaticFile(writer, request, server.root)
 }
 
-func serveEmbeddedFile(writer http.ResponseWriter, request *http.Request, root fs.FS) {
+func serveStaticFile(writer http.ResponseWriter, request *http.Request, root fs.FS) {
 	filePath, redirectPath, ok := resolveStaticPath(root, request.URL.Path)
 	if !ok {
 		http.NotFound(writer, request)
@@ -146,7 +153,7 @@ func serveEmbeddedFile(writer http.ResponseWriter, request *http.Request, root f
 	http.ServeContent(writer, request, info.Name(), info.ModTime(), bytes.NewReader(payload))
 }
 
-// resolveStaticPath maps a request path to an embedded file. The site root
+// resolveStaticPath maps a request path to a generated site file. The site root
 // serves the documentation home, and extensionless paths resolve to their
 // directory index.
 func resolveStaticPath(root fs.FS, requestPath string) (filePath, redirectPath string, ok bool) {

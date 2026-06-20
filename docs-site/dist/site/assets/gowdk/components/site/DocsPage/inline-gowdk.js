@@ -1,0 +1,195 @@
+(function () {
+    function ready(fn) {
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", fn);
+      } else {
+        fn();
+      }
+    }
+
+    function normalizePath(value) {
+      if (!value) return "/";
+      var p = value;
+      try { p = new URL(value, location.origin).pathname; } catch (e) {}
+      if (p.length > 1 && p.charAt(p.length - 1) === "/") p = p.slice(0, -1);
+      return p || "/";
+    }
+
+    function el(tag, className, text) {
+      var node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text != null) node.textContent = text;
+      return node;
+    }
+
+    ready(function () {
+      var here = normalizePath(location.pathname);
+      var nav = document.querySelector("[data-docs-nav]");
+      var links = nav ? Array.prototype.slice.call(nav.querySelectorAll("a")) : [];
+      var docLinks = links.filter(function (a) {
+        return normalizePath(a.getAttribute("href")).indexOf("/docs") === 0;
+      });
+
+      // Active navigation item, derived from the current path.
+      var current = null;
+      links.forEach(function (a) {
+        if (normalizePath(a.getAttribute("href")) === here) {
+          a.setAttribute("aria-current", "page");
+          a.classList.add("is-active");
+          current = a;
+        }
+      });
+
+      function separator() {
+        return el("span", "doc-crumb-sep", "/");
+      }
+
+      // Breadcrumb: Docs / Group / Page.
+      var crumbEl = document.querySelector("[data-doc-breadcrumb]");
+      if (crumbEl && current) {
+        var group = "";
+        var node = current.previousElementSibling;
+        while (node) {
+          if (node.classList && node.classList.contains("docs-nav-group")) {
+            group = node.textContent;
+            break;
+          }
+          node = node.previousElementSibling;
+        }
+        var rootCrumb = el("a", "doc-crumb", "Docs");
+        rootCrumb.href = "/docs/getting-started/";
+        crumbEl.appendChild(rootCrumb);
+        if (group) {
+          crumbEl.appendChild(separator());
+          crumbEl.appendChild(el("span", "doc-crumb", group));
+        }
+        crumbEl.appendChild(separator());
+        crumbEl.appendChild(el("span", "doc-crumb doc-crumb-current", current.textContent));
+        crumbEl.hidden = false;
+      }
+
+      // Previous / next page cards from the sidebar order.
+      var pager = document.querySelector("[data-doc-pager]");
+      if (pager && current) {
+        var idx = docLinks.indexOf(current);
+        var prev = idx > 0 ? docLinks[idx - 1] : null;
+        var next = idx >= 0 ? docLinks[idx + 1] : null;
+        function pagerCard(target, dir, label) {
+          var card = el("a", "doc-pager-card doc-pager-" + dir);
+          card.href = target.getAttribute("href");
+          card.appendChild(el("span", "doc-pager-dir", label));
+          card.appendChild(el("span", "doc-pager-title", target.textContent));
+          return card;
+        }
+        if (prev) pager.appendChild(pagerCard(prev, "prev", "Previous"));
+        if (next) pager.appendChild(pagerCard(next, "next", "Next"));
+        if (prev || next) pager.hidden = false;
+      }
+
+      // On this page: build from the article headings, then scroll-spy.
+      var article = document.querySelector(".doc-main-col article.prose") || document.querySelector("article.prose");
+      var tocWrap = document.querySelector("[data-doc-toc-wrap]");
+      var tocNav = document.querySelector("[data-doc-toc]");
+      var heads = [];
+      var tocById = {};
+      if (article && tocNav) {
+        heads = Array.prototype.slice.call(article.querySelectorAll("h2, h3")).filter(function (h) {
+          return !!h.id;
+        });
+        heads.forEach(function (h) {
+          var a = el("a", h.tagName === "H3" ? "toc-3" : "toc-2", h.textContent);
+          a.href = "#" + h.id;
+          a.setAttribute("data-toc-id", h.id);
+          tocNav.appendChild(a);
+          tocById[h.id] = a;
+        });
+        if (heads.length && tocWrap) tocWrap.hidden = false;
+
+        if (heads.length && "IntersectionObserver" in window) {
+          var seen = {};
+          var spy = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+              seen[entry.target.id] = entry.isIntersecting;
+            });
+            var activeId = null;
+            heads.forEach(function (h) {
+              if (seen[h.id] && !activeId) activeId = h.id;
+            });
+            heads.forEach(function (h) {
+              if (tocById[h.id]) tocById[h.id].classList.remove("is-active");
+            });
+            if (activeId && tocById[activeId]) tocById[activeId].classList.add("is-active");
+          }, { rootMargin: "0px 0px -72% 0px", threshold: 0 });
+          heads.forEach(function (h) { spy.observe(h); });
+        }
+      }
+
+      // Copy buttons on every code block (generated <pre> and authored figures).
+      var blocks = document.querySelectorAll(".prose pre, .prose figure.code");
+      Array.prototype.forEach.call(blocks, function (block) {
+        var pre = block.tagName === "PRE" ? block : block.querySelector("pre");
+        if (!pre || block.querySelector(".code-copy")) return;
+        var btn = el("button", "code-copy", "Copy");
+        btn.type = "button";
+        btn.addEventListener("click", function () {
+          var code = pre.querySelector("code");
+          var text = code ? code.textContent : pre.textContent;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () {
+              btn.textContent = "Copied";
+              setTimeout(function () { btn.textContent = "Copy"; }, 1500);
+            });
+          }
+        });
+        block.appendChild(btn);
+      });
+
+      // Command palette over the navigation.
+      var modal = document.querySelector("[data-docs-modal]");
+      if (modal) {
+        var input = modal.querySelector("[data-docs-search-input]");
+        var results = modal.querySelector("[data-docs-results]");
+
+        function render(query) {
+          while (results.firstChild) results.removeChild(results.firstChild);
+          var q = (query || "").toLowerCase();
+          var shown = 0;
+          docLinks.forEach(function (a) {
+            var label = a.textContent;
+            if (q && label.toLowerCase().indexOf(q) === -1) return;
+            var item = el("a", "docs-result", label);
+            item.href = a.getAttribute("href");
+            results.appendChild(item);
+            shown++;
+          });
+          if (!shown) results.appendChild(el("p", "docs-result-empty", "No matches"));
+        }
+        function open() {
+          modal.hidden = false;
+          document.body.classList.add("docs-modal-open");
+          render("");
+          if (input) { input.value = ""; input.focus(); }
+        }
+        function close() {
+          modal.hidden = true;
+          document.body.classList.remove("docs-modal-open");
+        }
+        var triggers = document.querySelectorAll("[data-docs-search]");
+        Array.prototype.forEach.call(triggers, function (t) {
+          t.addEventListener("click", open);
+        });
+        if (input) input.addEventListener("input", function () { render(input.value); });
+        modal.addEventListener("click", function (e) {
+          if (e.target === modal) close();
+        });
+        document.addEventListener("keydown", function (e) {
+          if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+            e.preventDefault();
+            if (modal.hidden) open(); else close();
+          } else if (e.key === "Escape" && !modal.hidden) {
+            close();
+          }
+        });
+      }
+    });
+  })();

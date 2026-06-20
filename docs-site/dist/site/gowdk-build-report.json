@@ -1,0 +1,1076 @@
+{
+  "version": 1,
+  "mode": "build",
+  "outputDir": "dist/site",
+  "events": [
+    {
+      "level": "info",
+      "stage": "start",
+      "kind": "build_started",
+      "message": "SPA build started",
+      "data": {
+        "components": "4",
+        "layouts": "2",
+        "pages": "101"
+      }
+    },
+    {
+      "level": "info",
+      "stage": "validate",
+      "kind": "ir_valid",
+      "message": "compiler IR validation completed"
+    },
+    {
+      "level": "info",
+      "stage": "plan",
+      "kind": "artifacts_planned",
+      "message": "app artifacts planned",
+      "data": {
+        "assets": "3",
+        "css": "1",
+        "pages": "101"
+      }
+    },
+    {
+      "level": "info",
+      "stage": "plan",
+      "kind": "asset_obfuscation",
+      "message": "generated asset obfuscation summarized",
+      "data": {
+        "assets": "0",
+        "enabled": "false"
+      }
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "css_written",
+      "message": "CSS artifact written",
+      "path": "assets/app.f8be0ea9d706.css"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "asset_written",
+      "message": "runtime asset written",
+      "path": "assets/gowdk/components/site/CookieNotice/inline-gowdk.js"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "asset_written",
+      "message": "runtime asset written",
+      "path": "assets/gowdk/components/site/DocsPage/inline-gowdk.js"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "asset_written",
+      "message": "runtime asset written",
+      "path": "assets/gowdk/gowdk.js"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.compiler",
+      "route": "/docs/compiler",
+      "path": "docs/compiler/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.compiler.browser-compiler",
+      "route": "/docs/compiler/browser-compiler",
+      "path": "docs/compiler/browser-compiler/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.compiler.build-report",
+      "route": "/docs/compiler/build-report",
+      "path": "docs/compiler/build-report/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.compiler.endpoint-binding-inspection",
+      "route": "/docs/compiler/endpoint-binding-inspection",
+      "path": "docs/compiler/endpoint-binding-inspection/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.compiler.generated-output",
+      "route": "/docs/compiler/generated-output",
+      "path": "docs/compiler/generated-output/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.compiler.incremental-cache-keys",
+      "route": "/docs/compiler/incremental-cache-keys",
+      "path": "docs/compiler/incremental-cache-keys/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.compiler.manifest",
+      "route": "/docs/compiler/manifest",
+      "path": "docs/compiler/manifest/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.compiler.pipeline",
+      "route": "/docs/compiler/pipeline",
+      "path": "docs/compiler/pipeline/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.compiler.project-structure",
+      "route": "/docs/compiler/project-structure",
+      "path": "docs/compiler/project-structure/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.compiler.syntax-contributors",
+      "route": "/docs/compiler/syntax-contributors",
+      "path": "docs/compiler/syntax-contributors/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.architecture",
+      "route": "/docs/engineering/architecture",
+      "path": "docs/engineering/architecture/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.await-blocks-plan",
+      "route": "/docs/engineering/await-blocks-plan",
+      "path": "docs/engineering/await-blocks-plan/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.ci",
+      "route": "/docs/engineering/ci",
+      "path": "docs/engineering/ci/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.code-quality",
+      "route": "/docs/engineering/code-quality",
+      "path": "docs/engineering/code-quality/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.conventions",
+      "route": "/docs/engineering/conventions",
+      "path": "docs/engineering/conventions/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions",
+      "route": "/docs/engineering/decisions",
+      "path": "docs/engineering/decisions/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions.0001-llm-ready-project-structure",
+      "route": "/docs/engineering/decisions/0001-llm-ready-project-structure",
+      "path": "docs/engineering/decisions/0001-llm-ready-project-structure/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions.0002-compile-first-render-model",
+      "route": "/docs/engineering/decisions/0002-compile-first-render-model",
+      "path": "docs/engineering/decisions/0002-compile-first-render-model/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions.0003-js-default-explicit-wasm-islands",
+      "route": "/docs/engineering/decisions/0003-js-default-explicit-wasm-islands",
+      "path": "docs/engineering/decisions/0003-js-default-explicit-wasm-islands/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions.0004-production-wasm-island-abi",
+      "route": "/docs/engineering/decisions/0004-production-wasm-island-abi",
+      "path": "docs/engineering/decisions/0004-production-wasm-island-abi/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions.0005-generated-go-emission-boundary",
+      "route": "/docs/engineering/decisions/0005-generated-go-emission-boundary",
+      "path": "docs/engineering/decisions/0005-generated-go-emission-boundary/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions.0006-gowdk-compiler-and-runtime-boundary",
+      "route": "/docs/engineering/decisions/0006-gowdk-compiler-and-runtime-boundary",
+      "path": "docs/engineering/decisions/0006-gowdk-compiler-and-runtime-boundary/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions.0007-static-first-spa-navigation",
+      "route": "/docs/engineering/decisions/0007-static-first-spa-navigation",
+      "path": "docs/engineering/decisions/0007-static-first-spa-navigation/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions.0008-bounded-client-language",
+      "route": "/docs/engineering/decisions/0008-bounded-client-language",
+      "path": "docs/engineering/decisions/0008-bounded-client-language/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions.0009-optional-inline-go-authoring",
+      "route": "/docs/engineering/decisions/0009-optional-inline-go-authoring",
+      "path": "docs/engineering/decisions/0009-optional-inline-go-authoring/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions.0010-tokenizer-recursive-descent-parser",
+      "route": "/docs/engineering/decisions/0010-tokenizer-recursive-descent-parser",
+      "path": "docs/engineering/decisions/0010-tokenizer-recursive-descent-parser/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions.0011-auth-addon-cryptography",
+      "route": "/docs/engineering/decisions/0011-auth-addon-cryptography",
+      "path": "docs/engineering/decisions/0011-auth-addon-cryptography/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions.0012-realtime-subscribe-surface",
+      "route": "/docs/engineering/decisions/0012-realtime-subscribe-surface",
+      "path": "docs/engineering/decisions/0012-realtime-subscribe-surface/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions.0013-built-in-tracing-observability",
+      "route": "/docs/engineering/decisions/0013-built-in-tracing-observability",
+      "path": "docs/engineering/decisions/0013-built-in-tracing-observability/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions.0014-addon-runtime-config-split",
+      "route": "/docs/engineering/decisions/0014-addon-runtime-config-split",
+      "path": "docs/engineering/decisions/0014-addon-runtime-config-split/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.decisions.0015-generated-binary-lifecycle-services",
+      "route": "/docs/engineering/decisions/0015-generated-binary-lifecycle-services",
+      "path": "docs/engineering/decisions/0015-generated-binary-lifecycle-services/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.dependency-policy",
+      "route": "/docs/engineering/dependency-policy",
+      "path": "docs/engineering/dependency-policy/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.generated-code-policy",
+      "route": "/docs/engineering/generated-code-policy",
+      "path": "docs/engineering/generated-code-policy/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.markup-transitions-plan",
+      "route": "/docs/engineering/markup-transitions-plan",
+      "path": "docs/engineering/markup-transitions-plan/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.naming-conventions",
+      "route": "/docs/engineering/naming-conventions",
+      "path": "docs/engineering/naming-conventions/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.operations",
+      "route": "/docs/engineering/operations",
+      "path": "docs/engineering/operations/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.release-plan",
+      "route": "/docs/engineering/release-plan",
+      "path": "docs/engineering/release-plan/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.release",
+      "route": "/docs/engineering/release",
+      "path": "docs/engineering/release/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.security-threat-model",
+      "route": "/docs/engineering/security-threat-model",
+      "path": "docs/engineering/security-threat-model/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.security",
+      "route": "/docs/engineering/security",
+      "path": "docs/engineering/security/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.engineering.testing",
+      "route": "/docs/engineering/testing",
+      "path": "docs/engineering/testing/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.getting-started",
+      "route": "/docs/getting-started",
+      "path": "docs/getting-started/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language",
+      "route": "/docs/language",
+      "path": "docs/language/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.actions",
+      "route": "/docs/language/actions",
+      "path": "docs/language/actions/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.api",
+      "route": "/docs/language/api",
+      "path": "docs/language/api/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.audit",
+      "route": "/docs/language/audit",
+      "path": "docs/language/audit/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.blocks",
+      "route": "/docs/language/blocks",
+      "path": "docs/language/blocks/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.components",
+      "route": "/docs/language/components",
+      "path": "docs/language/components/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.conformance",
+      "route": "/docs/language/conformance",
+      "path": "docs/language/conformance/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.data",
+      "route": "/docs/language/data",
+      "path": "docs/language/data/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.diagnostics",
+      "route": "/docs/language/diagnostics",
+      "path": "docs/language/diagnostics/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.formatting",
+      "route": "/docs/language/formatting",
+      "path": "docs/language/formatting/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.forms",
+      "route": "/docs/language/forms",
+      "path": "docs/language/forms/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.grammar",
+      "route": "/docs/language/grammar",
+      "path": "docs/language/grammar/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.guards",
+      "route": "/docs/language/guards",
+      "path": "docs/language/guards/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.hybrid",
+      "route": "/docs/language/hybrid",
+      "path": "docs/language/hybrid/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.layouts",
+      "route": "/docs/language/layouts",
+      "path": "docs/language/layouts/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.markup",
+      "route": "/docs/language/markup",
+      "path": "docs/language/markup/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.partials",
+      "route": "/docs/language/partials",
+      "path": "docs/language/partials/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.semantics",
+      "route": "/docs/language/semantics",
+      "path": "docs/language/semantics/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.spec",
+      "route": "/docs/language/spec",
+      "path": "docs/language/spec/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.ssr",
+      "route": "/docs/language/ssr",
+      "path": "docs/language/ssr/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.stability",
+      "route": "/docs/language/stability",
+      "path": "docs/language/stability/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.language.syntax",
+      "route": "/docs/language/syntax",
+      "path": "docs/language/syntax/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.product.await-blocks-spec",
+      "route": "/docs/product/await-blocks-spec",
+      "path": "docs/product/await-blocks-spec/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.product.contract-runtime-spec",
+      "route": "/docs/product/contract-runtime-spec",
+      "path": "docs/product/contract-runtime-spec/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.product.diagnostics-and-navigation",
+      "route": "/docs/product/diagnostics-and-navigation",
+      "path": "docs/product/diagnostics-and-navigation/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.product.language-server",
+      "route": "/docs/product/language-server",
+      "path": "docs/product/language-server/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.product.markup-transitions-spec",
+      "route": "/docs/product/markup-transitions-spec",
+      "path": "docs/product/markup-transitions-spec/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.product.observability-tracing-spec",
+      "route": "/docs/product/observability-tracing-spec",
+      "path": "docs/product/observability-tracing-spec/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.product.playground-hosted-execution-spec",
+      "route": "/docs/product/playground-hosted-execution-spec",
+      "path": "docs/product/playground-hosted-execution-spec/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.product.playground",
+      "route": "/docs/product/playground",
+      "path": "docs/product/playground/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.product.requirements",
+      "route": "/docs/product/requirements",
+      "path": "docs/product/requirements/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.product.roadmap",
+      "route": "/docs/product/roadmap",
+      "path": "docs/product/roadmap/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.product.security-audit-spec",
+      "route": "/docs/product/security-audit-spec",
+      "path": "docs/product/security-audit-spec/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.product.vision",
+      "route": "/docs/product/vision",
+      "path": "docs/product/vision/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference",
+      "route": "/docs/reference",
+      "path": "docs/reference/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.addons",
+      "route": "/docs/reference/addons",
+      "path": "docs/reference/addons/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.cli",
+      "route": "/docs/reference/cli",
+      "path": "docs/reference/cli/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.config",
+      "route": "/docs/reference/config",
+      "path": "docs/reference/config/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.contracts",
+      "route": "/docs/reference/contracts",
+      "path": "docs/reference/contracts/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.css",
+      "route": "/docs/reference/css",
+      "path": "docs/reference/css/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.db",
+      "route": "/docs/reference/db",
+      "path": "docs/reference/db/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.deployment",
+      "route": "/docs/reference/deployment",
+      "path": "docs/reference/deployment/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.dev",
+      "route": "/docs/reference/dev",
+      "path": "docs/reference/dev/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.diagnostic-codes",
+      "route": "/docs/reference/diagnostic-codes",
+      "path": "docs/reference/diagnostic-codes/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.diagnostics",
+      "route": "/docs/reference/diagnostics",
+      "path": "docs/reference/diagnostics/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.errors",
+      "route": "/docs/reference/errors",
+      "path": "docs/reference/errors/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.framework-integrations",
+      "route": "/docs/reference/framework-integrations",
+      "path": "docs/reference/framework-integrations/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.go-interop",
+      "route": "/docs/reference/go-interop",
+      "path": "docs/reference/go-interop/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.hooks",
+      "route": "/docs/reference/hooks",
+      "path": "docs/reference/hooks/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.images",
+      "route": "/docs/reference/images",
+      "path": "docs/reference/images/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.manifest",
+      "route": "/docs/reference/manifest",
+      "path": "docs/reference/manifest/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.observability",
+      "route": "/docs/reference/observability",
+      "path": "docs/reference/observability/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.pwa-offline",
+      "route": "/docs/reference/pwa-offline",
+      "path": "docs/reference/pwa-offline/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.realtime",
+      "route": "/docs/reference/realtime",
+      "path": "docs/reference/realtime/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.routing",
+      "route": "/docs/reference/routing",
+      "path": "docs/reference/routing/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.seo",
+      "route": "/docs/reference/seo",
+      "path": "docs/reference/seo/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.testing",
+      "route": "/docs/reference/testing",
+      "path": "docs/reference/testing/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "docs.reference.tracing",
+      "route": "/docs/reference/tracing",
+      "path": "docs/reference/tracing/index.html"
+    },
+    {
+      "level": "debug",
+      "stage": "write",
+      "kind": "page_written",
+      "message": "page artifact written",
+      "pageId": "home",
+      "route": "/",
+      "path": "index.html"
+    },
+    {
+      "level": "info",
+      "stage": "manifest",
+      "kind": "route_manifest_written",
+      "message": "route manifest written",
+      "path": "gowdk-routes.json"
+    },
+    {
+      "level": "info",
+      "stage": "manifest",
+      "kind": "asset_manifest_written",
+      "message": "asset manifest written",
+      "path": "gowdk-assets.json"
+    },
+    {
+      "level": "info",
+      "stage": "report",
+      "kind": "cache_policy",
+      "message": "cache policies summarized",
+      "data": {
+        "assetPolicies": "{\"no-cache\":3}",
+        "assets": "3",
+        "css": "1",
+        "cssPolicies": "{\"public, max-age=31536000, immutable\":1}",
+        "defaultPageHTML": "no-cache",
+        "defaultRequestTime": "no-store",
+        "pageHTMLPolicies": "{\"no-cache\":101}",
+        "pageHtml": "101"
+      }
+    },
+    {
+      "level": "info",
+      "stage": "report",
+      "kind": "asset_size",
+      "message": "generated asset size recorded",
+      "path": "assets/gowdk/components/site/CookieNotice/inline-gowdk.js",
+      "data": {
+        "bytes": "579",
+        "cache": "no-cache",
+        "hash": "sha256:3a4a5e90103f41890a168cb49fa012ed3e8a86bbab052e7289d60b8d6b5d6ca4",
+        "kind": "javascript"
+      }
+    },
+    {
+      "level": "info",
+      "stage": "report",
+      "kind": "asset_size",
+      "message": "generated asset size recorded",
+      "path": "assets/gowdk/components/site/DocsPage/inline-gowdk.js",
+      "data": {
+        "bytes": "7744",
+        "cache": "no-cache",
+        "hash": "sha256:82f8049eb47250af1581c0ca68f2eb5ff23968cfac1897b164564a472eb96fd4",
+        "kind": "javascript"
+      }
+    },
+    {
+      "level": "info",
+      "stage": "report",
+      "kind": "asset_size",
+      "message": "generated asset size recorded",
+      "path": "assets/gowdk/gowdk.js",
+      "data": {
+        "bytes": "41039",
+        "cache": "no-cache",
+        "hash": "sha256:b3f6fbbc7a47a2d53920d2bc6b21032cbbf08b04c4b3228b8b38ebc812f4ef7d",
+        "kind": "javascript"
+      }
+    },
+    {
+      "level": "info",
+      "stage": "report",
+      "kind": "openapi_written",
+      "message": "OpenAPI report written",
+      "path": "openapi.json"
+    },
+    {
+      "level": "info",
+      "stage": "manifest",
+      "kind": "security_manifest_written",
+      "message": "security manifest written",
+      "path": "/tmp/gowdk-distfix/docs-site/dist/.gowdk/reports/site/gowdk-security.json"
+    },
+    {
+      "level": "info",
+      "stage": "complete",
+      "kind": "build_complete",
+      "message": "SPA build completed",
+      "data": {
+        "assets": "3",
+        "css": "1",
+        "pages": "101"
+      }
+    }
+  ]
+}

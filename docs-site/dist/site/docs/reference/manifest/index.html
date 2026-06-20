@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manifest Reference - GOWDK</title>
+  <meta name="description" content="gowdk manifest prints validated route metadata for explicit .gwdk files.">
+  <link rel="icon" href="/favicon.ico">
+  <meta property="og:site_name" content="GOWDK">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Manifest Reference - GOWDK">
+  <meta property="og:description" content="gowdk manifest prints validated route metadata for explicit .gwdk files.">
+  <meta property="og:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Manifest Reference - GOWDK">
+  <meta name="twitter:description" content="gowdk manifest prints validated route metadata for explicit .gwdk files.">
+  <meta name="twitter:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <link rel="stylesheet" href="/assets/app.f8be0ea9d706.css">
+  <script type="module" src="/assets/gowdk/components/site/CookieNotice/inline-gowdk.js" defer></script>
+  <script type="module" src="/assets/gowdk/components/site/DocsPage/inline-gowdk.js" defer></script>
+  <script src="/assets/gowdk/gowdk.js" defer></script>
+</head>
+<body>
+<div class="site-frame"><div class="site-banner" role="alert"><span class="site-banner-badge">Experimental</span><span class="site-banner-text">GOWDK is <strong>0.x</strong> and not production-ready — the language, generated output, and APIs can change between releases.</span><a class="site-banner-link" href="https://github.com/cssbruno/GoWDK/releases">Release status</a></div><header class="site-header"><a class="brand-link" href="/" aria-label="GOWDK documentation"><span class="brand-mark" aria-hidden="true">❯</span><span class="brand-name">GOWDK</span><span class="brand-tag">docs</span></a><nav class="top-nav" aria-label="Main navigation"><a href="/docs/getting-started/">Getting Started</a><a href="/docs/reference/cli/">CLI</a><a class="github-link" href="https://github.com/cssbruno/gowdk" aria-label="GOWDK on GitHub"><span class="github-icon">GH</span><span>GitHub</span></a></nav></header><div class="site-body"><div class="docs-shell"><aside class="docs-sidebar"><button class="docs-search-btn" type="button" data-docs-search aria-label="Search documentation"><span class="docs-search-ico" aria-hidden="true">⌕</span><span class="docs-search-label">Search docs</span><kbd class="docs-search-kbd">⌘K</kbd></button><nav class="docs-nav" aria-label="Documentation" data-docs-nav><a href="/">Overview</a><p class="docs-nav-group">Start</p><a href="/docs/getting-started/">Getting Started</a><p class="docs-nav-group">Language</p><a href="/docs/language/">GOWDK Language</a><a href="/docs/language/spec/">Current .gwdk Language Spec</a><a href="/docs/language/syntax/">Syntax</a><a href="/docs/language/semantics/">Semantics</a><a href="/docs/language/grammar/">Grammar</a><a href="/docs/language/blocks/">Blocks</a><a href="/docs/language/markup/">Markup</a><a href="/docs/language/components/">Components</a><a href="/docs/language/layouts/">Layouts</a><a href="/docs/language/data/">Data Lifecycle</a><a href="/docs/language/actions/">Actions</a><a href="/docs/language/api/">API</a><a href="/docs/language/forms/">Forms And Progressive Enhancement</a><a href="/docs/language/partials/">Partials</a><a href="/docs/language/ssr/">SSR</a><a href="/docs/language/hybrid/">Hybrid Rendering</a><a href="/docs/language/formatting/">Formatting</a><a href="/docs/language/diagnostics/">Diagnostics</a><a href="/docs/language/audit/">Audit Policy Files</a><a href="/docs/language/conformance/">.gwdk Conformance Corpus</a><a href="/docs/language/guards/">Guards And Default-Deny Page Access</a><a href="/docs/language/stability/">Language Construct Stability</a><p class="docs-nav-group">Reference</p><a href="/docs/reference/">Reference</a><a href="/docs/reference/routing/">Routing Reference</a><a href="/docs/reference/cli/">CLI Reference</a><a href="/docs/reference/config/">Config Reference</a><a href="/docs/reference/css/">CSS Reference</a><a href="/docs/reference/hooks/">Hooks, Guards, And Middleware</a><a href="/docs/reference/addons/">Addons Reference</a><a href="/docs/reference/contracts/">Contracts</a><a href="/docs/reference/errors/">Errors And Boundaries</a><a href="/docs/reference/diagnostics/">Diagnostics Reference</a><a href="/docs/reference/diagnostic-codes/">Diagnostic Codes</a><a href="/docs/reference/dev/">Dev Loop</a><a href="/docs/reference/deployment/">Deployment</a><a href="/docs/reference/testing/">Testing Reference</a><a href="/docs/reference/framework-integrations/">Framework Integrations</a><a href="/docs/reference/manifest/">Manifest Reference</a><a href="/docs/reference/db/">DB Addon</a><a href="/docs/reference/go-interop/">Go Interop</a><a href="/docs/reference/images/">Images</a><a href="/docs/reference/observability/">Observability</a><a href="/docs/reference/pwa-offline/">PWA And Offline</a><a href="/docs/reference/realtime/">Realtime</a><a href="/docs/reference/seo/">SEO Addon</a><a href="/docs/reference/tracing/">Tracing</a><p class="docs-nav-group">Compiler</p><a href="/docs/compiler/">Compiler</a><a href="/docs/compiler/project-structure/">Project Structure</a><a href="/docs/compiler/pipeline/">Compiler Pipeline</a><a href="/docs/compiler/generated-output/">Generated Output</a><a href="/docs/compiler/browser-compiler/">Browser-Facing Output</a><a href="/docs/compiler/build-report/">Build Report</a><a href="/docs/compiler/manifest/">Manifest</a><a href="/docs/compiler/endpoint-binding-inspection/">Feature Spec: go/packages Endpoint Binding Inspection</a><a href="/docs/compiler/incremental-cache-keys/">Incremental Cache Keys</a><a href="/docs/compiler/syntax-contributors/">Syntax Contributor Checklist</a><p class="docs-nav-group">Engineering</p><a href="/docs/engineering/architecture/">Architecture</a><a href="/docs/engineering/security/">Security Baseline</a><a href="/docs/engineering/conventions/">Engineering Conventions</a><a href="/docs/engineering/naming-conventions/">Naming And Full-Name Conventions</a><a href="/docs/engineering/code-quality/">Code Quality</a><a href="/docs/engineering/generated-code-policy/">Generated Code Policy</a><a href="/docs/engineering/dependency-policy/">Dependency Policy</a><a href="/docs/engineering/operations/">Operations</a><a href="/docs/engineering/testing/">Testing Strategy</a><a href="/docs/engineering/ci/">CI</a><a href="/docs/engineering/release/">Release</a><a href="/docs/engineering/await-blocks-plan/">Implementation Plan: Bounded Await Blocks</a><a href="/docs/engineering/markup-transitions-plan/">Implementation Plan: Bounded Markup Transitions</a><a href="/docs/engineering/release-plan/">0.x Improvement Checklist</a><a href="/docs/engineering/security-threat-model/">Security Threat Model</a><p class="docs-nav-group">Decisions</p><a href="/docs/engineering/decisions/">Architecture Decision Records</a><a href="/docs/engineering/decisions/0001-llm-ready-project-structure/">ADR 0001: LLM-Ready Project Structure</a><a href="/docs/engineering/decisions/0002-compile-first-render-model/">ADR 0002: Compile-First Render Model</a><a href="/docs/engineering/decisions/0003-js-default-explicit-wasm-islands/">ADR 0003: JS Default, Component-Declared WASM Islands</a><a href="/docs/engineering/decisions/0004-production-wasm-island-abi/">ADR 0004: Production WASM Island ABI</a><a href="/docs/engineering/decisions/0005-generated-go-emission-boundary/">ADR 0005: Generated Go Emission Boundary</a><a href="/docs/engineering/decisions/0006-gowdk-compiler-and-runtime-boundary/">ADR 0006: GOWDK Compiler And Runtime Boundary</a><a href="/docs/engineering/decisions/0007-static-first-spa-navigation/">ADR 0007: Static-First SPA Navigation</a><a href="/docs/engineering/decisions/0008-bounded-client-language/">ADR 0008: Bounded Client Language</a><a href="/docs/engineering/decisions/0009-optional-inline-go-authoring/">ADR 0009: Optional Inline Go Authoring</a><a href="/docs/engineering/decisions/0010-tokenizer-recursive-descent-parser/">ADR 0010: Tokenizer and Recursive-Descent Parser Direction</a><a href="/docs/engineering/decisions/0011-auth-addon-cryptography/">ADR 0011: Auth Addon Cryptography Stance</a><a href="/docs/engineering/decisions/0012-realtime-subscribe-surface/">ADR 0012: Realtime Subscribe Surface</a><a href="/docs/engineering/decisions/0013-built-in-tracing-observability/">ADR 0013: Built-In Tracing Observability</a><a href="/docs/engineering/decisions/0014-addon-runtime-config-split/">ADR 0014: Addon Runtime Config Split</a><a href="/docs/engineering/decisions/0015-generated-binary-lifecycle-services/">ADR 0015: Generated Binary Lifecycle Services</a><p class="docs-nav-group">Product</p><a href="/docs/product/vision/">Product Vision</a><a href="/docs/product/roadmap/">Product Roadmap</a><a href="/docs/product/requirements/">Product Requirements</a><a href="/docs/product/language-server/">Feature Spec: GOWDK Language Server</a><a href="/docs/product/await-blocks-spec/">Feature Spec: Bounded Await Blocks</a><a href="/docs/product/contract-runtime-spec/">Feature Spec: Contract Runtime</a><a href="/docs/product/diagnostics-and-navigation/">Feature Spec: Diagnostics And Navigation</a><a href="/docs/product/markup-transitions-spec/">Feature Spec: Bounded Markup Transitions</a><a href="/docs/product/observability-tracing-spec/">Feature Spec: GOWDK Trace</a><a href="/docs/product/playground/">Playground Onboarding and Sandboxing</a><a href="/docs/product/playground-hosted-execution-spec/">Feature Spec: Playground Hosted Execution And Export</a><a href="/docs/product/security-audit-spec/">Feature Spec: Declarative Security Audit (M8)</a></nav></aside><div class="doc-area"><main class="doc-page"><div class="doc-body"><div class="doc-main-col"><nav class="doc-breadcrumb" aria-label="Breadcrumb" data-doc-breadcrumb hidden></nav><header class="doc-hero"><p class="eyebrow">Reference</p><h1>Manifest Reference</h1><p class="doc-lead">gowdk manifest prints validated route metadata for explicit .gwdk files.</p></header><article class="prose"><p><code>gowdk manifest</code> prints validated route metadata for explicit <code>.gwdk</code> files.</p><pre><code class="language-sh">go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/embed/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk
+</code></pre><p>Current JSON shape:</p><pre><code class="language-json">{
+  &#34;version&#34;: 1,
+  &#34;pages&#34;: {
+    &#34;dashboard&#34;: {
+      &#34;source&#34;: &#34;examples/ssr/dashboard.page.gwdk&#34;,
+      &#34;kind&#34;: &#34;page&#34;,
+      &#34;package&#34;: &#34;dashboard&#34;,
+      &#34;route&#34;: &#34;/dashboard&#34;,
+      &#34;render&#34;: &#34;ssr&#34;,
+      &#34;uses&#34;: [
+        {&#34;alias&#34;: &#34;ui&#34;, &#34;package&#34;: &#34;components&#34;}
+      ],
+      &#34;layouts&#34;: [&#34;root&#34;, &#34;dashboard&#34;],
+      &#34;guard&#34;: [&#34;auth.required&#34;],
+      &#34;css&#34;: [&#34;default&#34;, &#34;page&#34;, &#34;forms&#34;],
+      &#34;components&#34;: [&#34;Hero&#34;],
+      &#34;assets&#34;: [&#34;/assets/dashboard.png&#34;],
+      &#34;cssClasses&#34;: [&#34;dashboard&#34;, &#34;panel&#34;],
+      &#34;styleAttributes&#34;: [&#34;color: red;&#34;],
+      &#34;blocks&#34;: {
+        &#34;paths&#34;: false,
+        &#34;build&#34;: false,
+        &#34;load&#34;: true,
+        &#34;view&#34;: true
+      }
+    },
+    &#34;signup&#34;: {
+      &#34;source&#34;: &#34;examples/actions/signup.page.gwdk&#34;,
+      &#34;kind&#34;: &#34;page&#34;,
+      &#34;route&#34;: &#34;/signup&#34;,
+      &#34;render&#34;: &#34;action&#34;,
+      &#34;artifacts&#34;: [
+        {&#34;kind&#34;: &#34;html&#34;, &#34;path&#34;: &#34;signup/index.html&#34;}
+      ],
+      &#34;blocks&#34;: {
+        &#34;paths&#34;: false,
+        &#34;build&#34;: false,
+        &#34;load&#34;: false,
+        &#34;view&#34;: true,
+        &#34;actions&#34;: [&#34;submit&#34;]
+      },
+      &#34;actions&#34;: [
+        {
+          &#34;name&#34;: &#34;submit&#34;,
+          &#34;inputName&#34;: &#34;input&#34;,
+          &#34;inputType&#34;: &#34;SignupInput&#34;,
+          &#34;validatesInput&#34;: true,
+          &#34;redirect&#34;: &#34;/signup?ok=1&#34;,
+          &#34;fragments&#34;: [
+            {&#34;target&#34;: &#34;#signup-result&#34;}
+          ]
+        }
+      ],
+      &#34;apis&#34;: [
+        {
+          &#34;name&#34;: &#34;health&#34;,
+          &#34;method&#34;: &#34;GET&#34;,
+          &#34;route&#34;: &#34;/api/health&#34;
+        }
+      ]
+    }
+  },
+  &#34;components&#34;: {
+    &#34;Hero&#34;: {
+      &#34;source&#34;: &#34;examples/pages/hero.cmp.gwdk&#34;,
+      &#34;kind&#34;: &#34;component&#34;,
+      &#34;package&#34;: &#34;components&#34;,
+      &#34;props&#34;: [
+        {&#34;name&#34;: &#34;title&#34;, &#34;type&#34;: &#34;string&#34;},
+        {&#34;name&#34;: &#34;tagline&#34;, &#34;type&#34;: &#34;string&#34;}
+      ],
+      &#34;emits&#34;: [
+        {
+          &#34;name&#34;: &#34;select&#34;,
+          &#34;params&#34;: [
+            {&#34;name&#34;: &#34;id&#34;, &#34;type&#34;: &#34;string&#34;},
+            {&#34;name&#34;: &#34;active&#34;, &#34;type&#34;: &#34;bool&#34;}
+          ]
+        }
+      ]
+    }
+  }
+}
+</code></pre><p>Fields:</p><ul><li><code>version</code>: public manifest schema version.</li><li><code>source</code>: source file path.</li><li><code>kind</code>: file kind, currently <code>page</code> or <code>component</code>.</li><li><code>package</code>: <code>.gwdk</code> package name when declared.</li><li><code>uses</code>: optional GOWDK source package imports declared as
+<code>use alias &#34;package&#34;</code>; these are separate from normal Go imports.</li><li><code>route</code>: declared route path.</li><li><code>render</code>: effective render mode after applying default <code>spa</code>.</li><li><code>metadata</code>: optional page document metadata from <code>title</code>, <code>description</code>,
+<code>canonical</code>, <code>image</code>, <code>robots</code>, <code>noindex</code>, <code>preload</code>, and <code>prefetch</code>.
+<code>preload</code> and <code>prefetch</code> entries are arrays of <code>{ &#34;href&#34;: &#34;...&#34;, &#34;as&#34;: &#34;...&#34; }</code> objects; <code>as</code> is omitted when the source declaration did not set it.</li><li><code>layouts</code>: optional ordered layout references. Bare names are same-package or
+package-less layout IDs; qualified names such as <code>chrome.root</code> resolve through
+page <code>use chrome &#34;package&#34;</code> declarations.</li><li><code>dynamicParams</code>: route param names declared in dynamic route segments.</li><li><code>routeParams</code>: route param names and scalar types. Untyped params are
+reported as <code>string</code>.</li><li><code>cache</code>: optional concrete page Cache-Control response metadata from <code>cache</code>
+and <code>revalidate</code>.</li><li><code>paths</code>: optional boolean present when <code>paths {}</code> exists.</li><li><code>guard</code>: explicit page access metadata. Real page sources must declare it;
+intentionally public pages report <code>[&#34;public&#34;]</code>.</li><li><code>css</code>: optional <code>css</code> page selection metadata.</li><li><code>js</code>: optional path-based scoped browser script declarations.</li><li><code>inlineJS</code>: optional generated names for inline <code>js {}</code> browser script
+declarations. The manifest does not include inline code bodies.</li><li><code>blocks</code>: declared page block presence and action/API block names.</li><li><code>actions</code>: optional action metadata for the first supported action body
+subset, including input metadata, validation intent, local redirects, and
+fragment targets declared with <code>fragment &#34;#id&#34; {}</code>.</li><li><code>apis</code>: optional API block metadata, including method and route when declared
+with the first supported API endpoint metadata subset.</li><li>page <code>components</code>: optional sorted component names directly referenced by the
+current literal <code>view {}</code> parser subset.</li><li><code>assets</code>: optional sorted literal <code>src</code>, <code>href</code>, and <code>poster</code>
+references directly visible in the current literal <code>view {}</code> parser subset.
+Interpolated and external URLs are omitted.</li><li><code>cssClasses</code>: optional sorted class names directly visible in literal <code>class</code>
+attributes.</li><li><code>styleAttributes</code>: optional sorted literal inline <code>style</code> attribute values.</li><li><code>artifacts</code>: optional generated artifact path metadata. SPA and action
+pages list the generated HTML path pattern relative to the build output
+directory, such as <code>index.html</code>, <code>newsletter/index.html</code>, or
+<code>blog/{slug}/index.html</code>. SSR-only pages omit app-shell HTML artifacts.</li><li><code>components</code>: component declarations known to the manifest.
+Component declarations may include <code>css</code>, <code>js</code>, <code>inlineJS</code>, <code>assets</code>, inline
+<code>props</code>, typed <code>propsType</code>/<code>state</code> contracts, typed public <code>exports</code>, and emitted
+browser-island event metadata under <code>emits</code>.</li><li><code>backendBindings</code>: action/API handler binding metadata. Entries include
+endpoint kind, source, page ID, declared block name, method, endpoint path,
+Go package/import details, exact handler symbol, signature/input metadata when
+supported, binding status, and binding message.</li></ul><p>The site-map command emits broader editor-facing JSON that includes source
+paths, dynamic route params, block presence, and the normalized route graph.
+The route graph adds <code>routes</code> entries for page/file routes and <code>endpoints</code>
+entries for action, API, fragment, and command/query contract declarations.
+Route and endpoint entries include method, path, page ID, source path, source
+span when known, package, handler, status/binding summary fields, and contract
+binding details for command/query references.</p><p><code>gowdk build</code> also writes a separate SPA route manifest named
+<code>gowdk-routes.json</code> in the selected output directory. That generated file records
+emitted page IDs, declared routes, and relative build output paths under
+<code>routes</code>. Dynamic SPA routes are recorded once for each generated concrete
+route. The same file also records generated request-time backend route metadata
+under <code>endpoints</code> for actions, APIs, fragments, and routable command/query
+adapters, including <code>dynamicParams</code> and typed <code>routeParams</code> for dynamic
+endpoint routes.</p><p>SPA builds also write <code>gowdk-assets.json</code> in the selected output directory:</p><pre><code class="language-json">{
+  &#34;version&#34;: 2,
+  &#34;files&#34;: {
+    &#34;assets/app.css&#34;: &#34;assets/app.7ada5a1234b1.css&#34;
+  }
+}
+</code></pre><p>Today it records CSS files emitted by compile-time CSS processors, generated
+page CSS, and page-level cache policies for generated SPA HTML. Keys are stable
+logical asset names. Values are emitted slash-separated paths relative to the
+selected output directory; generated CSS is minified and emitted with
+content-hashed filenames. The <code>cache</code> map may include route HTML paths such as
+<code>index.html</code> without adding those route files to <code>files</code>; when a page declares
+<code>revalidate</code>, the recorded cache policy includes the generated
+<code>stale-while-revalidate=&lt;seconds&gt;</code> directive. The optional <code>obfuscated</code> map
+marks compiler-owned generated browser assets transformed by production asset
+obfuscation.</p></article><nav class="doc-pager" aria-label="Pagination" data-doc-pager hidden></nav></div><aside class="doc-toc" data-doc-toc-wrap hidden><p class="doc-toc-title">On this page</p><nav aria-label="On this page" data-doc-toc></nav></aside></div></main></div></div><div class="docs-modal" data-docs-modal hidden><div class="docs-modal-panel" role="dialog" aria-modal="true" aria-label="Search documentation"><div class="docs-modal-search"><span class="docs-modal-ico" aria-hidden="true">⌕</span><input class="docs-modal-input" type="text" placeholder="Search documentation" data-docs-search-input aria-label="Search documentation"><kbd class="docs-modal-esc">Esc</kbd></div><div class="docs-modal-results" data-docs-results></div></div></div><aside class="cookie-notice" data-cookie-notice aria-label="Cookie notice" hidden><div class="cookie-copy"><strong>One cookie</strong><p>This site stores a single cookie to remember you dismissed this notice. No tracking, no analytics.</p></div><button class="button cookie-dismiss" type="button" data-cookie-dismiss>Got it</button></aside></div><footer class="site-footer"><div class="site-footer-inner"><span>GOWDK - Go-native web apps that rebuild fast.</span><nav class="site-footer-nav" aria-label="Footer"><a href="/">Docs</a><a href="/docs/getting-started/">Getting Started</a><a href="https://github.com/cssbruno/gowdk">GitHub</a></nav></div></footer></div>
+</body>
+</html>

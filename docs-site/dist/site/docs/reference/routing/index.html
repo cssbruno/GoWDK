@@ -1,0 +1,274 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Routing Reference - GOWDK</title>
+  <meta name="description" content="Routes are declared inside .gwdk files. File location does not define route identity.">
+  <link rel="icon" href="/favicon.ico">
+  <meta property="og:site_name" content="GOWDK">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Routing Reference - GOWDK">
+  <meta property="og:description" content="Routes are declared inside .gwdk files. File location does not define route identity.">
+  <meta property="og:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Routing Reference - GOWDK">
+  <meta name="twitter:description" content="Routes are declared inside .gwdk files. File location does not define route identity.">
+  <meta name="twitter:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <link rel="stylesheet" href="/assets/app.f8be0ea9d706.css">
+  <script type="module" src="/assets/gowdk/components/site/CookieNotice/inline-gowdk.js" defer></script>
+  <script type="module" src="/assets/gowdk/components/site/DocsPage/inline-gowdk.js" defer></script>
+  <script src="/assets/gowdk/gowdk.js" defer></script>
+</head>
+<body>
+<div class="site-frame"><div class="site-banner" role="alert"><span class="site-banner-badge">Experimental</span><span class="site-banner-text">GOWDK is <strong>0.x</strong> and not production-ready — the language, generated output, and APIs can change between releases.</span><a class="site-banner-link" href="https://github.com/cssbruno/GoWDK/releases">Release status</a></div><header class="site-header"><a class="brand-link" href="/" aria-label="GOWDK documentation"><span class="brand-mark" aria-hidden="true">❯</span><span class="brand-name">GOWDK</span><span class="brand-tag">docs</span></a><nav class="top-nav" aria-label="Main navigation"><a href="/docs/getting-started/">Getting Started</a><a href="/docs/reference/cli/">CLI</a><a class="github-link" href="https://github.com/cssbruno/gowdk" aria-label="GOWDK on GitHub"><span class="github-icon">GH</span><span>GitHub</span></a></nav></header><div class="site-body"><div class="docs-shell"><aside class="docs-sidebar"><button class="docs-search-btn" type="button" data-docs-search aria-label="Search documentation"><span class="docs-search-ico" aria-hidden="true">⌕</span><span class="docs-search-label">Search docs</span><kbd class="docs-search-kbd">⌘K</kbd></button><nav class="docs-nav" aria-label="Documentation" data-docs-nav><a href="/">Overview</a><p class="docs-nav-group">Start</p><a href="/docs/getting-started/">Getting Started</a><p class="docs-nav-group">Language</p><a href="/docs/language/">GOWDK Language</a><a href="/docs/language/spec/">Current .gwdk Language Spec</a><a href="/docs/language/syntax/">Syntax</a><a href="/docs/language/semantics/">Semantics</a><a href="/docs/language/grammar/">Grammar</a><a href="/docs/language/blocks/">Blocks</a><a href="/docs/language/markup/">Markup</a><a href="/docs/language/components/">Components</a><a href="/docs/language/layouts/">Layouts</a><a href="/docs/language/data/">Data Lifecycle</a><a href="/docs/language/actions/">Actions</a><a href="/docs/language/api/">API</a><a href="/docs/language/forms/">Forms And Progressive Enhancement</a><a href="/docs/language/partials/">Partials</a><a href="/docs/language/ssr/">SSR</a><a href="/docs/language/hybrid/">Hybrid Rendering</a><a href="/docs/language/formatting/">Formatting</a><a href="/docs/language/diagnostics/">Diagnostics</a><a href="/docs/language/audit/">Audit Policy Files</a><a href="/docs/language/conformance/">.gwdk Conformance Corpus</a><a href="/docs/language/guards/">Guards And Default-Deny Page Access</a><a href="/docs/language/stability/">Language Construct Stability</a><p class="docs-nav-group">Reference</p><a href="/docs/reference/">Reference</a><a href="/docs/reference/routing/">Routing Reference</a><a href="/docs/reference/cli/">CLI Reference</a><a href="/docs/reference/config/">Config Reference</a><a href="/docs/reference/css/">CSS Reference</a><a href="/docs/reference/hooks/">Hooks, Guards, And Middleware</a><a href="/docs/reference/addons/">Addons Reference</a><a href="/docs/reference/contracts/">Contracts</a><a href="/docs/reference/errors/">Errors And Boundaries</a><a href="/docs/reference/diagnostics/">Diagnostics Reference</a><a href="/docs/reference/diagnostic-codes/">Diagnostic Codes</a><a href="/docs/reference/dev/">Dev Loop</a><a href="/docs/reference/deployment/">Deployment</a><a href="/docs/reference/testing/">Testing Reference</a><a href="/docs/reference/framework-integrations/">Framework Integrations</a><a href="/docs/reference/manifest/">Manifest Reference</a><a href="/docs/reference/db/">DB Addon</a><a href="/docs/reference/go-interop/">Go Interop</a><a href="/docs/reference/images/">Images</a><a href="/docs/reference/observability/">Observability</a><a href="/docs/reference/pwa-offline/">PWA And Offline</a><a href="/docs/reference/realtime/">Realtime</a><a href="/docs/reference/seo/">SEO Addon</a><a href="/docs/reference/tracing/">Tracing</a><p class="docs-nav-group">Compiler</p><a href="/docs/compiler/">Compiler</a><a href="/docs/compiler/project-structure/">Project Structure</a><a href="/docs/compiler/pipeline/">Compiler Pipeline</a><a href="/docs/compiler/generated-output/">Generated Output</a><a href="/docs/compiler/browser-compiler/">Browser-Facing Output</a><a href="/docs/compiler/build-report/">Build Report</a><a href="/docs/compiler/manifest/">Manifest</a><a href="/docs/compiler/endpoint-binding-inspection/">Feature Spec: go/packages Endpoint Binding Inspection</a><a href="/docs/compiler/incremental-cache-keys/">Incremental Cache Keys</a><a href="/docs/compiler/syntax-contributors/">Syntax Contributor Checklist</a><p class="docs-nav-group">Engineering</p><a href="/docs/engineering/architecture/">Architecture</a><a href="/docs/engineering/security/">Security Baseline</a><a href="/docs/engineering/conventions/">Engineering Conventions</a><a href="/docs/engineering/naming-conventions/">Naming And Full-Name Conventions</a><a href="/docs/engineering/code-quality/">Code Quality</a><a href="/docs/engineering/generated-code-policy/">Generated Code Policy</a><a href="/docs/engineering/dependency-policy/">Dependency Policy</a><a href="/docs/engineering/operations/">Operations</a><a href="/docs/engineering/testing/">Testing Strategy</a><a href="/docs/engineering/ci/">CI</a><a href="/docs/engineering/release/">Release</a><a href="/docs/engineering/await-blocks-plan/">Implementation Plan: Bounded Await Blocks</a><a href="/docs/engineering/markup-transitions-plan/">Implementation Plan: Bounded Markup Transitions</a><a href="/docs/engineering/release-plan/">0.x Improvement Checklist</a><a href="/docs/engineering/security-threat-model/">Security Threat Model</a><p class="docs-nav-group">Decisions</p><a href="/docs/engineering/decisions/">Architecture Decision Records</a><a href="/docs/engineering/decisions/0001-llm-ready-project-structure/">ADR 0001: LLM-Ready Project Structure</a><a href="/docs/engineering/decisions/0002-compile-first-render-model/">ADR 0002: Compile-First Render Model</a><a href="/docs/engineering/decisions/0003-js-default-explicit-wasm-islands/">ADR 0003: JS Default, Component-Declared WASM Islands</a><a href="/docs/engineering/decisions/0004-production-wasm-island-abi/">ADR 0004: Production WASM Island ABI</a><a href="/docs/engineering/decisions/0005-generated-go-emission-boundary/">ADR 0005: Generated Go Emission Boundary</a><a href="/docs/engineering/decisions/0006-gowdk-compiler-and-runtime-boundary/">ADR 0006: GOWDK Compiler And Runtime Boundary</a><a href="/docs/engineering/decisions/0007-static-first-spa-navigation/">ADR 0007: Static-First SPA Navigation</a><a href="/docs/engineering/decisions/0008-bounded-client-language/">ADR 0008: Bounded Client Language</a><a href="/docs/engineering/decisions/0009-optional-inline-go-authoring/">ADR 0009: Optional Inline Go Authoring</a><a href="/docs/engineering/decisions/0010-tokenizer-recursive-descent-parser/">ADR 0010: Tokenizer and Recursive-Descent Parser Direction</a><a href="/docs/engineering/decisions/0011-auth-addon-cryptography/">ADR 0011: Auth Addon Cryptography Stance</a><a href="/docs/engineering/decisions/0012-realtime-subscribe-surface/">ADR 0012: Realtime Subscribe Surface</a><a href="/docs/engineering/decisions/0013-built-in-tracing-observability/">ADR 0013: Built-In Tracing Observability</a><a href="/docs/engineering/decisions/0014-addon-runtime-config-split/">ADR 0014: Addon Runtime Config Split</a><a href="/docs/engineering/decisions/0015-generated-binary-lifecycle-services/">ADR 0015: Generated Binary Lifecycle Services</a><p class="docs-nav-group">Product</p><a href="/docs/product/vision/">Product Vision</a><a href="/docs/product/roadmap/">Product Roadmap</a><a href="/docs/product/requirements/">Product Requirements</a><a href="/docs/product/language-server/">Feature Spec: GOWDK Language Server</a><a href="/docs/product/await-blocks-spec/">Feature Spec: Bounded Await Blocks</a><a href="/docs/product/contract-runtime-spec/">Feature Spec: Contract Runtime</a><a href="/docs/product/diagnostics-and-navigation/">Feature Spec: Diagnostics And Navigation</a><a href="/docs/product/markup-transitions-spec/">Feature Spec: Bounded Markup Transitions</a><a href="/docs/product/observability-tracing-spec/">Feature Spec: GOWDK Trace</a><a href="/docs/product/playground/">Playground Onboarding and Sandboxing</a><a href="/docs/product/playground-hosted-execution-spec/">Feature Spec: Playground Hosted Execution And Export</a><a href="/docs/product/security-audit-spec/">Feature Spec: Declarative Security Audit (M8)</a></nav></aside><div class="doc-area"><main class="doc-page"><div class="doc-body"><div class="doc-main-col"><nav class="doc-breadcrumb" aria-label="Breadcrumb" data-doc-breadcrumb hidden></nav><header class="doc-hero"><p class="eyebrow">Reference</p><h1>Routing Reference</h1><p class="doc-lead">Routes are declared inside .gwdk files. File location does not define route identity.</p></header><article class="prose"><p>Routes are declared inside <code>.gwdk</code> files. File location does not define route
+identity.</p><h2 id="page-routes">Page Routes</h2><p>Every current page file must declare a route. <code>guard</code> is optional, but a page
+is not public by default: a guardless page warns (<code>missing_page_guard</code>) and its
+route is denied (403) until <code>guard public</code> (or a protective guard) is added.
+See <a href="/docs/language/guards/">guards.md</a> for the full access contract. Page ID
+derives from the filename unless <code>page</code> is present:</p><pre><code class="language-gwdk">route &#34;/&#34;
+guard public
+
+view {
+  &lt;main&gt;
+    &lt;h1&gt;Home&lt;/h1&gt;
+  &lt;/main&gt;
+}
+</code></pre><p>Use explicit <code>page</code> only when page identity should not follow the filename.</p><p>Current route rules:</p><ul><li>Routes must start with <code>/</code>.</li><li><code>/</code> is the only route that may end with <code>/</code>.</li><li>Routes must not include query strings, fragments, backslashes, whitespace,
+control characters, empty segments, <code>.</code>, or <code>..</code>.</li><li>Dynamic params must be whole path segments, such as <code>/blog/{slug}</code>.</li><li>Param names use <code>[A-Za-z_][A-Za-z0-9_]*</code>.</li><li>A route cannot repeat the same param name.</li><li>Duplicate page route patterns are rejected. <code>/blog/{slug}</code> and <code>/blog/{id}</code>
+are the same route pattern, and <code>/docs/{path...}</code> and <code>/docs/{rest...}</code> are
+the same route pattern.</li><li>Generated app request matching and SPA file lookup reject request paths that
+contain empty, <code>.</code>, or <code>..</code> segments before cleaning. Encoded dot segments
+such as <code>%2e%2e</code> therefore return 404 instead of resolving to a different
+generated route or asset.</li></ul><h3 id="rest-params">Rest Params</h3><p>A page route may declare one rest (catch-all) param as its final segment:</p><pre><code class="language-gwdk">route &#34;/docs/{path...}&#34;
+guard public
+
+go server {}
+
+view {
+  &lt;main&gt;
+    &lt;h1&gt;{param(&#34;path&#34;)}&lt;/h1&gt;
+  &lt;/main&gt;
+}
+</code></pre><p>Rest param contract:</p><ul><li><code>{name...}</code> is allowed only as the final route segment. A rest param before
+the end of the route is rejected with a <code>malformed_route</code> diagnostic.</li><li>A rest param matches one or more remaining request path segments. <code>/docs</code>
+does not match <code>/docs/{path...}</code>; <code>/docs/intro</code> and <code>/docs/guides/routing</code>
+do. Each matched segment still rejects empty, <code>.</code>, and <code>..</code> values.</li><li>The captured value is the remaining segments joined with <code>/</code>, for example
+<code>guides/routing</code>. Read it with <code>param(&#34;name&#34;)</code> in the view, or in request-time
+Go through <code>app.Params(ctx)</code> and <code>route.Required(params, &#34;name&#34;)</code>.</li><li>Rest params are always strings. Typed rest params such as <code>{path...:int}</code> are
+rejected.</li><li>Rest params require request-time (SSR) rendering when used on page routes,
+because build-time SPA paths cannot enumerate and escape multi-segment
+values. Declare <code>server {}</code> or <code>go server {}</code> on the page.</li><li>Rest params are supported on request-time fragment endpoint routes. Action,
+API, and Go comment endpoint paths reject rest params. An action or API that
+omits its path inherits the page route, so inline endpoints on a rest page
+are rejected the same way unless they declare their own concrete path.</li><li>Rest routes participate in ambiguity validation: <code>/docs/{path...}</code> overlaps
+<code>/docs/{slug}</code>, <code>/docs/{section}/{slug}</code>, and concrete routes such as
+<code>/docs/guides/intro</code>, so those combinations are rejected as
+<code>ambiguous_dynamic_route</code>. The same applies to a same-method endpoint inside
+a rest route&#39;s namespace (for example a <code>GET</code> API at <code>/docs/guides/intro</code>
+beside <code>/docs/{path...}</code>), which would otherwise shadow part of the page.</li></ul><p>Unsupported route forms today:</p><ul><li>Optional params such as <code>/docs/{slug?}</code>. The diagnostic is explicit: optional
+route parameters are not supported; declare explicit routes for each shape
+(rest parameters <code>{name...}</code> are supported as the final segment).</li><li>Route groups that affect URL shape independently from explicit <code>route</code>.</li><li>Page/API same-path content negotiation. A page route and endpoint may share a
+path only when their HTTP methods do not conflict, such as <code>GET /signup</code> page
+plus <code>POST /signup</code> action.</li></ul><h3 id="trailing-slash-policy">Trailing Slash Policy</h3><p>Routes are canonical without a trailing slash. The policy is explicit:</p><ul><li>Declarations: omit trailing slashes except for <code>/</code>. <code>route &#34;/blog/hello/&#34;</code>
+is rejected with <code>malformed_route</code>.</li><li>Requests: generated servers respond to <code>GET</code> and <code>HEAD</code> requests whose path
+carries a trailing slash (and is not <code>/</code>) with a <code>308 Permanent Redirect</code> to
+the cleaned canonical path, preserving the query string. <code>GET /blog/hello/?page=2</code>
+redirects to <code>/blog/hello?page=2</code> instead of serving duplicate content.</li><li><code>POST</code> behavior is unchanged: generated action handlers tolerate a trailing
+slash on concrete POST routes as a compatibility fallback and redirect to the
+declared target when configured.</li></ul><p>Pages may declare response cache intent with <code>cache</code>. The value is carried as
+route metadata and should be a literal HTTP <code>Cache-Control</code> value:</p><pre><code class="language-gwdk">route &#34;/docs&#34;
+guard public
+cache &#34;public, max-age=60&#34;
+</code></pre><p>Pages may also declare stale-while-revalidate behavior with <code>revalidate</code>.
+Values may be whole seconds or Go-style whole-second durations such as <code>60s</code>,
+<code>5m</code>, or <code>1h</code>. <code>revalidate</code> requires <code>cache</code> and appends a concrete
+<code>stale-while-revalidate=&lt;seconds&gt;</code> directive to the generated Cache-Control
+header:</p><pre><code class="language-gwdk">route &#34;/docs&#34;
+guard public
+cache &#34;public, max-age=60&#34;
+revalidate 5m
+</code></pre><p>Generated binaries apply explicit page <code>cache</code> values to successful static SPA
+HTML and SSR HTML responses. When <code>revalidate</code> is present, generated binaries
+send the appended stale-while-revalidate directive for the same successful
+responses. Request-time safety policies still win for actions, APIs, partial
+responses, SSR load redirects, CSRF HTML mutation, and generated request-time
+errors; those use <code>no-store</code>.</p><h2 id="spa-routes">SPA Routes</h2><p>SPA render is the default:</p><pre><code class="language-gwdk">route &#34;/docs&#34;
+guard public
+
+view {
+  &lt;main&gt;
+    &lt;h1&gt;Docs&lt;/h1&gt;
+  &lt;/main&gt;
+}
+</code></pre><p><code>gowdk build --out &lt;dir&gt;</code> writes the route as spa HTML. For <code>/docs</code>, the
+current output is <code>&lt;dir&gt;/docs/index.html</code>. For <code>/</code>, the output is
+<code>&lt;dir&gt;/index.html</code>.</p><p>When a SPA page, layout, or referenced component contains a literal internal
+link such as <code>&lt;a href=&#34;/docs&#34;&gt;</code>, the build emits the small
+<code>assets/gowdk/gowdk.js</code> enhancement runtime. That runtime intercepts normal
+same-origin link clicks, fetches the real generated HTML page, replaces the
+current document head/body, updates browser history, and preserves focus/scroll
+where possible. It does not define routes or decide whether a route exists; the
+generated files or generated server remain the source of truth, and direct page
+open/refresh must keep working.</p><h2 id="dynamic-spa-routes">Dynamic SPA Routes</h2><p>Dynamic SPA routes require <code>paths {}</code>. Action endpoints on a dynamic SPA page
+inherit that page&#39;s generated concrete paths:</p><pre><code class="language-gwdk">route &#34;/blog/{slug}&#34;
+guard public
+
+paths {
+  =&gt; { slug: &#34;hello-gowdk&#34; }
+  =&gt; { slug: &#34;compile-first&#34; }
+}
+
+view {
+  &lt;main&gt;
+    &lt;h1&gt;{slug}&lt;/h1&gt;
+    &lt;p&gt;{param(&#34;slug&#34;)}&lt;/p&gt;
+  &lt;/main&gt;
+}
+</code></pre><p>The implemented <code>paths {}</code> subset accepts literal string records. Route params
+from those records are available to the current spa interpolation scope and
+to literal <code>build {}</code> string interpolation.</p><p>Build:</p><pre><code class="language-sh">gowdk build --out /tmp/gowdk-dynamic examples/pages/blog-post.page.gwdk
+</code></pre><p>Generated output:</p><pre><code class="language-text">/tmp/gowdk-dynamic/blog/hello-gowdk/index.html
+/tmp/gowdk-dynamic/blog/compile-first/index.html
+</code></pre><p>Imported and same-package Go build functions can receive the current
+<code>paths {}</code> route params by declaring one <code>gowdk.BuildParams</code> argument.</p><h2 id="action-endpoints">Action Endpoints</h2><p>An <code>act</code> declaration on a page adds a <code>POST</code> endpoint in the current generated
+app slice:</p><pre><code class="language-gwdk">package signup
+
+route &#34;/signup&#34;
+guard public
+
+act Submit POST &#34;/signup&#34;
+
+view {
+  &lt;form g:post={Submit}&gt;
+    &lt;input name=&#34;email&#34; required /&gt;
+    &lt;button type=&#34;submit&#34;&gt;Sign up&lt;/button&gt;
+  &lt;/form&gt;
+}
+</code></pre><p>App-shell HTML lowers <code>g:post={Submit}</code> to a normal POST form. Generated apps
+built with <code>--app --bin</code> serve concrete action endpoints. If the same directory
+as the <code>.gwdk</code> file contains an exported Go function with the exact declared
+symbol, the generated handler calls it when it uses one of these signatures:</p><pre><code class="language-go">func Submit(context.Context) (response.Response, error)
+func Submit(context.Context, SignupInput) (response.Response, error)
+func Submit(context.Context, *SignupInput) (response.Response, error)
+func Submit(context.Context, form.Values) (response.Response, error)
+</code></pre><p>Missing or unsupported functions generate HTTP 501 handlers.</p><p>Actions can also be declared on the exported Go handler itself:</p><pre><code class="language-go">//gowdk:act POST /signup
+func Submit(context.Context, SignupInput) (response.Response, error)
+</code></pre><p>Go comment action endpoints are standalone backend endpoints. They use the same
+binding and generated adapter pipeline as <code>.gwdk</code> action declarations, but they
+do not infer page-local form schemas, fragments, or guards from <code>.gwdk</code> page
+markup.
+Malformed <code>//gowdk:</code> comments, unknown endpoint kinds, and missing method or
+path fields fail with <code>malformed_go_endpoint_comment</code>.</p><p>Generated action and web-command handlers validate CSRF tokens by default before
+generated decoding or user handlers run. Missing or invalid tokens return HTTP
+403 with <code>invalid csrf token</code> and <code>Cache-Control: no-store</code>.</p><p>For a broader runnable action cookbook, see <code>examples/endpoints/src/endpoints/contact.page.gwdk</code>
+and <code>examples/endpoints/src/endpoints/settings.page.gwdk</code>.</p><h2 id="api-routes">API Routes</h2><p>API endpoint metadata is parsed, appears in route plans, and can bind to
+same-package Go handlers:</p><pre><code class="language-gwdk">package api
+
+route &#34;/status&#34;
+guard public
+
+api Health GET &#34;/api/health&#34;
+
+view {
+  &lt;main&gt;
+    &lt;h1&gt;Status&lt;/h1&gt;
+  &lt;/main&gt;
+}
+</code></pre><p>Supported methods today: <code>GET</code>, <code>POST</code>, <code>PUT</code>, <code>PATCH</code>, and <code>DELETE</code>.</p><p><code>api Health GET &#34;/api/health&#34;</code> maps to exported Go function <code>Health</code> in the
+same package as the <code>.gwdk</code> file when the function has signature
+<code>func(context.Context, *http.Request) (response.Response, error)</code>. Missing or
+unsupported functions generate HTTP 501 handlers.</p><p>APIs can also be declared on the exported Go handler itself:</p><pre><code class="language-go">//gowdk:api GET /api/health
+func Health(context.Context, *http.Request) (response.Response, error)
+</code></pre><p>The compiler discovers Go endpoint comments only in selected source packages,
+does not infer endpoints from function names, and does not scan framework route
+registrations. If a Go comment endpoint and a <code>.gwdk</code> endpoint declare the same
+method/path pair, validation fails with a route conflict diagnostic.</p><p>For session, search, JSON CRUD, and webhook API examples, see
+<code>examples/endpoints/src/endpoints/api.page.gwdk</code>.</p><h2 id="ssr-routes">SSR Routes</h2><p>SSR is optional and must be enabled for validation:</p><pre><code class="language-sh">gowdk check --ssr examples/ssr/simple-ssr.page.gwdk
+</code></pre><p>First-slice concrete and dynamic request-time SSR pages with declared <code>server {}</code>
+fields can be
+generated into an embedded app and binary:</p><pre><code class="language-sh">gowdk build --ssr --out /tmp/gowdk-ssr-build \
+  --app /tmp/gowdk-ssr-app \
+  --bin /tmp/gowdk-ssr-site \
+  examples/ssr/dynamic-ssr.page.gwdk
+</code></pre><p>Dynamic SSR route params render through generated placeholders and request-time
+HTML escaping. Dynamic fragment endpoint params are attached to fragment hook
+contexts. Params can be declared as <code>{name}</code>, <code>{name:type}</code>, or — as the final
+segment only — <code>{name...}</code> (always a string). Supported types are <code>string</code>,
+<code>int</code>, <code>int64</code>, <code>uint</code>, <code>uint64</code>, <code>bool</code>, and <code>float64</code>. Generated SSR handlers
+attach route metadata through <code>runtime/app.Route(ctx)</code>, including render mode,
+guard IDs, dynamic params, typed route-param metadata, and declared layouts.
+Generated SSR and fragment handlers attach raw dynamic params through
+<code>runtime/app.Params(ctx)</code> and decoded typed params through
+<code>runtime/app.TypedParams(ctx)</code>.</p><p>There are no generated per-route param struct types yet. Request-time user code
+should use <code>app.Params(ctx)</code>, <code>app.TypedParams(ctx)</code>, or the <code>runtime/route</code>
+typed helpers. Per-route structs may be added later only if the generated API
+stays stable and simpler than the current helpers.</p><p>User Go can still decode raw params with <code>runtime/route</code> helpers:</p><pre><code class="language-go">params := app.Params(ctx)
+id, ok, err := route.Int(params, &#34;id&#34;)
+if err != nil {
+  return response.HTMLBody(400, &#34;invalid route param&#34;), err
+}
+if !ok {
+  return response.HTMLBody(404, &#34;missing route param&#34;), nil
+}
+_ = id
+</code></pre><p>The helpers support <code>String</code>, <code>Int</code>, <code>Int64</code>, <code>Uint</code>, <code>Uint64</code>, <code>Bool</code>, and
+<code>Float64</code>. <code>Required</code> returns a missing-param error when a required param is not
+present. Decode errors name the param and expected type without echoing the raw
+request value. Generated typed SSR and fragment bindings return <code>400</code> for
+invalid typed route params and <code>404</code> for missing route params before guards,
+page rendering, or fragment hooks run.</p><p>For standalone fragment and action-driven partial examples, see
+<code>examples/endpoints/src/endpoints/fragments.page.gwdk</code>.</p><p>Endpoint user code can read generated endpoint metadata with
+<code>runtime/app.Endpoint(ctx)</code>. This is the stable accessor for action, API, and
+fragment handler metadata today. Typed load-result and action-result data
+accessors are deferred until those result contracts are stable.</p><p><code>server { =&gt; { field, user.name } }</code> execution calls same-package Go
+<code>Load&lt;PageID&gt;</code> functions at request time through <code>ssr.LoadContext</code>. Returned
+declared identifiers and dotted paths are resolved from nested maps with string
+keys, structs, pointers, interfaces, exported Go field names, and <code>json</code> tag
+names, then HTML-escaped into generated placeholders.</p><h2 id="route-plans">Route Plans</h2><p>Use <code>gowdk routes</code> to inspect validated route and endpoint metadata:</p><pre><code class="language-sh">gowdk routes --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk
+gowdk endpoints --ssr examples/actions/*.gwdk examples/api/*.gwdk
+</code></pre><p>The current JSON schema is version <code>1</code>. <code>routes</code> is the generated route table:
+it includes page/file route kinds such as <code>static</code>, <code>spa</code>, <code>ssr</code>, and <code>hybrid</code>,
+plus generated endpoint route rows for actions, APIs, fragments, and routable
+<code>g:command</code>/<code>g:query</code> contract references. Route records include the HTTP
+method/path, page ID, <code>.gwdk</code> package, guards, source file, source span, and
+planned handler. Page rows also include effective render mode, layouts, dynamic
+route params, and cache policy when declared. Endpoint rows include
+<code>endpointSource</code>, <code>directive</code> (<code>act</code>, <code>api</code>, <code>fragment</code>, <code>g:command</code>, or
+<code>g:query</code>), symbol/contract name, no-store backend cache policy, CSRF
+applicability, route params when declared, and binding status when known.</p><p><code>endpoints</code> contains the detailed framework-neutral backend endpoint records
+for the same action, API, fragment, and contract adapter routes. Endpoint
+records repeat the route table fields and add Go package path/name when known,
+backend binding details, and contract binding details. Backend binding details
+repeat the Go package name, import path when known, handler symbol, and
+supported signature/input metadata when the handler is bound. Contract binding
+details include the contract kind, reference name, binding status, local input
+type, result type, roles, handler, register function, and message when known.
+The
+<code>info</code> list reports disabled route-mode lanes, for example SSR disabled on a
+SPA route.</p><p><code>gowdk endpoints</code> prints the same versioned endpoint records without page route
+records or <code>info</code> notes. Route/method conflicts remain hard validation
+diagnostics; <code>gowdk check --json</code> reports the conflicting declaration with a
+source range and a related location for the first declaration when available.</p><p>Use <code>gowdk inspect ir</code> when route debugging needs the full typed compiler IR
+instead of the route-report schema. The IR output is for M2 compiler debugging
+and snapshots; keep <code>gowdk routes</code> for route and endpoint report integrations.</p><p>Use <code>gowdk inspect endpoint-graph --json</code> when route debugging needs the
+dispatch graph. The current graph schema is version <code>1</code> and includes <code>page</code>,
+<code>route</code>, <code>endpoint</code>, <code>handler</code>, <code>guard</code>, <code>contract</code>, and <code>structural</code> nodes.
+Edges describe route declarations, page-owned endpoints, planned/generated
+handlers, inherited guard policy, routable command/query contract references,
+and structural <code>dispatches</code> links from <code>g:post</code>, <code>g:command</code>, and <code>g:query</code>
+view elements to generated endpoint nodes. Endpoint nodes carry method/path,
+source kind, cache, guards, CSRF policy, binding status, signature, input type,
+and source span when available.</p><p>Use <code>gowdk inspect asset-graph --json</code> when debugging which source owner
+introduced CSS, JavaScript, component file assets, or WASM declarations. The
+current graph schema is version <code>1</code> and includes owner, template, and asset
+nodes with deterministic <code>has_template</code>, <code>declares_asset</code>, and <code>uses_package</code>
+edges.</p><p>Use <code>gowdk inspect tree --json</code> when source navigation needs the unified node
+tree instead of a route-only projection. The current tree schema is version <code>1</code>
+and includes package, page, component, layout, route, endpoint,
+contract-reference, view, element, component-call, and text nodes with stable
+IDs, source paths, source spans when known, properties, and ordered children.
+Resolved component calls also produce <code>renders_component</code> edges, and component
+composition cycles are reported as tree diagnostics.</p></article><nav class="doc-pager" aria-label="Pagination" data-doc-pager hidden></nav></div><aside class="doc-toc" data-doc-toc-wrap hidden><p class="doc-toc-title">On this page</p><nav aria-label="On this page" data-doc-toc></nav></aside></div></main></div></div><div class="docs-modal" data-docs-modal hidden><div class="docs-modal-panel" role="dialog" aria-modal="true" aria-label="Search documentation"><div class="docs-modal-search"><span class="docs-modal-ico" aria-hidden="true">⌕</span><input class="docs-modal-input" type="text" placeholder="Search documentation" data-docs-search-input aria-label="Search documentation"><kbd class="docs-modal-esc">Esc</kbd></div><div class="docs-modal-results" data-docs-results></div></div></div><aside class="cookie-notice" data-cookie-notice aria-label="Cookie notice" hidden><div class="cookie-copy"><strong>One cookie</strong><p>This site stores a single cookie to remember you dismissed this notice. No tracking, no analytics.</p></div><button class="button cookie-dismiss" type="button" data-cookie-dismiss>Got it</button></aside></div><footer class="site-footer"><div class="site-footer-inner"><span>GOWDK - Go-native web apps that rebuild fast.</span><nav class="site-footer-nav" aria-label="Footer"><a href="/">Docs</a><a href="/docs/getting-started/">Getting Started</a><a href="https://github.com/cssbruno/gowdk">GitHub</a></nav></div></footer></div>
+</body>
+</html>

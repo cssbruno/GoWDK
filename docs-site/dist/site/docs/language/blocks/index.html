@@ -1,0 +1,167 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blocks - GOWDK</title>
+  <link rel="icon" href="/favicon.ico">
+  <meta property="og:site_name" content="GOWDK">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Blocks - GOWDK">
+  <meta property="og:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Blocks - GOWDK">
+  <meta name="twitter:image" content="https://gowdk.com/assets/wdk_logo.png">
+  <link rel="stylesheet" href="/assets/app.f8be0ea9d706.css">
+  <script type="module" src="/assets/gowdk/components/site/CookieNotice/inline-gowdk.js" defer></script>
+  <script type="module" src="/assets/gowdk/components/site/DocsPage/inline-gowdk.js" defer></script>
+  <script src="/assets/gowdk/gowdk.js" defer></script>
+</head>
+<body>
+<div class="site-frame"><div class="site-banner" role="alert"><span class="site-banner-badge">Experimental</span><span class="site-banner-text">GOWDK is <strong>0.x</strong> and not production-ready — the language, generated output, and APIs can change between releases.</span><a class="site-banner-link" href="https://github.com/cssbruno/GoWDK/releases">Release status</a></div><header class="site-header"><a class="brand-link" href="/" aria-label="GOWDK documentation"><span class="brand-mark" aria-hidden="true">❯</span><span class="brand-name">GOWDK</span><span class="brand-tag">docs</span></a><nav class="top-nav" aria-label="Main navigation"><a href="/docs/getting-started/">Getting Started</a><a href="/docs/reference/cli/">CLI</a><a class="github-link" href="https://github.com/cssbruno/gowdk" aria-label="GOWDK on GitHub"><span class="github-icon">GH</span><span>GitHub</span></a></nav></header><div class="site-body"><div class="docs-shell"><aside class="docs-sidebar"><button class="docs-search-btn" type="button" data-docs-search aria-label="Search documentation"><span class="docs-search-ico" aria-hidden="true">⌕</span><span class="docs-search-label">Search docs</span><kbd class="docs-search-kbd">⌘K</kbd></button><nav class="docs-nav" aria-label="Documentation" data-docs-nav><a href="/">Overview</a><p class="docs-nav-group">Start</p><a href="/docs/getting-started/">Getting Started</a><p class="docs-nav-group">Language</p><a href="/docs/language/">GOWDK Language</a><a href="/docs/language/spec/">Current .gwdk Language Spec</a><a href="/docs/language/syntax/">Syntax</a><a href="/docs/language/semantics/">Semantics</a><a href="/docs/language/grammar/">Grammar</a><a href="/docs/language/blocks/">Blocks</a><a href="/docs/language/markup/">Markup</a><a href="/docs/language/components/">Components</a><a href="/docs/language/layouts/">Layouts</a><a href="/docs/language/data/">Data Lifecycle</a><a href="/docs/language/actions/">Actions</a><a href="/docs/language/api/">API</a><a href="/docs/language/forms/">Forms And Progressive Enhancement</a><a href="/docs/language/partials/">Partials</a><a href="/docs/language/ssr/">SSR</a><a href="/docs/language/hybrid/">Hybrid Rendering</a><a href="/docs/language/formatting/">Formatting</a><a href="/docs/language/diagnostics/">Diagnostics</a><a href="/docs/language/audit/">Audit Policy Files</a><a href="/docs/language/conformance/">.gwdk Conformance Corpus</a><a href="/docs/language/guards/">Guards And Default-Deny Page Access</a><a href="/docs/language/stability/">Language Construct Stability</a><p class="docs-nav-group">Reference</p><a href="/docs/reference/">Reference</a><a href="/docs/reference/routing/">Routing Reference</a><a href="/docs/reference/cli/">CLI Reference</a><a href="/docs/reference/config/">Config Reference</a><a href="/docs/reference/css/">CSS Reference</a><a href="/docs/reference/hooks/">Hooks, Guards, And Middleware</a><a href="/docs/reference/addons/">Addons Reference</a><a href="/docs/reference/contracts/">Contracts</a><a href="/docs/reference/errors/">Errors And Boundaries</a><a href="/docs/reference/diagnostics/">Diagnostics Reference</a><a href="/docs/reference/diagnostic-codes/">Diagnostic Codes</a><a href="/docs/reference/dev/">Dev Loop</a><a href="/docs/reference/deployment/">Deployment</a><a href="/docs/reference/testing/">Testing Reference</a><a href="/docs/reference/framework-integrations/">Framework Integrations</a><a href="/docs/reference/manifest/">Manifest Reference</a><a href="/docs/reference/db/">DB Addon</a><a href="/docs/reference/go-interop/">Go Interop</a><a href="/docs/reference/images/">Images</a><a href="/docs/reference/observability/">Observability</a><a href="/docs/reference/pwa-offline/">PWA And Offline</a><a href="/docs/reference/realtime/">Realtime</a><a href="/docs/reference/seo/">SEO Addon</a><a href="/docs/reference/tracing/">Tracing</a><p class="docs-nav-group">Compiler</p><a href="/docs/compiler/">Compiler</a><a href="/docs/compiler/project-structure/">Project Structure</a><a href="/docs/compiler/pipeline/">Compiler Pipeline</a><a href="/docs/compiler/generated-output/">Generated Output</a><a href="/docs/compiler/browser-compiler/">Browser-Facing Output</a><a href="/docs/compiler/build-report/">Build Report</a><a href="/docs/compiler/manifest/">Manifest</a><a href="/docs/compiler/endpoint-binding-inspection/">Feature Spec: go/packages Endpoint Binding Inspection</a><a href="/docs/compiler/incremental-cache-keys/">Incremental Cache Keys</a><a href="/docs/compiler/syntax-contributors/">Syntax Contributor Checklist</a><p class="docs-nav-group">Engineering</p><a href="/docs/engineering/architecture/">Architecture</a><a href="/docs/engineering/security/">Security Baseline</a><a href="/docs/engineering/conventions/">Engineering Conventions</a><a href="/docs/engineering/naming-conventions/">Naming And Full-Name Conventions</a><a href="/docs/engineering/code-quality/">Code Quality</a><a href="/docs/engineering/generated-code-policy/">Generated Code Policy</a><a href="/docs/engineering/dependency-policy/">Dependency Policy</a><a href="/docs/engineering/operations/">Operations</a><a href="/docs/engineering/testing/">Testing Strategy</a><a href="/docs/engineering/ci/">CI</a><a href="/docs/engineering/release/">Release</a><a href="/docs/engineering/await-blocks-plan/">Implementation Plan: Bounded Await Blocks</a><a href="/docs/engineering/markup-transitions-plan/">Implementation Plan: Bounded Markup Transitions</a><a href="/docs/engineering/release-plan/">0.x Improvement Checklist</a><a href="/docs/engineering/security-threat-model/">Security Threat Model</a><p class="docs-nav-group">Decisions</p><a href="/docs/engineering/decisions/">Architecture Decision Records</a><a href="/docs/engineering/decisions/0001-llm-ready-project-structure/">ADR 0001: LLM-Ready Project Structure</a><a href="/docs/engineering/decisions/0002-compile-first-render-model/">ADR 0002: Compile-First Render Model</a><a href="/docs/engineering/decisions/0003-js-default-explicit-wasm-islands/">ADR 0003: JS Default, Component-Declared WASM Islands</a><a href="/docs/engineering/decisions/0004-production-wasm-island-abi/">ADR 0004: Production WASM Island ABI</a><a href="/docs/engineering/decisions/0005-generated-go-emission-boundary/">ADR 0005: Generated Go Emission Boundary</a><a href="/docs/engineering/decisions/0006-gowdk-compiler-and-runtime-boundary/">ADR 0006: GOWDK Compiler And Runtime Boundary</a><a href="/docs/engineering/decisions/0007-static-first-spa-navigation/">ADR 0007: Static-First SPA Navigation</a><a href="/docs/engineering/decisions/0008-bounded-client-language/">ADR 0008: Bounded Client Language</a><a href="/docs/engineering/decisions/0009-optional-inline-go-authoring/">ADR 0009: Optional Inline Go Authoring</a><a href="/docs/engineering/decisions/0010-tokenizer-recursive-descent-parser/">ADR 0010: Tokenizer and Recursive-Descent Parser Direction</a><a href="/docs/engineering/decisions/0011-auth-addon-cryptography/">ADR 0011: Auth Addon Cryptography Stance</a><a href="/docs/engineering/decisions/0012-realtime-subscribe-surface/">ADR 0012: Realtime Subscribe Surface</a><a href="/docs/engineering/decisions/0013-built-in-tracing-observability/">ADR 0013: Built-In Tracing Observability</a><a href="/docs/engineering/decisions/0014-addon-runtime-config-split/">ADR 0014: Addon Runtime Config Split</a><a href="/docs/engineering/decisions/0015-generated-binary-lifecycle-services/">ADR 0015: Generated Binary Lifecycle Services</a><p class="docs-nav-group">Product</p><a href="/docs/product/vision/">Product Vision</a><a href="/docs/product/roadmap/">Product Roadmap</a><a href="/docs/product/requirements/">Product Requirements</a><a href="/docs/product/language-server/">Feature Spec: GOWDK Language Server</a><a href="/docs/product/await-blocks-spec/">Feature Spec: Bounded Await Blocks</a><a href="/docs/product/contract-runtime-spec/">Feature Spec: Contract Runtime</a><a href="/docs/product/diagnostics-and-navigation/">Feature Spec: Diagnostics And Navigation</a><a href="/docs/product/markup-transitions-spec/">Feature Spec: Bounded Markup Transitions</a><a href="/docs/product/observability-tracing-spec/">Feature Spec: GOWDK Trace</a><a href="/docs/product/playground/">Playground Onboarding and Sandboxing</a><a href="/docs/product/playground-hosted-execution-spec/">Feature Spec: Playground Hosted Execution And Export</a><a href="/docs/product/security-audit-spec/">Feature Spec: Declarative Security Audit (M8)</a></nav></aside><div class="doc-area"><main class="doc-page"><div class="doc-body"><div class="doc-main-col"><nav class="doc-breadcrumb" aria-label="Breadcrumb" data-doc-breadcrumb hidden></nav><header class="doc-hero"><p class="eyebrow">Language</p><h1>Blocks</h1></header><article class="prose"><h2 id="current-support">Current Support</h2><p>The parser records whether these top-level blocks are present:</p><ul><li><code>paths {}</code>: declares dynamic SPA paths. Presence and raw body
+text are recorded. SPA builds support the first literal subset:
+<code>=&gt; { slug: &#34;hello-gowdk&#34; }</code>. Other statement forms are rejected with a
+<code>parse_error</code> diagnostic instead of running arbitrary build-time code.</li><li><code>build {}</code>: build-time data block. Presence and raw body text are recorded.
+SPA builds support the first literal subset, <code>=&gt; { title: &#34;Hello&#34; }</code>, and
+the first imported or same-package Go function subset,
+<code>=&gt; interop.FeaturedCopyForBuild()</code> or <code>=&gt; FeaturedCopyForBuild()</code>. The Go
+function can return <code>T</code> or <code>(T, error)</code> and can optionally accept one
+<code>gowdk.BuildParams</code> argument for dynamic <code>paths {}</code> route params. Other
+statement forms are rejected with a <code>parse_error</code> diagnostic; arbitrary
+build-time statements remain planned.</li><li><code>server {}</code>: request-time data block. Presence and raw body text are recorded,
+then rejected on SPA/action pages.</li><li><code>go {}</code> and <code>go target {}</code>: optional inline Go authoring blocks.
+Presence, target, raw body text, and source span are recorded. Default
+<code>go {}</code> can provide build-data functions called by
+<code>build { =&gt; LocalFunc() }</code> and same-page action, API, or fragment handlers.
+Page-level <code>go client {}</code> can opt into client-side execution by exporting
+<code>GOWDKMount&lt;PageID&gt;</code> with
+<code>//go:wasmexport</code>; GOWDK compiles that Go block to browser Go WASM and emits a
+page loader. <code>go server {}</code> can provide generated SSR load handlers.
+Configured addons that implement <code>gowdk.GoBlockConsumer</code> can validate
+<code>go addon.&lt;name&gt; {}</code> blocks and emit generated app Go files.</li><li><code>view {}</code>: markup render block. Presence and body text are recorded.</li><li><code>style {}</code>: CSS render block for the same page, component, or layout.
+Presence and body text are recorded, then emitted through generated CSS
+assets.</li></ul><p>Actions and APIs are endpoint declarations, not blocks:</p><pre><code class="language-gwdk">act Submit POST &#34;/submit&#34;
+api Health GET &#34;/api/health&#34;
+</code></pre><h2 id="time-boundaries">Time Boundaries</h2><ul><li><code>paths {}</code> and <code>build {}</code> are build-time concepts.</li><li>Page-level Go imports used by <code>build {}</code> run at build time with the local Go
+toolchain.</li><li>Build-time Go function calls can use an explicit imported alias such as
+<code>interop.FeaturedCopyForBuild()</code> or a bare same-package function such as
+<code>FeaturedCopyForBuild()</code> when the page directory is a buildable Go package.
+Dynamic <code>paths {}</code> output passes route params into helpers that declare one
+<code>gowdk.BuildParams</code> argument.</li><li><code>server {}</code> is request-time behavior and must not make SPA pages implicitly SSR.</li><li><code>go {}</code> is parsed as Go and can run static build-time helpers for
+<code>build {}</code>. Saved default <code>go {}</code> blocks are also type-checked with
+sibling Go files in the same package during validation. Generated apps can
+bind supported same-page action, API, and fragment handlers from default
+<code>go {}</code> when no same-package <code>.go</code> handler exists. A page-level
+<code>go client {}</code> runs on the client only when it
+declares a <code>//go:wasmexport GOWDKMount&lt;PageID&gt;</code> function; that browser lane is
+compiled with <code>GOOS=js GOARCH=wasm</code> and mounted by the generated page loader.
+<code>go server {}</code> is
+request-time and requires SSR or explicit hybrid request-time behavior;
+current generated apps can bind <code>Load&lt;PageID&gt;</code> from <code>go server {}</code>.
+Generated app source writes default <code>go {}</code> and <code>go server {}</code> blocks as
+normal Go packages under <code>gowdk_go/</code>. <code>go addon.&lt;name&gt; {}</code>
+is reserved for addon-owned validation and generated app file emission.</li><li><code>act</code> and <code>api</code> endpoint declarations describe request handlers that should
+work without full-page SSR. Normal Go handlers own behavior and return
+<code>runtime/response.Response</code>.</li><li><code>view {}</code> renders markup for spa, action, partial, and SSR output.</li></ul><h2 id="style-blocks">Style Blocks</h2><p>Declare CSS close to markup with a sibling <code>style {}</code> block:</p><pre><code class="language-gwdk">view {
+  &lt;main class=&#34;hero&#34;&gt;
+    &lt;h1&gt;GOWDK&lt;/h1&gt;
+  &lt;/main&gt;
+}
+
+style {
+  .hero {
+    color: red;
+  }
+}
+</code></pre><p>The style block is not rendered as markup. GOWDK emits it through the generated
+CSS asset pipeline:</p><ul><li>Page styles are appended to the page CSS asset.</li><li>Component styles are emitted as scoped component CSS.</li><li>Layout styles are linked only by pages that declare the layout.</li></ul><h2 id="go-blocks">Go Blocks</h2><p>Use a default <code>go {}</code> block for colocated build-time Go helpers:</p><pre><code class="language-gwdk">import strings &#34;strings&#34;
+
+build {
+  =&gt; HomePageForBuild()
+}
+
+go {
+type PageCopy struct {
+	Title string `json:&#34;title&#34;`
+	Slug  string `json:&#34;slug&#34;`
+}
+
+func HomePageForBuild() PageCopy {
+	title := &#34;GOWDK ships apps&#34;
+	return PageCopy{
+		Title: title,
+		Slug:  strings.ToLower(strings.ReplaceAll(title, &#34; &#34;, &#34;-&#34;)),
+	}
+}
+}
+
+view {
+  &lt;h1&gt;{title}&lt;/h1&gt;
+}
+
+style {
+  h1 { color: #0f766e; }
+}
+</code></pre><p>The compiler parses the go block body as Go and runs the referenced build-data
+function during build. Dynamic <code>paths {}</code> output can pass one
+<code>gowdk.BuildParams</code> argument. Returned JSON object fields become build data.</p><p>When generated app source is emitted, default <code>go {}</code> blocks are also written
+under <code>gowdk_go/&lt;package&gt;/go.go</code> so <code>go test ./...</code> in the generated app can
+type-check them as normal Go packages. GOWDK does not write extracted files
+beside the user&#39;s source files.</p><p>Use <code>go server {}</code> for colocated SSR load handlers:</p><pre><code class="language-gwdk">import ssr &#34;github.com/cssbruno/gowdk/addons/ssr&#34;
+
+server {
+  =&gt; { user.name }
+}
+
+go server {
+func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
+	return map[string]any{
+		&#34;user&#34;: map[string]any{&#34;name&#34;: &#34;Ada&#34;},
+	}, nil
+}
+}
+</code></pre><p>Generated apps emit the SSR go block as normal Go under <code>gowdk_go/</code> in the
+generated app module and call it through the same load-handler adapter used for
+separate <code>.go</code> files.</p><p>Use a page-level <code>go client {}</code> mount when the page needs client-side Go:</p><pre><code class="language-gwdk">page home &#34;/&#34;
+
+go client {
+import &#34;syscall/js&#34;
+
+//go:wasmexport GOWDKMountHome
+func GOWDKMountHome() uint32 {
+	document := js.Global().Get(&#34;document&#34;)
+	button := document.Call(&#34;querySelector&#34;, &#34;#refresh&#34;)
+	button.Call(&#34;addEventListener&#34;, &#34;click&#34;, js.FuncOf(func(js.Value, []js.Value) any {
+		document.Call(&#34;querySelector&#34;, &#34;#status&#34;).Set(&#34;textContent&#34;, &#34;mounted&#34;)
+		return nil
+	}))
+	return 0
+}
+}
+
+view {
+  &lt;button id=&#34;refresh&#34;&gt;Refresh&lt;/button&gt;
+  &lt;p id=&#34;status&#34;&gt;&lt;/p&gt;
+}
+
+style {
+  button { font: inherit; }
+}
+</code></pre><p>For page <code>home</code>, the required browser mount export is <code>GOWDKMountHome</code>.
+GOWDK emits <code>assets/gowdk/islands/pages/Home.wasm</code>,
+<code>assets/gowdk/islands/pages/Home.wasm.js</code>, and Go&#39;s <code>wasm_exec.js</code> runtime.
+Without that <code>//go:wasmexport</code> mount, <code>go client {}</code> is validated as Go but no
+browser WASM asset is emitted.</p><p>Use <code>go addon.&lt;name&gt; {}</code> when a configured addon owns the target:</p><pre><code class="language-gwdk">go addon.contracts {
+func AuditSignup() string {
+	return &#34;signup&#34;
+}
+}
+</code></pre><p>The compiler passes those blocks to the matching addon only when it implements
+<code>gowdk.GoBlockConsumer</code>. The addon decides accepted targets, diagnostics, and
+which generated app files to emit. Addon go block files are formatted when they
+are Go files. If the addon is not configured, the compiler reports an
+<code>unknown_addon_go_block_target</code> diagnostic. If the addon is configured but does
+not implement <code>GoBlockConsumer</code> or does not accept the exact target, the
+compiler reports <code>unsupported_addon_go_block_target</code>.</p></article><nav class="doc-pager" aria-label="Pagination" data-doc-pager hidden></nav></div><aside class="doc-toc" data-doc-toc-wrap hidden><p class="doc-toc-title">On this page</p><nav aria-label="On this page" data-doc-toc></nav></aside></div></main></div></div><div class="docs-modal" data-docs-modal hidden><div class="docs-modal-panel" role="dialog" aria-modal="true" aria-label="Search documentation"><div class="docs-modal-search"><span class="docs-modal-ico" aria-hidden="true">⌕</span><input class="docs-modal-input" type="text" placeholder="Search documentation" data-docs-search-input aria-label="Search documentation"><kbd class="docs-modal-esc">Esc</kbd></div><div class="docs-modal-results" data-docs-results></div></div></div><aside class="cookie-notice" data-cookie-notice aria-label="Cookie notice" hidden><div class="cookie-copy"><strong>One cookie</strong><p>This site stores a single cookie to remember you dismissed this notice. No tracking, no analytics.</p></div><button class="button cookie-dismiss" type="button" data-cookie-dismiss>Got it</button></aside></div><footer class="site-footer"><div class="site-footer-inner"><span>GOWDK - Go-native web apps that rebuild fast.</span><nav class="site-footer-nav" aria-label="Footer"><a href="/">Docs</a><a href="/docs/getting-started/">Getting Started</a><a href="https://github.com/cssbruno/gowdk">GitHub</a></nav></div></footer></div>
+</body>
+</html>

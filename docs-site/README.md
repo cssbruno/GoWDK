@@ -128,11 +128,14 @@ GOWDK_ADDR=127.0.0.1:8091 go run .
 ```
 
 Deployment is a Go web service (see `render.yaml` at the repo root — Render only
-reads a Blueprint from the repository root, not from a subdirectory). With
-`rootDir: docs-site`, Render checks out the monorepo, enters `docs-site/`, runs
-syncdocs and the in-tree GOWDK build, copies `assets/`, then `go build`s
-`main.go` into the `app` binary that embeds and serves `docs-site/dist/site`
-(reading `$PORT`). The Blueprint build filter watches both `docs-site/**` and
+reads a Blueprint from the repository root, not from a subdirectory). The service
+is rooted at the **repo root**, not `docs-site/`: docs-site's `go.mod` replaces
+the framework with `../` and `syncdocs` reads `../docs`, both outside
+`docs-site/`, and Render makes files outside a service's root directory
+unavailable at build time. So the build `cd`s into `docs-site/`, runs syncdocs
+and the in-tree GOWDK build, copies `assets/`, then `go build`s `main.go` into
+the `app` binary that embeds and serves `dist/site` (reading `$PORT`); the start
+command is `cd docs-site && ./app`. The Blueprint build filter watches both `docs-site/**` and
 `docs/**`, so source documentation changes deploy the generated site even though
 `src/pages/docs/**` is gitignored. A static preview of any branch is just the
 build output above served by any static file server, so contributors can review

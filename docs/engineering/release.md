@@ -12,9 +12,7 @@ runtime, and docs continue through the 0.x line. Public release notes must keep
 the build experimental and not production-ready until the 1.0 release gates are
 satisfied.
 
-Use `docs/engineering/v0.2-release-checklist.md` for the historical v0.2
-Public Truth and Release Trust checklist.
-Use `docs/engineering/release-notes-v0.7.md` as the draft v0.7 release notes.
+Use `CHANGELOG.md` for published release history.
 Use `docs/engineering/release-plan.md` for the open-ended 0.x hardening
 checklist. It does not make any minor version a production-readiness target.
 Use `.github/release-note-template.md` for future 0.x release bodies.

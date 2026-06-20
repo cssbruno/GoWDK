@@ -337,6 +337,5 @@ reviewable test diff rather than a silent behavior change.
 - [Playground onboarding and sandboxing](docs/product/playground.md)
 - [Changelog](CHANGELOG.md)
 - [0.x improvement checklist](docs/engineering/release-plan.md)
-- [v0.2 release checklist](docs/engineering/v0.2-release-checklist.md)
 - [Public 0.x hardening backlog](https://github.com/cssbruno/GoWDK/issues)
 - [Examples](examples/README.md)

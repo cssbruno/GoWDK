@@ -31,6 +31,85 @@ func TestFormatGoldenPreservesCommentsAndNestedMarkup(t *testing.T) {
 	}
 }
 
+// TestFormatParserBackedGolden exercises the parser-backed path across the block
+// families called out by the formatter scope: comments, nested markup,
+// multi-line attributes, interpolations, and style, client, go, go ssr, go
+// client, and go addon.* bodies.
+func TestFormatParserBackedGolden(t *testing.T) {
+	source, err := os.ReadFile(filepath.FromSlash("testdata/format_parser_backed/input.gwdk"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected, err := os.ReadFile(filepath.FromSlash("testdata/format_parser_backed/expected.gwdk"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	formatted, ok := FormatChecked(source)
+	if !ok {
+		t.Fatalf("expected parser-backed formatting, got conservative fallback for:\n%s", source)
+	}
+	if string(formatted) != string(expected) {
+		t.Fatalf("parser-backed golden mismatch\nexpected:\n%s\nactual:\n%s", expected, formatted)
+	}
+	// The formatted golden must be a fixed point of the formatter.
+	if twice := Format(expected); string(twice) != string(expected) {
+		t.Fatalf("parser-backed golden is not idempotent\nonce:\n%s\ntwice:\n%s", expected, twice)
+	}
+}
+
+// TestFormatStructuredIndentsMultiLineAttributes locks the parser-backed
+// behavior the line-by-line fallback cannot reproduce: a multi-line open tag
+// indents its attribute continuation lines one level deeper than the tag, with
+// the self-closing terminator back at the tag's level.
+func TestFormatStructuredIndentsMultiLineAttributes(t *testing.T) {
+	source := []byte("view {\n<input\ntype=\"text\"\nvalue={email}\n/>\n}\n")
+	formatted, ok := FormatChecked(source)
+	if !ok {
+		t.Fatalf("expected parser-backed formatting, got fallback")
+	}
+	want := "view {\n  <input\n    type=\"text\"\n    value={email}\n  />\n}\n"
+	if string(formatted) != want {
+		t.Fatalf("multi-line attribute indentation mismatch:\n--- got ---\n%s--- want ---\n%s", formatted, want)
+	}
+}
+
+// TestFormatCheckedReportsParseability reports the parser-backed path for
+// parseable source and the conservative fallback for source the parser rejects.
+func TestFormatCheckedReportsParseability(t *testing.T) {
+	if _, ok := FormatChecked([]byte("page home\nroute \"/\"\n\nview {\n<main>Home</main>\n}\n")); !ok {
+		t.Fatalf("expected ok=true for parseable source")
+	}
+	// View bodies with HTML comments are not supported by the view parser, so the
+	// formatter preserves the source through the conservative fallback.
+	if _, ok := FormatChecked([]byte("view {\n<main>\n<!-- note -->\n</main>\n}\n")); ok {
+		t.Fatalf("expected ok=false for view markup the parser cannot parse")
+	}
+}
+
+// TestFormatPreservesUnsupportedViewSyntaxWithoutDroppingSource verifies the
+// fallback never drops user source: every non-blank line survives a format of a
+// view the parser cannot handle, and the result is idempotent.
+func TestFormatPreservesUnsupportedViewSyntaxWithoutDroppingSource(t *testing.T) {
+	source := []byte("page home\nroute \"/\"\n\nview {\n<main>\n<!-- keep this comment -->\n<h1>{title}</h1>\n</main>\n}\n")
+	formatted, ok := FormatChecked(source)
+	if ok {
+		t.Fatalf("expected conservative fallback for unsupported view syntax")
+	}
+	for _, line := range strings.Split(string(source), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if !strings.Contains(string(formatted), trimmed) {
+			t.Fatalf("fallback dropped source line %q from:\n%s", trimmed, formatted)
+		}
+	}
+	if twice := Format(formatted); string(twice) != string(formatted) {
+		t.Fatalf("fallback is not idempotent\nonce:\n%s\ntwice:\n%s", formatted, twice)
+	}
+}
+
 func TestFormatPreservesNestedViewMarkupDepth(t *testing.T) {
 	source := []byte(`view {
 <main class="shell">

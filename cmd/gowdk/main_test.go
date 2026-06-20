@@ -8006,3 +8006,62 @@ func TestLiveReloadBrokerNotifyIsNoOpOnNilBroker(t *testing.T) {
 	broker.notify("reload")
 	broker.notifyData("build-error", "boom")
 }
+
+func TestFmtCommandWritesFormatsAndChecks(t *testing.T) {
+	root := t.TempDir()
+	unformatted := "page home\nroute \"/\"\nguard public\n\nview {\n<main>\n<h1>Home</h1>\n</main>\n}\n"
+	formatted := "page home\nroute \"/\"\nguard public\n\nview {\n  <main>\n    <h1>Home</h1>\n  </main>\n}\n"
+
+	path := filepath.Join(root, "home.page.gwdk")
+	if err := os.WriteFile(path, []byte(unformatted), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// --check on an unformatted file reports it and fails.
+	out, err := captureCLIStdout(t, func() error { return run([]string{"fmt", "--check", path}) })
+	if err == nil {
+		t.Fatalf("expected --check to fail for an unformatted file")
+	}
+	if !strings.Contains(out, path) {
+		t.Fatalf("expected --check to list %q, got:\n%s", path, out)
+	}
+
+	// --write rewrites the file to its formatted form.
+	if err := run([]string{"fmt", "--write", path}); err != nil {
+		t.Fatalf("fmt --write: %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != formatted {
+		t.Fatalf("unexpected written output:\n--- got ---\n%s--- want ---\n%s", got, formatted)
+	}
+
+	// --check now passes because the file is already formatted.
+	if err := run([]string{"fmt", "--check", path}); err != nil {
+		t.Fatalf("expected --check to pass for a formatted file, got %v", err)
+	}
+}
+
+func TestFmtCommandRefusesToRewriteUnparseableSource(t *testing.T) {
+	root := t.TempDir()
+	// A view body with an HTML comment is not supported by the view parser, so
+	// the formatter must refuse to rewrite the file and leave the source intact.
+	original := "page home\nroute \"/\"\nguard public\n\nview {\n<main>\n<!-- keep -->\n<h1>Home</h1>\n</main>\n}\n"
+	path := filepath.Join(root, "broken.page.gwdk")
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := run([]string{"fmt", "--write", path}); err == nil {
+		t.Fatalf("expected fmt --write to refuse unparseable source")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != original {
+		t.Fatalf("fmt --write must not rewrite unparseable source:\n--- got ---\n%s--- want ---\n%s", got, original)
+	}
+}

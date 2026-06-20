@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -37,7 +38,7 @@ func TestStartRecordsSpanToSink(t *testing.T) {
 	if !ok || !traceContext.TraceID.Valid() || !traceContext.SpanID.Valid() {
 		t.Fatalf("expected trace context in returned context, got %#v", traceContext)
 	}
-	spans := ring.Spans()
+	spans := waitForSpans(t, ring, 1)
 	if len(spans) != 1 {
 		t.Fatalf("expected one span, got %d", len(spans))
 	}
@@ -109,6 +110,47 @@ func TestJSONLAndConsoleSinks(t *testing.T) {
 	}
 	if !strings.Contains(console.String(), "unit trace=") {
 		t.Fatalf("unexpected console output: %q", console.String())
+	}
+}
+
+func TestSpanEndDoesNotBlockOnSink(t *testing.T) {
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	tracer := trace.NewTracer(trace.WithSink(blockingSink{entered: entered, release: release}))
+	_, span := tracer.Start(context.Background(), "blocked-export")
+	done := make(chan struct{})
+
+	go func() {
+		span.EndTime(time.Unix(1, 0).UTC())
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		close(release)
+		t.Fatal("span end blocked on sink export")
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		close(release)
+		t.Fatal("sink was not invoked")
+	}
+	close(release)
+}
+
+func TestMultiSinkAttemptsLaterSinksAfterFailure(t *testing.T) {
+	expected := errors.New("first sink failed")
+	recording := &recordingSink{}
+	sink := trace.MultiSink(failingSink{err: expected}, recording)
+
+	err := sink.RecordSpan(context.Background(), trace.Snapshot{Name: "fanout"})
+	if !errors.Is(err, expected) {
+		t.Fatalf("MultiSink error = %v, want %v", err, expected)
+	}
+	if len(recording.spans) != 1 || recording.spans[0].Name != "fanout" {
+		t.Fatalf("later sink did not receive span: %#v", recording.spans)
 	}
 }
 
@@ -226,6 +268,56 @@ func (denySampler) Sample(trace.SamplingContext) bool {
 
 type recordingExporter struct {
 	spans []trace.OTLPSpan
+}
+
+type blockingSink struct {
+	entered chan<- struct{}
+	release <-chan struct{}
+}
+
+func (sink blockingSink) RecordSpan(ctx context.Context, span trace.Snapshot) error {
+	close(sink.entered)
+	select {
+	case <-sink.release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+type failingSink struct {
+	err error
+}
+
+func (sink failingSink) RecordSpan(context.Context, trace.Snapshot) error {
+	return sink.err
+}
+
+type recordingSink struct {
+	spans []trace.Snapshot
+}
+
+func (sink *recordingSink) RecordSpan(ctx context.Context, span trace.Snapshot) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	sink.spans = append(sink.spans, span)
+	return nil
+}
+
+func waitForSpans(t *testing.T, ring *trace.RingSink, want int) []trace.Snapshot {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		spans := ring.Spans()
+		if len(spans) >= want {
+			return spans
+		}
+		if time.Now().After(deadline) {
+			return spans
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }
 
 func (exporter *recordingExporter) ExportSpans(ctx context.Context, spans []trace.OTLPSpan) error {

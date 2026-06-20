@@ -197,6 +197,36 @@ func TestReceiveEventBatchNackKeepsRecords(t *testing.T) {
 	}
 }
 
+func TestReceiveEventBatchNackRedactsLastError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "outbox.jsonl")
+	store := New(path, WithJSONTypeDecoder[patientCreated]())
+	if err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{{
+		Category: contracts.DomainEvent,
+		Type:     patientCreatedType,
+		Value:    patientCreated{ID: "patient-1"},
+	}}); err != nil {
+		t.Fatalf("store events: %v", err)
+	}
+
+	batch, err := store.ReceiveEventBatch(context.Background())
+	if err != nil {
+		t.Fatalf("receive batch: %v", err)
+	}
+	if err := batch.Nack(context.Background(), errors.New("subscriber failed password=hunter2")); err != nil {
+		t.Fatalf("nack batch: %v", err)
+	}
+	records, err := store.Records(context.Background())
+	if err != nil {
+		t.Fatalf("records: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("len(records) = %d, want 1", len(records))
+	}
+	if strings.Contains(records[0].LastError, "hunter2") || !strings.Contains(records[0].LastError, "password=[REDACTED]") {
+		t.Fatalf("last error was not redacted: %q", records[0].LastError)
+	}
+}
+
 func TestReceiveEventBatchAckKeepsDuplicateEventIDRowsDistinct(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "outbox.jsonl")
 	store := New(path, WithBatchSize(1), WithJSONTypeDecoder[patientCreated]())
@@ -341,6 +371,84 @@ func TestReceiveEventBatchMovesRecordToDeadLetterAfterMaxAttempts(t *testing.T) 
 	}
 }
 
+func TestReceiveEventBatchDoesNotDuplicateDeadLetterAfterPendingRewriteFailure(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "outbox.jsonl")
+	deadLetterPath := filepath.Join(root, "dead-letter.jsonl")
+	store := New(path, WithBatchSize(1), WithJSONTypeDecoder[patientCreated](), WithDeadLetter(deadLetterPath, 1))
+	if err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{
+		{
+			Category: contracts.DomainEvent,
+			Type:     patientCreatedType,
+			Value:    patientCreated{ID: "patient-1"},
+		},
+		{
+			Category: contracts.DomainEvent,
+			Type:     patientCreatedType,
+			Value:    patientCreated{ID: "patient-2"},
+		},
+	}); err != nil {
+		t.Fatalf("store events: %v", err)
+	}
+
+	renameErr := errors.New("pending rewrite failed")
+	var renames int
+	store.rename = func(old, new string) error {
+		renames++
+		if renames == 2 {
+			return renameErr
+		}
+		return os.Rename(old, new)
+	}
+
+	first, err := store.ReceiveEventBatch(context.Background())
+	if err != nil {
+		t.Fatalf("receive first batch: %v", err)
+	}
+	if err := first.Nack(context.Background(), errors.New("subscriber failed password=hunter2")); !errors.Is(err, renameErr) {
+		t.Fatalf("first nack error = %v, want %v", err, renameErr)
+	}
+	records, err := store.Records(context.Background())
+	if err != nil {
+		t.Fatalf("records after failed pending rewrite: %v", err)
+	}
+	if len(records) != 2 {
+		t.Fatalf("pending records after failed rewrite = %#v, want two", records)
+	}
+	dead, err := store.DeadLetterRecords(context.Background())
+	if err != nil {
+		t.Fatalf("dead letter after failed pending rewrite: %v", err)
+	}
+	if len(dead) != 1 {
+		t.Fatalf("dead letter records after failed pending rewrite = %#v, want one", dead)
+	}
+	if strings.Contains(dead[0].LastError, "hunter2") || !strings.Contains(dead[0].LastError, "password=[REDACTED]") {
+		t.Fatalf("dead letter error was not redacted: %q", dead[0].LastError)
+	}
+
+	second, err := store.ReceiveEventBatch(context.Background())
+	if err != nil {
+		t.Fatalf("receive retry batch: %v", err)
+	}
+	if err := second.Nack(context.Background(), errors.New("subscriber failed password=hunter2")); err != nil {
+		t.Fatalf("retry nack: %v", err)
+	}
+	dead, err = store.DeadLetterRecords(context.Background())
+	if err != nil {
+		t.Fatalf("dead letter after retry: %v", err)
+	}
+	if len(dead) != 1 {
+		t.Fatalf("dead letter records after retry = %#v, want one deduplicated record", dead)
+	}
+	records, err = store.Records(context.Background())
+	if err != nil {
+		t.Fatalf("records after retry: %v", err)
+	}
+	if len(records) != 1 || records[0].EventID == dead[0].EventID {
+		t.Fatalf("pending records after retry = %#v, want only the untouched second record", records)
+	}
+}
+
 func TestReceiveEventBatchHonorsBatchSize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "outbox.jsonl")
 	store := New(path, WithBatchSize(1), WithJSONTypeDecoder[patientCreated]())
@@ -401,6 +509,23 @@ func TestRunEventWorkerConsumesFileOutbox(t *testing.T) {
 	}
 	if len(records) != 0 {
 		t.Fatalf("len(records) = %d, want 0", len(records))
+	}
+}
+
+func TestStoreEventsRejectsRecordLargerThanReaderLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "outbox.jsonl")
+	store := New(path)
+
+	err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{{
+		Category: contracts.DomainEvent,
+		Type:     patientCreatedType,
+		Value:    strings.Repeat("x", maxJSONLineBytes),
+	}})
+	if err == nil || !strings.Contains(err.Error(), "file outbox record exceeds") {
+		t.Fatalf("store oversized event error = %v, want record-size error", err)
+	}
+	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+		t.Fatalf("oversized event should not create outbox file, stat err=%v", statErr)
 	}
 }
 

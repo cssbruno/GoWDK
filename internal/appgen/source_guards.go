@@ -154,6 +154,13 @@ func denyByOmissionStmts() []ast.Stmt {
 	}
 }
 
+func denyByOmissionJSONStmts() []ast.Stmt {
+	return []ast.Stmt{
+		writeNoStoreJSONErrorStmt(sel("http", "StatusForbidden"), "403 forbidden"),
+		returnBool(true),
+	}
+}
+
 func generatedUsesCustomGuards(options Options) bool {
 	return generatedRequiresAppGuardRegistry(options)
 }

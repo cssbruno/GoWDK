@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/cssbruno/gowdk/runtime/contracts"
+	"github.com/cssbruno/gowdk/runtime/security"
 )
 
 const defaultBatchSize = 100
@@ -285,7 +286,7 @@ func (store *Store) readRecordsFromPathLocked(path string) ([]Record, error) {
 
 	var records []Record
 	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxJSONLineBytes)
 	line := 0
 	for scanner.Scan() {
 		line++
@@ -328,7 +329,7 @@ func (store *Store) markRecordsFailedLocked(mark map[string]bool, cause error) e
 	now := store.now().UTC()
 	message := ""
 	if cause != nil {
-		message = cause.Error()
+		message = security.RedactSecrets(cause.Error())
 	}
 	var kept []Record
 	var dead []Record
@@ -366,5 +367,21 @@ func (store *Store) appendRecordsToPathLocked(path string, records []Record) err
 	if err != nil {
 		return err
 	}
-	return writeJSONLinesAtomic(path, ".gowdk-outbox-*", append(existing, records...), store.rename)
+	seen := make(map[string]bool, len(existing))
+	merged := append([]Record(nil), existing...)
+	for _, record := range existing {
+		if record.ID != "" {
+			seen[record.ID] = true
+		}
+	}
+	for _, record := range records {
+		if record.ID != "" && seen[record.ID] {
+			continue
+		}
+		merged = append(merged, record)
+		if record.ID != "" {
+			seen[record.ID] = true
+		}
+	}
+	return writeJSONLinesAtomic(path, ".gowdk-outbox-*", merged, store.rename)
 }

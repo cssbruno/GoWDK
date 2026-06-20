@@ -2,11 +2,20 @@ package trace
 
 import (
 	"context"
+	"log"
 	"sync"
 	"time"
 )
 
 type spanContextKey struct{}
+
+const defaultSinkTimeout = 5 * time.Second
+
+// SinkLogger receives completed-span export failures. Set it to nil to silence
+// sink failure logging. It defaults to the standard log package.
+var SinkLogger func(message string) = func(message string) {
+	log.Print(message)
+}
 
 // Span records one sampled unit of work. Methods are nil-safe so callers can
 // defer span.End() even when sampling is disabled.
@@ -74,8 +83,25 @@ func (span *Span) EndTime(t time.Time) {
 	}
 	span.mu.Unlock()
 	if sink != nil {
-		_ = sink.RecordSpan(context.Background(), snapshot)
+		recordSpanAsync(sink, snapshot)
 	}
+}
+
+func recordSpanAsync(sink Sink, snapshot Snapshot) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultSinkTimeout)
+		defer cancel()
+		if err := sink.RecordSpan(ctx, snapshot); err != nil {
+			logSinkFailure(err)
+		}
+	}()
+}
+
+func logSinkFailure(err error) {
+	if err == nil || SinkLogger == nil {
+		return
+	}
+	SinkLogger("gowdk trace: sink failed: " + err.Error())
 }
 
 // Event records a timestamped event on the span.

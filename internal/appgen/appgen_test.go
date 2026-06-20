@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"flag"
+	"go/ast"
 	"go/format"
 	"io"
 	"net"
@@ -822,6 +823,7 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 			Register:  "Register",
 			OwnerKind: gwdkir.SourcePage,
 			OwnerID:   "patients",
+			Guards:    []string{"public"},
 		},
 		{
 			Kind:        gwdkir.ContractQuery,
@@ -840,6 +842,7 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 			Register:  "Register",
 			OwnerKind: gwdkir.SourcePage,
 			OwnerID:   "patients",
+			Guards:    []string{"public"},
 		},
 	}}
 
@@ -930,6 +933,7 @@ func TestGenerateWritesRealtimeFanoutForSubscriptions(t *testing.T) {
 			Register:    "Register",
 			OwnerKind:   gwdkir.SourcePage,
 			OwnerID:     "patients",
+			Guards:      []string{"public"},
 		}},
 		RealtimeSubscriptions: []gwdkir.RealtimeSubscription{{
 			Query:           "patients.GetPatientPage",
@@ -989,6 +993,7 @@ func TestGenerateWritesRealtimeQueryInvalidationFanout(t *testing.T) {
 			Register:    "Register",
 			OwnerKind:   gwdkir.SourcePage,
 			OwnerID:     "patients",
+			Guards:      []string{"public"},
 		}},
 		QueryInvalidations: []gwdkir.QueryInvalidation{{
 			Query:         "patients.GetPatientPage",
@@ -1059,6 +1064,7 @@ func TestGenerateRegistersSingleFlightRegionRenderers(t *testing.T) {
 			Register:    "Register",
 			OwnerKind:   gwdkir.SourcePage,
 			OwnerID:     "patients",
+			Guards:      []string{"public"},
 		}},
 		QueryInvalidations: []gwdkir.QueryInvalidation{{
 			Query:         "patients.GetPatientPage",
@@ -1200,6 +1206,7 @@ func TestGenerateSkipsSingleFlightRegionRenderersForGuardedRoutes(t *testing.T) 
 			Register:    "Register",
 			OwnerKind:   gwdkir.SourcePage,
 			OwnerID:     "patients",
+			Guards:      []string{"public"},
 		}},
 		QueryInvalidations: []gwdkir.QueryInvalidation{{
 			Query:         "patients.GetPatientPage",
@@ -1893,8 +1900,8 @@ func TestGenerateWiresCSRFForStateChangingAPIs(t *testing.T) {
 		t.Fatalf("expected generated source to contain API case:\n%s", source)
 	}
 	assertSourceOrder(t, source[apiIndex:],
-		`err := csrfValidator.Validate(request)`,
 		`request.Body = http.MaxBytesReader(response, request.Body, maxAPIBodyBytes)`,
+		`err := csrfValidator.Validate(request)`,
 		`result, err := status.Update(ctx, request)`,
 	)
 }
@@ -1955,6 +1962,7 @@ func TestGenerateWiresCSRFForCommandContracts(t *testing.T) {
 		Register:    "Register",
 		OwnerKind:   gwdkir.SourcePage,
 		OwnerID:     "patients",
+		Guards:      []string{"public"},
 	}}}
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
@@ -2051,6 +2059,9 @@ func TestGenerateWiresEnvContractValidation(t *testing.T) {
 		`explicit := strings.TrimSpace(os.Getenv("GOWDK_ENV_FILE"))`,
 		`path, _, err := gowdkenvfile.LookupPath("", explicit)`,
 		`_, err = gowdkenvfile.LoadIntoEnv(path, explicit != "")`,
+		`applyEnvDefaults()`,
+		`func applyEnvDefaults()`,
+		`os.Setenv("GOWDK_TEST_ADDR", "127.0.0.1:8080")`,
 		`if err := validateEnvContract(); err != nil {`,
 		`func validateEnvContract() error`,
 		`value := os.Getenv("GOWDK_TEST_BACKEND_ORIGIN")`,
@@ -2065,6 +2076,78 @@ func TestGenerateWiresEnvContractValidation(t *testing.T) {
 	}
 	if strings.Contains(source, `GOWDK_TEST_ADDR is required but is not set`) {
 		t.Fatalf("required env var with a default should not need runtime validation:\n%s", source)
+	}
+	muxIndex := strings.Index(source, `func newServeMux(identity gowdkruntime.Identity) (*http.ServeMux, error)`)
+	if muxIndex < 0 {
+		t.Fatalf("expected generated source to contain newServeMux:\n%s", source)
+	}
+	assertSourceOrder(t, source[muxIndex:],
+		`if err := loadEnvFile(); err != nil {`,
+		`applyEnvDefaults()`,
+		`if err := validateEnvContract(); err != nil {`,
+	)
+}
+
+func TestGenerateLoadsEnvFileForOptionalEnvConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		vars          []gowdk.EnvVar
+		expectDefault bool
+	}{
+		{
+			name: "optional only",
+			vars: []gowdk.EnvVar{{Name: "GOWDK_TEST_OPTIONAL_ORIGIN"}},
+		},
+		{
+			name:          "default only",
+			vars:          []gowdk.EnvVar{{Name: "GOWDK_TEST_ADDR", Default: "127.0.0.1:8080"}},
+			expectDefault: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			outputDir := filepath.Join(root, "dist")
+			appDir := filepath.Join(root, "generated-app")
+			writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+			result, err := GenerateWithOptions(outputDir, appDir, Options{
+				Config: gowdk.Config{Env: gowdk.EnvConfig{Vars: tc.vars}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			payload, err := os.ReadFile(result.PackagePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			source := string(payload)
+			for _, expected := range []string{
+				`gowdkenvfile "github.com/cssbruno/gowdk/runtime/envfile"`,
+				`if err := loadEnvFile(); err != nil {`,
+				`func loadEnvFile() error`,
+				`_, err = gowdkenvfile.LoadIntoEnv(path, explicit != "")`,
+			} {
+				if !strings.Contains(source, expected) {
+					t.Fatalf("expected optional env config to load .env via %q:\n%s", expected, source)
+				}
+			}
+			if strings.Contains(source, `func validateEnvContract() error`) {
+				t.Fatalf("optional-only env config should not emit required validation:\n%s", source)
+			}
+			if tc.expectDefault {
+				for _, expected := range []string{
+					`applyEnvDefaults()`,
+					`func applyEnvDefaults()`,
+					`os.Setenv("GOWDK_TEST_ADDR", "127.0.0.1:8080")`,
+				} {
+					if !strings.Contains(source, expected) {
+						t.Fatalf("expected default-only env config to emit %q:\n%s", expected, source)
+					}
+				}
+			} else if strings.Contains(source, `func applyEnvDefaults()`) {
+				t.Fatalf("optional env config without defaults should not emit defaults helper:\n%s", source)
+			}
+		})
 	}
 }
 
@@ -3709,7 +3792,8 @@ func TestGenerateWiresRateLimiterWhenEnabled(t *testing.T) {
 		`func RegisterRateLimiter(limiter *gowdkratelimit.Limiter)`,
 		`result, err := rateLimiter.AllowRequest(request)`,
 		`gowdkratelimit.WriteHeaders(response, result)`,
-		`gowdkratelimit.DefaultLimitHandler(response, request, result)`,
+		`rateLimiter.HandleError(response, request, err)`,
+		`rateLimiter.HandleLimit(response, request, result)`,
 		`if runRateLimit(response, request)`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -5737,6 +5821,7 @@ func TestGeneratedBinaryServesPageAndExecutesContractQuery(t *testing.T) {
 		Register:    "Register",
 		OwnerKind:   gwdkir.SourcePage,
 		OwnerID:     "patients",
+		Guards:      []string{"public"},
 	}}}
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program}); err != nil {
 		t.Fatal(err)
@@ -5839,6 +5924,7 @@ func TestGeneratedBinaryCommandContractUsesRegisteredEventSink(t *testing.T) {
 		Register:    "Register",
 		OwnerKind:   gwdkir.SourcePage,
 		OwnerID:     "patients",
+		Guards:      []string{"public"},
 	}}}
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program}); err != nil {
 		t.Fatal(err)
@@ -5966,6 +6052,7 @@ func TestGeneratedBinaryCommandSetsInvalidatedQueriesHeader(t *testing.T) {
 			Register:    "Register",
 			OwnerKind:   gwdkir.SourcePage,
 			OwnerID:     "patients",
+			Guards:      []string{"public"},
 		}},
 		QueryInvalidations: []gwdkir.QueryInvalidation{{
 			Query:         "patients.GetPatientPage",
@@ -6072,6 +6159,7 @@ func TestGeneratedBinaryCommandEmbedsSingleFlightRegionHTML(t *testing.T) {
 			Register:    "Register",
 			OwnerKind:   gwdkir.SourcePage,
 			OwnerID:     "patients",
+			Guards:      []string{"public"},
 		}},
 		QueryInvalidations: []gwdkir.QueryInvalidation{{
 			Query:         "patients.GetPatientPage",
@@ -6259,6 +6347,7 @@ func TestGeneratedBinaryRealtimeFanoutStreamsSubscribedPresentationEvents(t *tes
 			Register:    "Register",
 			OwnerKind:   gwdkir.SourcePage,
 			OwnerID:     "patients",
+			Guards:      []string{"public"},
 		}},
 		RealtimeSubscriptions: []gwdkir.RealtimeSubscription{{
 			Query:           "patients.GetPatientPage",
@@ -6482,7 +6571,7 @@ func GOWDKGuardRegistry() gowdkguard.Registry {
 	if cache := response.Header.Get("Cache-Control"); cache != "no-store" {
 		t.Fatalf("expected guard-denied realtime stream to be no-store, got %q", cache)
 	}
-	if !strings.Contains(string(payload), "guard") {
+	if !strings.Contains(string(payload), "403 forbidden") || strings.Contains(string(payload), "auth.required") {
 		t.Fatalf("expected guard denial response, got %s", payload)
 	}
 }
@@ -6513,6 +6602,7 @@ func TestGeneratedBinaryContractAdaptersReturnJSONErrors(t *testing.T) {
 			Register:  "Register",
 			OwnerKind: gwdkir.SourcePage,
 			OwnerID:   "patients",
+			Guards:    []string{"public"},
 		},
 		{
 			Kind:        gwdkir.ContractQuery,
@@ -6529,6 +6619,7 @@ func TestGeneratedBinaryContractAdaptersReturnJSONErrors(t *testing.T) {
 			Register:    "Register",
 			OwnerKind:   gwdkir.SourcePage,
 			OwnerID:     "patients",
+			Guards:      []string{"public"},
 		},
 	}}
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program}); err != nil {
@@ -6714,6 +6805,7 @@ func TestGeneratedBinaryContractCommandCSRFReturnsJSONErrorByDefault(t *testing.
 		Register:    "Register",
 		OwnerKind:   gwdkir.SourcePage,
 		OwnerID:     "patients",
+		Guards:      []string{"public"},
 	}}}
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{
 		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
@@ -8270,6 +8362,7 @@ func TestDeniedPageRoutePatternsSelectsGuardlessDynamicPages(t *testing.T) {
 
 func TestGuardlessActionAndAPIAreDeniedByOmission(t *testing.T) {
 	const deny = `gowdkresponse.WriteNoStoreError(response, http.StatusForbidden, "403 forbidden")`
+	const denyJSON = `gowdkresponse.WriteNoStoreJSONError(response, http.StatusForbidden, "403 forbidden")`
 
 	actionSrc, err := actionHandlerSource([]ActionEndpoint{{PageID: "p", ActionName: "Sub", Route: "/sub"}}, false)
 	if err != nil {
@@ -8285,6 +8378,62 @@ func TestGuardlessActionAndAPIAreDeniedByOmission(t *testing.T) {
 	}
 	if !strings.Contains(apiSrc, deny) {
 		t.Fatalf("guardless api must be denied by omission:\n%s", apiSrc)
+	}
+
+	fragmentAdapter := backendAdapterIR(Options{Fragments: []FragmentEndpoint{{
+		PageID:       "p",
+		FragmentName: "Refresh",
+		Method:       http.MethodPost,
+		Route:        "/fragment",
+		Target:       "#target",
+		HTML:         "<p>Updated</p>",
+	}}})
+	fragmentSrc, err := printActionDecls([]ast.Decl{fragmentFuncDecl(fragmentAdapter.Fragments, false)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(fragmentSrc, deny) {
+		t.Fatalf("guardless fragment must be denied by omission:\n%s", fragmentSrc)
+	}
+
+	contractsAdapter := backendAdapterIR(Options{IR: &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{
+		{
+			Kind:        gwdkir.ContractCommand,
+			Name:        "patients.CreatePatient",
+			ImportAlias: "patients",
+			ImportPath:  "example.com/app/contracts/patients",
+			Type:        "CreatePatient",
+			Result:      "CreatePatientResult",
+			Method:      "POST",
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "HandleCreatePatient",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		},
+		{
+			Kind:        gwdkir.ContractQuery,
+			Name:        "patients.GetPatientPage",
+			ImportAlias: "patients",
+			ImportPath:  "example.com/app/contracts/patients",
+			Type:        "GetPatientPage",
+			Result:      "PatientPageData",
+			Method:      "GET",
+			Path:        "/patients",
+			Status:      gwdkir.ContractBindingBound,
+			Handler:     "LoadPatientPage",
+			Register:    "Register",
+			OwnerKind:   gwdkir.SourcePage,
+			OwnerID:     "patients",
+		},
+	}}})
+	contractSrc, err := printActionDecls(contractHandlerDecls(contractsAdapter.ContractExposures, false, false, false, false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(contractSrc, denyJSON); got != 2 {
+		t.Fatalf("guardless command/query contracts must be denied by omission, got %d JSON denies:\n%s", got, contractSrc)
 	}
 
 	// An endpoint that declares `guard public` is intentionally reachable and

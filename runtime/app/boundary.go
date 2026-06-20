@@ -36,6 +36,7 @@ func Boundary(kind string, handler HandlerFunc) HandlerFunc {
 	kind = normalizeBoundaryKind(kind)
 	return func(writer http.ResponseWriter, request *http.Request) (handled bool) {
 		boundaryWriter := &boundaryResponseWriter{ResponseWriter: writer}
+		wrappedWriter := wrapBoundaryResponseWriter(boundaryWriter)
 		defer func() {
 			if value := recover(); value != nil {
 				if value == http.ErrAbortHandler {
@@ -54,7 +55,7 @@ func Boundary(kind string, handler HandlerFunc) HandlerFunc {
 				writeBoundaryError(boundaryWriter, request, kind, value)
 			}
 		}()
-		return handler(boundaryWriter, request)
+		return handler(wrappedWriter, request)
 	}
 }
 
@@ -96,6 +97,10 @@ func normalizeBoundaryKind(kind string) string {
 		return "action"
 	case "api":
 		return "api"
+	case "command":
+		return "command"
+	case "query":
+		return "query"
 	case "ssr":
 		return "ssr"
 	default:
@@ -108,6 +113,10 @@ func writeBoundaryError(writer http.ResponseWriter, request *http.Request, kind 
 	message := fmt.Sprintf("GOWDK %s handler failed", boundaryKindLabel(kind))
 	if kind == "ssr" && request != nil {
 		WriteErrorPage(writer, request, http.StatusInternalServerError, message)
+		return
+	}
+	if kind == "command" || kind == "query" {
+		response.WriteNoStoreJSONError(writer, http.StatusInternalServerError, message)
 		return
 	}
 	response.WriteNoStoreError(writer, http.StatusInternalServerError, message)

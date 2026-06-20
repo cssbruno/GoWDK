@@ -64,3 +64,7 @@ func roleNotAllowedError(kind Kind, contract string, role Role) error {
 func nilHandlerError(kind Kind, contract string) error {
 	return Error{Kind: ErrNilHandler, Contract: contract, Message: fmt.Sprintf("%s %s cannot register a nil handler", kind, contract)}
 }
+
+func nilRegistryError(kind Kind, contract string) error {
+	return Error{Kind: ErrNilHandler, Contract: contract, Message: fmt.Sprintf("%s %s registry cannot be nil", kind, contract)}
+}

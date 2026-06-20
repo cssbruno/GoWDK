@@ -1,10 +1,14 @@
 package fileoutbox
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 )
+
+const maxJSONLineBytes = 10 * 1024 * 1024
 
 func writeJSONLinesAtomic[T any](path, pattern string, records []T, rename func(string, string) error) error {
 	if len(records) == 0 {
@@ -28,9 +32,18 @@ func writeJSONLinesAtomic[T any](path, pattern string, records []T, rename func(
 		}
 	}()
 
-	encoder := json.NewEncoder(temp)
 	for _, record := range records {
+		var line bytes.Buffer
+		encoder := json.NewEncoder(&line)
 		if err := encoder.Encode(record); err != nil {
+			_ = temp.Close()
+			return err
+		}
+		if line.Len() > maxJSONLineBytes {
+			_ = temp.Close()
+			return fmt.Errorf("file outbox record exceeds %d bytes", maxJSONLineBytes)
+		}
+		if _, err := temp.Write(line.Bytes()); err != nil {
 			_ = temp.Close()
 			return err
 		}

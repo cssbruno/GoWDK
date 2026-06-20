@@ -173,10 +173,13 @@ func traceBackendRoute(kind, routePath string, source gowdktrace.SourceRef, hand
 		if _, ok := gowdktrace.TracerFromContext(request.Context()); !ok {
 			return handler(writer, request)
 		}
-		recorder, ok := writer.(*traceResponseWriter)
-		if !ok {
-			recorder = &traceResponseWriter{ResponseWriter: writer, status: http.StatusOK}
-			writer = recorder
+		recorder, ok := writer.(interface{ traceRecorder() *traceResponseWriter })
+		var traceRecorder *traceResponseWriter
+		if ok {
+			traceRecorder = recorder.traceRecorder()
+		} else {
+			traceRecorder = &traceResponseWriter{ResponseWriter: writer, status: http.StatusOK}
+			writer = wrapTraceResponseWriter(traceRecorder)
 		}
 		ctx, span := gowdktrace.Start(request.Context(), name,
 			gowdktrace.WithSurface(gowdktrace.SurfaceBackend),
@@ -193,9 +196,9 @@ func traceBackendRoute(kind, routePath string, source gowdktrace.SourceRef, hand
 				span.End()
 				panic(recovered)
 			}
-			span.Set(gowdktrace.AttrHTTPResponseStatusCode, recorder.status)
-			if recorder.status >= 500 {
-				span.SetStatus(gowdktrace.StatusError, http.StatusText(recorder.status))
+			span.Set(gowdktrace.AttrHTTPResponseStatusCode, traceRecorder.status)
+			if traceRecorder.status >= 500 {
+				span.SetStatus(gowdktrace.StatusError, http.StatusText(traceRecorder.status))
 			} else {
 				span.SetStatus(gowdktrace.StatusOK, "")
 			}

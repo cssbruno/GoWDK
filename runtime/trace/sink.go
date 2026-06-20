@@ -3,6 +3,7 @@ package trace
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -24,15 +25,16 @@ func (fn sinkFunc) RecordSpan(ctx context.Context, span Snapshot) error {
 func MultiSink(sinks ...Sink) Sink {
 	copied := append([]Sink(nil), sinks...)
 	return sinkFunc(func(ctx context.Context, span Snapshot) error {
+		var joined error
 		for _, sink := range copied {
 			if sink == nil {
 				continue
 			}
 			if err := sink.RecordSpan(ctx, span); err != nil {
-				return err
+				joined = errors.Join(joined, err)
 			}
 		}
-		return nil
+		return joined
 	})
 }
 

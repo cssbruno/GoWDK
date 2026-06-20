@@ -11,6 +11,9 @@ func RegisterJob[J any](registry *Registry, handler JobHandler[J], roles ...Role
 	if handler == nil {
 		return nilHandlerError(Job, typeName[J]())
 	}
+	if registry == nil {
+		return nilRegistryError(Job, typeName[J]())
+	}
 	return registry.registerJob(typeName[J](), handler, roles)
 }
 
@@ -32,6 +35,10 @@ func executeJob[J any](ctx context.Context, registry *Registry, job J, role Role
 	)
 	var spanErr error
 	defer func() { finishContractSpan(span, spanErr) }()
+	if registry == nil {
+		spanErr = nilRegistryError(Job, contract)
+		return spanErr
+	}
 	entry, ok := registry.job(contract)
 	if !ok {
 		spanErr = missingHandlerError(Job, contract)
@@ -53,6 +60,7 @@ func executeJob[J any](ctx context.Context, registry *Registry, job J, role Role
 func (registry *Registry) registerJob(job string, handler any, roles []Role) error {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
+	registry.ensureMapsLocked()
 	if _, exists := registry.jobs[job]; exists {
 		return duplicateHandlerError(Job, job)
 	}

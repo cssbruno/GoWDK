@@ -38,6 +38,9 @@ func executableContractHandlerDecl(exposure BackendContractExposure, csrf bool, 
 }
 
 func executableContractHandlerStmts(exposure BackendContractExposure, csrf bool, rateLimit bool, queryInvalidations bool, commandPatches bool) []ast.Stmt {
+	if endpointDeniedByOmission(exposure.Guards) {
+		return denyByOmissionJSONStmts()
+	}
 	stmts := endpointContextStmts(
 		string(exposure.Endpoint.Kind),
 		exposure.Endpoint.PageID,
@@ -348,6 +351,9 @@ func contractExposureExecutable(exposure BackendContractExposure) bool {
 
 func contractExposuresUseForm(exposures []BackendContractExposure) bool {
 	for _, exposure := range exposures {
+		if endpointDeniedByOmission(exposure.Guards) {
+			continue
+		}
 		if len(exposure.InputFields) > 0 {
 			return true
 		}
@@ -357,6 +363,9 @@ func contractExposuresUseForm(exposures []BackendContractExposure) bool {
 
 func contractExposuresParseForm(exposures []BackendContractExposure) bool {
 	for _, exposure := range exposures {
+		if endpointDeniedByOmission(exposure.Guards) {
+			continue
+		}
 		if exposure.Endpoint.Kind == BackendEndpointCommand {
 			return true
 		}

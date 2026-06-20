@@ -23,7 +23,20 @@ func envRuntimeValidationRequired(config gowdk.EnvConfig) bool {
 }
 
 func generatedEnvFileLoadRequired(options Options) bool {
-	return envRuntimeValidationRequired(options.Config.Env) || csrfEnabled(options) || generatedUsesAuthAddon(options)
+	return envConfigDeclared(options.Config.Env) || csrfEnabled(options) || generatedUsesAuthAddon(options)
+}
+
+func envConfigDeclared(config gowdk.EnvConfig) bool {
+	return len(config.Vars) > 0 || len(config.Secrets) > 0
+}
+
+func envDefaultsRequired(config gowdk.EnvConfig) bool {
+	for _, variable := range config.Vars {
+		if variable.Default != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func loadEnvFileDecl(options Options) []ast.Decl {
@@ -52,6 +65,35 @@ func loadEnvFileStmt(options Options) []ast.Stmt {
 		Cond: notNil("err"),
 		Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil"), id("err")}}),
 	}}
+}
+
+func applyEnvDefaultsDecl(config gowdk.EnvConfig) []ast.Decl {
+	if !envDefaultsRequired(config) {
+		return nil
+	}
+	var stmts []ast.Stmt
+	for _, variable := range config.Vars {
+		if variable.Default == "" {
+			continue
+		}
+		stmts = append(stmts, &ast.IfStmt{
+			Init: define([]ast.Expr{id("value")}, call(sel("os", "Getenv"), stringLit(variable.Name))),
+			Cond: &ast.BinaryExpr{
+				X:  call(sel("strings", "TrimSpace"), id("value")),
+				Op: token.EQL,
+				Y:  stringLit(""),
+			},
+			Body: block(exprStmt(call(sel("os", "Setenv"), stringLit(variable.Name), stringLit(variable.Default)))),
+		})
+	}
+	return []ast.Decl{funcDecl("applyEnvDefaults", nil, nil, stmts)}
+}
+
+func applyEnvDefaultsStmt(config gowdk.EnvConfig) []ast.Stmt {
+	if !envDefaultsRequired(config) {
+		return nil
+	}
+	return []ast.Stmt{exprStmt(call(id("applyEnvDefaults")))}
 }
 
 func validateEnvContractDecl(config gowdk.EnvConfig) []ast.Decl {

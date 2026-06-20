@@ -28,16 +28,25 @@ func NewRegistry() *Registry {
 
 // Contracts returns deterministic metadata for registered contracts.
 func (registry *Registry) Contracts() []Metadata {
+	if registry == nil {
+		return nil
+	}
 	return registry.contractsForRole("")
 }
 
 // ContractsForRole returns deterministic metadata for contracts available to role.
 func (registry *Registry) ContractsForRole(role Role) []Metadata {
+	if registry == nil {
+		return nil
+	}
 	return registry.contractsForRole(role)
 }
 
 // Invalidations returns deterministic event-to-query invalidation metadata.
 func (registry *Registry) Invalidations() []QueryInvalidation {
+	if registry == nil {
+		return nil
+	}
 	registry.mu.RLock()
 	defer registry.mu.RUnlock()
 	out := append([]QueryInvalidation(nil), registry.invalidations...)
@@ -51,6 +60,21 @@ func (registry *Registry) Invalidations() []QueryInvalidation {
 		return out[i].QueryType < out[j].QueryType
 	})
 	return out
+}
+
+func (registry *Registry) ensureMapsLocked() {
+	if registry.queries == nil {
+		registry.queries = map[string]queryEntry{}
+	}
+	if registry.commands == nil {
+		registry.commands = map[string]commandEntry{}
+	}
+	if registry.events == nil {
+		registry.events = map[eventKey][]eventEntry{}
+	}
+	if registry.jobs == nil {
+		registry.jobs = map[string]jobEntry{}
+	}
 }
 
 func (registry *Registry) contractsForRole(role Role) []Metadata {

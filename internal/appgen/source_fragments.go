@@ -62,6 +62,9 @@ func fragmentCaseExpr(fragment BackendFragmentAdapter) ast.Expr {
 }
 
 func fragmentCaseStmts(fragment BackendFragmentAdapter, rateLimit bool) []ast.Stmt {
+	if endpointDeniedByOmission(fragment.Guards) {
+		return denyByOmissionStmts()
+	}
 	stmts := fragmentContextStmts(fragment, false)
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(fragment.Guards)...)
@@ -110,6 +113,9 @@ func fragmentDynamicIfStmt(fragment BackendFragmentAdapter, rateLimit bool) ast.
 }
 
 func fragmentDynamicCaseStmts(fragment BackendFragmentAdapter, rateLimit bool) []ast.Stmt {
+	if endpointDeniedByOmission(fragment.Guards) {
+		return denyByOmissionStmts()
+	}
 	stmts := fragmentContextStmts(fragment, true)
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(fragment.Guards)...)

@@ -251,7 +251,7 @@ func TestRunEventWorkerWithSeenStoreDoesNotMarkAckFailure(t *testing.T) {
 
 func TestRunEventWorkerNacksSubscriberFailureAndContinues(t *testing.T) {
 	registry := NewRegistry()
-	subscriberErr := errors.New("subscriber unavailable")
+	subscriberErr := errors.New("subscriber unavailable password=hunter2")
 	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
 		return subscriberErr
 	}, RoleWorker))
@@ -294,8 +294,11 @@ func TestRunEventWorkerNacksSubscriberFailureAndContinues(t *testing.T) {
 	if !Is(nackCause, ErrSubscriberFailed) {
 		t.Fatalf("nack cause = %v, want subscriber failure", nackCause)
 	}
-	if len(logged) != 1 || !strings.Contains(logged[0], subscriberErr.Error()) {
-		t.Fatalf("logged = %#v, want one recovered dispatch failure", logged)
+	if len(logged) != 1 || !strings.Contains(logged[0], "subscriber unavailable") || !strings.Contains(logged[0], "password=[REDACTED]") {
+		t.Fatalf("logged = %#v, want one redacted dispatch failure", logged)
+	}
+	if strings.Contains(logged[0], "hunter2") {
+		t.Fatalf("worker log leaked secret: %q", logged[0])
 	}
 }
 

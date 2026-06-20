@@ -81,7 +81,8 @@ func (handler Handler) startRequestTrace(response http.ResponseWriter, request *
 	if span == nil {
 		return response, request, nil
 	}
-	return &traceResponseWriter{ResponseWriter: response, status: http.StatusOK}, request, span
+	recorder := &traceResponseWriter{ResponseWriter: response, status: http.StatusOK}
+	return wrapTraceResponseWriter(recorder), request, span
 }
 
 func finishRequestTrace(response http.ResponseWriter, span *gowdktrace.Span) {
@@ -94,8 +95,8 @@ func FinishHTTPTrace(response http.ResponseWriter, span *gowdktrace.Span) {
 		return
 	}
 	status := http.StatusOK
-	if recorder, ok := response.(*traceResponseWriter); ok {
-		status = recorder.status
+	if recorder, ok := response.(interface{ traceRecorder() *traceResponseWriter }); ok {
+		status = recorder.traceRecorder().status
 	}
 	span.Set(gowdktrace.AttrHTTPResponseStatusCode, status)
 	if status >= 500 {
@@ -138,6 +139,10 @@ func (writer *traceResponseWriter) Write(payload []byte) (int, error) {
 
 func (writer *traceResponseWriter) Unwrap() http.ResponseWriter {
 	return writer.ResponseWriter
+}
+
+func (writer *traceResponseWriter) traceRecorder() *traceResponseWriter {
+	return writer
 }
 
 // Trace records a redacted user event on the active span. It is intentionally

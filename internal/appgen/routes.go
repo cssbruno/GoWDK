@@ -1,7 +1,7 @@
 package appgen
 
 import (
-	"github.com/cssbruno/gowdk/internal/view"
+	view "github.com/cssbruno/gowdk/internal/viewrender"
 )
 
 func actionInputFields(fields []view.ActionFormField) []string {

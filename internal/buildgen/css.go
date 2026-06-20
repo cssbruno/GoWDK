@@ -11,8 +11,8 @@ import (
 	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/discover"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/view"
 	"github.com/cssbruno/gowdk/internal/viewanalysis"
+	view "github.com/cssbruno/gowdk/internal/viewrender"
 )
 
 type cssPlan struct {

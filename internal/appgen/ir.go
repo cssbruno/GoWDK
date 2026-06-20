@@ -7,7 +7,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
-	"github.com/cssbruno/gowdk/internal/view"
+	view "github.com/cssbruno/gowdk/internal/viewrender"
 )
 
 func actionEndpointsFromIR(ir gwdkir.Program) ([]ActionEndpoint, error) {

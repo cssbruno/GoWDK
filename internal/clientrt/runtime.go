@@ -4,6 +4,8 @@ import (
 	"embed"
 	"strconv"
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/clientlang"
 )
 
 // Filename is the conventional output name for the generated client runtime.
@@ -33,7 +35,7 @@ type IslandJSOptions struct {
 
 // IslandRuntimeSource returns the shared generated JavaScript island runtime.
 func IslandRuntimeSource() string {
-	return assetSource("island.js")
+	return strings.ReplaceAll(assetSource("island.js"), "__GOWDK_EXPRESSION_SPEC__", clientlang.RuntimeExpressionSpecJSON())
 }
 
 // IslandJSSource returns the generated JavaScript island registration stub for

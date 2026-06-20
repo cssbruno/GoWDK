@@ -1,4 +1,4 @@
-package view
+package viewrender
 
 func collectActionFormFields(nodes []Node, fields map[string]map[string]ActionFormField) error {
 	for _, node := range nodes {

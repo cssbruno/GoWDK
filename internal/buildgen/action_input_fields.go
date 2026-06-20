@@ -2,7 +2,7 @@ package buildgen
 
 import (
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/view"
+	view "github.com/cssbruno/gowdk/internal/viewrender"
 )
 
 func pageActionInputFields(ir gwdkir.Program) map[string]map[string][]view.ActionInputField {

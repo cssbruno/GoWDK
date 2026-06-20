@@ -1,4 +1,4 @@
-package view
+package viewrender
 
 import (
 	"encoding/json"
@@ -536,7 +536,7 @@ func componentCallParentListener(node ComponentCall, attr Attr, component Compon
 			return parentComponentListener{}, fmt.Errorf("component %s does not emit event %q", node.Name, directive.Event)
 		}
 		readSymbols := mergeClientSymbols(ctx.readSymbols(), exportPayloadSymbols(component.Exports))
-		if err := ValidateIslandEventExpressionTypedWithFunctions(attr.Value, readSymbols, ctx.stateTypes, ctx.handlers, nil); err != nil {
+		if err := clientlang.ValidateIslandEventExpressionTypedWithFunctions(attr.Value, readSymbols, ctx.stateTypes, ctx.handlers, nil); err != nil {
 			return parentComponentListener{}, fmt.Errorf("%s: %w", attr.Name, err)
 		}
 		return parentComponentListener{
@@ -546,7 +546,7 @@ func componentCallParentListener(node ComponentCall, attr Attr, component Compon
 		}, nil
 	}
 	readSymbols := mergeClientSymbols(ctx.readSymbols(), eventPayloadSymbols(event))
-	if err := ValidateIslandEventExpressionTypedWithFunctions(attr.Value, readSymbols, ctx.stateTypes, ctx.handlers, nil); err != nil {
+	if err := clientlang.ValidateIslandEventExpressionTypedWithFunctions(attr.Value, readSymbols, ctx.stateTypes, ctx.handlers, nil); err != nil {
 		return parentComponentListener{}, fmt.Errorf("%s: %w", attr.Name, err)
 	}
 	return parentComponentListener{

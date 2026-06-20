@@ -95,7 +95,7 @@ runtime integration, or nondeterministic output.
 - `internal/compiler` tests cover SSR addon enforcement, duplicate page/component/layout identities, layout reference resolution, dynamic SPA routes requiring `paths`, actions without SSR, and `server {}` rejection on SPA pages.
 - `internal/discover` tests cover recursive `.gwdk` include/exclude matching.
 - `internal/parser` tests cover page/component/layout metadata declarations, `paths`, `build`, `load`, `view`, `props`, `act`, captured `paths`/`build`/`load`/`view` bodies, the first action input/redirect body subset, and render mode rejection.
-- `internal/view` tests cover view markup rendering, escaping, expression attributes, shorthand class/id normalization, component expansion, and missing component/prop errors.
+- `internal/viewrender` tests cover view markup rendering, escaping, expression attributes, shorthand class/id normalization, component expansion, and missing component/prop errors.
 - `internal/buildgen` tests cover app-shell HTML emission, literal build data,
   imported Go build data functions, build-data route-param binding, literal
   dynamic paths, route and asset manifest output, component expansion, nested
@@ -106,9 +106,10 @@ runtime integration, or nondeterministic output.
 - `internal/compiler` tests cover route metadata for SPA/SSR routes, endpoint
   metadata for actions/APIs, and missing SSR addon rejection.
 - `internal/clientrt` tests cover the embedded framework browser runtime source
-  files, render the placeholder templates, run `node --check` for those `.js`
-  files when `node` is available, and run a dependency-free Node DOM harness for
-  innerHTML and outerHTML swaps.
+  files, render the placeholder templates, require Node for the client
+  expression conformance test against `internal/clientlang`, run `node --check`
+  for those `.js` files when `node` is available, and run a dependency-free Node
+  DOM harness for innerHTML and outerHTML swaps.
 - `internal/lsp` tests cover initialize, diagnostics, formatting, completion,
   hover, component and open-Go go-to-definition, references, semantic tokens,
   code actions, shutdown, and exit protocol behavior.

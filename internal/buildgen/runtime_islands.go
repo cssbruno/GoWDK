@@ -9,8 +9,8 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/clientrt"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/view"
 	"github.com/cssbruno/gowdk/internal/viewanalysis"
+	view "github.com/cssbruno/gowdk/internal/viewrender"
 )
 
 func islandRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, allComponents []gwdkir.Component, outputDir string, layouts map[string]gwdkir.Layout) ([]plannedAssetArtifact, error) {

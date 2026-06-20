@@ -4,7 +4,7 @@ import (
 	"sort"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
-	"github.com/cssbruno/gowdk/internal/view"
+	view "github.com/cssbruno/gowdk/internal/viewrender"
 )
 
 const internalComponentKeyPrefix = "\x00component:"

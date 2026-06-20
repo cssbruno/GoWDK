@@ -1,4 +1,4 @@
-package view
+package viewrender
 
 import (
 	"fmt"
@@ -176,7 +176,7 @@ func conditionalBranch(node Element, ctx *renderContext) (conditionalBranchInfo,
 	if hasElse {
 		return conditionalBranchInfo{Kind: "else"}, nil
 	}
-	if err := ValidateIslandBoolExpression(condition, ctx.readFields); err != nil {
+	if err := clientlang.ValidateIslandBoolExpression(condition, ctx.readFields); err != nil {
 		if hasIf {
 			return conditionalBranchInfo{}, fmt.Errorf("g:if: %w", err)
 		}

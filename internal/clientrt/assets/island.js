@@ -12,6 +12,16 @@
     { kind: "style", attrPrefix: "data-gowdk-binding-style-", valuePrefix: "data-gowdk-style-", unitPrefix: "data-gowdk-style-unit-" },
     { kind: "attr", attrPrefix: "data-gowdk-binding-attr-", valuePrefix: "data-gowdk-attr-" }
   ]);
+  const expressionSpec = Object.freeze(__GOWDK_EXPRESSION_SPEC__);
+  const expressionOperators = Object.freeze({
+    unary: new Set(expressionSpec.unaryOperators || []),
+    equality: new Set(expressionSpec.equalityOperators || []),
+    compare: new Set(expressionSpec.compareOperators || []),
+    term: new Set(expressionSpec.termOperators || []),
+    factor: new Set(expressionSpec.factorOperators || []),
+    token: new Set(expressionSpec.tokenOperators || [])
+  });
+  const builtinSpecByName = Object.freeze(Object.fromEntries((expressionSpec.builtins || []).map((builtin) => [builtin.name, builtin])));
   const registry = window.__gowdkIslandRegistry || (window.__gowdkIslandRegistry = { components: Object.create(null), roots: new WeakMap() });
   window.__gowdkMountIslands = () => {
     Object.keys(registry.components).forEach((name) => mountComponentIsland(name, document));
@@ -52,44 +62,44 @@
     return valueOf(helper.return || "", state, nextScope, helpers, stack.concat([name]));
   }
 
-  const builtins = Object.freeze({
+  const builtinImpls = Object.freeze({
     len(value) {
-      expectArgCount("len", arguments.length, 1);
       if (typeof value === "string" || Array.isArray(value)) return value.length;
       throw new Error("built-in len expects string or array");
     },
     string(value) {
-      expectArgCount("string", arguments.length, 1);
       if (value == null) return "";
       if (typeof value === "string" || typeof value === "boolean") return String(value);
       if (isNumber(value)) return String(value);
       throw new Error("built-in string expects scalar");
     },
     lower(value) {
-      expectArgCount("lower", arguments.length, 1);
       if (typeof value !== "string") throw new Error("built-in lower expects string");
       return value.toLowerCase();
     },
     upper(value) {
-      expectArgCount("upper", arguments.length, 1);
       if (typeof value !== "string") throw new Error("built-in upper expects string");
       return value.toUpperCase();
     },
     contains(value, query) {
-      expectArgCount("contains", arguments.length, 2);
       if (typeof value !== "string") throw new Error("built-in contains argument 1 expects string");
       if (typeof query !== "string") throw new Error("built-in contains argument 2 expects string");
       return value.includes(query);
     },
     int(value) {
-      expectArgCount("int", arguments.length, 1);
       return Math.trunc(conversionNumber("int", value));
     },
     float(value) {
-      expectArgCount("float", arguments.length, 1);
       return conversionNumber("float", value);
     }
   });
+  const builtins = Object.freeze(Object.fromEntries(Object.keys(builtinSpecByName).map((name) => {
+    if (!builtinImpls[name]) throw new Error("GOWDK expression builtin " + name + " has no browser implementation");
+    return [name, function() {
+      expectArgCount(name, arguments.length, builtinSpecByName[name].args);
+      return builtinImpls[name].apply(null, arguments);
+    }];
+  })));
 
   function expectArgCount(name, got, want) {
     if (got === want) return;
@@ -234,7 +244,7 @@
         continue;
       }
       const pair = source.slice(index, index + 2);
-      if (["==", "!=", "<=", ">=", "&&", "||"].indexOf(pair) >= 0) {
+      if (expressionOperators.token.has(pair)) {
         tokens.push({ kind: "op", value: pair });
         index += 2;
         continue;
@@ -303,7 +313,7 @@
       },
       parseEquality() {
         let expr = this.parseCompare();
-        while (this.peek().kind === "op" && (this.peek().value === "==" || this.peek().value === "!=")) {
+        while (this.peek().kind === "op" && expressionOperators.equality.has(this.peek().value)) {
           const op = this.expect("op").value;
           expr = { kind: "binary", op, left: expr, right: this.parseCompare() };
         }
@@ -311,7 +321,7 @@
       },
       parseCompare() {
         let expr = this.parseTerm();
-        while (this.peek().kind === "op" && ["<", "<=", ">", ">="].indexOf(this.peek().value) >= 0) {
+        while (this.peek().kind === "op" && expressionOperators.compare.has(this.peek().value)) {
           const op = this.expect("op").value;
           expr = { kind: "binary", op, left: expr, right: this.parseTerm() };
         }
@@ -319,7 +329,7 @@
       },
       parseTerm() {
         let expr = this.parseFactor();
-        while (this.peek().kind === "op" && (this.peek().value === "+" || this.peek().value === "-")) {
+        while (this.peek().kind === "op" && expressionOperators.term.has(this.peek().value)) {
           const op = this.expect("op").value;
           expr = { kind: "binary", op, left: expr, right: this.parseFactor() };
         }
@@ -327,14 +337,14 @@
       },
       parseFactor() {
         let expr = this.parseUnary();
-        while (this.peek().kind === "op" && ["*", "/", "%"].indexOf(this.peek().value) >= 0) {
+        while (this.peek().kind === "op" && expressionOperators.factor.has(this.peek().value)) {
           const op = this.expect("op").value;
           expr = { kind: "binary", op, left: expr, right: this.parseUnary() };
         }
         return expr;
       },
       parseUnary() {
-        if (this.peek().kind === "op" && (this.peek().value === "!" || this.peek().value === "-")) {
+        if (this.peek().kind === "op" && expressionOperators.unary.has(this.peek().value)) {
           const op = this.expect("op").value;
           return { kind: "unary", op, expr: this.parseUnary() };
         }

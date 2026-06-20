@@ -220,6 +220,9 @@ func TestRuntimeTemplatesReplacePlaceholders(t *testing.T) {
 
 func TestIslandRuntimeClonesTemplateDOM(t *testing.T) {
 	source := IslandRuntimeSource()
+	if strings.Contains(source, "__GOWDK_EXPRESSION_SPEC__") {
+		t.Fatalf("rendered island runtime still contains expression spec placeholder:\n%s", source)
+	}
 	for _, forbidden := range []string{
 		`data-gowdk-for-template`,
 		`holder.innerHTML`,
@@ -230,6 +233,10 @@ func TestIslandRuntimeClonesTemplateDOM(t *testing.T) {
 		}
 	}
 	for _, expected := range []string{
+		`const expressionSpec = Object.freeze({`,
+		`"builtins":[{"name":"len","args":1}`,
+		`const builtinSpecByName = Object.freeze(Object.fromEntries`,
+		`expressionOperators.equality.has`,
 		`function cloneListTemplate(marker, state, scope, helpers)`,
 		`const source = marker.content && marker.content.firstElementChild;`,
 		`if (node.content) Array.from(node.content.childNodes).forEach`,

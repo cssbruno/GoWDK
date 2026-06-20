@@ -101,6 +101,28 @@ fn clear() {
 	}
 }
 
+func TestParseDuplicateClientSymbolReportsLine(t *testing.T) {
+	_, err := Parse(`
+fn Save() {
+  Count = 1
+}
+
+fn Save() {
+  Count = 2
+}
+`)
+	if err == nil {
+		t.Fatal("expected duplicate function error")
+	}
+	var parseErr *ParseError
+	if !errors.As(err, &parseErr) {
+		t.Fatalf("expected ParseError, got %T: %v", err, err)
+	}
+	if parseErr.Line != 6 {
+		t.Fatalf("expected duplicate declaration on line 6, got %d", parseErr.Line)
+	}
+}
+
 func TestParseClientFunctionsAllowsFuncAlias(t *testing.T) {
 	program, err := Parse(`
 func Increment() {

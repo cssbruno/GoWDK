@@ -1110,6 +1110,40 @@ computed Label string {
 	}
 }
 
+func TestValidateManifestComputedConflictUsesComputedSpan(t *testing.T) {
+	app := appFixture{Components: []gwdkir.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: gwdkir.Blocks{
+			Client: true,
+			ClientBody: `computed Count string {
+  return "shadow"
+}`,
+			View:     true,
+			ViewBody: `<section>{Count}</section>`,
+			Spans: gwdkir.BlockSpans{Client: source.SourceSpan{
+				Start: source.SourcePosition{Line: 8, Column: 1},
+				End:   source.SourcePosition{Line: 10, Column: 2},
+			}},
+		},
+	}}}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected computed conflict diagnostic")
+	}
+	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_client_error")
+	if diagnostic == nil {
+		t.Fatalf("missing component_client_error diagnostic: %#v", err)
+	}
+	assertSourceSpan(t, diagnostic.Span, 9, 1, 11, 2)
+}
+
 func TestValidateManifestRejectsInvalidTypedUseStoreType(t *testing.T) {
 	app := appFixture{
 		Pages: []gwdkir.Page{{

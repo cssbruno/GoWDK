@@ -93,8 +93,8 @@ source-set changes, generated app/runtime mode, WASM islands, and component
 changes that do not have a matching island boundary on the current page. Local
 island state preservation is not a current contract.
 
-Generated-app rebuild overlay delivery now uses the dev-only proxy bridge.
-Dev-only runtime panic surfacing and broader component HMR remain tracked in
+Generated-app rebuild and runtime 5xx overlay delivery use the dev-only proxy
+bridge. Broader state-preserving component HMR remains tracked in
 [#424](https://github.com/cssbruno/GoWDK/issues/424).
 
 ## Browser Overlay
@@ -116,9 +116,11 @@ The overlay is removed on the next successful rebuild and page reload.
 
 Generated app runtime mode keeps runtime stdout/stderr attached to the terminal
 and serves browser traffic through the dev-only proxy bridge. Rebuild failures
-from generated app compilation are sent to the same browser overlay. Runtime
-panics and request-time handler failures remain terminal-first unless they are
-already surfaced through the generated app's normal safe HTTP response.
+from generated app compilation are sent to the same browser overlay. Request-time
+5xx HTML responses from the generated app trigger a generic runtime overlay with
+the HTTP status only; the payload does not include request paths, query strings,
+cookies, submitted form values, response bodies, panic values, or stack traces.
+The terminal remains the source for redacted runtime panic logs.
 
 ## File Watching
 

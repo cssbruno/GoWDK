@@ -87,12 +87,31 @@ Current v0.1-supported language surfaces report source locations as follows:
   offending directive, field, component call, or interpolation expression.
 - Component `client {}` validation reports the offending statement line and
   narrows supported expression failures to expression columns.
+- Duplicate or conflicting component `client {}` declarations report the exact
+  declaration line when the client parser already owns that span.
 - Package validation points at the `.gwdk` package declaration or the nearest
   page/component/layout declaration when the package declaration is missing.
 - Build-data validation rejects unsupported statement shapes during parsing and
   reports the offending line; build execution errors that come from external Go
   execution keep their command/error context rather than a precise `.gwdk`
   expression range.
+
+Remaining known exact-range gaps:
+
+- Internal compiler invariant failures report no `.gwdk` range because they
+  describe a broken compiler handoff, not an author-owned source construct.
+- External Go execution and package-loading failures keep the Go toolchain file,
+  line, or command context. GOWDK does not synthesize a `.gwdk` range when the
+  failure happens inside user Go or generated temporary Go.
+- Aggregate dependency diagnostics, such as computed dependency cycles, point at
+  the owning client block until the client dependency graph records edge-level
+  source spans.
+- Addon-owned diagnostics are exact only when the addon returns source spans;
+  otherwise GOWDK can only attach the owning block or source file.
+- Dev runtime overlay events intentionally have no source range. The proxy only
+  reports a generic generated-app runtime 5xx status so it does not expose
+  request paths, query strings, cookies, submitted values, response bodies,
+  panic values, or stack traces.
 
 ## P0/P1 Constraint Diagnostics
 

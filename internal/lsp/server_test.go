@@ -193,6 +193,47 @@ func TestServerPublishesComponentClientDiagnostics(t *testing.T) {
 	assertResponseID(t, messages[2], float64(2))
 }
 
+func TestServerPublishesDuplicateClientSymbolDiagnosticAtDeclarationRange(t *testing.T) {
+	uri := "file:///tmp/duplicate.cmp.gwdk"
+	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +
+		framed(`{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"`+uri+`","languageId":"gwdk","version":1,"text":"package app\n\ncomponent Counter\n\nclient {\n  fn Save() {\n    Count = 1\n  }\n\n  fn Save() {\n    Count = 2\n  }\n}\n\nview {\n  <button type=\"button\">Save</button>\n}\n"}}}`) +
+		framed(`{"jsonrpc":"2.0","id":2,"method":"shutdown","params":null}`) +
+		framed(`{"jsonrpc":"2.0","method":"exit"}`)
+
+	var output bytes.Buffer
+	server := NewServer(gowdk.Config{})
+	server.log = nil
+	if err := server.Serve(stringsReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	messages := readOutputMessages(t, output.Bytes())
+	if len(messages) != 3 {
+		t.Fatalf("expected 3 output messages, got %d", len(messages))
+	}
+	params := messages[1]["params"].(map[string]any)
+	diagnostics := params["diagnostics"].([]any)
+	if len(diagnostics) != 1 {
+		t.Fatalf("expected one duplicate client symbol diagnostic, got %#v", diagnostics)
+	}
+	diagnostic := diagnostics[0].(map[string]any)
+	if diagnostic["code"] != "component_client_error" {
+		t.Fatalf("expected component_client_error code, got %#v", diagnostic)
+	}
+	if message := diagnostic["message"].(string); !strings.Contains(message, `client function "Save" is declared more than once`) {
+		t.Fatalf("unexpected diagnostic message: %q", message)
+	}
+	diagnosticRange := diagnostic["range"].(map[string]any)
+	start := diagnosticRange["start"].(map[string]any)
+	end := diagnosticRange["end"].(map[string]any)
+	if start["line"] != float64(9) || start["character"] != float64(0) ||
+		end["line"] != float64(9) || end["character"] != float64(1) {
+		t.Fatalf("expected duplicate declaration range, got %#v", diagnosticRange)
+	}
+
+	assertResponseID(t, messages[2], float64(2))
+}
+
 func TestServerPublishesUnboundDOMRefDiagnosticAtClientStatement(t *testing.T) {
 	uri := "file:///tmp/search.cmp.gwdk"
 	input := framed(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`) +

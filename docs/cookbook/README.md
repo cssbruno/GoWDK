@@ -199,7 +199,7 @@ points instead of duplicating the same status list.
 | Compiler output contracts | [Compiler docs](../compiler/README.md). | Covered for the current pipeline, manifest, project structure, and generated-output contracts. |
 | Parser-backed formatting | [Formatting](../language/formatting.md) and [CLI reference](../reference/cli.md). | Parser-backed `gowdk fmt` remains tracked in [#472](https://github.com/cssbruno/GoWDK/issues/472). |
 | Exact diagnostic source ranges | [Diagnostic codes](../reference/diagnostic-codes.md#source-ranges). | Remaining exact-span work is tracked in [#419](https://github.com/cssbruno/GoWDK/issues/419). |
-| Dev overlay and HMR hardening | [Dev server reference](../reference/dev.md). | Runtime panic surfacing and broader state-preserving HMR are tracked in [#424](https://github.com/cssbruno/GoWDK/issues/424). |
+| Dev overlay and HMR hardening | [Dev server reference](../reference/dev.md). | Generic runtime 5xx overlays are implemented; broader state-preserving HMR is tracked in [#424](https://github.com/cssbruno/GoWDK/issues/424). |
 | Testing suites | [Testing reference](../reference/testing.md) and [engineering testing](../engineering/testing.md). | Parser fuzz smoke, generated-app integration, and generated-output determinism runners exist; broader fuzz/browser/E2E expansion remains in the hardening backlog. |
 | Client expression implementation | [Components](../language/components.md). | Single-source client expression lowering is tracked in [#384](https://github.com/cssbruno/GoWDK/issues/384). |
 | View package ownership | [Architecture](../engineering/architecture.md#components). | Splitting source model, render engine, and client validators is tracked in [#383](https://github.com/cssbruno/GoWDK/issues/383). |

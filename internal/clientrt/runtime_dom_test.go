@@ -31,13 +31,15 @@ func domHarnessScript(runtime string) string {
 const assert = require('node:assert/strict');
 
 class CustomEvent {
-  constructor(type, options = {}) {
-    this.type = type;
-    this.cancelable = !!options.cancelable;
-    this.detail = options.detail || {};
-    this.defaultPrevented = false;
-    this.target = null;
-  }
+	  constructor(type, options = {}) {
+	    this.type = type;
+	    this.bubbles = !!options.bubbles;
+	    this.cancelable = !!options.cancelable;
+	    this.detail = options.detail || {};
+	    this.defaultPrevented = false;
+	    this.target = null;
+	    this.currentTarget = null;
+	  }
   preventDefault() {
     if (this.cancelable) {
       this.defaultPrevented = true;
@@ -52,14 +54,27 @@ class EventTarget {
   addEventListener(type, handler) {
     (this.listeners[type] ||= []).push(handler);
   }
-  dispatchEvent(event) {
-    event.target ||= this;
-    for (const handler of this.listeners[event.type] || []) {
-      handler(event);
-    }
-    return !event.defaultPrevented;
-  }
-}
+	  dispatchEvent(event) {
+	    event.target ||= this;
+	    event.currentTarget = this;
+	    for (const handler of this.listeners[event.type] || []) {
+	      handler(event);
+	    }
+	    if (event.bubbles && this.parentNode) {
+	      this.parentNode.dispatchEvent(event);
+	    }
+	    return !event.defaultPrevented;
+	  }
+	}
+
+	function disconnectTree(node) {
+	  if (!node) return;
+	  node.isConnected = false;
+	  for (const child of node.children || []) {
+	    disconnectTree(child);
+	  }
+	  node.parentNode = null;
+	}
 
 class Element extends EventTarget {
   constructor(tagName) {
@@ -76,10 +91,13 @@ class Element extends EventTarget {
     this.action = '';
     this.disabled = false;
     this.replacedWith = '';
-    this.outerHTMLValue = '';
-    this.valid = true;
-    this.reported = false;
-  }
+	    this.outerHTMLValue = '';
+	    this.valid = true;
+	    this.reported = false;
+	    this.parentNode = null;
+	    this.children = [];
+	    this.isConnected = true;
+	  }
   closest(selector) {
     if (selector === 'form[data-gowdk-target]' && this.tagName === 'FORM' && this.dataset.gowdkTarget) {
       return this;
@@ -108,13 +126,19 @@ class Element extends EventTarget {
     this.reported = true;
     return this.valid;
   }
-  focus() {
-    document.activeElement = this;
-  }
-  set outerHTML(value) {
-    this.replacedWith = value;
-    this.outerHTMLValue = value;
-  }
+	  focus() {
+	    document.activeElement = this;
+	  }
+	  appendChild(child) {
+	    child.parentNode = this;
+	    child.isConnected = this.isConnected;
+	    this.children.push(child);
+	  }
+	  set outerHTML(value) {
+	    this.replacedWith = value;
+	    this.outerHTMLValue = value;
+	    disconnectTree(this);
+	  }
   get outerHTML() {
     return this.outerHTMLValue || this.replacedWith;
   }
@@ -123,13 +147,16 @@ class Element extends EventTarget {
 class Document extends EventTarget {
   constructor() {
     super();
-    this.body = new Element('body');
-    this.activeElement = this.body;
-    this.bySelector = {};
-    this.byID = {};
-    this.realtimeRegions = [];
-    this.queryRegions = [];
-  }
+	    this.body = new Element('body');
+	    this.body.parentNode = this;
+	    this.activeElement = this.body;
+	    this.bySelector = {};
+	    this.byID = {};
+	    this.realtimeRegions = [];
+	    this.queryRegions = [];
+	    this.parentNode = null;
+	    this.isConnected = true;
+	  }
   querySelector(selector) {
     if (selector === '[data-gowdk-subscribe], [data-gowdk-query-type]') {
       return this.realtimeRegions[0] || this.queryRegions[0] || null;
@@ -234,16 +261,20 @@ global.FormData = class {
   }
 };
 
-const form = new Element('form');
-form.method = 'post';
-form.action = '/newsletter';
-form.setAttribute('method', 'post');
-form.setAttribute('action', '/newsletter');
-form.dataset.gowdkTarget = '#newsletter';
-form.dataset.gowdkSwap = 'innerHTML';
-const commandForm = new Element('form');
-commandForm.method = 'post';
-commandForm.action = '/commands/create';
+	const form = new Element('form');
+	form.method = 'post';
+	form.action = '/newsletter';
+	form.setAttribute('method', 'post');
+	form.setAttribute('action', '/newsletter');
+	form.dataset.gowdkTarget = '#newsletter';
+	form.dataset.gowdkSwap = 'innerHTML';
+	form.fields = [{ name: 'email', value: 'ada@example.test' }];
+	const partialSubmitter = new Element('button');
+	partialSubmitter.name = 'intent';
+	partialSubmitter.value = 'save';
+	const commandForm = new Element('form');
+	commandForm.method = 'post';
+	commandForm.action = '/commands/create';
 commandForm.setAttribute('method', 'post');
 commandForm.setAttribute('action', '/commands/create');
 commandForm.dataset.gowdkCommand = 'patients.CreatePatient';
@@ -251,9 +282,12 @@ commandForm.fields = [{ name: 'name', value: 'Ada' }];
 const commandSubmitter = new Element('button');
 commandSubmitter.name = 'intent';
 commandSubmitter.value = 'publish';
-const target = new Element('section');
-target.id = 'newsletter';
-target.innerHTML = '<p>Old</p>';
+	const target = new Element('section');
+	target.id = 'newsletter';
+	target.innerHTML = '<p>Old</p>';
+	target.appendChild(form);
+	target.parentNode = document;
+	commandForm.parentNode = document;
 const liveRegion = new Element('section');
 liveRegion.id = 'live-patients';
 liveRegion.innerHTML = '<p>Waiting</p>';
@@ -292,13 +326,18 @@ let requestCount = 0;
 let swap = 'innerHTML';
 let fail = false;
 let reload = false;
-let commandMode = 'success';
-let refreshFail = false;
-global.fetch = async function(url, options) {
-  requestCount++;
-  request = { url, options };
-  requests.push(request);
-  if (url === '/commands/create') {
+	let commandMode = 'success';
+	let refreshFail = false;
+	let holdRequests = false;
+	let heldFetchResolvers = [];
+	global.fetch = async function(url, options) {
+	  requestCount++;
+	  request = { url, options };
+	  requests.push(request);
+	  if (holdRequests) {
+	    await new Promise(resolve => heldFetchResolvers.push(resolve));
+	  }
+	  if (url === '/commands/create') {
     if (commandMode === 'redirect') {
       return {
         ok: true,
@@ -376,21 +415,33 @@ global.fetch = async function(url, options) {
 
 ` + runtime + `
 
-async function flushRuntime() {
-  await new Promise(resolve => setImmediate(resolve));
-  await new Promise(resolve => setImmediate(resolve));
-}
+	async function flushRuntime() {
+	  await new Promise(resolve => setImmediate(resolve));
+	  await new Promise(resolve => setImmediate(resolve));
+	}
 
-async function submit(target = form, submitter = null) {
-  const event = new CustomEvent('submit', { cancelable: true });
-  event.target = target;
-  if (submitter) {
-    event.submitter = submitter;
-  }
-  document.dispatchEvent(event);
-  await flushRuntime();
-  return event;
-}
+	function dispatchSubmit(target = form, submitter = null) {
+	  const event = new CustomEvent('submit', { cancelable: true });
+	  event.target = target;
+	  if (submitter) {
+	    event.submitter = submitter;
+	  }
+	  document.dispatchEvent(event);
+	  return event;
+	}
+
+	async function submit(target = form, submitter = null) {
+	  const event = dispatchSubmit(target, submitter);
+	  await flushRuntime();
+	  return event;
+	}
+
+	function releaseHeldFetches() {
+	  const resolvers = heldFetchResolvers.slice();
+	  heldFetchResolvers = [];
+	  holdRequests = false;
+	  resolvers.forEach(resolve => resolve());
+	}
 
 (async function() {
   assert.equal(eventSources.length, 1);
@@ -467,9 +518,9 @@ async function submit(target = form, submitter = null) {
   commandForm.addEventListener('gowdk:command-error', event => {
     commandError = event.detail;
   });
-  function resetCommandHarness() {
-    commandSuccess = null;
-    commandError = null;
+	  function resetCommandHarness() {
+	    commandSuccess = null;
+	    commandError = null;
     realtimeError = null;
     queryRefresh = null;
     request = null;
@@ -479,12 +530,25 @@ async function submit(target = form, submitter = null) {
     invalidatedRegion.outerHTMLValue = '';
     duplicateInvalidatedRegion.replacedWith = '';
     duplicateInvalidatedRegion.outerHTMLValue = '<section id="invalidated-patients-copy" data-gowdk-query="patients.GetPatientPage" data-gowdk-query-type="gowdk-generated-app/patients.GetPatientPage"><p>Duplicate stale</p></section>';
-    document.queryRegions = [liveRegion, invalidatedRegion];
-  }
+	    document.queryRegions = [liveRegion, invalidatedRegion];
+	  }
 
-  let commandSubmit = await submit(commandForm, commandSubmitter);
-  assert.equal(commandSubmit.defaultPrevented, true);
-  assert.equal(requestCount, 1);
+	  resetCommandHarness();
+	  holdRequests = true;
+	  const firstHeldCommand = dispatchSubmit(commandForm, commandSubmitter);
+	  const duplicateHeldCommand = dispatchSubmit(commandForm, commandSubmitter);
+	  assert.equal(firstHeldCommand.defaultPrevented, true);
+	  assert.equal(duplicateHeldCommand.defaultPrevented, true);
+	  assert.equal(requestCount, 1, "duplicate command submit should not issue a second request");
+	  releaseHeldFetches();
+	  await flushRuntime();
+	  assert.equal(commandSuccess.result.id, 'patient-1');
+	  assert.equal(commandForm.attributes['aria-busy'], undefined);
+	  resetCommandHarness();
+
+	  let commandSubmit = await submit(commandForm, commandSubmitter);
+	  assert.equal(commandSubmit.defaultPrevented, true);
+	  assert.equal(requestCount, 1);
   assert.equal(request.url, '/commands/create');
   assert.equal(request.options.method, 'POST');
   assert.equal(request.options.redirect, 'manual');
@@ -566,10 +630,14 @@ async function submit(target = form, submitter = null) {
   requests = [];
   requestCount = 0;
 
-  let afterSwap;
-  form.addEventListener('gowdk:after-swap', event => {
-    afterSwap = event.detail;
-  });
+	  let afterSwap;
+	  form.addEventListener('gowdk:after-swap', event => {
+	    afterSwap = event.detail;
+	  });
+	  let documentAfterSwap;
+	  document.addEventListener('gowdk:after-swap', event => {
+	    documentAfterSwap = event.detail;
+	  });
 
   let validationBlocked;
   form.addEventListener('gowdk:validation-blocked', event => {
@@ -585,14 +653,33 @@ async function submit(target = form, submitter = null) {
   assert.equal(validationBlocked.form, form);
   assert.equal(validationBlocked.target, target);
   assert.equal(form.attributes['aria-busy'], undefined);
-  form.valid = true;
-  form.reported = false;
+	  form.valid = true;
+	  form.reported = false;
 
-  const inner = await submit();
-  assert.equal(inner.defaultPrevented, true);
-  assert.equal(request.url, '/newsletter');
-  assert.equal(request.options.method, 'POST');
-  assert.equal(request.options.headers['X-GOWDK-Partial'], '1');
+	  holdRequests = true;
+	  const firstHeldPartial = dispatchSubmit(form, partialSubmitter);
+	  const duplicateHeldPartial = dispatchSubmit(form, partialSubmitter);
+	  assert.equal(firstHeldPartial.defaultPrevented, true);
+	  assert.equal(duplicateHeldPartial.defaultPrevented, true);
+	  assert.equal(requestCount, 1, "duplicate partial submit should not issue a second request");
+	  releaseHeldFetches();
+	  await flushRuntime();
+	  assert.equal(form.attributes['aria-busy'], undefined);
+	  assert.equal(target.innerHTML, '<p>Updated</p>');
+	  assert.deepEqual(islandLifecycle.shift(), ['destroy', 'newsletter', false]);
+	  assert.deepEqual(islandLifecycle.shift(), ['mount']);
+	  request = null;
+	  requests = [];
+	  requestCount = 0;
+	  target.innerHTML = '<p>Old</p>';
+
+	  const inner = await submit(form, partialSubmitter);
+	  assert.equal(inner.defaultPrevented, true);
+	  assert.equal(request.url, '/newsletter');
+	  assert.equal(request.options.method, 'POST');
+	  assert.equal(request.options.body.getAll('email')[0], 'ada@example.test');
+	  assert.deepEqual(request.options.body.getAll('intent'), ['save']);
+	  assert.equal(request.options.headers['X-GOWDK-Partial'], '1');
   assert.equal(request.options.headers['X-GOWDK-Target'], '#newsletter');
   assert.equal(request.options.headers['X-GOWDK-Swap'], 'innerHTML');
   assert.equal(target.innerHTML, '<p>Updated</p>');
@@ -600,17 +687,26 @@ async function submit(target = form, submitter = null) {
   assert.deepEqual(islandLifecycle.shift(), ['mount']);
   assert.equal(form.attributes['aria-busy'], undefined);
   assert.equal(document.activeElement, input);
-  assert.equal(afterSwap.form, form);
-  assert.equal(afterSwap.target, target);
-  assert.equal(afterSwap.swap, 'innerHTML');
+	  assert.equal(afterSwap.form, form);
+	  assert.equal(afterSwap.target, target);
+	  assert.equal(afterSwap.swap, 'innerHTML');
+	  assert.equal(documentAfterSwap.form, form);
+	  assert.equal(documentAfterSwap.target, target);
+	  assert.equal(documentAfterSwap.swap, 'innerHTML');
 
-  swap = 'outerHTML';
-  form.dataset.gowdkSwap = 'outerHTML';
-  await submit();
-  assert.equal(request.options.headers['X-GOWDK-Swap'], 'outerHTML');
-  assert.deepEqual(islandLifecycle.shift(), ['destroy', 'newsletter', true]);
-  assert.deepEqual(islandLifecycle.shift(), ['mount']);
-  assert.equal(target.replacedWith, '<p>Updated</p>');
+	  swap = 'outerHTML';
+	  form.dataset.gowdkSwap = 'outerHTML';
+	  afterSwap = null;
+	  documentAfterSwap = null;
+	  await submit();
+	  assert.equal(request.options.headers['X-GOWDK-Swap'], 'outerHTML');
+	  assert.deepEqual(islandLifecycle.shift(), ['destroy', 'newsletter', true]);
+	  assert.deepEqual(islandLifecycle.shift(), ['mount']);
+	  assert.equal(target.replacedWith, '<p>Updated</p>');
+	  assert.equal(afterSwap, null);
+	  assert.equal(documentAfterSwap.form, null);
+	  assert.equal(documentAfterSwap.target, null);
+	  assert.equal(documentAfterSwap.swap, 'outerHTML');
 
   let requestError;
   form.addEventListener('gowdk:request-error', event => {

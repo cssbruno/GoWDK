@@ -79,7 +79,15 @@
   };
 
   const notify = (name) => {
-    (registry.listeners[name] || []).slice().forEach((listener) => listener(registry.get(name)));
+    (registry.listeners[name] || []).slice().forEach((listener) => {
+      try {
+        listener(registry.get(name));
+      } catch (error) {
+        if (typeof console !== "undefined" && console.error) {
+          console.error("GOWDK: store subscriber for \"" + name + "\" failed; continuing notification.", error);
+        }
+      }
+    });
   };
 
   registry.init = (name, state, persist) => {

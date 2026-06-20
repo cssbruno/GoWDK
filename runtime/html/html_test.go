@@ -11,6 +11,12 @@ func TestEscapeEscapesHTMLText(t *testing.T) {
 	}
 }
 
+func TestEscapeURLEncodesBeforeHTMLEscaping(t *testing.T) {
+	if got := EscapeURL(`\\evil.example/x?q="bad"&ok=1`); got != `%5C%5Cevil.example%2Fx%3Fq=%22bad%22&amp;ok=1` {
+		t.Fatalf("unexpected escaped URL segment: %q", got)
+	}
+}
+
 func TestAttrOmitsEmptyValuesAndEscapesNonEmptyValues(t *testing.T) {
 	if got := Attr("href", ""); got != "" {
 		t.Fatalf("expected empty attr to be omitted, got %q", got)

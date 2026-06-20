@@ -1467,6 +1467,21 @@ func TestRenderRejectsTaintedLoadFieldInDangerousAttribute(t *testing.T) {
 	}
 }
 
+func TestRenderRejectsTaintedSrcsetCandidateWithoutStablePrefix(t *testing.T) {
+	_, err := RenderWithOptions(`<img srcset="/safe.png 1x, {user.avatar} 2x" />`, nil, map[string]string{
+		"user.avatar": "https://evil.example/avatar.png",
+	}, Options{Tainted: map[string]bool{"user.avatar": true}})
+	if err == nil || !strings.Contains(err.Error(), `is not allowed in "srcset" attributes`) {
+		t.Fatalf("expected tainted srcset candidate to be rejected, got %v", err)
+	}
+
+	if _, err := RenderWithOptions(`<img srcset="/avatar/{user.avatar} 1x, /avatar/{user.avatar} 2x" />`, nil, map[string]string{
+		"user.avatar": "ada.png",
+	}, Options{Tainted: map[string]bool{"user.avatar": true}}); err != nil {
+		t.Fatalf("root-relative srcset candidates should render: %v", err)
+	}
+}
+
 func TestRenderSPAAllowsSafeURLAttributes(t *testing.T) {
 	source := `<main><a href="/docs?q=go&sort=new">Docs</a><a href="https://example.com">External</a><a href="mailto:team@example.com">Mail</a><img srcset="/img.png 1x, https://cdn.example.com/img@2x.png 2x" data-uri="data:text/plain,ok" /></main>`
 	got, err := RenderSPA(source)

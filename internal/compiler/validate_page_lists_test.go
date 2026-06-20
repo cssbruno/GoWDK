@@ -253,6 +253,38 @@ func TestValidateAcceptsRequestTimeURLTemplateInsideServerRow(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsRequestTimeSrcsetCandidateWithoutStablePrefix(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { issues }`,
+			View:       true,
+			ViewBody:   `<main><img g:for={issue in issues} srcset="/safe.png 1x, {issue.image} 2x" /></main>`,
+		},
+	})
+	diag, ok := findCode(report, "server_url_tainted")
+	if !ok {
+		t.Fatalf("expected server_url_tainted for tainted srcset candidate, got %v", report)
+	}
+	if !strings.Contains(diag.Message, `"srcset"`) {
+		t.Fatalf("diagnostic should name srcset: %q", diag.Message)
+	}
+}
+
+func TestValidateAcceptsRequestTimeSrcsetCandidatesWithStablePrefixes(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { issues }`,
+			View:       true,
+			ViewBody:   `<main><img g:for={issue in issues} srcset="/image/{issue.image} 1x, /image/{issue.image} 2x" /></main>`,
+		},
+	})
+	if _, ok := findCode(report, "server_url_tainted"); ok {
+		t.Fatalf("root-relative srcset URL templates should be accepted, got %v", report)
+	}
+}
+
 func TestValidateRejectsRequestTimeURLAttributeControlledByServerRow(t *testing.T) {
 	report := validatePageListsFor(t, gwdkir.Page{
 		Blocks: gwdkir.Blocks{
@@ -329,5 +361,52 @@ func TestValidateRejectsComponentInsideServerRow(t *testing.T) {
 	})
 	if _, ok := findCode(report, "server_region_directive"); !ok {
 		t.Fatalf("expected server_region_directive for component call, got %v", report)
+	}
+}
+
+func TestValidateRejectsDirectiveInsideTopLevelServerIf(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { found }`,
+			Actions:    []gwdkir.Action{{Name: "Open", Method: "POST", Route: "/open"}},
+			View:       true,
+			ViewBody:   `<main><section g:if={found}><form g:post={Open}></form></section></main>`,
+		},
+	})
+	diag, ok := findCode(report, "server_region_directive")
+	if !ok {
+		t.Fatalf("expected server_region_directive inside server g:if, got %v", report)
+	}
+	if !strings.Contains(diag.Message, `"g:post"`) {
+		t.Fatalf("diagnostic should name the unsupported directive: %q", diag.Message)
+	}
+}
+
+func TestValidateRejectsComponentInsideTopLevelServerIf(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { found }`,
+			View:       true,
+			ViewBody:   `<main><section g:if={found}><IssueCard /></section></main>`,
+		},
+	})
+	if _, ok := findCode(report, "server_region_directive"); !ok {
+		t.Fatalf("expected server_region_directive for component call inside server g:if, got %v", report)
+	}
+}
+
+func TestValidateRejectsRequestTimeURLInsideTopLevelServerIf(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { found, website }`,
+			View:       true,
+			ViewBody:   `<main><section g:if={found}><a href="{website}">Profile</a></section></main>`,
+		},
+	})
+	if _, ok := findCode(report, "server_url_tainted"); !ok {
+		t.Fatalf("expected server_url_tainted inside server g:if, got %v", report)
 	}
 }

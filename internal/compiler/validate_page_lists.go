@@ -24,7 +24,7 @@ func validatePageServerLists(page gwdkir.Page) []ValidationError {
 	loads := collectPageLoads(page)
 	var diagnostics []ValidationError
 	validateServerLoadFieldConflicts(page, loads, &diagnostics)
-	walkPageListNodes(page, nodes, loads, nil, &diagnostics)
+	walkPageListNodes(page, nodes, loads, nil, false, &diagnostics)
 	return diagnostics
 }
 
@@ -77,17 +77,17 @@ func collectPageLoads(page gwdkir.Page) pageLoads {
 	return loads
 }
 
-func walkPageListNodes(page gwdkir.Page, nodes []viewmodel.Node, loads pageLoads, eachVars []string, diagnostics *[]ValidationError) {
+func walkPageListNodes(page gwdkir.Page, nodes []viewmodel.Node, loads pageLoads, eachVars []string, inServerRegion bool, diagnostics *[]ValidationError) {
 	for _, node := range nodes {
 		element, ok := node.(viewmodel.Element)
 		if !ok {
 			if call, isCall := node.(viewmodel.ComponentCall); isCall {
-				if len(eachVars) > 0 {
+				if inServerRegion || len(eachVars) > 0 {
 					*diagnostics = append(*diagnostics, pageListDiagnostic(page, "server_region_directive",
 						fmt.Sprintf("%s: server-lane g:for rows and g:if branches cannot contain component calls; render request-time markup with static elements, g:for, and g:if", page.ID)))
 					continue
 				}
-				walkPageListNodes(page, call.Children, loads, eachVars, diagnostics)
+				walkPageListNodes(page, call.Children, loads, eachVars, inServerRegion, diagnostics)
 			}
 			continue
 		}
@@ -109,8 +109,9 @@ func walkPageListNodes(page gwdkir.Page, nodes []viewmodel.Node, loads pageLoads
 		if !serverBranch && len(childVars) == len(eachVars) {
 			serverRegionVars = eachVars
 		}
-		validatePageServerRegionElement(page, element, loads, serverBranch || len(childVars) > len(eachVars), serverRegionVars, diagnostics)
-		walkPageListNodes(page, element.Children, loads, childVars, diagnostics)
+		currentServerRegion := inServerRegion || serverBranch || len(childVars) > len(eachVars)
+		validatePageServerRegionElement(page, element, loads, currentServerRegion, serverRegionVars, diagnostics)
+		walkPageListNodes(page, element.Children, loads, childVars, currentServerRegion, diagnostics)
 	}
 }
 
@@ -343,6 +344,27 @@ func allowRequestTimeURLAttrTemplate(name, value string) bool {
 	if !urlBearingRequestTimeAttr(name) {
 		return false
 	}
+	value = strings.TrimSpace(value)
+	if strings.EqualFold(strings.TrimSpace(name), "srcset") {
+		return allowRequestTimeSrcsetURLAttrTemplate(value)
+	}
+	return allowSingleRequestTimeURLAttrTemplate(value)
+}
+
+func allowRequestTimeSrcsetURLAttrTemplate(value string) bool {
+	for _, candidate := range strings.Split(value, ",") {
+		fields := strings.Fields(strings.TrimSpace(candidate))
+		if len(fields) == 0 || !strings.Contains(fields[0], "{") {
+			continue
+		}
+		if !allowSingleRequestTimeURLAttrTemplate(fields[0]) {
+			return false
+		}
+	}
+	return true
+}
+
+func allowSingleRequestTimeURLAttrTemplate(value string) bool {
 	value = strings.TrimSpace(value)
 	if value == "" || value[0] != '/' {
 		return false

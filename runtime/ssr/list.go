@@ -66,6 +66,8 @@ type ListField struct {
 	Path string
 	// Index is true when this field substitutes the zero-based row index.
 	Index bool
+	// URL is true when this field is substituted into a URL-bearing attribute.
+	URL bool
 }
 
 // RenderRegions expands every top-level g:for list and g:if conditional in
@@ -124,11 +126,17 @@ func condHolds(container any, cond CondSpec) bool {
 
 func listFieldValue(field ListField, container any, index int) string {
 	if field.Index {
+		if field.URL {
+			return gowdkhtml.EscapeURL(strconv.Itoa(index))
+		}
 		return gowdkhtml.Escape(strconv.Itoa(index))
 	}
 	value, ok := ElementPath(container, field.Path)
 	if !ok || value == nil {
 		return ""
+	}
+	if field.URL {
+		return gowdkhtml.EscapeURL(fmt.Sprint(value))
 	}
 	return gowdkhtml.Escape(fmt.Sprint(value))
 }

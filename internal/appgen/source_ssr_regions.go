@@ -91,10 +91,14 @@ func regionRendererExpr(route SSRRoute, region SSRQueryRegion) ast.Expr {
 func regionLoadFieldsExpr(replacements []SSRLoadReplacement) ast.Expr {
 	elts := make([]ast.Expr, 0, len(replacements))
 	for _, replacement := range replacements {
-		elts = append(elts, &ast.CompositeLit{Type: sel("gowdkssr", "RegionLoadField"), Elts: []ast.Expr{
+		fieldElts := []ast.Expr{
 			keyValue("Path", stringLit(replacement.Path)),
 			keyValue("Placeholder", stringLit(replacement.Placeholder)),
-		}})
+		}
+		if replacement.URL {
+			fieldElts = append(fieldElts, keyValue("URL", id("true")))
+		}
+		elts = append(elts, &ast.CompositeLit{Type: sel("gowdkssr", "RegionLoadField"), Elts: fieldElts})
 	}
 	return &ast.CompositeLit{
 		Type: &ast.ArrayType{Elt: sel("gowdkssr", "RegionLoadField")},

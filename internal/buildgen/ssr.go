@@ -114,10 +114,13 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 	if !regions.empty() && !page.Blocks.Server {
 		return SSRArtifact{}, fmt.Errorf("%s: g:for and g:if over server data require a server {} block", page.ID)
 	}
+	html, replacements, loadReplacements = markPageURLPlaceholders(html, replacements, loadReplacements)
+	regions = markRegionURLPlaceholders(regions)
 	// A load field consumed only by g:for/g:if (resolved by the runtime region
 	// renderer) leaves no scalar placeholder in the HTML. Drop those request-time
 	// replacements so the handler does not stringify and substitute a value that
 	// never appears in the output.
+	replacements = usedSSRReplacements(html, replacements)
 	loadReplacements = usedLoadReplacements(html, loadReplacements)
 	queryRegions := ssrQueryRegions(html, regions.Lists, regions.Conds, loadReplacements, replacements, len(page.DynamicParams()) > 0)
 	return SSRArtifact{

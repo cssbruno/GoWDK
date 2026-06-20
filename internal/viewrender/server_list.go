@@ -46,6 +46,7 @@ type SSRListField struct {
 	Placeholder string
 	Path        string
 	Index       bool
+	URL         bool
 }
 
 // serverScope tracks the active server-lane g:for row or g:if branch while

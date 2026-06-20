@@ -42,6 +42,29 @@ func TestRenderInvalidatedRegionsRendersRegisteredRegion(t *testing.T) {
 	}
 }
 
+func TestRegionRendererEscapesURLLoadFields(t *testing.T) {
+	renderer := RegionRenderer{
+		QueryType: "example.com/app/profile.Load",
+		Template:  `<a href="/user/__SLUG__">Profile</a>`,
+		LoadFields: []RegionLoadField{{
+			Path:        "slug",
+			Placeholder: "__SLUG__",
+			URL:         true,
+		}},
+		Load: func(*http.Request) (map[string]any, error) {
+			return map[string]any{"slug": `\\evil.com`}, nil
+		},
+	}
+	got, ok := renderer.render(httptest.NewRequest(http.MethodPost, "/profile", nil))
+	if !ok {
+		t.Fatal("expected region to render")
+	}
+	const want = `<a href="/user/%5C%5Cevil.com">Profile</a>`
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
 func TestRenderInvalidatedRegionsSkipsUnregisteredAndAmbiguous(t *testing.T) {
 	resetRegions()
 	defer resetRegions()

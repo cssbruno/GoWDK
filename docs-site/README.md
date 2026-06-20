@@ -27,13 +27,17 @@ every generated page is modular and consistent.
   `replace` overrides it with the working-tree sources.)
 - The Tailwind CSS v4 standalone CLI at `tools/tailwindcss`. The GOWDK tailwind
   addon (see `gowdk.config.go`) runs it during the build; it is not downloaded
-  automatically. Pick the binary for your platform (the Render deploy uses
-  `tailwindcss-linux-x64`; on Apple Silicon use `tailwindcss-macos-arm64`):
+  automatically. The Render deploy pins `tailwindcss-linux-x64` to v4.3.1 and
+  verifies its SHA-256 before executing it. Pick the binary for your platform
+  (on Apple Silicon use `tailwindcss-macos-arm64`) and verify it against the
+  release `sha256sums.txt`:
 
   ```sh
+  TAILWIND_VERSION=v4.3.1
   mkdir -p tools
   curl -fsSL -o tools/tailwindcss \
-    https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
+    "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-x64"
+  echo "2526d063ba03b71f9a3ea7d5cee14f0aec147f117f222d5adc97b1d736d45999  tools/tailwindcss" | sha256sum -c -
   chmod +x tools/tailwindcss
   ```
 
@@ -124,12 +128,14 @@ GOWDK_ADDR=127.0.0.1:8091 go run .
 ```
 
 Deployment is a static publish (see `render.yaml` at the repo root, which Render
-detects as a Blueprint): with `rootDir: docs-site`, the host checks out the
-monorepo, runs syncdocs and the in-tree GOWDK build from this directory, copies
-`assets/`, and serves `dist/site`. A static preview of any
-branch is just the build output above served by any static file server, so
-contributors can review a branch without a live runtime. None of this makes the
-site a product promise — it is documentation for an experimental project.
+detects as a Blueprint): Render builds from the repo root, enters `docs-site/`,
+runs syncdocs and the in-tree GOWDK build, copies `assets/`, and serves
+`docs-site/dist/site`. The Blueprint build filter watches both `docs-site/**`
+and `docs/**`, so source documentation changes deploy the generated site even
+though `src/pages/docs/**` is gitignored. A static preview of any branch is just
+the build output above served by any static file server, so contributors can
+review a branch without a live runtime. None of this makes the site a product
+promise — it is documentation for an experimental project.
 
 ## Structure
 

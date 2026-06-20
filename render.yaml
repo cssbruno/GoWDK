@@ -2,14 +2,17 @@ services:
   - type: web
     name: gowdk-page
     runtime: static
-    # The docs site lives in the GOWDK monorepo under docs-site/. Render checks
-    # out the whole repo and runs the build from this subdirectory; the parent
-    # directory (..) is the framework root whose docs/ tree syncdocs renders.
-    rootDir: docs-site
+    # Build from the repo root so docs-site can render ../docs and docs-only
+    # changes trigger deploys.
     buildCommand: |
+      set -euo pipefail
+      cd docs-site
       mkdir -p tools
+      tailwind_version="v4.3.1"
+      tailwind_sha256="2526d063ba03b71f9a3ea7d5cee14f0aec147f117f222d5adc97b1d736d45999"
       curl -fsSL -o tools/tailwindcss \
-        https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
+        "https://github.com/tailwindlabs/tailwindcss/releases/download/${tailwind_version}/tailwindcss-linux-x64"
+      echo "${tailwind_sha256}  tools/tailwindcss" | sha256sum -c -
       chmod +x tools/tailwindcss
       go run ./cmd/syncdocs
       rm -rf dist/site
@@ -17,4 +20,8 @@ services:
       mkdir -p dist/site/assets
       cp -R assets/. dist/site/assets/
       cp assets/favicon.ico dist/site/favicon.ico
-    staticPublishPath: dist/site
+    staticPublishPath: docs-site/dist/site
+    buildFilter:
+      paths:
+        - docs-site/**
+        - docs/**

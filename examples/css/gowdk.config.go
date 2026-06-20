@@ -8,4 +8,7 @@ var Config = gowdk.Config{
 			{Href: "/assets/site.css"},
 		},
 	},
+	CSS: gowdk.CSSConfig{
+		Include: []string{"examples/css/assets/*.css"},
+	},
 }

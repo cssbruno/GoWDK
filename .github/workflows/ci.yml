@@ -111,6 +111,35 @@ jobs:
       - name: Check documentation links
         run: sh scripts/check-docs-links.sh
 
+  docs-site:
+    name: Docs site compile
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: true
+
+      - name: Compile docs site against in-tree GOWDK
+        working-directory: docs-site
+        run: |
+          set -euxo pipefail
+          # The site embeds dist/site; a placeholder lets the main package
+          # compile without the full asset build (Render compiles the real site
+          # at deploy). This job only catches Go/generator drift against HEAD.
+          mkdir -p dist/site
+          printf '<!doctype html>\n' > dist/site/index.html
+          go build ./...
+          go vet ./...
+          # The docs generator must run against the repo's own docs/ tree.
+          go run ./cmd/syncdocs
+          test -f src/components/docs-sidebar.cmp.gwdk
+
   example-reports:
     name: Example reports
     runs-on: ubuntu-latest

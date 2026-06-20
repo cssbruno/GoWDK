@@ -6,6 +6,9 @@ import (
 )
 
 var Config = gowdk.Config{
+	CSS: gowdk.CSSConfig{
+		Include: []string{"examples/seo/*.css"},
+	},
 	Addons: []gowdk.Addon{
 		seo.Addon(seo.Options{
 			BaseURL:  "https://example.com",

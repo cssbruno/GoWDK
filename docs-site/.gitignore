@@ -1,0 +1,17 @@
+# Generated site output (rebuilt by `gowdk build`; not committed).
+dist/
+.gowdk/
+gowdk_cache/
+
+# Generated docs pages and sidebar (rebuilt by `go run ./cmd/syncdocs` from the
+# repo's docs/ markdown; the markdown is the source of truth, not these files).
+src/pages/docs/
+src/components/docs-sidebar.cmp.gwdk
+
+# Local binaries and tools.
+bin/
+app
+/gowdk
+/gowdk-page
+/syncdocs
+tools/tailwindcss

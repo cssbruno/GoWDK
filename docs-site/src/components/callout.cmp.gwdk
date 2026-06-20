@@ -1,0 +1,16 @@
+package site
+
+component Callout
+
+props {
+  type string
+}
+
+view {
+  <div class="callout callout-{type}" role="note">
+    <span class="callout-mark" aria-hidden="true"></span>
+    <div class="callout-content">
+      <slot />
+    </div>
+  </div>
+}

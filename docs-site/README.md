@@ -4,10 +4,10 @@ Documentation site for GOWDK, written entirely in GOWDK source files. The pages
 are `.gwdk`, styling is `app.css` (Tailwind v4), and client behavior lives in
 GOWDK `js {}` blocks. No HTML, CSS, or JavaScript is generated from Go code.
 
-It lives inside the GOWDK monorepo at `docs-site/` and is its own Go module. A
-`replace github.com/cssbruno/gowdk => ../` directive in `go.mod` builds the site
-against the **in-tree framework HEAD** rather than a published release, so the
-site always reflects the sources it documents.
+It lives inside the GOWDK monorepo at `docs-site/` and is its own Go module.
+The site server depends on the released GOWDK runtime module, while docs-site
+build and dev commands run the in-tree CLI via `go run ../cmd/gowdk ...` so the
+published docs reflect the repository sources.
 
 The documentation pages under `src/pages/docs/` and the sidebar
 (`src/components/docs-sidebar.cmp.gwdk`) are **generated from the structured
@@ -21,10 +21,9 @@ every generated page is modular and consistent.
 ## Prerequisites
 
 - Go 1.26.4+.
-- The framework is resolved from the parent directory via the `replace` in
-  `go.mod`, so `go run github.com/cssbruno/gowdk/cmd/gowdk ...` runs the in-tree
-  CLI. (The `require ... v0.7.0` line is the minimum version selector; the
-  `replace` overrides it with the working-tree sources.)
+- The site server imports the released GOWDK runtime module declared in
+  `go.mod`. Use `go run ../cmd/gowdk ...` for compiler/build commands that
+  should run against the in-tree repository checkout.
 - The Tailwind CSS v4 standalone CLI at `tools/tailwindcss`. The GOWDK tailwind
   addon (see `gowdk.config.go`) runs it during the build; it is not downloaded
   automatically. The Render deploy pins `tailwindcss-linux-x64` to v4.3.1 and
@@ -62,7 +61,7 @@ parent repo.
 ## Develop
 
 ```sh
-go run github.com/cssbruno/gowdk/cmd/gowdk dev --addr 127.0.0.1:8091
+go run ../cmd/gowdk dev --addr 127.0.0.1:8091
 ```
 
 Watches the `.gwdk` sources and `app.css` and rebuilds on change. Open
@@ -73,7 +72,7 @@ Watches the `.gwdk` sources and `app.css` and rebuilds on change. Open
 ```sh
 go run ./cmd/syncdocs
 rm -rf dist/site
-go run github.com/cssbruno/gowdk/cmd/gowdk build
+go run ../cmd/gowdk build
 mkdir -p dist/site/assets
 cp -R assets/. dist/site/assets/
 cp assets/favicon.ico dist/site/favicon.ico
@@ -83,7 +82,7 @@ Always run `cmd/syncdocs` before the GOWDK build so the published docs match the
 selected GOWDK source. `rm -rf dist/site` is required because the generated tree
 mirrors the repo structure and stale routes must not linger.
 
-`go run github.com/cssbruno/gowdk/cmd/gowdk build` compiles the `.gwdk` sources
+`go run ../cmd/gowdk build` compiles the `.gwdk` sources
 to static HTML, emits each page's `<head>` from its `title`, `description`, and
 `canonical` metadata plus
 `BuildConfig.Head`, and runs the tailwind addon, which builds `app.css`
@@ -97,8 +96,8 @@ mkdir -p bin
 go build -o bin/gowdk-page .
 ```
 
-Run "Build Site Output" first. `main.go` embeds `dist/site`, so a clean clone
-cannot compile the binary until that generated output exists.
+Run "Build Site Output" first. `main.go` serves `dist/site`, so the binary needs
+that generated output at runtime.
 
 ## Run
 
@@ -106,8 +105,8 @@ cannot compile the binary until that generated output exists.
 GOWDK_ADDR=127.0.0.1:8091 ./bin/gowdk-page
 ```
 
-The site binary serves the embedded site. If `GOWDK_ADDR` is omitted, it
-defaults to `127.0.0.1:8080`.
+The site binary serves the generated `dist/site` directory. If `GOWDK_ADDR` is
+omitted, it defaults to `127.0.0.1:8080`.
 
 ## Preview & Deploy
 
@@ -120,11 +119,11 @@ language and generated output can change between releases.
 To preview website changes locally before opening a PR:
 
 ```sh
-go run github.com/cssbruno/gowdk/cmd/gowdk dev --addr 127.0.0.1:8091
+go run ../cmd/gowdk dev --addr 127.0.0.1:8091
 # or a production-faithful preview that serves the exact built output through
 # the site's own Go binary (the same one that ships to production):
 go run ./cmd/syncdocs
-rm -rf dist/site && go run github.com/cssbruno/gowdk/cmd/gowdk build
+rm -rf dist/site && go run ../cmd/gowdk build
 GOWDK_ADDR=127.0.0.1:8091 go run .
 ```
 
@@ -167,7 +166,7 @@ project.
   block remembers dismissal in a cookie. Works in dev and the production build.
 - `tools/tailwindcss`: standalone Tailwind CLI used by the build.
 - `assets/`: static assets copied into `dist/site/assets`.
-- `main.go` / `bin/gowdk-page`: single-binary site server. `main.go` serves the
-  embedded files only; it constructs no markup.
+- `main.go` / `bin/gowdk-page`: site server. `main.go` serves the generated
+  `dist/site` files only; it constructs no markup.
 - `gowdk`: local CLI build for the VS Code extension (`.vscode/settings.json`
   points `gowdk.cliPath` at it). Git-ignored.

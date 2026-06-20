@@ -31,10 +31,9 @@ unsupported unless another language reference explicitly says otherwise.
 Deferred construct families each fail with a registered diagnostic (see
 [diagnostics.md](diagnostics.md)) rather than ad-hoc behavior:
 
-- Async placeholders (`{#await}` blocks, `g:await`/`g:async`) are deferred.
-  The diagnostic points at build/load data, actions, APIs, and fragments for
-  asynchronous data (`unsupported_markup_syntax` /
-  `unsupported_markup_directive`).
+- Async placeholder directives (`g:await`/`g:async`) are deferred. Use the
+  bounded `{#await fetchJSON[T](urlExpr)}` block inside client islands when a
+  local loading/error placeholder is needed.
 - Transitions and animations (`g:transition`, `g:animate`) are deferred. The
   diagnostic points at CSS transitions or a future addon-specific contract
   (`unsupported_markup_directive`).
@@ -187,14 +186,33 @@ Implemented today:
   WASM island assets. `g:island="wasm"` remains a call-site override. Unknown
   `g:island` values are compile/render errors. Without `wasm` or `g:island`,
   stateful component calls use generated JavaScript by default.
+- Bounded client-island await blocks:
+
+  ```gwdk
+  {#await fetchJSON[[]Item]("/api/items")}
+    <p>Loading</p>
+  {:then results}
+    <ul>
+      <li g:for={item in results} g:key={item.ID}>{item.Name}</li>
+    </ul>
+  {:catch err}
+    <p>{err.message}</p>
+  {/await}
+  ```
+
+  Await blocks are local browser-island behavior. The expression must be
+  `fetchJSON[T](urlExpr)` where `urlExpr` is a bounded client expression. The
+  `then` branch receives the resolved value; the optional `catch` branch
+  receives an error object with `message`. Await blocks do not support arbitrary
+  promises, raw JavaScript, `g:await`, or `g:async`.
 - The explicit raw HTML escape hatch `g:unsafe-html={Expr}` on a non-void element
   without markup children. See the "Raw HTML (`g:unsafe-html`)" section below.
 - Familiar external-template block syntax such as `{#if}`, `{#each}`,
-  `{#await}`, `{#snippet}`, `{@html}`, `{@const}`, and `{@debug}`
-  is rejected with diagnostics that point to the current GOWDK-native
-  alternatives — `{@html body}` now points at the explicit `g:unsafe-html={Expr}`
-  directive. These diagnostics are guidance only; they do not imply that
-  GOWDK will implement those external constructs feature-for-feature.
+  `{#snippet}`, `{@html}`, `{@const}`, and `{@debug}` is rejected with
+  diagnostics that point to the current GOWDK-native alternatives —
+  `{@html body}` now points at the explicit `g:unsafe-html={Expr}` directive.
+  These diagnostics are guidance only; they do not imply that GOWDK will
+  implement those external constructs feature-for-feature.
 - Unknown `g:` attributes are rejected at parse time with a diagnostic that
   lists where the supported directive set is documented. There is no silent
   pass-through for unrecognized directives.
@@ -330,8 +348,9 @@ Not implemented yet:
 - Raw HTML escape hatches beyond the `g:unsafe-html` element directive, including
   attribute-position or text-position raw output.
 - Snippet/render block syntax as a first-class reusable markup value.
-- Template-level await blocks, local const tags, debug tags, transitions,
-  animations, DOM actions, and document/window/body/head special targets.
+- Await forms beyond the bounded client-island `fetchJSON[T](urlExpr)` block,
+  local const tags, debug tags, transitions, animations, DOM actions, and
+  document/window/body/head special targets.
 - Full client-side expressions beyond the first safe island subset, including
   broader date/time built-ins and JavaScript-style ternaries.
 - Other `g:` directives beyond the supported directive list above.

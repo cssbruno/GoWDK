@@ -122,8 +122,8 @@ GOWDK keeps the v0.1 language boundary explicit through diagnostics and tests:
   and unsupported event modifiers fail with `component_client_error` or
   `component_field_error`.
 - No external template semantics: familiar external-template blocks such as
-  `{#if}`, `{@html}`, snippets, await blocks, and debug tags fail as parse/view
-  diagnostics with guidance toward GOWDK-native constructs.
+  `{#if}`, `{@html}`, snippets, and debug tags fail as parse/view diagnostics
+  with guidance toward GOWDK-native constructs.
 - No generated JavaScript as trusted business logic: frontend templates must not
   declare backend facts with `g:event`; command/query/action behavior remains
   backend-owned and invalid references fail compiler diagnostics before build

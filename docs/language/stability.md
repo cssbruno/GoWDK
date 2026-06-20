@@ -99,6 +99,12 @@ Supported exact-name directives (the closed set in
 Component calls also accept `g:bind:<ExportedState>` for exported child state
 fields. HTML elements remain limited to `g:bind:value` and `g:bind:checked`.
 
+## View Markup Blocks
+
+| Construct | Tier | Notes |
+| --- | --- | --- |
+| `{#await}` | Partial | Client-island async placeholder for `fetchJSON[T](urlExpr)` with pending, `{:then name}`, and optional `{:catch err}` branches. |
+
 Planned directives are rejected. They currently surface as the generic
 `parse_error` rather than the intended `unsupported_markup_directive` code; that
 code lands when markup rejections carry their own code (see
@@ -108,7 +114,7 @@ code lands when markup rejections carry their own code (see
 | --- | --- | --- |
 | `g:transition`, `g:animate` | Planned | CSS transitions or a future addon. |
 | `g:window`, `g:document`, `g:body`, `g:head` | Planned | Page metadata or `g:on:*` on elements. |
-| `g:await`, `g:async` | Planned | build/load data, actions, APIs, fragments. |
+| `g:await`, `g:async` | Planned | Use `{#await fetchJSON[T](urlExpr)}` for local island placeholders, or build/load data, actions, APIs, and fragments for server-owned data. |
 | `g:use`, `g:action`, `g:attach` | Planned | `client {}` with `g:ref`. |
 
 Foreign template syntax (`{#if}`, `{@html}`, and similar) is **Planned/Unsupported**

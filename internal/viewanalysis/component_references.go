@@ -70,6 +70,10 @@ func collectComponentReferences(nodes []viewmodel.Node, refs *[]ComponentReferen
 			collectComponentReferences(typed.Children, refs)
 		case viewmodel.Element:
 			collectComponentReferences(typed.Children, refs)
+		case viewmodel.AwaitBlock:
+			collectComponentReferences(typed.Pending, refs)
+			collectComponentReferences(typed.Then, refs)
+			collectComponentReferences(typed.Catch, refs)
 		}
 	}
 }
@@ -109,6 +113,16 @@ func collectComponentIslandUsages(nodes []viewmodel.Node, usages *[]ComponentIsl
 			}
 		case viewmodel.Element:
 			if err := collectComponentIslandUsages(typed.Children, usages); err != nil {
+				return err
+			}
+		case viewmodel.AwaitBlock:
+			if err := collectComponentIslandUsages(typed.Pending, usages); err != nil {
+				return err
+			}
+			if err := collectComponentIslandUsages(typed.Then, usages); err != nil {
+				return err
+			}
+			if err := collectComponentIslandUsages(typed.Catch, usages); err != nil {
 				return err
 			}
 		}
@@ -153,6 +167,16 @@ func collectComponentCallUsages(nodes []viewmodel.Node, usages *[]ComponentCallU
 			}
 		case viewmodel.Element:
 			if err := collectComponentCallUsages(typed.Children, usages); err != nil {
+				return err
+			}
+		case viewmodel.AwaitBlock:
+			if err := collectComponentCallUsages(typed.Pending, usages); err != nil {
+				return err
+			}
+			if err := collectComponentCallUsages(typed.Then, usages); err != nil {
+				return err
+			}
+			if err := collectComponentCallUsages(typed.Catch, usages); err != nil {
 				return err
 			}
 		}

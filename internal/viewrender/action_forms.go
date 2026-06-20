@@ -27,6 +27,16 @@ func collectActionFormFields(nodes []Node, fields map[string]map[string]ActionFo
 			if err := collectActionFormFields(typed.Children, fields); err != nil {
 				return err
 			}
+		case AwaitBlock:
+			if err := collectActionFormFields(typed.Pending, fields); err != nil {
+				return err
+			}
+			if err := collectActionFormFields(typed.Then, fields); err != nil {
+				return err
+			}
+			if err := collectActionFormFields(typed.Catch, fields); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

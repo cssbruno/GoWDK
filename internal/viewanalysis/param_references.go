@@ -40,6 +40,11 @@ func collectParamReferences(nodes []viewmodel.Node, names map[string]bool) {
 				collectParamReferencesFromString(attr.Value, names)
 			}
 			collectParamReferences(typed.Children, names)
+		case viewmodel.AwaitBlock:
+			collectParamReferencesFromString(typed.Expression, names)
+			collectParamReferences(typed.Pending, names)
+			collectParamReferences(typed.Then, names)
+			collectParamReferences(typed.Catch, names)
 		}
 	}
 }

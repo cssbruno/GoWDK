@@ -47,6 +47,24 @@ func writeCanonicalNode(out *strings.Builder, node viewmodel.Node) {
 		out.WriteByte('[')
 		writeCanonicalNodes(out, typed.Children)
 		out.WriteString("])")
+	case viewmodel.AwaitBlock:
+		out.WriteString("await(")
+		out.WriteString(strconv.Quote(strings.TrimSpace(typed.Expression)))
+		out.WriteString(" pending[")
+		writeCanonicalNodes(out, typed.Pending)
+		out.WriteString("] then ")
+		out.WriteString(typed.ResultName)
+		out.WriteByte('[')
+		writeCanonicalNodes(out, typed.Then)
+		out.WriteByte(']')
+		if typed.ErrorName != "" {
+			out.WriteString(" catch ")
+			out.WriteString(typed.ErrorName)
+			out.WriteByte('[')
+			writeCanonicalNodes(out, typed.Catch)
+			out.WriteByte(']')
+		}
+		out.WriteByte(')')
 	}
 }
 

@@ -53,6 +53,16 @@ func collectCommandReferences(nodes []viewmodel.Node, refs *[]CommandReference) 
 			if err := collectCommandReferences(typed.Children, refs); err != nil {
 				return err
 			}
+		case viewmodel.AwaitBlock:
+			if err := collectCommandReferences(typed.Pending, refs); err != nil {
+				return err
+			}
+			if err := collectCommandReferences(typed.Then, refs); err != nil {
+				return err
+			}
+			if err := collectCommandReferences(typed.Catch, refs); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -145,6 +155,16 @@ func collectSubscriptionReferences(nodes []viewmodel.Node, refs *[]SubscriptionR
 			if err := collectSubscriptionReferences(typed.Children, refs); err != nil {
 				return err
 			}
+		case viewmodel.AwaitBlock:
+			if err := collectSubscriptionReferences(typed.Pending, refs); err != nil {
+				return err
+			}
+			if err := collectSubscriptionReferences(typed.Then, refs); err != nil {
+				return err
+			}
+			if err := collectSubscriptionReferences(typed.Catch, refs); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -208,6 +228,16 @@ func collectContractReferences(nodes []viewmodel.Node, refs *[]ContractReference
 				}
 			}
 			if err := collectContractReferences(typed.Children, refs); err != nil {
+				return err
+			}
+		case viewmodel.AwaitBlock:
+			if err := collectContractReferences(typed.Pending, refs); err != nil {
+				return err
+			}
+			if err := collectContractReferences(typed.Then, refs); err != nil {
+				return err
+			}
+			if err := collectContractReferences(typed.Catch, refs); err != nil {
 				return err
 			}
 		}

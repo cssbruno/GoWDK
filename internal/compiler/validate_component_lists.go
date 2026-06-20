@@ -55,6 +55,16 @@ func validateListNodes(nodes []viewmodel.Node, component gwdkir.Component, symbo
 			validateListNodes(typed.Children, component, symbols, stateTypes, handlers, helpers, messages)
 		case viewmodel.ComponentCall:
 			validateListNodes(typed.Children, component, symbols, stateTypes, handlers, helpers, messages)
+		case viewmodel.AwaitBlock:
+			if _, err := clientlang.ValidateAwaitFetchExpression(typed.Expression, symbols, helpers); err != nil {
+				*messages = append(*messages, spannedMessage{Message: fmt.Sprintf("await block is invalid: %v", err), Span: componentViewBodyOffsetSpan(component, typed.Start, typed.End)})
+				continue
+			}
+			validateListNodes(typed.Pending, component, symbols, stateTypes, handlers, helpers, messages)
+			validateListNodes(typed.Then, component, awaitThenSymbols(symbols, typed.ResultName), stateTypes, handlers, helpers, messages)
+			if typed.ErrorName != "" {
+				validateListNodes(typed.Catch, component, awaitCatchSymbols(symbols, typed.ErrorName), stateTypes, handlers, helpers, messages)
+			}
 		}
 	}
 }
@@ -132,7 +142,34 @@ func validateLoopSubtree(component gwdkir.Component, node viewmodel.Node, readSy
 		for _, child := range typed.Children {
 			validateLoopSubtree(component, child, readSymbols, writeSymbols, handlers, helpers, messages)
 		}
+	case viewmodel.AwaitBlock:
+		if _, err := clientlang.ValidateAwaitFetchExpression(typed.Expression, readSymbols, helpers); err != nil {
+			*messages = append(*messages, spannedMessage{Message: fmt.Sprintf("await block is invalid: %v", err), Span: componentViewBodyOffsetSpan(component, typed.Start, typed.End)})
+			return
+		}
+		for _, child := range typed.Pending {
+			validateLoopSubtree(component, child, readSymbols, writeSymbols, handlers, helpers, messages)
+		}
+		for _, child := range typed.Then {
+			validateLoopSubtree(component, child, awaitThenSymbols(readSymbols, typed.ResultName), writeSymbols, handlers, helpers, messages)
+		}
+		if typed.ErrorName != "" {
+			for _, child := range typed.Catch {
+				validateLoopSubtree(component, child, awaitCatchSymbols(readSymbols, typed.ErrorName), writeSymbols, handlers, helpers, messages)
+			}
+		}
 	}
+}
+
+func awaitThenSymbols(symbols map[string]clientlang.ValueType, name string) map[string]clientlang.ValueType {
+	return mergeTypeSymbols(symbols, map[string]clientlang.ValueType{name: clientlang.TypeUnknown})
+}
+
+func awaitCatchSymbols(symbols map[string]clientlang.ValueType, name string) map[string]clientlang.ValueType {
+	return mergeTypeSymbols(symbols, map[string]clientlang.ValueType{
+		name:              clientlang.TypeObject,
+		name + ".message": clientlang.TypeString,
+	})
 }
 
 func validateLoopElementBody(component gwdkir.Component, element viewmodel.Element, readSymbols map[string]clientlang.ValueType, writeSymbols map[string]clientlang.ValueType, handlers map[string]clientlang.Handler, helpers map[string]clientlang.ExprFunction, messages *[]spannedMessage) {

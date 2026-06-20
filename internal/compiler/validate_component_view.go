@@ -132,6 +132,9 @@ func loopSymbols(symbols map[string]clientlang.ValueType, loop viewparse.ForDire
 	itemType := out[loop.Collection+"[]"]
 	if itemType == "" {
 		itemType = clientlang.TypeObject
+		if out[loop.Collection] == clientlang.TypeUnknown {
+			itemType = clientlang.TypeUnknown
+		}
 	}
 	out[loop.Var] = itemType
 	if loop.IndexVar != "" {
@@ -267,6 +270,13 @@ func collectComponentViewReferences(source string, nodes []viewmodel.Node, refs 
 				collectSimpleAttrInterpolationRefs(source, attr, refs)
 			}
 			collectComponentViewReferences(source, typed.Children, refs)
+		case viewmodel.AwaitBlock:
+			if _, urlExpr, ok := clientlang.ParseAwaitFetchExpression(typed.Expression); ok {
+				for _, field := range expressionFields(urlExpr) {
+					addFieldRef(refs, field, typed.Start, typed.End)
+				}
+			}
+			collectComponentViewReferences(source, typed.Pending, refs)
 		}
 	}
 }

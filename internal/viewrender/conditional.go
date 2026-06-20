@@ -113,6 +113,8 @@ func renderNode(node Node, ctx *renderContext, out *renderOutput) error {
 		return renderElement(typed, ctx, out)
 	case ComponentCall:
 		return renderComponentCall(typed, ctx, out)
+	case AwaitBlock:
+		return renderAwaitBlock(typed, ctx, out)
 	default:
 		return fmt.Errorf("unsupported view node %T", node)
 	}

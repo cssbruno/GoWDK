@@ -63,7 +63,7 @@ Lexer diagnostics can emit `unterminated_string`; parser diagnostics emit
 Two stable codes describe the `view {}` markup contract families:
 
 - `unsupported_markup_syntax` — foreign template syntax such as `{#if}`,
-  `{#each}`, `{#await}`, `{#snippet}`, `{@html}`, `{@const}`, and `{@debug}`.
+  `{#each}`, `{#snippet}`, `{@html}`, `{@const}`, and `{@debug}`.
   Each rejection message names the GOWDK-owned alternative (for example,
   `{@html body}` points at the explicit `g:unsafe-html={Expr}` directive).
 - `unsupported_markup_directive` — `g:` attributes outside the owned directive

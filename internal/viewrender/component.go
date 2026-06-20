@@ -167,6 +167,7 @@ func renderComponentCall(node ComponentCall, ctx *renderContext, out *renderOutp
 	if len(propExpressions) > 0 {
 		bindValues = mergeValues(bindValues, props)
 	}
+	awaitUsed := false
 	childCtx := renderContext{
 		renderComponentContext: renderComponentContext{
 			components:             ctx.components,
@@ -195,7 +196,9 @@ func renderComponentCall(node ComponentCall, ctx *renderContext, out *renderOutp
 			refs:       component.Refs,
 			emits:      component.Emits,
 		},
-		ids: ctx.ids,
+		ids:          ctx.ids,
+		awaitAllowed: true,
+		awaitUsed:    &awaitUsed,
 	}
 	childCtx.stack[identity] = true
 	var body string
@@ -208,7 +211,7 @@ func renderComponentCall(node ComponentCall, ctx *renderContext, out *renderOutp
 	if renderErr != nil {
 		return renderErr
 	}
-	if component.StateJSON != "" || component.HandlersJSON != "" || mode != "" || len(component.Emits) > 0 || len(component.Exports) > 0 || len(propExpressions) > 0 {
+	if component.StateJSON != "" || component.HandlersJSON != "" || mode != "" || len(component.Emits) > 0 || len(component.Exports) > 0 || len(propExpressions) > 0 || awaitUsed {
 		if mode == "" {
 			mode = "js"
 		}

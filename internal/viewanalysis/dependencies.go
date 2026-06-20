@@ -58,6 +58,10 @@ func collectViewDependencies(nodes []viewmodel.Node, assets, classes, styles map
 			collectViewDependencies(typed.Children, assets, classes, styles)
 		case viewmodel.ComponentCall:
 			collectViewDependencies(typed.Children, assets, classes, styles)
+		case viewmodel.AwaitBlock:
+			collectViewDependencies(typed.Pending, assets, classes, styles)
+			collectViewDependencies(typed.Then, assets, classes, styles)
+			collectViewDependencies(typed.Catch, assets, classes, styles)
 		}
 	}
 }

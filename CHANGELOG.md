@@ -5,6 +5,11 @@ packages, and tooling contracts may change before 1.0.
 
 ## Unreleased
 
+### Added
+
+- Bounded `{#await fetchJSON[T](urlExpr)}` blocks in JS client islands for
+  pending, resolved, and error placeholder UI.
+
 ### Changed
 
 - The client expression runtime now receives its operator and builtin metadata

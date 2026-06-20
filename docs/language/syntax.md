@@ -375,6 +375,25 @@ initializers. The target must be a state field whose type matches the fetched
 type. Async handlers still follow source order for statements in the handler;
 computed values and DOM bindings update after state assignments settle.
 
+Component views can also render local async placeholders with a bounded await
+block:
+
+```gwdk
+{#await fetchJSON[[]ui.Item]("/api/items")}
+  <p>Loading</p>
+{:then items}
+  <ul>
+    <li g:for={item in items} g:key={item.ID}>{item.Name}</li>
+  </ul>
+{:catch err}
+  <p>{err.message}</p>
+{/await}
+```
+
+This markup form is client-island local behavior. It accepts only
+`fetchJSON[T](urlExpr)`, not arbitrary promises or value-returning async helper
+functions.
+
 Client blocks can declare return-valued helper functions for internal
 expression reuse:
 

@@ -1,0 +1,64 @@
+package site
+
+page home
+route "/"
+title "GOWDK Documentation - Compile-first web apps in Go"
+description "Learn the GOWDK language, compiler pipeline, CLI loop, addons, and deployment targets for Go-first web apps."
+canonical "https://gowdk.com/"
+guard public
+layout root, docs
+css none
+
+view {
+  <DocsPage>
+    <header class="doc-hero">
+      <p class="eyebrow">Documentation</p>
+      <h1>GOWDK Documentation</h1>
+      <p class="doc-lead">GOWDK is a compile-first web kit for Go. You write portable <code>.gwdk</code> files; the compiler turns them into HTML, CSS, route metadata, and generated Go adapter code. A runtime only enters the picture when a route needs request-time behavior.</p>
+      <div class="status-badges" aria-label="Project status">
+        <a href="https://github.com/cssbruno/GoWDK/actions/workflows/ci.yml" aria-label="CI status">
+          <img src="https://img.shields.io/github/actions/workflow/status/cssbruno/GoWDK/ci.yml?branch=main&label=CI" alt="CI status" />
+        </a>
+        <a href="https://github.com/cssbruno/GoWDK/releases" aria-label="Latest release">
+          <img src="https://img.shields.io/github/v/release/cssbruno/GoWDK?include_prereleases&label=release&color=00add8" alt="Latest release" />
+        </a>
+        <a href="https://github.com/cssbruno/GoWDK/blob/main/LICENSE" aria-label="License">
+          <img src="https://img.shields.io/github/license/cssbruno/GoWDK" alt="License" />
+        </a>
+        <a href="https://github.com/cssbruno/GoWDK" aria-label="Project stability">
+          <img src="https://img.shields.io/badge/stability-experimental%200.x-e8821a" alt="Stability: experimental 0.x" />
+        </a>
+      </div>
+      <p class="doc-status-note">GOWDK is in active <strong>0.x</strong> development. Badges link to the authoritative GitHub sources for build health, the latest release, and license.</p>
+    </header>
+    <article class="prose">
+      <h2 id="start-here">Start here</h2>
+      <p>If you are new, read these in order. Each one builds on the last.</p>
+      <ul>
+        <li><a href="/docs/getting-started/">Getting Started</a> installs the CLI and builds your first page end to end.</li>
+        <li><a href="/docs/language/">The Language</a> covers the mental model: pages, components, layouts, build-time versus request-time, and guards.</li>
+        <li><a href="/docs/engineering/architecture/">Architecture</a> explains how the compiler, generated adapters, and runtime fit together.</li>
+      </ul>
+      <h2 id="the-language">The language</h2>
+      <ul>
+        <li><a href="/docs/language/">Language overview</a> is the full <code>.gwdk</code> reference: annotations, blocks, render modes, markup, components, and slots.</li>
+        <li><a href="/docs/language/forms/">Forms &amp; progressive enhancement</a> shows how forms and links work without JavaScript, then enhance into fragment requests.</li>
+        <li><a href="/docs/language/ssr/">SSR &amp; request-time</a> explains opting into request-time rendering with <code>load</code> and <code>go ssr</code>.</li>
+      </ul>
+      <h2 id="reference">Reference</h2>
+      <ul>
+        <li><a href="/docs/reference/routing/">Routing</a> covers routes, dynamic params, rest params, and the trailing-slash policy.</li>
+        <li><a href="/docs/reference/config/">Config</a> documents source discovery, modules, build output, CSS settings, render defaults, and addons.</li>
+        <li><a href="/docs/reference/cli/">CLI</a> lists every command for scaffolding, checking, building, watching, and serving a project.</li>
+        <li><a href="/docs/reference/deployment/">Deployment</a> walks through publishing static files, generating a Go app, and shipping a single binary.</li>
+      </ul>
+      <h2 id="what-makes-gowdk-different">What makes GOWDK different</h2>
+      <ul>
+        <li><strong>Go owns the build.</strong> No Node toolchain is required. The CLI is one Go binary and your project is normal Go code.</li>
+        <li><strong>Compile first, serve later.</strong> Pages render at build time by default and you opt into SPA or SSR behavior only where it is needed.</li>
+        <li><strong>Everything is explicit.</strong> Routes, guards, render lanes, and component usage are declared in the source file, never inferred from folder layout.</li>
+        <li><strong>Portable output.</strong> Ship static files to a CDN, run the generated app, or package the whole site into a single executable.</li>
+      </ul>
+    </article>
+  </DocsPage>
+}

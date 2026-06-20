@@ -1,0 +1,39 @@
+package site
+
+view {
+  <div class="site-frame">
+    <div class="site-banner" role="alert">
+      <span class="site-banner-badge">Experimental</span>
+      <span class="site-banner-text">GOWDK is <strong>0.x</strong> and not production-ready &mdash; the language, generated output, and APIs can change between releases.</span>
+      <a class="site-banner-link" href="https://github.com/cssbruno/GoWDK/releases">Release status</a>
+    </div>
+    <header class="site-header">
+      <a class="brand-link" href="/" aria-label="GOWDK documentation">
+        <span class="brand-mark" aria-hidden="true">❯</span>
+        <span class="brand-name">GOWDK</span>
+        <span class="brand-tag">docs</span>
+      </a>
+      <nav class="top-nav" aria-label="Main navigation">
+        <a href="/docs/getting-started/">Getting Started</a>
+        <a href="/docs/reference/cli/">CLI</a>
+        <a class="github-link" href="https://github.com/cssbruno/gowdk" aria-label="GOWDK on GitHub">
+          <span class="github-icon">GH</span>
+          <span>GitHub</span>
+        </a>
+      </nav>
+    </header>
+    <div class="site-body">
+      <slot />
+    </div>
+    <footer class="site-footer">
+      <div class="site-footer-inner">
+        <span>GOWDK - Go-native web apps that rebuild fast.</span>
+        <nav class="site-footer-nav" aria-label="Footer">
+          <a href="/">Docs</a>
+          <a href="/docs/getting-started/">Getting Started</a>
+          <a href="https://github.com/cssbruno/gowdk">GitHub</a>
+        </nav>
+      </div>
+    </footer>
+  </div>
+}

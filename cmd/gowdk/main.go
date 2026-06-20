@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
-	"github.com/cssbruno/gowdk/addons/ssr"
 )
 
 const version = "0.7.0"
@@ -294,21 +293,4 @@ func cleanNames(names []string) []string {
 		cleaned = append(cleaned, name)
 	}
 	return cleaned
-}
-
-func parseOptions(args []string) (cliOptions, []string) {
-	var options cliOptions
-	var paths []string
-	for _, arg := range args {
-		switch arg {
-		case "--ssr":
-			options.Config.Addons = append(options.Config.Addons, ssr.Addon())
-		case "--json":
-			options.JSON = true
-		default:
-			paths = append(paths, arg)
-			continue
-		}
-	}
-	return options, paths
 }

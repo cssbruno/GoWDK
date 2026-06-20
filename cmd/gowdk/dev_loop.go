@@ -21,14 +21,6 @@ import (
 	"github.com/cssbruno/gowdk/internal/viewmodel"
 )
 
-func buildDevChange(args []string, change inputChange, allowIncremental bool) (bool, error) {
-	plan, err := loadBuildOptions(args)
-	if err != nil {
-		return false, err
-	}
-	return buildDevChangeLoaded(plan, change, allowIncremental)
-}
-
 func buildDevChangeLoaded(plan buildOptions, change inputChange, allowIncremental bool) (bool, error) {
 	if allowIncremental {
 		incremental, err := buildIncrementalSPALoaded(plan, change)
@@ -984,11 +976,6 @@ func uniqueInputPaths(paths []string) []string {
 	}
 	sort.Strings(unique)
 	return unique
-}
-
-func discoverBuildCSSFiles(config gowdk.Config, outputDir string, root string) ([]string, error) {
-	files, _, err := discoverBuildCSSFilesAndDirs(config, outputDir, root)
-	return files, err
 }
 
 func discoverBuildCSSFilesAndDirs(config gowdk.Config, outputDir string, root string) ([]string, []string, error) {

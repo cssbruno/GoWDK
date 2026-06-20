@@ -91,7 +91,7 @@ func TestLoadIntoEnvUpdatesValuesItPreviouslyApplied(t *testing.T) {
 	t.Cleanup(func() {
 		_ = os.Unsetenv(name)
 		appliedMu.Lock()
-		delete(appliedByFile, name)
+		delete(appliedValues, name)
 		appliedMu.Unlock()
 	})
 
@@ -109,6 +109,45 @@ func TestLoadIntoEnvUpdatesValuesItPreviouslyApplied(t *testing.T) {
 	}
 	if got := os.Getenv(name); got != "second" {
 		t.Fatalf("expected file-applied value to update, got %q", got)
+	}
+}
+
+func TestLoadIntoEnvDoesNotOverrideManualValueAfterLoad(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, ".env")
+	name := "GOWDK_TEST_MANUAL_OVERRIDE"
+	_ = os.Unsetenv(name)
+	t.Cleanup(func() {
+		_ = os.Unsetenv(name)
+		appliedMu.Lock()
+		delete(appliedValues, name)
+		appliedMu.Unlock()
+	})
+
+	if err := os.WriteFile(path, []byte(name+"=from-file\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadIntoEnv(path, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := os.Getenv(name); got != "from-file" {
+		t.Fatalf("expected initial file value, got %q", got)
+	}
+
+	// Override the value manually after the initial file load.
+	if err := os.Setenv(name, "manual"); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := LoadIntoEnv(path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := os.Getenv(name); got != "manual" {
+		t.Fatalf("expected manual override to survive reload, got %q", got)
+	}
+	if !reflect.DeepEqual(result.Skipped, []string{name}) {
+		t.Fatalf("expected %q skipped on reload, got %#v", name, result)
 	}
 }
 

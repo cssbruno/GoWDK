@@ -116,6 +116,31 @@ func TestRunCleanDryRunKeepsFiles(t *testing.T) {
 	}
 }
 
+func TestRunCleanDoesNotFollowSymlinkOutsideRoot(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	external := filepath.Join(outside, "keep.txt")
+	if err := os.WriteFile(external, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// "link" inside the project points at the external directory; the
+	// configured clean target reaches a file through that intermediate symlink.
+	if err := os.Symlink(outside, filepath.Join(root, "link")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	result, err := runClean(root, []string{"link/keep.txt"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contains(result.Removed, "link/keep.txt") {
+		t.Fatalf("expected symlinked external path to be refused, got %+v", result)
+	}
+	if _, statErr := os.Stat(external); statErr != nil {
+		t.Fatalf("external file must survive clean: %v", statErr)
+	}
+}
+
 func TestCleanCommandRejectsUnknownFlag(t *testing.T) {
 	if err := clean([]string{"--nope"}); err == nil {
 		t.Fatal("expected an error for an unknown flag")

@@ -21,7 +21,20 @@ const (
 type Hub struct {
 	mu         sync.Mutex
 	bufferSize int
-	clients    map[chan []byte]bool
+	clients    map[*sseClient]bool
+}
+
+// sseClient is one connected browser. disconnect is closed (once) to ask the
+// streaming goroutine to drop the connection so the browser's EventSource
+// reconnects and resynchronizes.
+type sseClient struct {
+	queue      chan []byte
+	disconnect chan struct{}
+	once       sync.Once
+}
+
+func (client *sseClient) drop() {
+	client.once.Do(func() { close(client.disconnect) })
 }
 
 // Option configures a Hub.
@@ -41,7 +54,7 @@ func WithBufferSize(size int) Option {
 func New(options ...Option) *Hub {
 	hub := &Hub{
 		bufferSize: defaultBufferSize,
-		clients:    map[chan []byte]bool{},
+		clients:    map[*sseClient]bool{},
 	}
 	for _, option := range options {
 		if option != nil {
@@ -64,7 +77,10 @@ func (hub *Hub) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Connection", "keep-alive")
 	response.Header().Set("X-Accel-Buffering", "no")
 
-	client := make(chan []byte, hub.bufferSize)
+	client := &sseClient{
+		queue:      make(chan []byte, hub.bufferSize),
+		disconnect: make(chan struct{}),
+	}
 	hub.add(client)
 	defer hub.remove(client)
 
@@ -75,7 +91,9 @@ func (hub *Hub) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		select {
 		case <-request.Context().Done():
 			return
-		case payload := <-client:
+		case <-client.disconnect:
+			return
+		case payload := <-client.queue:
 			if _, err := response.Write([]byte("event: gowdk-presentation\n")); err != nil {
 				return
 			}
@@ -114,14 +132,24 @@ func (hub *Hub) SendPresentationEvents(ctx context.Context, events []contracts.E
 		return nil
 	}
 	hub.mu.Lock()
-	defer hub.mu.Unlock()
+	var slow []*sseClient
 	for client := range hub.clients {
+	queueLoop:
 		for _, payload := range payloads {
 			select {
-			case client <- payload:
+			case client.queue <- payload:
 			default:
+				// The client cannot keep up. Drop it so the browser reconnects
+				// and resynchronizes, rather than silently missing events (for
+				// example a query invalidation) and leaving the UI stale.
+				slow = append(slow, client)
+				break queueLoop
 			}
 		}
+	}
+	hub.mu.Unlock()
+	for _, client := range slow {
+		client.drop()
 	}
 	return nil
 }
@@ -133,17 +161,20 @@ func (hub *Hub) ClientCount() int {
 	return len(hub.clients)
 }
 
-func (hub *Hub) add(client chan []byte) {
+func (hub *Hub) add(client *sseClient) {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
 	hub.clients[client] = true
 }
 
-func (hub *Hub) remove(client chan []byte) {
+func (hub *Hub) remove(client *sseClient) {
 	hub.mu.Lock()
-	defer hub.mu.Unlock()
 	delete(hub.clients, client)
-	close(client)
+	hub.mu.Unlock()
+	// The queue channel is intentionally left for the garbage collector: the
+	// sender only ever holds it under the lock, so once the client is removed
+	// no send can reach it. Closing it here could race a concurrent send.
+	client.drop()
 }
 
 // ErrNoHub is returned by helpers that require a hub but receive nil.

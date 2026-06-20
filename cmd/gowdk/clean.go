@@ -89,9 +89,14 @@ func clean(args []string) error {
 
 // runClean resolves candidates against root, removes the ones that exist (or
 // reports them under DryRun), and records the rest as absent. Paths that are
-// the project root or escape it are silently dropped by safeRelativeTargets.
+// the project root, escape it lexically, or escape it through a symlink are
+// silently dropped.
 func runClean(root string, candidates []string, dryRun bool) (cleanResult, error) {
 	result := cleanResult{Version: 1, DryRun: dryRun}
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		realRoot = filepath.Clean(root)
+	}
 	for _, candidate := range safeRelativeTargets(root, candidates) {
 		absolute := candidate
 		if !filepath.IsAbs(absolute) {
@@ -103,6 +108,13 @@ func runClean(root string, candidates []string, dryRun bool) (cleanResult, error
 				continue
 			}
 			return cleanResult{}, statErr
+		}
+		// safeRelativeTargets only checks containment lexically, but
+		// os.RemoveAll follows intermediate symlinks. Re-check against the
+		// symlink-resolved path so a configured target reached through a
+		// symlinked directory cannot delete files outside the project.
+		if !withinRoot(realRoot, absolute) {
+			continue
 		}
 		if !dryRun {
 			if removeErr := os.RemoveAll(absolute); removeErr != nil {
@@ -185,6 +197,28 @@ func safeRelativeTargets(root string, candidates []string) []string {
 	}
 	sort.Strings(safe)
 	return safe
+}
+
+// withinRoot reports whether absolute resolves inside realRoot after following
+// symlinks in its parent directory. Only the parent is resolved so that a
+// target that is itself a symlink is removed as a link (os.RemoveAll does not
+// follow a leaf symlink) rather than escaping through it.
+func withinRoot(realRoot, absolute string) bool {
+	parent := filepath.Dir(absolute)
+	realParent, err := filepath.EvalSymlinks(parent)
+	if err != nil {
+		realParent = filepath.Clean(parent)
+	}
+	resolved := filepath.Join(realParent, filepath.Base(absolute))
+	rel, err := filepath.Rel(realRoot, resolved)
+	if err != nil {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, "../") {
+		return false
+	}
+	return true
 }
 
 func reportClean(result cleanResult, jsonOutput bool) error {

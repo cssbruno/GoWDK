@@ -67,6 +67,14 @@ func Match(pattern, requestPath string) (map[string]string, bool) {
 }
 
 func hasUnsafeRequestSegment(requestPath string) bool {
+	// Consecutive slashes anywhere — including a leading "//" or trailing
+	// "//" — are non-canonical. path.Clean would collapse them, letting
+	// "//admin" or "/admin//" match "/admin" while a fronting proxy, cache,
+	// or authorization layer may treat them as different paths. Reject them
+	// outright so matching cannot disagree with what sits in front of it.
+	if strings.Contains(requestPath, "//") {
+		return true
+	}
 	trimmed := strings.Trim(requestPath, "/")
 	if trimmed == "" {
 		return false

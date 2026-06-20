@@ -69,6 +69,17 @@ func TestLoadPathResolvesNestedMapsAndStructs(t *testing.T) {
 	}
 }
 
+func TestLoadPathResolvesNamedStringKeyedMap(t *testing.T) {
+	type key string
+	data := map[string]any{
+		"labels": map[key]string{"greeting": "hi"},
+	}
+	value, ok := LoadPath(data, "labels.greeting")
+	if !ok || value != "hi" {
+		t.Fatalf("LoadPath(labels.greeting) = %#v, %v; want \"hi\", true", value, ok)
+	}
+}
+
 func TestLoadPathRejectsMissingOrInvalidPaths(t *testing.T) {
 	data := map[string]any{
 		"user": map[string]any{"name": "Ada"},

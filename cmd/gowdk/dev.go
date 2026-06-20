@@ -244,23 +244,29 @@ func (serve *devServeState) apply(state devBuildState, absDir string) error {
 	if state.runtime.Enabled {
 		return serve.useRuntime(state.runtime)
 	}
-	serve.useStatic(absDir)
-	return nil
+	return serve.useStatic(absDir)
 }
 
-func (serve *devServeState) useStatic(absDir string) {
+func (serve *devServeState) useStatic(absDir string) error {
 	if serve.process != nil {
 		serve.process.stop()
 		serve.process = nil
 	}
 	if serve.server != nil && serve.staticDir == absDir {
-		return
+		return nil
 	}
 	if serve.server != nil {
 		stopDevStaticServer(serve.server)
+		serve.server = nil
+		serve.staticDir = ""
 	}
-	serve.server = startDevStaticServer(serve.addr, absDir, serve.reload)
+	server, err := startDevStaticServer(serve.addr, absDir, serve.reload)
+	if err != nil {
+		return err
+	}
+	serve.server = server
 	serve.staticDir = absDir
+	return nil
 }
 
 func (serve *devServeState) useRuntime(runtime devRuntime) error {
@@ -277,7 +283,11 @@ func (serve *devServeState) useRuntime(runtime devRuntime) error {
 		if err != nil {
 			return err
 		}
-		serve.server = startDevRuntimeProxy(serve.addr, targetAddr, serve.reload)
+		server, err := startDevRuntimeProxy(serve.addr, targetAddr, serve.reload)
+		if err != nil {
+			return err
+		}
+		serve.server = server
 		serve.staticDir = ""
 		if serve.process == nil {
 			serve.process = &devRuntimeProcess{addr: targetAddr}
@@ -335,7 +345,7 @@ func (serve *devServeState) close() {
 	}
 }
 
-func startDevStaticServer(addr, absDir string, reload *liveReloadBroker) *http.Server {
+func startDevStaticServer(addr, absDir string, reload *liveReloadBroker) (*http.Server, error) {
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           liveReloadFileHandler(absDir, reload),
@@ -345,15 +355,22 @@ func startDevStaticServer(addr, absDir string, reload *liveReloadBroker) *http.S
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
+	// Bind synchronously so a failure (e.g. the address is already in use) is
+	// returned to the caller instead of being logged from a goroutine while
+	// dev keeps running and reports that it is serving.
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
 	go func() {
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			fmt.Fprintln(os.Stderr, err)
 		}
 	}()
-	return server
+	return server, nil
 }
 
-func startDevRuntimeProxy(addr, targetAddr string, reload *liveReloadBroker) *http.Server {
+func startDevRuntimeProxy(addr, targetAddr string, reload *liveReloadBroker) (*http.Server, error) {
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           devRuntimeProxyHandler(targetAddr, reload),
@@ -363,12 +380,18 @@ func startDevRuntimeProxy(addr, targetAddr string, reload *liveReloadBroker) *ht
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
+	// Bind synchronously so a failure on the public address is returned to the
+	// caller instead of being logged from a goroutine.
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
 	go func() {
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			fmt.Fprintln(os.Stderr, err)
 		}
 	}()
-	return server
+	return server, nil
 }
 
 func stopDevStaticServer(server *http.Server) {
@@ -377,6 +400,11 @@ func stopDevStaticServer(server *http.Server) {
 	}
 }
 
+// freeDevRuntimeAddr returns a free loopback address for the generated app to
+// bind. The probe listener is closed before the address is handed back, so a
+// brief TOCTOU window remains in which another process could claim the port
+// before the generated binary binds it. Fully closing it requires handing the
+// bound listener to the child process (socket activation), tracked separately.
 func freeDevRuntimeAddr() (string, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

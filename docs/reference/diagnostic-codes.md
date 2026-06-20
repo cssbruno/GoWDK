@@ -197,10 +197,43 @@ Exact ranges now cover the backend-binding family, which point at the declaring
 block span so both `gowdk check`/build diagnostics and the editor highlight the
 exact declaration.
 
-Known gaps (no precise span available, file/owner-level only): `go_package_error`
-for an unparseable sibling `.go` file or a missing package clause — these arise
-before a Go AST exists, so only the file path is known. Inline `go {}` block
-package errors already carry the block span.
+Exact ranges also cover `g:for` / `g:key` row bodies (`component_field_error`).
+Errors inside a list row — invalid `g:on:` handlers, `g:if` / `g:else-if`
+conditionals, `g:bind:value` / `g:bind:checked` targets, `class:` / `style:`
+toggles, reactive attribute expressions, and `{}` interpolations — point at the
+offending expression or text node. The view-contract collector skips loop
+subtrees, so the list-directive validator is the only source for these and used
+to fall back to the whole `view {}` block; it now maps the parsed
+`viewmodel.Attr` / text offsets through `componentViewBodyOffsetSpan`.
+
+Known gaps (no precise span available; file/owner- or line-level only):
+
+- `go_package_error` for an unparseable sibling `.go` file or a missing package
+  clause — these arise before a Go AST exists, so only the file path is known.
+  Inline `go {}` block package errors already carry the block span.
+- Go contract-scan diagnostics (`contract_handler_*`, `contract_reference_*`,
+  `duplicate_command_owner`, and peers from `internal/contractscan`) carry the
+  registration call's line and column but no end, so the editor marks a point
+  rather than a token range. `contractscan.Diagnostic` records only `Line` /
+  `Column`; an exact range needs the Go AST node end threaded through the scan
+  report model.
+- Untyped parser errors (`parse_error`) wrapped with `withLine` in
+  `internal/parser` (currently three call sites) carry only a line number, so
+  the range is the whole line. Most parser diagnostics are typed via
+  `lineDiagnosticError` and are already exact.
+- Component `client {}` block errors (`component_client_error`) are
+  line-accurate but not column-accurate: `clientlang.Span` carries `StartLine` /
+  `EndLine` only.
+- Interpolation errors inside a list row resolve to the enclosing text node or
+  attribute, not the individual `{expr}`, when several interpolations share one
+  node.
+
+The LSP (`internal/lsp/diagnostics.go`) consumes `Diagnostic.Range` directly and
+only derives a position-based range when `Range` is nil, so there is no
+editor-only range guessing for diagnostics. Cursor-driven features
+(hover, go-to-definition, find-references) still locate the token under the
+caret by scanning, which is inherent to those features and unrelated to
+diagnostic ranges.
 
 ## Adding A Code
 

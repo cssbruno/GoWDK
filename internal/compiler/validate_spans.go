@@ -3,7 +3,6 @@ package compiler
 import (
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
-	"strings"
 )
 
 func firstSpan(spans ...source.SourceSpan) source.SourceSpan {
@@ -13,36 +12,6 @@ func firstSpan(spans ...source.SourceSpan) source.SourceSpan {
 		}
 	}
 	return source.SourceSpan{}
-}
-
-func viewBodyNeedleSpan(component gwdkir.Component, needle string) source.SourceSpan {
-	needle = strings.TrimSpace(needle)
-	if needle == "" || component.Blocks.ViewBody == "" || !hasSpan(component.Blocks.Spans.View) {
-		return firstSpan(component.Blocks.Spans.View, component.Span)
-	}
-	offset := strings.Index(component.Blocks.ViewBody, needle)
-	if offset < 0 {
-		return firstSpan(component.Blocks.Spans.View, component.Span)
-	}
-	before := component.Blocks.ViewBody[:offset]
-	lineOffset := strings.Count(before, "\n")
-	lastNewline := strings.LastIndex(before, "\n")
-	lineStart := 0
-	if lastNewline >= 0 {
-		lineStart = lastNewline + 1
-	}
-	startColumn := len([]rune(before[lineStart:])) + 1
-	endColumn := startColumn + len([]rune(needle))
-	return source.SourceSpan{
-		Start: source.SourcePosition{
-			Line:   component.Blocks.Spans.View.Start.Line + 1 + lineOffset,
-			Column: startColumn,
-		},
-		End: source.SourcePosition{
-			Line:   component.Blocks.Spans.View.Start.Line + 1 + lineOffset,
-			Column: endColumn,
-		},
-	}
 }
 
 func pageViewBodyOffsetSpan(page gwdkir.Page, start int, end int) source.SourceSpan {

@@ -2799,6 +2799,70 @@ func TestValidateManifestRejectsUnknownGForItemField(t *testing.T) {
 	}
 }
 
+func TestValidateManifestLoopBodyEventDiagnosticPointsToExpression(t *testing.T) {
+	// An invalid event handler inside a g:for row is validated only by the list
+	// directive validator (the view-contract collector skips loop subtrees), so
+	// this guards that the list validator emits the exact expression span instead
+	// of falling back to the whole view block.
+	app := appFixture{Components: []gwdkir.Component{{
+		Name:    "Nested",
+		Source:  "components/nested.cmp.gwdk",
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
+		},
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<ul><li g:for={item in Items} g:key={item.ID} g:on:click={Missing()}>{item.Name}</li></ul>`,
+			Spans: gwdkir.BlockSpans{
+				View: source.SourceSpan{Start: source.SourcePosition{Line: 9, Column: 1}, End: source.SourcePosition{Line: 9, Column: 7}},
+			},
+		},
+	}}}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected invalid loop-body event expression diagnostic")
+	}
+	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_field_error")
+	if diagnostic == nil || !strings.Contains(diagnostic.Message, "Missing()") {
+		t.Fatalf("Missing loop-body event diagnostic: %#v", err)
+	}
+	assertSourceSpan(t, diagnostic.Span, 10, 59, 10, 68)
+}
+
+func TestValidateManifestLoopBodyInterpolationDiagnosticPointsToTextNode(t *testing.T) {
+	// An unknown loop-item field used in a {} interpolation inside a g:for row must
+	// point at the offending text node, not the whole view block.
+	app := appFixture{Components: []gwdkir.Component{{
+		Name:    "Nested",
+		Source:  "components/nested.cmp.gwdk",
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "NestedState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewNestedState"},
+		},
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<ul><li g:for={item in Items} g:key={item.ID}>{item.Missing}</li></ul>`,
+			Spans: gwdkir.BlockSpans{
+				View: source.SourceSpan{Start: source.SourcePosition{Line: 9, Column: 1}, End: source.SourcePosition{Line: 9, Column: 7}},
+			},
+		},
+	}}}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected unknown loop-item field diagnostic")
+	}
+	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_field_error")
+	if diagnostic == nil || !strings.Contains(diagnostic.Message, "item.Missing") {
+		t.Fatalf("Missing loop-body interpolation diagnostic: %#v", err)
+	}
+	assertSourceSpan(t, diagnostic.Span, 10, 47, 10, 61)
+}
+
 func TestValidateManifestViewEventDiagnosticPointsToExpression(t *testing.T) {
 	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Counter",

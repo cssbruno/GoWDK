@@ -127,15 +127,17 @@ rm -rf dist/site && go run github.com/cssbruno/gowdk/cmd/gowdk build
 GOWDK_ADDR=127.0.0.1:8091 go run .
 ```
 
-Deployment is a static publish (see `render.yaml` at the repo root, which Render
-detects as a Blueprint): Render builds from the repo root, enters `docs-site/`,
-runs syncdocs and the in-tree GOWDK build, copies `assets/`, and serves
-`docs-site/dist/site`. The Blueprint build filter watches both `docs-site/**`
-and `docs/**`, so source documentation changes deploy the generated site even
-though `src/pages/docs/**` is gitignored. A static preview of any branch is just
-the build output above served by any static file server, so contributors can
-review a branch without a live runtime. None of this makes the site a product
-promise — it is documentation for an experimental project.
+Deployment is a Go web service (see `render.yaml` at the repo root — Render only
+reads a Blueprint from the repository root, not from a subdirectory). With
+`rootDir: docs-site`, Render checks out the monorepo, enters `docs-site/`, runs
+syncdocs and the in-tree GOWDK build, copies `assets/`, then `go build`s
+`main.go` into the `app` binary that embeds and serves `docs-site/dist/site`
+(reading `$PORT`). The Blueprint build filter watches both `docs-site/**` and
+`docs/**`, so source documentation changes deploy the generated site even though
+`src/pages/docs/**` is gitignored. A static preview of any branch is just the
+build output above served by any static file server, so contributors can review
+a branch without a live runtime. None of this makes the site a product promise —
+it is documentation for an experimental project.
 
 ## Structure
 

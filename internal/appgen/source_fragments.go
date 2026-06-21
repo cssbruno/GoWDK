@@ -168,6 +168,9 @@ func fragmentTypedRouteParams(fragment BackendFragmentAdapter) []source.RoutePar
 
 func fragmentsUseStaticFallback(fragments []BackendFragmentAdapter) bool {
 	for _, fragment := range fragments {
+		if endpointDeniedByOmission(fragment.Guards) {
+			continue
+		}
 		if fragment.Binding.Status != source.BackendBindingBound && fragment.Binding.Status != source.BackendBindingUnsupportedSignature {
 			return true
 		}

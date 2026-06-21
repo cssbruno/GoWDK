@@ -2,9 +2,12 @@ package trace
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/cssbruno/gowdk/runtime/security"
 )
 
 type spanContextKey struct{}
@@ -89,6 +92,11 @@ func (span *Span) EndTime(t time.Time) {
 
 func recordSpanAsync(sink Sink, snapshot Snapshot) {
 	go func() {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				logSinkFailure(fmt.Errorf("panic: %v", recovered))
+			}
+		}()
 		ctx, cancel := context.WithTimeout(context.Background(), defaultSinkTimeout)
 		defer cancel()
 		if err := sink.RecordSpan(ctx, snapshot); err != nil {
@@ -101,7 +109,7 @@ func logSinkFailure(err error) {
 	if err == nil || SinkLogger == nil {
 		return
 	}
-	SinkLogger("gowdk trace: sink failed: " + err.Error())
+	SinkLogger("gowdk trace: sink failed: " + security.RedactSecrets(err.Error()))
 }
 
 // Event records a timestamped event on the span.

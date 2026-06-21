@@ -1,6 +1,7 @@
 package appgen
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
@@ -35,6 +36,7 @@ func TestBackendAdapterIRCapturesRouteAndHandlerMetadata(t *testing.T) {
 			APIName: "Health",
 			Method:  "GET",
 			Route:   "/api/health",
+			Guards:  []string{"public"},
 			Binding: source.BackendBinding{
 				Status:       source.BackendBindingBound,
 				ImportPath:   "example.com/app/status",
@@ -50,6 +52,7 @@ func TestBackendAdapterIRCapturesRouteAndHandlerMetadata(t *testing.T) {
 			Route:        "/patients/{id}/list",
 			Target:       "#patients",
 			HTML:         "<section>Patients</section>",
+			Guards:       []string{"public"},
 			Binding: source.BackendBinding{
 				Status:       source.BackendBindingBound,
 				ImportPath:   "example.com/app/patients",
@@ -97,7 +100,7 @@ func TestBackendAdapterIRCapturesRouteAndHandlerMetadata(t *testing.T) {
 		t.Fatalf("expected adapter IR to report dynamic fragment route")
 	}
 	guards := ir.GuardNames()
-	if len(guards) != 1 || guards[0] != "auth.required" {
+	if strings.Join(guards, ",") != "auth.required,public,public" {
 		t.Fatalf("expected adapter guard metadata, got %#v", guards)
 	}
 	imports := ir.BackendImports()

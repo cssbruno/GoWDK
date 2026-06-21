@@ -215,6 +215,7 @@ func TestGenerateLifecycleServiceAliasesReserveBackendImports(t *testing.T) {
 			APIName: "Status",
 			Method:  http.MethodGet,
 			Route:   "/api/status",
+			Guards:  []string{"public"},
 			Binding: source.BackendBinding{
 				Status:       source.BackendBindingBound,
 				ImportPath:   "example.com/site/gowdkservice0",
@@ -290,6 +291,121 @@ func Services() ([]gowdkapp.Service, error) {
 	command.Dir = result.AppDir
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("expected lifecycle generated app to compile: %v\n%s", err, output)
+	}
+}
+
+func TestGenerateDeniedContractAndFragmentEndpointsCompileWithoutStaleImports(t *testing.T) {
+	root := t.TempDir()
+	repoRoot, ok := gowdkRuntimeModuleRoot()
+	if !ok {
+		t.Fatal("could not locate GOWDK module root")
+	}
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/site
+
+go 1.22
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+filepath.ToSlash(repoRoot)+`
+`)
+	writeTestFile(t, filepath.Join(root, "dist", "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(root, "contracts", "patients", "patients.go"), `package patients
+
+import "github.com/cssbruno/gowdk/runtime/contracts"
+
+type CreatePatient struct {
+	Name string
+}
+
+type CreatePatientResult struct{}
+
+func Register(registry *contracts.Registry) {}
+`)
+	writeTestFile(t, filepath.Join(root, "fragments", "fragments.go"), `package fragments
+
+import (
+	"context"
+
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+func List(ctx context.Context) (response.Response, error) {
+	return response.FragmentFor("#patients", "<section>Patients</section>"), nil
+}
+`)
+	t.Chdir(root)
+
+	program := &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{{
+		Kind:        gwdkir.ContractCommand,
+		Name:        "patients.CreatePatient",
+		ImportAlias: "patients",
+		ImportPath:  "example.com/site/contracts/patients",
+		Type:        "CreatePatient",
+		Result:      "CreatePatientResult",
+		InputFields: []source.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
+		Method:      http.MethodPost,
+		Path:        "/patients",
+		Status:      gwdkir.ContractBindingBound,
+		Handler:     "HandleCreatePatient",
+		Register:    "Register",
+		OwnerKind:   gwdkir.SourcePage,
+		OwnerID:     "patients",
+	}}}
+	result, err := GenerateWithOptions(filepath.Join(root, "dist"), filepath.Join(root, "generated-app"), Options{
+		Config: csrfDisabledConfig(),
+		IR:     program,
+		Fragments: []FragmentEndpoint{
+			{
+				PageID:       "patients",
+				FragmentName: "StaticList",
+				Method:       http.MethodGet,
+				Route:        "/patients/list",
+				Target:       "#patients",
+				HTML:         "<section>Patients</section>",
+			},
+			{
+				PageID:       "patients",
+				FragmentName: "BoundList",
+				Method:       http.MethodGet,
+				Route:        "/patients/bound-list",
+				Target:       "#patients",
+				HTML:         "<section>Fallback</section>",
+				Binding: source.BackendBinding{
+					Status:       source.BackendBindingBound,
+					ImportPath:   "example.com/site/fragments",
+					PackageName:  "fragments",
+					FunctionName: "List",
+					Signature:    source.BackendSignatureFragment,
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, unexpected := range []string{
+		`gowdkform "github.com/cssbruno/gowdk/runtime/form"`,
+		`gowdkpartial "github.com/cssbruno/gowdk/runtime/partial"`,
+		`patients "example.com/site/contracts/patients"`,
+		`fragments "example.com/site/fragments"`,
+		`func decodeContract`,
+		`gowdkform.DecodeExpected`,
+		`fragments.List(ctx)`,
+		`gowdkpartial.Fragment`,
+	} {
+		if strings.Contains(source, unexpected) {
+			t.Fatalf("guardless denied endpoints must not leave stale generated dependency %q:\n%s", unexpected, source)
+		}
+	}
+	command := exec.Command("go", "test", "./...")
+	command.Dir = result.AppDir
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("expected generated app with denied endpoints to compile: %v\n%s", err, output)
 	}
 }
 
@@ -1342,6 +1458,7 @@ func TestGenerateWritesDerivedCommandContractBackendRoute(t *testing.T) {
 		Package: "pages",
 		ID:      "patients",
 		Route:   "/patients",
+		Guards:  []string{"public"},
 		Blocks: gwdkir.Blocks{
 			View:     true,
 			ViewBody: `<main><form g:command="patients.CreatePatient"></form></main>`,
@@ -1396,6 +1513,7 @@ func TestGeneratedGoMatchesGoldenFixture(t *testing.T) {
 			Register:  "Register",
 			OwnerKind: gwdkir.SourcePage,
 			OwnerID:   "patients",
+			Guards:    []string{"public"},
 		}, {
 			Kind:        gwdkir.ContractQuery,
 			Name:        "patients.GetPatientPage",
@@ -1413,6 +1531,7 @@ func TestGeneratedGoMatchesGoldenFixture(t *testing.T) {
 			Register:  "Register",
 			OwnerKind: gwdkir.SourcePage,
 			OwnerID:   "patients",
+			Guards:    []string{"public"},
 		},
 		},
 	}
@@ -5757,6 +5876,7 @@ func TestGeneratedBinaryContractFallbacksAreExplicitNoStore(t *testing.T) {
 		Message:   "command patients.CreatePatient is not registered",
 		OwnerKind: gwdkir.SourcePage,
 		OwnerID:   "patients",
+		Guards:    []string{"public"},
 	}}}
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program}); err != nil {
 		t.Fatal(err)
@@ -8411,6 +8531,7 @@ func TestGuardlessActionAndAPIAreDeniedByOmission(t *testing.T) {
 			Register:    "Register",
 			OwnerKind:   gwdkir.SourcePage,
 			OwnerID:     "patients",
+			InputFields: []source.BackendInputField{{FieldName: "Name", FormName: "name", Type: "string"}},
 		},
 		{
 			Kind:        gwdkir.ContractQuery,
@@ -8434,6 +8555,34 @@ func TestGuardlessActionAndAPIAreDeniedByOmission(t *testing.T) {
 	}
 	if got := strings.Count(contractSrc, denyJSON); got != 2 {
 		t.Fatalf("guardless command/query contracts must be denied by omission, got %d JSON denies:\n%s", got, contractSrc)
+	}
+	if strings.Contains(contractSrc, "contractRegistry") {
+		t.Fatalf("guardless denied contract handlers must not require a registry:\n%s", contractSrc)
+	}
+	if decoders := contractDecoderDecls(contractsAdapter.ContractExposures); len(decoders) != 0 {
+		decoderSrc, err := printActionDecls(decoders)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Fatalf("guardless denied contracts must not emit unused decoders:\n%s", decoderSrc)
+	}
+
+	fallbackAdapter := backendAdapterIR(Options{IR: &gwdkir.Program{ContractRefs: []gwdkir.ContractReference{{
+		Kind:      gwdkir.ContractCommand,
+		Name:      "patients.CreatePatient",
+		Method:    http.MethodPost,
+		Path:      "/patients",
+		Status:    gwdkir.ContractBindingMissing,
+		Message:   "command patients.CreatePatient is not registered",
+		OwnerKind: gwdkir.SourcePage,
+		OwnerID:   "patients",
+	}}}})
+	fallbackSrc, err := printActionDecls(contractHandlerDecls(fallbackAdapter.ContractExposures, false, false, false, false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(fallbackSrc, denyJSON) || strings.Contains(fallbackSrc, "StatusNotImplemented") || strings.Contains(fallbackSrc, "not registered") {
+		t.Fatalf("guardless fallback contract handler must deny by omission instead of exposing fallback JSON:\n%s", fallbackSrc)
 	}
 
 	// An endpoint that declares `guard public` is intentionally reachable and

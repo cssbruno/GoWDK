@@ -284,6 +284,9 @@ func contractFormSchemaExpr(fields []source.BackendInputField) ast.Expr {
 }
 
 func fallbackContractHandlerDecl(exposure BackendContractExposure) *ast.FuncDecl {
+	if endpointDeniedByOmission(exposure.Guards) {
+		return funcDecl(contractHandlerName(exposure), actionParams(), boolResults(), denyByOmissionJSONStmts())
+	}
 	return funcDecl(contractHandlerName(exposure), actionParams(), boolResults(), []ast.Stmt{
 		writeNoStoreJSONErrorStmt(sel("http", "StatusNotImplemented"), contractFallbackMessage(exposure)),
 		returnBool(true),
@@ -341,7 +344,8 @@ func executableCommandContractExposures(exposures []BackendContractExposure) []B
 }
 
 func contractExposureExecutable(exposure BackendContractExposure) bool {
-	return exposure.Status == gwdkir.ContractBindingBound &&
+	return !endpointDeniedByOmission(exposure.Guards) &&
+		exposure.Status == gwdkir.ContractBindingBound &&
 		strings.TrimSpace(exposure.ImportAlias) != "" &&
 		strings.TrimSpace(exposure.ImportPath) != "" &&
 		strings.TrimSpace(exposure.Type) != "" &&

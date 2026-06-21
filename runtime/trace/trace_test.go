@@ -140,6 +140,35 @@ func TestSpanEndDoesNotBlockOnSink(t *testing.T) {
 	close(release)
 }
 
+func TestSpanEndRecoversPanickingSinkAndRedactsLog(t *testing.T) {
+	logged := captureSinkLogs(t)
+	tracer := trace.NewTracer(trace.WithSink(panickingSink{value: "token=super-secret-token-value"}))
+	_, span := tracer.Start(context.Background(), "panic-export")
+
+	span.EndTime(time.Unix(1, 0).UTC())
+
+	message := waitForSinkLog(t, logged)
+	if !strings.Contains(message, "gowdk trace: sink failed: panic:") {
+		t.Fatalf("unexpected sink panic log: %q", message)
+	}
+	if strings.Contains(message, "super-secret-token-value") || !strings.Contains(message, "[REDACTED]") {
+		t.Fatalf("sink panic log was not redacted: %q", message)
+	}
+}
+
+func TestSpanEndRedactsSinkFailureLog(t *testing.T) {
+	logged := captureSinkLogs(t)
+	tracer := trace.NewTracer(trace.WithSink(failingSink{err: errors.New("export failed: Authorization: Bearer abcdefghijklmnop")}))
+	_, span := tracer.Start(context.Background(), "failed-export")
+
+	span.EndTime(time.Unix(1, 0).UTC())
+
+	message := waitForSinkLog(t, logged)
+	if strings.Contains(message, "abcdefghijklmnop") || !strings.Contains(message, "Bearer [REDACTED]") {
+		t.Fatalf("sink failure log was not redacted: %q", message)
+	}
+}
+
 func TestMultiSinkAttemptsLaterSinksAfterFailure(t *testing.T) {
 	expected := errors.New("first sink failed")
 	recording := &recordingSink{}
@@ -293,6 +322,14 @@ func (sink failingSink) RecordSpan(context.Context, trace.Snapshot) error {
 	return sink.err
 }
 
+type panickingSink struct {
+	value any
+}
+
+func (sink panickingSink) RecordSpan(context.Context, trace.Snapshot) error {
+	panic(sink.value)
+}
+
 type recordingSink struct {
 	spans []trace.Snapshot
 }
@@ -317,6 +354,30 @@ func waitForSpans(t *testing.T, ring *trace.RingSink, want int) []trace.Snapshot
 			return spans
 		}
 		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func captureSinkLogs(t *testing.T) <-chan string {
+	t.Helper()
+	logged := make(chan string, 1)
+	previous := trace.SinkLogger
+	trace.SinkLogger = func(message string) {
+		logged <- message
+	}
+	t.Cleanup(func() {
+		trace.SinkLogger = previous
+	})
+	return logged
+}
+
+func waitForSinkLog(t *testing.T, logged <-chan string) string {
+	t.Helper()
+	select {
+	case message := <-logged:
+		return message
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for sink log")
+		return ""
 	}
 }
 

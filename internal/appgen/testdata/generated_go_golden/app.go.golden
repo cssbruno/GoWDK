@@ -181,13 +181,68 @@ func fragment(response http.ResponseWriter, request *http.Request) bool {
 }
 func commandPatientsCreatePatientPOSTPatients(contractRegistry *gowdkcontracts.Registry) gowdkruntime.BackendHandler {
 	return func(response http.ResponseWriter, request *http.Request) bool {
-		gowdkresponse.WriteNoStoreJSONError(response, http.StatusForbidden, "403 forbidden")
+		ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "command", PageID: "patients", Name: "patients.CreatePatient", Method: "POST", Path: "/patients"})
+		request = request.WithContext(ctx)
+		request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)
+		if err := request.ParseForm(); err != nil {
+			if strings.Contains(err.Error(), "request body too large") {
+				gowdkresponse.WriteNoStoreJSONError(response, http.StatusRequestEntityTooLarge, "request body too large")
+				return true
+			}
+			gowdkresponse.WriteNoStoreJSONError(response, http.StatusBadRequest, "invalid form")
+			return true
+		}
+		if csrfValidator != nil {
+			if err := csrfValidator.Validate(request); err != nil {
+				gowdkresponse.WriteNoStoreJSONError(response, http.StatusForbidden, "invalid csrf token")
+				return true
+			}
+		}
+		values := gowdkform.FromURLValues(request.PostForm)
+		input, err := decodeContractPatientsCreatePatientInput(values)
+		if err != nil {
+			gowdkresponse.WriteNoStoreJSONError(response, http.StatusBadRequest, "invalid form")
+			return true
+		}
+		result, events, err := gowdkcontracts.CaptureCommandEventsForRole[patients.CreatePatient, patients.CreatePatientResult](ctx, contractRegistry, gowdkcontracts.RoleWeb, input)
+		if err != nil {
+			gowdkresponse.WriteNoStoreHandlerJSONError(response, err, http.StatusInternalServerError)
+			return true
+		}
+		if dispatchErr := gowdkcontracts.DispatchCommandEvents(ctx, currentContractEventSink(), contractRegistry, gowdkcontracts.RoleWeb, events); dispatchErr != nil {
+			gowdkresponse.WriteNoStoreHandlerJSONError(response, dispatchErr, http.StatusInternalServerError)
+			return true
+		}
+		httpResult, err := gowdkresponse.JSONValue(http.StatusOK, result)
+		if err != nil {
+			gowdkresponse.WriteNoStoreHandlerJSONError(response, err, http.StatusInternalServerError)
+			return true
+		}
+		_ = gowdkresponse.WriteNoStoreHTTP(response, httpResult)
 		return true
 	}
 }
 func queryPatientsGetPatientPageGETPatients(contractRegistry *gowdkcontracts.Registry) gowdkruntime.BackendHandler {
 	return func(response http.ResponseWriter, request *http.Request) bool {
-		gowdkresponse.WriteNoStoreJSONError(response, http.StatusForbidden, "403 forbidden")
+		ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "query", PageID: "patients", Name: "patients.GetPatientPage", Method: "GET", Path: "/patients"})
+		request = request.WithContext(ctx)
+		values := gowdkform.FromURLValues(request.URL.Query())
+		input, err := decodeContractPatientsGetPatientPageInput(values)
+		if err != nil {
+			gowdkresponse.WriteNoStoreJSONError(response, http.StatusBadRequest, "invalid form")
+			return true
+		}
+		result, err := gowdkcontracts.ExecuteQueryForRole[patients.GetPatientPage, patients.PatientPageData](ctx, contractRegistry, gowdkcontracts.RoleWeb, input)
+		if err != nil {
+			gowdkresponse.WriteNoStoreHandlerJSONError(response, err, http.StatusInternalServerError)
+			return true
+		}
+		httpResult, err := gowdkresponse.JSONValue(http.StatusOK, result)
+		if err != nil {
+			gowdkresponse.WriteNoStoreHandlerJSONError(response, err, http.StatusInternalServerError)
+			return true
+		}
+		_ = gowdkresponse.WriteNoStoreHTTP(response, httpResult)
 		return true
 	}
 }

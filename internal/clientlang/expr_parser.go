@@ -38,7 +38,13 @@ func (parser *exprParser) parseOr() (Expr, error) {
 
 func (parser *exprParser) parseConditional() (Expr, error) {
 	token := parser.peek()
-	if token.kind != tokenIdent || token.value != "if" {
+	if token.kind != tokenIdent {
+		return parser.parseOr()
+	}
+	if token.value == "switch" || token.value == "match" {
+		return parser.parseSwitch()
+	}
+	if token.value != "if" {
 		return parser.parseOr()
 	}
 	start := parser.consume()
@@ -73,6 +79,66 @@ func (parser *exprParser) parseConditional() (Expr, error) {
 		return nil, parser.expected("closing } after else branch", token)
 	}
 	return ConditionalExpr{Cond: cond, Then: thenExpr, Else: elseExpr, Span: mergeExprSpans(tokenSpan(start), tokenSpan(end))}, nil
+}
+
+func (parser *exprParser) parseSwitch() (Expr, error) {
+	start := parser.consume()
+	value, err := parser.parseOr()
+	if err != nil {
+		return nil, err
+	}
+	if token := parser.consume(); token.kind != tokenLBrace {
+		return nil, parser.expected("opening { after "+start.value+" value", token)
+	}
+	var cases []SwitchCase
+	var defaultExpr Expr
+	for {
+		token := parser.peek()
+		if token.kind == tokenRBrace {
+			if len(cases) == 0 {
+				return nil, fmt.Errorf("%s expression must contain at least one case", start.value)
+			}
+			if defaultExpr == nil {
+				return nil, fmt.Errorf("%s expression must contain a default branch", start.value)
+			}
+			end := parser.consume()
+			return SwitchExpr{Keyword: start.value, Value: value, Cases: cases, Default: defaultExpr, Span: mergeExprSpans(tokenSpan(start), tokenSpan(end))}, nil
+		}
+		if token.kind != tokenIdent {
+			return nil, parser.expected("case or default in "+start.value+" expression", token)
+		}
+		switch token.value {
+		case "case":
+			parser.consume()
+			match, err := parser.parseConditional()
+			if err != nil {
+				return nil, err
+			}
+			if token := parser.consume(); token.kind != tokenColon {
+				return nil, parser.expected(": after case expression", token)
+			}
+			expr, err := parser.parseConditional()
+			if err != nil {
+				return nil, err
+			}
+			cases = append(cases, SwitchCase{Match: match, Value: expr})
+		case "default":
+			parser.consume()
+			if defaultExpr != nil {
+				return nil, fmt.Errorf("%s expression must contain only one default branch", start.value)
+			}
+			if token := parser.consume(); token.kind != tokenColon {
+				return nil, parser.expected(": after default", token)
+			}
+			expr, err := parser.parseConditional()
+			if err != nil {
+				return nil, err
+			}
+			defaultExpr = expr
+		default:
+			return nil, parser.expected("case or default in "+start.value+" expression", token)
+		}
+	}
 }
 
 func (parser *exprParser) parseAnd() (Expr, error) {

@@ -158,28 +158,87 @@ func checkExpr(expr Expr, symbols map[string]ValueType, functions map[string]Exp
 		}
 		typ, err := checkConditionalBranches(thenType, elseType)
 		return typ, wrapExprError(typed, err)
+	case SwitchExpr:
+		valueType, err := checkExpr(typed.Value, symbols, functions, fields)
+		if err != nil {
+			return TypeUnknown, err
+		}
+		var branchType ValueType
+		branchSeen := false
+		for _, item := range typed.Cases {
+			matchType, err := checkExpr(item.Match, symbols, functions, fields)
+			if err != nil {
+				return TypeUnknown, err
+			}
+			if err := checkSwitchCaseType(valueType, matchType); err != nil {
+				return TypeUnknown, wrapExprError(item.Match, err)
+			}
+			caseType, err := checkExpr(item.Value, symbols, functions, fields)
+			if err != nil {
+				return TypeUnknown, err
+			}
+			if !branchSeen {
+				branchType = caseType
+				branchSeen = true
+			} else {
+				branchType, err = mergeBranchTypes(branchType, caseType, typed.Keyword)
+				if err != nil {
+					return TypeUnknown, wrapExprError(item.Value, err)
+				}
+			}
+		}
+		defaultType, err := checkExpr(typed.Default, symbols, functions, fields)
+		if err != nil {
+			return TypeUnknown, err
+		}
+		typ, err := mergeBranchTypes(branchType, defaultType, typed.Keyword)
+		return typ, wrapExprError(typed, err)
 	default:
 		return TypeUnknown, fmt.Errorf("unknown expression node")
 	}
 }
 
 func checkConditionalBranches(thenType, elseType ValueType) (ValueType, error) {
-	if thenType == TypeUnknown || elseType == TypeUnknown {
+	return mergeBranchTypes(thenType, elseType, "if")
+}
+
+func mergeBranchTypes(left, right ValueType, label string) (ValueType, error) {
+	if left == TypeUnknown || right == TypeUnknown {
 		return TypeUnknown, nil
 	}
-	if thenType == elseType {
-		return thenType, nil
+	if left == right {
+		return left, nil
 	}
-	if compatibleNumericType(thenType, elseType) {
-		if thenType == TypeFloat || elseType == TypeFloat {
+	if compatibleNumericType(left, right) {
+		if left == TypeFloat || right == TypeFloat {
 			return TypeFloat, nil
 		}
 		return TypeInt, nil
 	}
-	if thenType == TypeNil || elseType == TypeNil {
+	if left == TypeNil || right == TypeNil {
 		return TypeUnknown, fmt.Errorf("nil is only supported in == or != scalar comparisons")
 	}
-	return TypeUnknown, fmt.Errorf("if expression branches must have matching types, got %s and %s", thenType, elseType)
+	return TypeUnknown, fmt.Errorf("%s expression branches must have matching types, got %s and %s", label, left, right)
+}
+
+func checkSwitchCaseType(valueType, matchType ValueType) error {
+	if valueType == TypeUnknown || matchType == TypeUnknown {
+		return nil
+	}
+	if valueType == TypeNil || matchType == TypeNil {
+		other := valueType
+		if valueType == TypeNil {
+			other = matchType
+		}
+		if other == TypeNil || other == TypeArray || other == TypeObject {
+			return fmt.Errorf("switch case supports nil only with scalar values")
+		}
+		return nil
+	}
+	if valueType == matchType || compatibleNumericType(valueType, matchType) {
+		return nil
+	}
+	return fmt.Errorf("switch case requires comparable matching types, got %s and %s", valueType, matchType)
 }
 
 func checkBinaryExpr(op string, left, right ValueType) (ValueType, error) {

@@ -14,6 +14,7 @@ type ExpressionRuntimeSpec struct {
 	TermOperators     []string                `json:"termOperators"`
 	FactorOperators   []string                `json:"factorOperators"`
 	TokenOperators    []string                `json:"tokenOperators"`
+	SwitchKeywords    []string                `json:"switchKeywords"`
 }
 
 // ExpressionBuiltinSpec describes one compiler-owned client expression builtin.
@@ -42,6 +43,7 @@ func RuntimeExpressionSpec() ExpressionRuntimeSpec {
 		TermOperators:     []string{"+", "-"},
 		FactorOperators:   []string{"*", "/", "%"},
 		TokenOperators:    []string{"==", "!=", "<=", ">=", "&&", "||"},
+		SwitchKeywords:    []string{"switch", "match"},
 	}
 }
 

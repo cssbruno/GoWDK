@@ -44,6 +44,15 @@ func canonicalExpr(expr Expr) string {
 		return "(" + canonicalExpr(typed.Left) + " " + typed.Op + " " + canonicalExpr(typed.Right) + ")"
 	case ConditionalExpr:
 		return "if " + canonicalExpr(typed.Cond) + " { " + canonicalExpr(typed.Then) + " } else { " + canonicalExpr(typed.Else) + " }"
+	case SwitchExpr:
+		parts := make([]string, 0, len(typed.Cases)+2)
+		parts = append(parts, "switch "+canonicalExpr(typed.Value)+" {")
+		for _, item := range typed.Cases {
+			parts = append(parts, "case "+canonicalExpr(item.Match)+": "+canonicalExpr(item.Value))
+		}
+		parts = append(parts, "default: "+canonicalExpr(typed.Default))
+		parts = append(parts, "}")
+		return strings.Join(parts, " ")
 	default:
 		return ""
 	}

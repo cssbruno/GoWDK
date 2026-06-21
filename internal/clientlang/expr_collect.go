@@ -46,6 +46,13 @@ func collectExprFields(expr Expr, fields map[string]bool) {
 		collectExprFields(typed.Cond, fields)
 		collectExprFields(typed.Then, fields)
 		collectExprFields(typed.Else, fields)
+	case SwitchExpr:
+		collectExprFields(typed.Value, fields)
+		for _, item := range typed.Cases {
+			collectExprFields(item.Match, fields)
+			collectExprFields(item.Value, fields)
+		}
+		collectExprFields(typed.Default, fields)
 	}
 }
 
@@ -70,6 +77,13 @@ func collectExprCalls(expr Expr, calls map[string]bool) {
 		collectExprCalls(typed.Cond, calls)
 		collectExprCalls(typed.Then, calls)
 		collectExprCalls(typed.Else, calls)
+	case SwitchExpr:
+		collectExprCalls(typed.Value, calls)
+		for _, item := range typed.Cases {
+			collectExprCalls(item.Match, calls)
+			collectExprCalls(item.Value, calls)
+		}
+		collectExprCalls(typed.Default, calls)
 	}
 }
 

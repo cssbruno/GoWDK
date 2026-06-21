@@ -35,6 +35,8 @@ func Completions() []Completion {
 		{Label: "fn", Detail: "Declare a client handler or helper function."},
 		{Label: "let", Detail: "Declare a local client variable."},
 		{Label: "return", Detail: "Return a value from a client helper or cleanup block."},
+		{Label: "switch", Detail: "Select a client expression branch by comparable value."},
+		{Label: "case", Detail: "Declare a branch in a client switch or match expression."},
 		{Label: "effect", Detail: "Declare a client effect block."},
 		{Label: "on mount", Detail: "Declare a component mount lifecycle block."},
 		{Label: "on destroy", Detail: "Declare a component destroy lifecycle block."},

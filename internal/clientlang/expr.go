@@ -127,6 +127,23 @@ type ConditionalExpr struct {
 
 func (ConditionalExpr) exprNode() {}
 
+// SwitchCase is one case branch in a switch or match expression.
+type SwitchCase struct {
+	Match Expr
+	Value Expr
+}
+
+// SwitchExpr chooses the first case whose match expression equals Value.
+type SwitchExpr struct {
+	Keyword string
+	Value   Expr
+	Cases   []SwitchCase
+	Default Expr
+	Span    ExprSourceSpan
+}
+
+func (SwitchExpr) exprNode() {}
+
 // ParseExpr parses the supported client expression subset.
 func ParseExpr(source string) (Expr, error) {
 	return ParseExprWithSpans(source)
@@ -170,6 +187,8 @@ func ExprSpan(expr Expr) ExprSourceSpan {
 	case BinaryExpr:
 		return typed.Span
 	case ConditionalExpr:
+		return typed.Span
+	case SwitchExpr:
 		return typed.Span
 	default:
 		return ExprSourceSpan{}

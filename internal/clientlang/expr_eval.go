@@ -157,6 +157,21 @@ func evalExpr(expr Expr, values map[string]string) (any, error) {
 			return evalExpr(typed.Then, values)
 		}
 		return evalExpr(typed.Else, values)
+	case SwitchExpr:
+		value, err := evalExpr(typed.Value, values)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range typed.Cases {
+			match, err := evalExpr(item.Match, values)
+			if err != nil {
+				return nil, err
+			}
+			if valuesEqual(value, match) {
+				return evalExpr(item.Value, values)
+			}
+		}
+		return evalExpr(typed.Default, values)
 	default:
 		return nil, fmt.Errorf("unknown expression node")
 	}

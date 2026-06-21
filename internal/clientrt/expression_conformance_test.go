@@ -51,6 +51,18 @@ func TestIslandExpressionRuntimeMatchesGoEvaluator(t *testing.T) {
 			State:  map[string]any{"Open": true, "Label": "Ada"},
 		},
 		{
+			Name:   "switch expression",
+			Expr:   `switch Status { case "draft": "Draft" case "live": Label default: "Unknown" }`,
+			Values: map[string]string{"Status": "live", "Label": "Published"},
+			State:  map[string]any{"Status": "live", "Label": "Published"},
+		},
+		{
+			Name:   "match expression",
+			Expr:   `match Count { case 0: "empty" case 1: "single" default: string(Count) }`,
+			Values: map[string]string{"Count": "3"},
+			State:  map[string]any{"Count": 3},
+		},
+		{
 			Name:   "nested member and index",
 			Expr:   `User.Open && Items[0].Name == "first"`,
 			Values: map[string]string{"User": `{"Name":"Ada","Open":true}`, "Items": `[{"Name":"first"},{"Name":"second"}]`},

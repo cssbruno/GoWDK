@@ -61,7 +61,7 @@
       "patterns": [
         {
           "name": "keyword.control.client.gwdk",
-          "match": "\\b(?:async|fn|computed|on|mount|destroy|effect|when|ref|let|return|await|if|else|in|emit)\\b"
+          "match": "\\b(?:async|fn|computed|on|mount|destroy|effect|when|ref|let|return|await|if|else|switch|match|case|default|in|emit)\\b"
         },
         {
           "name": "support.function.builtin.gwdk",

@@ -26,6 +26,7 @@ const (
 	tokenLBrace
 	tokenRBrace
 	tokenComma
+	tokenColon
 )
 
 type exprToken struct {
@@ -89,6 +90,10 @@ func (lexer *exprLexer) next() (exprToken, error) {
 		start := lexer.index
 		lexer.index++
 		return exprToken{kind: tokenComma, value: ",", start: start, end: lexer.index}, nil
+	case char == ':':
+		start := lexer.index
+		lexer.index++
+		return exprToken{kind: tokenColon, value: ":", start: start, end: lexer.index}, nil
 	default:
 		return lexer.operator()
 	}

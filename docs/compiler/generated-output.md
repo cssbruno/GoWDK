@@ -174,10 +174,12 @@ Implemented today:
   generated request-time slice. Dynamic route params are substituted into
   generated SSR placeholders with request-time HTML escaping. Declared
   `server { => { field } }` pages call same-package Go load functions named
-  `Load<PageID>` with `ssr.LoadContext` and replace declared load placeholders
-  with escaped returned values. Load errors that wrap `ssr.RedirectError`
-  become no-store local redirects; other load failures use generated error-page
-  output.
+  `Load<PageID>` with `ssr.LoadContext`. Load functions can return
+  `map[string]any` or exported same-package typed result structs; generated
+  adapters convert typed struct results into the existing load-data map and
+  replace declared load placeholders with escaped returned values. Load errors
+  that wrap `ssr.RedirectError` become no-store local redirects; other load
+  failures use generated error-page output.
 - Request-time SSR and hybrid pages compose declared layouts before rendering
   the generated response, and load placeholders are shared across page and
   layout markup. Generated route metadata records the layout stack.

@@ -366,14 +366,15 @@ For standalone fragment and action-driven partial examples, see
 
 Endpoint user code can read generated endpoint metadata with
 `runtime/app.Endpoint(ctx)`. This is the stable accessor for action, API, and
-fragment handler metadata today. Typed load-result and action-result data
-accessors are deferred until those result contracts are stable.
+fragment handler metadata today. Typed SSR load result structs are supported for
+declared `server {}` data. Typed action-result data accessors are deferred until
+action result contracts are stable.
 
 `server { => { field, user.name } }` execution calls same-package Go
 `Load<PageID>` functions at request time through `ssr.LoadContext`. Returned
 declared identifiers and dotted paths are resolved from nested maps with string
-keys, structs, pointers, interfaces, exported Go field names, and `json` tag
-names, then HTML-escaped into generated placeholders.
+keys, typed result structs, pointers, interfaces, exported Go field names, and
+`json` tag names, then HTML-escaped into generated placeholders.
 
 ## Route Plans
 

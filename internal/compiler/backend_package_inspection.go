@@ -148,13 +148,16 @@ func typedFeatureFunction(obj *types.Func, pkg *types.Package) (featureFunction,
 	if !ok {
 		return featureFunction{}, false
 	}
-	kind, inputType, inputPointer, inputFields, supportMessage := backendTypedSignature(signature, pkg)
+	kind, inputType, inputPointer, inputFields, resultType, resultPointer, resultFields, supportMessage := backendTypedSignature(signature, pkg)
 	return featureFunction{
 		Name:           obj.Name(),
 		Signature:      kind,
 		InputType:      inputType,
 		InputPointer:   inputPointer,
 		InputFields:    inputFields,
+		ResultType:     resultType,
+		ResultPointer:  resultPointer,
+		ResultFields:   resultFields,
 		SupportMessage: supportMessage,
 	}, true
 }

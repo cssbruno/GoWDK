@@ -148,7 +148,8 @@ Fields:
 - `backendBindings`: action/API handler binding metadata. Entries include
   endpoint kind, source, page ID, declared block name, method, endpoint path,
   Go package/import details, exact handler symbol, signature/input metadata when
-  supported, binding status, and binding message.
+  supported, typed load result metadata when supported, binding status, and
+  binding message.
 
 The site-map command emits broader editor-facing JSON that includes source
 paths, dynamic route params, block presence, and the normalized route graph.

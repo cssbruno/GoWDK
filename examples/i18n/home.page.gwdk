@@ -1,0 +1,18 @@
+package i18nexample
+
+page localized.home
+route "/"
+guard public
+
+import copy "github.com/cssbruno/gowdk/examples/i18n"
+
+build {
+  => copy.HomeCopyForBuild()
+}
+
+view {
+  <main>
+    <h1>{title}</h1>
+    <p>{intro}</p>
+  </main>
+}

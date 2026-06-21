@@ -25,6 +25,7 @@ type routeManifestEntry struct {
 	PageID string `json:"page"`
 	Route  string `json:"route"`
 	Path   string `json:"path"`
+	Locale string `json:"locale,omitempty"`
 }
 
 type routeManifestEndpointEntry struct {
@@ -70,6 +71,7 @@ func routeManifestPayload(outputDir string, artifacts []Artifact, endpoints []co
 			PageID: artifact.PageID,
 			Route:  artifact.Route,
 			Path:   rel,
+			Locale: artifact.Locale,
 		})
 	}
 	sort.Slice(routes, func(i, j int) bool {

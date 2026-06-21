@@ -4613,6 +4613,41 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 	})
 }
 
+func TestValidateManifestRejectsLocalizedRouteMethodConflicts(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{
+			{
+				ID:     "home",
+				Route:  "/",
+				Blocks: gwdkir.Blocks{View: true},
+			},
+			{
+				ID:    "api",
+				Route: "/api-page",
+				Blocks: gwdkir.Blocks{
+					View: true,
+					APIs: []gwdkir.API{{
+						Name:   "Status",
+						Method: "GET",
+						Route:  "/en",
+					}},
+				},
+			},
+		},
+	}
+
+	err := validateManifest(gowdk.Config{I18N: gowdk.I18NConfig{
+		Locales: []gowdk.LocaleConfig{{Code: "en"}},
+	}}, app)
+	if err == nil {
+		t.Fatal("expected localized route conflict")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticMessage(diagnostics, "route_method_conflict", "GET", "/en", "api api.Status", "page home") {
+		t.Fatalf("missing localized route conflict diagnostic: %#v", diagnostics)
+	}
+}
+
 func TestValidateManifestAllowsSameRouteWithDifferentMethods(t *testing.T) {
 	app := appFixture{
 		Pages: []gwdkir.Page{{

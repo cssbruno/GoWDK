@@ -513,6 +513,9 @@ func ssrRouteContextStmts(route SSRRoute, includeParams bool) []ast.Stmt {
 	if route.ErrorPage != "" {
 		metadata = append(metadata, keyValue("ErrorPage", stringLit(route.ErrorPage)))
 	}
+	if route.Locale != "" {
+		metadata = append(metadata, keyValue("Locale", stringLit(route.Locale)))
+	}
 	dynamicParams := route.DynamicParams
 	if len(dynamicParams) == 0 {
 		dynamicParams = ssrRoutePatternParams(route.Route)
@@ -545,6 +548,9 @@ func ssrRouteContextStmts(route SSRRoute, includeParams bool) []ast.Stmt {
 	if includeParams {
 		stmts = append(stmts, assign([]ast.Expr{id("ctx")}, call(sel("gowdkruntime", "WithParams"), id("ctx"), id("params"))))
 		stmts = append(stmts, typedRouteParamStmts(route.RouteParams)...)
+	}
+	if route.Locale != "" {
+		stmts = append(stmts, assign([]ast.Expr{id("ctx")}, call(sel("gowdkruntime", "WithLocale"), id("ctx"), stringLit(route.Locale))))
 	}
 	stmts = append(stmts, assign([]ast.Expr{id("request")}, call(selExpr(id("request"), "WithContext"), id("ctx"))))
 	return stmts

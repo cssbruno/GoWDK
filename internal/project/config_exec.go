@@ -21,6 +21,7 @@ type executableConfig struct {
 	Source    gowdk.SourceConfig       `json:"source"`
 	Modules   []gowdk.ModuleConfig     `json:"modules"`
 	Render    gowdk.RenderConfig       `json:"render"`
+	I18N      gowdk.I18NConfig         `json:"i18n"`
 	Env       gowdk.EnvConfig          `json:"env"`
 	Lifecycle gowdk.LifecycleConfig    `json:"lifecycle"`
 	Build     gowdk.BuildConfig        `json:"build"`
@@ -108,6 +109,7 @@ func loadExecutableConfig(configPath string) (gowdk.Config, error) {
 		Source:    wire.Source,
 		Modules:   wire.Modules,
 		Render:    wire.Render,
+		I18N:      wire.I18N,
 		Env:       wire.Env,
 		Lifecycle: wire.Lifecycle,
 		Build:     wire.Build,
@@ -391,6 +393,7 @@ type executableConfig struct {
 	Source    gowdk.SourceConfig       ` + "`json:\"source\"`" + `
 	Modules   []gowdk.ModuleConfig     ` + "`json:\"modules\"`" + `
 	Render    gowdk.RenderConfig       ` + "`json:\"render\"`" + `
+	I18N      gowdk.I18NConfig         ` + "`json:\"i18n\"`" + `
 	Env       gowdk.EnvConfig          ` + "`json:\"env\"`" + `
 	Lifecycle gowdk.LifecycleConfig    ` + "`json:\"lifecycle\"`" + `
 	Build     gowdk.BuildConfig        ` + "`json:\"build\"`" + `
@@ -473,6 +476,7 @@ func writeConfig() {
 		Source:    config.Source,
 		Modules:   config.Modules,
 		Render:    config.Render,
+		I18N:      config.I18N,
 		Env:       config.Env,
 		Lifecycle: config.Lifecycle,
 		Build:     config.Build,

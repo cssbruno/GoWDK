@@ -12,12 +12,13 @@ import (
 )
 
 type pageOutput struct {
-	route string
-	data  map[string]string
+	route  string
+	data   map[string]string
+	locale string
 }
 
-func pageRouteArtifacts(outputDir string, page gwdkir.Page) ([]Artifact, error) {
-	outputs, err := pageOutputs(page)
+func pageRouteArtifacts(config gowdk.Config, outputDir string, page gwdkir.Page) ([]Artifact, error) {
+	outputs, err := pageOutputs(config, page)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", page.ID, err)
 	}
@@ -27,19 +28,19 @@ func pageRouteArtifacts(outputDir string, page gwdkir.Page) ([]Artifact, error) 
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
-		artifacts = append(artifacts, Artifact{PageID: page.ID, Route: output.route, Path: outputPath, CachePolicy: page.CachePolicy()})
+		artifacts = append(artifacts, Artifact{PageID: page.ID, Route: output.route, Path: outputPath, CachePolicy: page.CachePolicy(), Locale: output.locale})
 	}
 	return artifacts, nil
 }
 
 func pageOutputArtifacts(config gowdk.Config, outputDir string, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, realtimeEventTypeNames map[string]string, queryTypeNames map[string]string) ([]plannedArtifact, error) {
-	outputs, err := pageOutputs(page)
+	outputs, err := pageOutputs(config, page)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", page.ID, err)
 	}
 	artifacts := make([]plannedArtifact, 0, len(outputs))
 	for _, output := range outputs {
-		buildData, err := parseBuildDataFromBlocks(page.Blocks, output.data, page.Imports, page.Source)
+		buildData, err := parseBuildDataFromBlocks(page.Blocks, output.data, output.locale, page.Imports, page.Source)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
@@ -47,7 +48,7 @@ func pageOutputArtifacts(config gowdk.Config, outputDir string, page gwdkir.Page
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
-		html, _, err := renderPage(config, page, components, layouts, stylesheets, actionFields, data, realtimeEventTypeNames, queryTypeNames, renderModeSPA)
+		html, _, err := renderPage(config, page, output.route, components, layouts, stylesheets, actionFields, data, output.locale, realtimeEventTypeNames, queryTypeNames, renderModeSPA)
 		if err != nil {
 			return nil, err
 		}
@@ -56,14 +57,22 @@ func pageOutputArtifacts(config gowdk.Config, outputDir string, page gwdkir.Page
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
 		artifacts = append(artifacts, plannedArtifact{
-			Artifact: Artifact{PageID: page.ID, Route: output.route, Path: outputPath, CachePolicy: page.CachePolicy()},
+			Artifact: Artifact{PageID: page.ID, Route: output.route, Path: outputPath, CachePolicy: page.CachePolicy(), Locale: output.locale},
 			contents: []byte(html),
 		})
 	}
 	return artifacts, nil
 }
 
-func pageOutputs(page gwdkir.Page) ([]pageOutput, error) {
+func pageOutputs(config gowdk.Config, page gwdkir.Page) ([]pageOutput, error) {
+	outputs, err := pageBaseOutputs(page)
+	if err != nil {
+		return nil, err
+	}
+	return localizePageOutputs(config.I18N, outputs), nil
+}
+
+func pageBaseOutputs(page gwdkir.Page) ([]pageOutput, error) {
 	params := page.DynamicParams()
 	if len(params) == 0 {
 		return []pageOutput{{route: page.Route}}, nil
@@ -108,6 +117,22 @@ func pageOutputs(page gwdkir.Page) ([]pageOutput, error) {
 		})
 	}
 	return outputs, nil
+}
+
+func localizePageOutputs(config gowdk.I18NConfig, outputs []pageOutput) []pageOutput {
+	if !config.Enabled() {
+		return outputs
+	}
+	localized := make([]pageOutput, 0, len(outputs)*len(config.Locales))
+	for _, output := range outputs {
+		for _, route := range config.LocalizedRoutes(output.route) {
+			next := output
+			next.route = route.Route
+			next.locale = route.Locale
+			localized = append(localized, next)
+		}
+	}
+	return localized
 }
 
 func outputPath(outputDir, route string) (string, error) {

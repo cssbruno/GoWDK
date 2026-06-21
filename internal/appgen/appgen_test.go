@@ -3838,6 +3838,59 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 	}
 }
 
+func TestGenerateAutoRoutesLocalizesSSRRoutes(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:     "dashboard",
+		Route:  "/dashboard",
+		Render: gowdk.SSR,
+		Guards: []string{"public"},
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main><h1>Dashboard</h1></main>`,
+		},
+	}}}
+
+	config := gowdk.Config{
+		Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)},
+		I18N: gowdk.I18NConfig{
+			Locales: []gowdk.LocaleConfig{{Code: "en"}, {Code: "pt"}},
+		},
+	}
+	ir := gwdkanalysis.BuildProgram(config, app)
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		AutoRoutes: true,
+		Config:     config,
+		IR:         &ir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`case "/en/dashboard":`,
+		`case "/pt/dashboard":`,
+		`gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/en/dashboard", Render: "ssr", Locale: "en", Guards: []string{"public"}}`,
+		`gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/pt/dashboard", Render: "ssr", Locale: "pt", Guards: []string{"public"}}`,
+		`ctx = gowdkruntime.WithLocale(ctx, "en")`,
+		`ctx = gowdkruntime.WithLocale(ctx, "pt")`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected localized SSR generated app source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
 func TestGenerateAutoRoutesUseDefaultHybridRenderMetadata(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -8685,7 +8738,7 @@ func waitForHTTPStatusWithHeaders(url, method, body string, headers map[string]s
 // through the production manifest->IR path, asserting against exactly what the
 // generated-app pipeline derives.
 func actionEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]ActionEndpoint, error) {
-	return actionEndpointsFromIR(gwdkanalysis.BuildProgram(gowdk.Config{}, app))
+	return actionEndpointsFromIR(gowdk.Config{}, gwdkanalysis.BuildProgram(gowdk.Config{}, app))
 }
 
 func apiEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]APIEndpoint, error) {
@@ -8709,6 +8762,26 @@ func TestDeniedPageRoutesSelectsGuardlessStaticPages(t *testing.T) {
 	denied := deniedPageRoutes(options)
 	if len(denied) != 1 || denied[0] != "/" {
 		t.Fatalf("expected only the guardless static route /, got %#v", denied)
+	}
+}
+
+func TestDeniedPageRoutesLocalizeGuardlessStaticPages(t *testing.T) {
+	options := Options{
+		Config: gowdk.Config{
+			I18N: gowdk.I18NConfig{
+				Locales: []gowdk.LocaleConfig{{Code: "en"}, {Code: "pt"}},
+			},
+		},
+		IR: &gwdkir.Program{Pages: []gwdkir.Page{
+			{ID: "home", Route: "/"},
+			{ID: "dashboard", Route: "/dashboard"},
+		}},
+		SSR: []SSRRoute{{PageID: "dashboard", Route: "/en/dashboard"}},
+	}
+
+	denied := deniedPageRoutes(options)
+	if strings.Join(denied, ",") != "/en,/pt" {
+		t.Fatalf("expected localized guardless static routes, got %#v", denied)
 	}
 }
 

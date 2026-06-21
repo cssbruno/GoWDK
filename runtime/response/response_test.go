@@ -427,6 +427,9 @@ func TestHandlerError(t *testing.T) {
 	if got := HandlerStatus(errors.New("ordinary"), 500); got != 500 {
 		t.Fatalf("unexpected fallback status: %d", got)
 	}
+	if got := HandlerStatus(&http.MaxBytesError{Limit: 1024}, 500); got != http.StatusRequestEntityTooLarge {
+		t.Fatalf("unexpected max bytes status: %d", got)
+	}
 }
 
 func TestHandlerErrorMessageHidesOrdinary5xxDetails(t *testing.T) {

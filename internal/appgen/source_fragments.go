@@ -62,6 +62,9 @@ func fragmentCaseExpr(fragment BackendFragmentAdapter) ast.Expr {
 }
 
 func fragmentCaseStmts(fragment BackendFragmentAdapter, rateLimit bool) []ast.Stmt {
+	if endpointDeniedByOmission(fragment.Guards) {
+		return denyByOmissionStmts()
+	}
 	stmts := fragmentContextStmts(fragment, false)
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(fragment.Guards)...)
@@ -110,6 +113,9 @@ func fragmentDynamicIfStmt(fragment BackendFragmentAdapter, rateLimit bool) ast.
 }
 
 func fragmentDynamicCaseStmts(fragment BackendFragmentAdapter, rateLimit bool) []ast.Stmt {
+	if endpointDeniedByOmission(fragment.Guards) {
+		return denyByOmissionStmts()
+	}
 	stmts := fragmentContextStmts(fragment, true)
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(fragment.Guards)...)
@@ -162,6 +168,9 @@ func fragmentTypedRouteParams(fragment BackendFragmentAdapter) []source.RoutePar
 
 func fragmentsUseStaticFallback(fragments []BackendFragmentAdapter) bool {
 	for _, fragment := range fragments {
+		if endpointDeniedByOmission(fragment.Guards) {
+			continue
+		}
 		if fragment.Binding.Status != source.BackendBindingBound && fragment.Binding.Status != source.BackendBindingUnsupportedSignature {
 			return true
 		}

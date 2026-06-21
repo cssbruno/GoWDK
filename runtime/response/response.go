@@ -77,6 +77,10 @@ func HandlerStatus(err error, fallback int) int {
 	if errors.As(err, &handlerErr) && handlerErr.Status != 0 {
 		return handlerErr.Status
 	}
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		return http.StatusRequestEntityTooLarge
+	}
 	return fallback
 }
 

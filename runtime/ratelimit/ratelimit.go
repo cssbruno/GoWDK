@@ -125,6 +125,24 @@ func (limiter *Limiter) AllowRequest(request *http.Request) (Result, error) {
 	return limiter.store.Take(request.Context(), key, limiter.limit, limiter.window, limiter.now())
 }
 
+// HandleError writes the configured rate-limit store-error response.
+func (limiter *Limiter) HandleError(writer http.ResponseWriter, request *http.Request, err error) {
+	if limiter == nil || limiter.errorHandler == nil {
+		DefaultErrorHandler(writer, request, err)
+		return
+	}
+	limiter.errorHandler(writer, request, err)
+}
+
+// HandleLimit writes the configured blocked-request response.
+func (limiter *Limiter) HandleLimit(writer http.ResponseWriter, request *http.Request, result Result) {
+	if limiter == nil || limiter.limitHandler == nil {
+		DefaultLimitHandler(writer, request, result)
+		return
+	}
+	limiter.limitHandler(writer, request, result)
+}
+
 // Middleware wraps an HTTP handler with rate limiting.
 func (limiter *Limiter) Middleware(next http.Handler) http.Handler {
 	if next == nil {

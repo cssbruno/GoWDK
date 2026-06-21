@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/cssbruno/gowdk/runtime/security"
 	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 )
 
@@ -24,7 +25,7 @@ func logWorkerDispatchFailure(err error) {
 	if logger == nil {
 		return
 	}
-	logger("gowdk: event worker nacked batch after dispatch failure: " + err.Error())
+	logger("gowdk: event worker nacked batch after dispatch failure: " + security.RedactSecrets(err.Error()))
 }
 
 // EventBatch is one ordered delivery batch from an outbox, queue, or broker

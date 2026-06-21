@@ -11,6 +11,9 @@ func RegisterQuery[Q, R any](registry *Registry, handler QueryHandler[Q, R], rol
 	if handler == nil {
 		return nilHandlerError(Query, typeName[Q]())
 	}
+	if registry == nil {
+		return nilRegistryError(Query, typeName[Q]())
+	}
 	return registry.registerQuery(typeName[Q](), typeName[R](), handler, roles)
 }
 
@@ -33,6 +36,10 @@ func executeQuery[Q, R any](ctx context.Context, registry *Registry, query Q, ro
 	)
 	var spanErr error
 	defer func() { finishContractSpan(span, spanErr) }()
+	if registry == nil {
+		spanErr = nilRegistryError(Query, contract)
+		return zero, spanErr
+	}
 	entry, ok := registry.query(contract)
 	if !ok {
 		spanErr = missingHandlerError(Query, contract)
@@ -55,6 +62,7 @@ func executeQuery[Q, R any](ctx context.Context, registry *Registry, query Q, ro
 func (registry *Registry) registerQuery(query, result string, handler any, roles []Role) error {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
+	registry.ensureMapsLocked()
 	if _, exists := registry.queries[query]; exists {
 		return duplicateHandlerError(Query, query)
 	}

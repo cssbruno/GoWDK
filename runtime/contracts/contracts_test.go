@@ -910,7 +910,7 @@ func TestContractTracingRecordsCommandQueryEventAndJobSpans(t *testing.T) {
 		t.Fatalf("execute job: %v", err)
 	}
 
-	spans := ring.Spans()
+	spans := waitForSpans(t, ring, 4)
 	assertContractSpan(t, spans, string(ObservationExecuteCommand), gowdktrace.LaneContract, string(Command))
 	assertContractSpan(t, spans, string(ObservationPublishEvent), gowdktrace.LaneContract, string(Event))
 	assertContractSpan(t, spans, string(ObservationExecuteQuery), gowdktrace.LaneContract, string(Query))
@@ -1185,6 +1185,67 @@ func TestMetadataIsDeterministic(t *testing.T) {
 	}
 }
 
+func TestNilRegistryAPIsReturnStructuredErrors(t *testing.T) {
+	if err := RegisterQuery[patientPageQuery, patientPage](nil, func(ctx context.Context, query patientPageQuery) (patientPage, error) {
+		return patientPage{}, nil
+	}); !Is(err, ErrNilHandler) {
+		t.Fatalf("RegisterQuery nil registry error = %v, want %s", err, ErrNilHandler)
+	}
+	if _, err := ExecuteQuery[patientPageQuery, patientPage](context.Background(), nil, patientPageQuery{}); !Is(err, ErrNilHandler) {
+		t.Fatalf("ExecuteQuery nil registry error = %v, want %s", err, ErrNilHandler)
+	}
+	if err := RegisterCommand[createPatient, createPatientResult](nil, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		return createPatientResult{}, nil
+	}); !Is(err, ErrNilHandler) {
+		t.Fatalf("RegisterCommand nil registry error = %v, want %s", err, ErrNilHandler)
+	}
+	if _, err := ExecuteCommand[createPatient, createPatientResult](context.Background(), nil, createPatient{}); !Is(err, ErrNilHandler) {
+		t.Fatalf("ExecuteCommand nil registry error = %v, want %s", err, ErrNilHandler)
+	}
+	if err := RegisterDomainEvent[patientCreated](nil, func(ctx context.Context, event patientCreated) error {
+		return nil
+	}); !Is(err, ErrNilHandler) {
+		t.Fatalf("RegisterDomainEvent nil registry error = %v, want %s", err, ErrNilHandler)
+	}
+	if err := PublishDomain(context.Background(), nil, patientCreated{}); !Is(err, ErrNilHandler) {
+		t.Fatalf("PublishDomain nil registry error = %v, want %s", err, ErrNilHandler)
+	}
+}
+
+func TestZeroValueRegistryIsUsable(t *testing.T) {
+	registry := &Registry{}
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		return createPatientResult{ID: command.Name}, nil
+	}, RoleWeb))
+	must(t, RegisterQuery[patientPageQuery, patientPage](registry, func(ctx context.Context, query patientPageQuery) (patientPage, error) {
+		return patientPage{Name: query.ID}, nil
+	}, RoleWeb))
+	var handled string
+	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
+		handled = event.ID
+		return nil
+	}, RoleWorker))
+	must(t, RegisterInvalidation[patientCreated, patientPageQuery](registry))
+
+	commandResult, err := ExecuteCommandForRole[createPatient, createPatientResult](context.Background(), registry, RoleWeb, createPatient{Name: "patient-1"})
+	if err != nil || commandResult.ID != "patient-1" {
+		t.Fatalf("zero-value command result = %#v err=%v", commandResult, err)
+	}
+	queryResult, err := ExecuteQueryForRole[patientPageQuery, patientPage](context.Background(), registry, RoleWeb, patientPageQuery{ID: "Ada"})
+	if err != nil || queryResult.Name != "Ada" {
+		t.Fatalf("zero-value query result = %#v err=%v", queryResult, err)
+	}
+	if err := PublishDomainForRole(context.Background(), registry, RoleWorker, patientCreated{ID: "event-1"}); err != nil {
+		t.Fatalf("zero-value publish domain: %v", err)
+	}
+	if handled != "event-1" {
+		t.Fatalf("handled = %q, want event-1", handled)
+	}
+	if got := registry.Invalidations(); len(got) != 1 {
+		t.Fatalf("zero-value invalidations = %#v, want one", got)
+	}
+}
+
 func TestExecuteRolelessContractFailsClosedForConcreteRole(t *testing.T) {
 	registry := NewRegistry()
 	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
@@ -1255,6 +1316,21 @@ func contractSpanAttr(span gowdktrace.Snapshot, key string) any {
 		}
 	}
 	return nil
+}
+
+func waitForSpans(t *testing.T, ring *gowdktrace.RingSink, want int) []gowdktrace.Snapshot {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		spans := ring.Spans()
+		if len(spans) >= want {
+			return spans
+		}
+		if time.Now().After(deadline) {
+			return spans
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }
 
 func must(t *testing.T, err error) {

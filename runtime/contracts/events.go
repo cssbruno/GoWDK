@@ -228,6 +228,10 @@ func publishEnvelopeForRole(ctx context.Context, registry *Registry, event Event
 	)
 	var spanErr error
 	defer func() { finishContractSpan(span, spanErr) }()
+	if registry == nil {
+		spanErr = nilRegistryError(Event, event.Type)
+		return spanErr
+	}
 	key := eventKey{category: event.Category, event: event.Type}
 	entries := registry.eventEntries(key)
 	for index, entry := range entries {
@@ -259,8 +263,12 @@ func registerEvent[E any](registry *Registry, category EventCategory, handler Ev
 	if handler == nil {
 		return nilHandlerError(Event, typeName[E]())
 	}
+	if registry == nil {
+		return nilRegistryError(Event, typeName[E]())
+	}
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
+	registry.ensureMapsLocked()
 	key := eventKey{category: category, event: typeName[E]()}
 	registry.events[key] = append(registry.events[key], eventEntry{
 		event:    key.event,
@@ -313,6 +321,9 @@ func eventsWithTraceparent(ctx context.Context, events []EventEnvelope) []EventE
 }
 
 func (registry *Registry) eventEntries(key eventKey) []eventEntry {
+	if registry == nil {
+		return nil
+	}
 	registry.mu.RLock()
 	defer registry.mu.RUnlock()
 	entries := registry.events[key]

@@ -272,6 +272,7 @@ func appShellDecls(options Options) []ast.Decl {
 		decls = append(decls, configuredServicesDecl(nil))
 	}
 	decls = append(decls, loadEnvFileDecl(options)...)
+	decls = append(decls, applyEnvDefaultsDecl(options.Config.Env)...)
 	decls = append(decls, validateEnvContractDecl(options.Config.Env)...)
 	return decls
 }
@@ -293,6 +294,7 @@ func backendShellDecls(options Options) []ast.Decl {
 		decls = append(decls, configuredServicesDecl(nil))
 	}
 	decls = append(decls, loadEnvFileDecl(options)...)
+	decls = append(decls, applyEnvDefaultsDecl(options.Config.Env)...)
 	decls = append(decls, validateEnvContractDecl(options.Config.Env)...)
 	return decls
 }
@@ -432,6 +434,7 @@ func serveMuxDecl(options Options, embedded bool) ast.Decl {
 func newServeMuxDecl(options Options, embedded bool) ast.Decl {
 	stmts := []ast.Stmt{}
 	stmts = append(stmts, loadEnvFileStmt(options)...)
+	stmts = append(stmts, applyEnvDefaultsStmt(options.Config.Env)...)
 	stmts = append(stmts, authSetupStmts(options)...)
 	stmts = append(stmts, validateEnvContractStmt(options.Config.Env)...)
 	if embedded {

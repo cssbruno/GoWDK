@@ -14,6 +14,7 @@ func RegisterInvalidation[E, Q any](registry *Registry) error {
 	}
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
+	registry.ensureMapsLocked()
 	invalidation := QueryInvalidation{
 		EventCategory: DomainEvent,
 		EventType:     typeName[E](),

@@ -98,7 +98,7 @@ func WriteNoStoreFailure(writer http.ResponseWriter, err error) {
 		_ = response.WriteNoStoreHTTP(writer, result)
 		return
 	}
-	response.WriteNoStoreError(writer, http.StatusForbidden, err.Error())
+	response.WriteNoStoreError(writer, http.StatusForbidden, "403 forbidden")
 }
 
 func validateRedirectURL(url string) error {

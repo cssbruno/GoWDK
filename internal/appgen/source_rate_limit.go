@@ -50,7 +50,7 @@ func runRateLimitDecl() ast.Decl {
 		&ast.IfStmt{
 			Cond: notNil("err"),
 			Body: block(
-				exprStmt(call(sel("gowdkratelimit", "DefaultErrorHandler"), id("response"), id("request"), id("err"))),
+				exprStmt(call(selExpr(id("rateLimiter"), "HandleError"), id("response"), id("request"), id("err"))),
 				returnBool(true),
 			),
 		},
@@ -58,7 +58,7 @@ func runRateLimitDecl() ast.Decl {
 		&ast.IfStmt{
 			Cond: &ast.UnaryExpr{Op: token.NOT, X: selExpr(id("result"), "Allowed")},
 			Body: block(
-				exprStmt(call(sel("gowdkratelimit", "DefaultLimitHandler"), id("response"), id("request"), id("result"))),
+				exprStmt(call(selExpr(id("rateLimiter"), "HandleLimit"), id("response"), id("request"), id("result"))),
 				returnBool(true),
 			),
 		},

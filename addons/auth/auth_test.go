@@ -82,10 +82,13 @@ func TestPBKDF2HasherWithCustomIterations(t *testing.T) {
 }
 
 func TestHashPasswordWithIterationsRejectsInvalidIterations(t *testing.T) {
-	for _, iterations := range []int{0, -1, MinIterations - 1} {
+	for _, iterations := range []int{0, -1, MinIterations - 1, MaxIterations + 1} {
 		if _, err := HashPasswordWithIterations("same", iterations); err == nil {
 			t.Fatalf("HashPasswordWithIterations accepted iterations=%d", iterations)
 		}
+	}
+	if _, err := (PBKDF2Hasher{Iterations: MaxIterations + 1}).HashPassword("same"); err == nil {
+		t.Fatalf("PBKDF2Hasher accepted iterations=%d", MaxIterations+1)
 	}
 }
 
@@ -148,6 +151,7 @@ func TestVerifyPasswordRejectsMalformedHash(t *testing.T) {
 		"bcrypt$10$salt$key",
 		"pbkdf2-sha256$600000$$a2V5",
 		"pbkdf2-sha256$1$" + canonicalSalt + "$" + canonicalKey,
+		"pbkdf2-sha256$" + strconv.Itoa(MaxIterations+1) + "$" + canonicalSalt + "$" + canonicalKey,
 		"pbkdf2-sha256$600000$" + shortSalt + "$" + canonicalKey,
 		"pbkdf2-sha256$600000$" + canonicalSalt + "$" + shortKey,
 	} {

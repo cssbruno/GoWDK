@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
 	gowdkresponse "github.com/cssbruno/gowdk/runtime/response"
@@ -74,7 +75,7 @@ func TestRunGuardsRecordsFailedGuardSpan(t *testing.T) {
 	if !errors.Is(err, expected) {
 		t.Fatalf("expected failed guard error, got %v", err)
 	}
-	spans := ring.Spans()
+	spans := waitForSpans(t, ring, 1)
 	if len(spans) != 1 {
 		t.Fatalf("spans = %d, want 1", len(spans))
 	}
@@ -174,7 +175,22 @@ func TestWriteNoStoreFailure(t *testing.T) {
 
 	ordinary := httptest.NewRecorder()
 	WriteNoStoreFailure(ordinary, errors.New("guard failed"))
-	if ordinary.Code != http.StatusForbidden || ordinary.Header().Get("Cache-Control") != "no-store" || !strings.Contains(ordinary.Body.String(), "guard failed") {
+	if ordinary.Code != http.StatusForbidden || ordinary.Header().Get("Cache-Control") != "no-store" || !strings.Contains(ordinary.Body.String(), "403 forbidden") || strings.Contains(ordinary.Body.String(), "guard failed") {
 		t.Fatalf("unexpected ordinary failure response: status=%d headers=%v body=%q", ordinary.Code, ordinary.Header(), ordinary.Body.String())
+	}
+}
+
+func waitForSpans(t *testing.T, ring *gowdktrace.RingSink, want int) []gowdktrace.Snapshot {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		spans := ring.Spans()
+		if len(spans) >= want {
+			return spans
+		}
+		if time.Now().After(deadline) {
+			return spans
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }

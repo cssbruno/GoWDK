@@ -458,6 +458,9 @@ func (ir BackendAdapterIR) GuardNames() []string {
 func (ir BackendAdapterIR) BackendImports() map[string]string {
 	imports := map[string]string{}
 	for _, call := range ir.Calls {
+		if endpointDeniedByOmission(call.Endpoint.Guards) {
+			continue
+		}
 		if call.ImportPath != "" && call.Alias != "" {
 			imports[call.ImportPath] = call.Alias
 		}

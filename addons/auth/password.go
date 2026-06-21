@@ -22,6 +22,10 @@ const (
 	// stored hashes. Keep this separate from DefaultIterations so existing
 	// stored hashes remain verifiable if the default later increases.
 	MinIterations = 600000
+	// MaxIterations is the maximum accepted PBKDF2 iteration count for new and
+	// stored hashes. It bounds CPU cost when verifying imported or corrupted
+	// hashes while leaving room for future default increases.
+	MaxIterations = 2000000
 
 	pbkdf2SaltLength = 16
 	pbkdf2KeyLength  = 32
@@ -112,6 +116,9 @@ func (hasher PBKDF2Hasher) iterations() int {
 func validateIterations(iterations int) error {
 	if iterations < MinIterations {
 		return fmt.Errorf("gowdk auth: iterations must be at least %d", MinIterations)
+	}
+	if iterations > MaxIterations {
+		return fmt.Errorf("gowdk auth: iterations must be at most %d", MaxIterations)
 	}
 	return nil
 }

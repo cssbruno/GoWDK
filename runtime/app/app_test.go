@@ -1,9 +1,11 @@
 package app
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1263,6 +1265,102 @@ func TestBackendRouterRecoversAPIPanic(t *testing.T) {
 	}
 }
 
+func TestBackendRouterRecoversContractPanicsAsJSON(t *testing.T) {
+	for _, tc := range []struct {
+		kind   string
+		method string
+		path   string
+		header func(*http.Request)
+	}{
+		{kind: "command", method: http.MethodPost, path: "/patients"},
+		{kind: "query", method: http.MethodGet, path: "/patients", header: func(request *http.Request) {
+			request.Header.Set("Accept", "application/json")
+		}},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
+			router, err := NewBackendRouter(BackendRoute{
+				Method: tc.method,
+				Path:   tc.path,
+				Kind:   tc.kind,
+				Handler: func(http.ResponseWriter, *http.Request) bool {
+					panic("secret token")
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(tc.method, tc.path, nil)
+			if tc.header != nil {
+				tc.header(request)
+			}
+
+			if !router.Dispatch(recorder, request) {
+				t.Fatal("expected route to dispatch")
+			}
+			if recorder.Code != http.StatusInternalServerError {
+				t.Fatalf("unexpected status: %d", recorder.Code)
+			}
+			if contentType := recorder.Header().Get("Content-Type"); !strings.Contains(contentType, "application/json") {
+				t.Fatalf("expected JSON boundary response, got %q", contentType)
+			}
+			body := recorder.Body.String()
+			if !strings.Contains(body, `GOWDK `+tc.kind+` handler failed`) || strings.Contains(body, "secret token") {
+				t.Fatalf("unexpected boundary body: %q", body)
+			}
+			if cache := recorder.Header().Get("Cache-Control"); cache != "no-store" {
+				t.Fatalf("expected no-store boundary response, got %q", cache)
+			}
+		})
+	}
+}
+
+func TestResponseWriterWrappersExposeOptionalCapabilities(t *testing.T) {
+	base := &optionalCapabilityResponseWriter{ResponseWriter: httptest.NewRecorder()}
+	boundary := wrapBoundaryResponseWriter(&boundaryResponseWriter{ResponseWriter: base})
+	if _, ok := boundary.(http.Flusher); !ok {
+		t.Fatal("boundary wrapper did not expose http.Flusher")
+	}
+	if _, ok := boundary.(http.Hijacker); !ok {
+		t.Fatal("boundary wrapper did not expose http.Hijacker")
+	}
+	if _, ok := boundary.(http.Pusher); !ok {
+		t.Fatal("boundary wrapper did not expose http.Pusher")
+	}
+	boundary.(http.Flusher).Flush()
+	if err := boundary.(http.Pusher).Push("/app.css", nil); err != nil {
+		t.Fatalf("boundary push: %v", err)
+	}
+	if _, _, err := boundary.(http.Hijacker).Hijack(); !errors.Is(err, errHijackedForTest) {
+		t.Fatalf("boundary hijack error = %v, want %v", err, errHijackedForTest)
+	}
+	if !base.flushed || base.pushed != "/app.css" {
+		t.Fatalf("boundary optional methods were not delegated: %#v", base)
+	}
+
+	base = &optionalCapabilityResponseWriter{ResponseWriter: httptest.NewRecorder()}
+	traceWriter := wrapTraceResponseWriter(&traceResponseWriter{ResponseWriter: base, status: http.StatusOK})
+	if _, ok := traceWriter.(http.Flusher); !ok {
+		t.Fatal("trace wrapper did not expose http.Flusher")
+	}
+	if _, ok := traceWriter.(http.Hijacker); !ok {
+		t.Fatal("trace wrapper did not expose http.Hijacker")
+	}
+	if _, ok := traceWriter.(http.Pusher); !ok {
+		t.Fatal("trace wrapper did not expose http.Pusher")
+	}
+	traceWriter.(http.Flusher).Flush()
+	if err := traceWriter.(http.Pusher).Push("/app.js", nil); err != nil {
+		t.Fatalf("trace push: %v", err)
+	}
+	if _, _, err := traceWriter.(http.Hijacker).Hijack(); !errors.Is(err, errHijackedForTest) {
+		t.Fatalf("trace hijack error = %v, want %v", err, errHijackedForTest)
+	}
+	if !base.flushed || base.pushed != "/app.js" {
+		t.Fatalf("trace optional methods were not delegated: %#v", base)
+	}
+}
+
 func TestBoundaryLogsRecoveredPanicWithRedactedSecret(t *testing.T) {
 	previous := BoundaryLogger
 	t.Cleanup(func() { BoundaryLogger = previous })
@@ -1770,7 +1868,7 @@ func TestTracedBackendRouteMarksServerStatusError(t *testing.T) {
 	if !handler(recorder, request) {
 		t.Fatal("expected backend handler to handle request")
 	}
-	spans := ring.Spans()
+	spans := waitForSpans(t, ring, 1)
 	if len(spans) != 1 {
 		t.Fatalf("spans = %d, want 1", len(spans))
 	}
@@ -1805,7 +1903,7 @@ func TestTracedBackendRouteRecordsEndpointLanes(t *testing.T) {
 				t.Fatal("expected backend handler to handle request")
 			}
 
-			spans := ring.Spans()
+			spans := waitForSpans(t, ring, 1)
 			if len(spans) != 1 {
 				t.Fatalf("spans = %d, want 1", len(spans))
 			}
@@ -1845,7 +1943,7 @@ func TestTracedBackendRouteRecordsPanicAsRedactedError(t *testing.T) {
 		_ = handler(recorder, request)
 	}()
 
-	spans := ring.Spans()
+	spans := waitForSpans(t, ring, 1)
 	if len(spans) != 1 {
 		t.Fatalf("spans = %d, want 1", len(spans))
 	}
@@ -1866,6 +1964,42 @@ func spanAttr(span gowdktrace.Snapshot, key string) any {
 	return nil
 }
 
+func waitForSpans(t *testing.T, ring *gowdktrace.RingSink, want int) []gowdktrace.Snapshot {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		spans := ring.Spans()
+		if len(spans) >= want {
+			return spans
+		}
+		if time.Now().After(deadline) {
+			return spans
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+var errHijackedForTest = errors.New("hijacked for test")
+
+type optionalCapabilityResponseWriter struct {
+	http.ResponseWriter
+	flushed bool
+	pushed  string
+}
+
+func (writer *optionalCapabilityResponseWriter) Flush() {
+	writer.flushed = true
+}
+
+func (writer *optionalCapabilityResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return nil, nil, errHijackedForTest
+}
+
+func (writer *optionalCapabilityResponseWriter) Push(target string, options *http.PushOptions) error {
+	writer.pushed = target
+	return nil
+}
+
 func TestFinishHTTPTraceMarksServerStatusError(t *testing.T) {
 	ring := gowdktrace.NewRingSink(4)
 	tracer := gowdktrace.NewTracer(gowdktrace.WithSink(ring))
@@ -1875,7 +2009,7 @@ func TestFinishHTTPTraceMarksServerStatusError(t *testing.T) {
 
 	FinishHTTPTrace(recorder, span)
 
-	spans := ring.Spans()
+	spans := waitForSpans(t, ring, 1)
 	if len(spans) != 1 {
 		t.Fatalf("spans = %d, want 1", len(spans))
 	}

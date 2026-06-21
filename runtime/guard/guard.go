@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/runtime/auth"
+	"github.com/cssbruno/gowdk/runtime/security"
 	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 )
 
@@ -34,7 +35,7 @@ func RunGuardsWithAuth(ctx Context, names []string, registry Registry, provider 
 		guardCtx, span := startGuardTrace(ctx, name)
 		ctx.Context = guardCtx
 		if err := guard(ctx); err != nil {
-			span.SetStatus(gowdktrace.StatusError, err.Error())
+			span.SetStatus(gowdktrace.StatusError, security.RedactSecrets(err.Error()))
 			span.End()
 			return fmt.Errorf("guard %q failed: %w", name, err)
 		}

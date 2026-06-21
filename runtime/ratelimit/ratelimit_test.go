@@ -156,6 +156,39 @@ func TestMiddlewareHidesStoreErrorDetails(t *testing.T) {
 	}
 }
 
+func TestHandleMethodsUseConfiguredHandlers(t *testing.T) {
+	limiter, err := New(Options{
+		Limit:  1,
+		Window: time.Minute,
+		Store:  NewInMemoryStore(InMemoryOptions{}),
+		LimitHandler: func(writer http.ResponseWriter, request *http.Request, result Result) {
+			writer.Header().Set("X-Custom-Limit", result.Key)
+			http.Error(writer, "blocked by app", http.StatusTeapot)
+		},
+		ErrorHandler: func(writer http.ResponseWriter, request *http.Request, err error) {
+			writer.Header().Set("X-Custom-Error", err.Error())
+			http.Error(writer, "store unavailable", http.StatusBadGateway)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	limitRecorder := httptest.NewRecorder()
+	limitRequest := httptest.NewRequest(http.MethodGet, "/", nil)
+	limiter.HandleLimit(limitRecorder, limitRequest, Result{Key: "patient-api"})
+	if limitRecorder.Code != http.StatusTeapot || limitRecorder.Header().Get("X-Custom-Limit") != "patient-api" {
+		t.Fatalf("custom limit handler did not run: status=%d headers=%#v body=%q", limitRecorder.Code, limitRecorder.Header(), limitRecorder.Body.String())
+	}
+
+	errorRecorder := httptest.NewRecorder()
+	errorRequest := httptest.NewRequest(http.MethodGet, "/", nil)
+	limiter.HandleError(errorRecorder, errorRequest, errors.New("redis down"))
+	if errorRecorder.Code != http.StatusBadGateway || errorRecorder.Header().Get("X-Custom-Error") != "redis down" {
+		t.Fatalf("custom error handler did not run: status=%d headers=%#v body=%q", errorRecorder.Code, errorRecorder.Header(), errorRecorder.Body.String())
+	}
+}
+
 func TestKeyByRemoteAddrIgnoresForwardedHeaders(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
 	request.RemoteAddr = "198.51.100.10:44000"

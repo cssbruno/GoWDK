@@ -12,6 +12,9 @@ func RegisterCommand[C, R any](registry *Registry, handler CommandHandler[C, R],
 	if handler == nil {
 		return nilHandlerError(Command, typeName[C]())
 	}
+	if registry == nil {
+		return nilRegistryError(Command, typeName[C]())
+	}
 	return registry.registerCommand(typeName[C](), typeName[R](), handler, roles)
 }
 
@@ -154,6 +157,10 @@ func runCommand[C, R any](ctx context.Context, registry *Registry, command C, ro
 	)
 	var spanErr error
 	defer func() { finishContractSpan(span, spanErr) }()
+	if registry == nil {
+		spanErr = nilRegistryError(Command, contract)
+		return zero, nil, ctx, spanErr
+	}
 	entry, ok := registry.command(typeName[C]())
 	if !ok {
 		spanErr = missingHandlerError(Command, contract)
@@ -180,6 +187,7 @@ func runCommand[C, R any](ctx context.Context, registry *Registry, command C, ro
 func (registry *Registry) registerCommand(command, result string, handler any, roles []Role) error {
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
+	registry.ensureMapsLocked()
 	if _, exists := registry.commands[command]; exists {
 		return duplicateHandlerError(Command, command)
 	}

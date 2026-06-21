@@ -67,6 +67,9 @@ func GenerateWithOptions(outputDir, appDir string, options Options) (result Resu
 	if err := validateSSRRoutes(options.SSR); err != nil {
 		return Result{}, err
 	}
+	if err := validateCORSConfig(options); err != nil {
+		return Result{}, err
+	}
 
 	targetOutput := filepath.Join(absApp, appOutputDirName)
 	if isSameOrWithin(targetOutput, absOutput) {
@@ -173,6 +176,9 @@ func GenerateBackendWithOptions(appDir string, options Options) (result Result, 
 		return Result{}, err
 	}
 	if err := validateContractRoutes(options.IR); err != nil {
+		return Result{}, err
+	}
+	if err := validateCORSConfig(options); err != nil {
 		return Result{}, err
 	}
 	if err := os.MkdirAll(absApp, 0o755); err != nil {

@@ -102,6 +102,30 @@ The optional endpoint-local `error` suffix selects a generated HTML error page
 for API panics before response headers are written. Returned handler errors
 still follow normal `runtime/response.Response` behavior.
 
+## CORS
+
+Generated API routes are same-origin by default. Enable cross-origin browser
+access with `Build.CORS` in `gowdk.config.go`:
+
+```go
+Build: gowdk.BuildConfig{
+	CORS: gowdk.CORSConfig{
+		Enabled: true,
+		AllowedOrigins: []string{"https://app.example"},
+		AllowedMethods: []string{"GET", "POST"},
+		AllowedHeaders: []string{"Content-Type", "X-CSRF"},
+		ExposedHeaders: []string{"X-Total-Count"},
+		AllowCredentials: true,
+		MaxAgeSeconds: 600,
+	},
+}
+```
+
+The policy applies to generated API, command, and query routes. Preflight
+requests are answered before guards, rate limits, CSRF, and user handlers. CORS
+does not replace authentication or authorization. `AllowedOrigins: []string{"*"}`
+is allowed only when `AllowCredentials` is false.
+
 ## Examples
 
 `examples/endpoints/src/endpoints/api.page.gwdk` declares session, search, JSON CRUD, and
@@ -139,6 +163,9 @@ rendering; build-time SPA HTML cannot enforce frontend page access.
 - Missing or unsupported generated API bindings return HTTP 501 only in
   development/default mode or when an explicit missing-backend migration flag is
   set.
+- Generated API/command/query endpoints are same-origin unless `Build.CORS`
+  enables a CORS policy. Preflight requests for matching endpoints fail closed
+  with HTTP 403 when no policy allows them.
 - Generated state-changing API endpoints validate the generated CSRF token by
   default. Browser clients must send the token in the configured CSRF header
   such as `X-GOWDK-CSRF`; non-browser API designs can opt out with
@@ -151,5 +178,5 @@ Future API behavior must define:
 - Generated typed handler signatures beyond
   `func(context.Context, *http.Request) (response.Response, error)`.
 - Per-route body/query/result contracts and route-param accessors.
-- CORS policy and richer content negotiation.
+- Per-endpoint CORS policy syntax and richer content negotiation.
 - Interaction with SPA/action pages without full-page SSR.

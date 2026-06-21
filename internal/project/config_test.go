@@ -86,6 +86,15 @@ var Config = gowdk.Config{
 			HeaderName: "X-Example-CSRF",
 			Insecure: true,
 		},
+		CORS: gowdk.CORSConfig{
+			Enabled: true,
+			AllowedOrigins: []string{"https://app.example"},
+			AllowedMethods: []string{"GET", "POST"},
+			AllowedHeaders: []string{"Content-Type", "X-CSRF"},
+			ExposedHeaders: []string{"X-Total-Count"},
+			AllowCredentials: true,
+			MaxAgeSeconds: 600,
+		},
 		SecurityHeaders: gowdk.SecurityHeadersConfig{
 			Enabled: true,
 			Headers: map[string]string{
@@ -202,6 +211,9 @@ var Config = gowdk.Config{
 	}
 	if !config.Build.CSRF.Enabled || !config.Build.CSRF.Disabled || config.Build.CSRF.SecretEnv != "EXAMPLE_CSRF_SECRET" || config.Build.CSRF.CookieName != "__Host-example-csrf" || config.Build.CSRF.FieldName != "_example_csrf" || config.Build.CSRF.HeaderName != "X-Example-CSRF" || !config.Build.CSRF.Insecure {
 		t.Fatalf("unexpected build csrf config: %#v", config.Build.CSRF)
+	}
+	if !config.Build.CORS.Enabled || strings.Join(config.Build.CORS.AllowedOrigins, ",") != "https://app.example" || strings.Join(config.Build.CORS.AllowedMethods, ",") != "GET,POST" || strings.Join(config.Build.CORS.AllowedHeaders, ",") != "Content-Type,X-CSRF" || strings.Join(config.Build.CORS.ExposedHeaders, ",") != "X-Total-Count" || !config.Build.CORS.AllowCredentials || config.Build.CORS.MaxAgeSeconds != 600 {
+		t.Fatalf("unexpected build cors config: %#v", config.Build.CORS)
 	}
 	if !config.Build.SecurityHeaders.Enabled || config.Build.SecurityHeaders.Headers["Content-Security-Policy"] != "default-src 'self'" || config.Build.SecurityHeaders.Headers["X-Content-Type-Options"] != "nosniff" {
 		t.Fatalf("unexpected security headers config: %#v", config.Build.SecurityHeaders)
@@ -404,6 +416,32 @@ var Config = gowdk.Config{
 	_, err := LoadConfigFile(path)
 	if err == nil || !strings.Contains(err.Error(), "Lifecycle.Services[0].Function is required") {
 		t.Fatalf("expected lifecycle service ref validation, got %v", err)
+	}
+}
+
+func TestLoadConfigFileRejectsUnsafeCORSPolicy(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, DefaultConfigFile)
+	if err := os.WriteFile(path, []byte(`package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		CORS: gowdk.CORSConfig{
+			Enabled: true,
+			AllowedOrigins: []string{"*"},
+			AllowCredentials: true,
+		},
+	},
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadConfigFile(path)
+	if err == nil || !strings.Contains(err.Error(), "wildcard origin") {
+		t.Fatalf("expected unsafe CORS validation error, got %v", err)
 	}
 }
 

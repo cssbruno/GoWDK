@@ -454,9 +454,10 @@ Every 0.x minor release must have:
   newsletter/signup/login slices. Deferred to
   [#337](https://github.com/cssbruno/GoWDK/issues/337).
 - [x] Document and add broader API helpers for strict JSON bodies, typed query
-  params, JSON/error/no-content responses, content type handling, and
-  method-not-allowed behavior. Generated typed route params, `(T, error)`
-  signatures, CORS, and richer examples remain planned.
+  params, JSON/error/no-content responses, content type handling,
+  method-not-allowed behavior, and config-level CORS for generated API/contract
+  routes. Generated typed route params, `(T, error)` signatures, per-endpoint
+  CORS policy, and richer examples remain planned.
 - [x] Document supported API signatures, context/request support,
   `response.Response`, generated error handling, guards, no-store responses,
   missing/unsupported handler behavior, and unsupported methods for the current

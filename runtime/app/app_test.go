@@ -225,6 +225,164 @@ func TestApplyMiddlewaresSkipsNilAndRejectsNilHandler(t *testing.T) {
 	}
 }
 
+func TestBackendRouterHandlesCORSPreflightForAPI(t *testing.T) {
+	called := false
+	router, err := NewBackendRouter(BackendRoute{
+		Kind:   "api",
+		Method: http.MethodGet,
+		Path:   "/api/health",
+		Handler: func(http.ResponseWriter, *http.Request) bool {
+			called = true
+			return true
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := router.SetCORSPolicy(CORSPolicy{
+		AllowedOrigins:   []string{"https://app.example"},
+		AllowedHeaders:   []string{"Content-Type", "X-CSRF"},
+		AllowCredentials: true,
+		MaxAgeSeconds:    600,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodOptions, "/api/health", nil)
+	request.Header.Set("Origin", "https://app.example")
+	request.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	request.Header.Set("Access-Control-Request-Headers", "content-type, x-csrf")
+
+	if !router.Dispatch(recorder, request) {
+		t.Fatal("expected CORS preflight to be handled")
+	}
+	if called {
+		t.Fatal("preflight must not call the API handler")
+	}
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("unexpected preflight status: %d", recorder.Code)
+	}
+	assertHeader(t, recorder, "Access-Control-Allow-Origin", "https://app.example")
+	assertHeader(t, recorder, "Access-Control-Allow-Credentials", "true")
+	assertHeader(t, recorder, "Access-Control-Allow-Methods", http.MethodGet)
+	assertHeader(t, recorder, "Access-Control-Allow-Headers", "Content-Type, X-Csrf")
+	assertHeader(t, recorder, "Access-Control-Max-Age", "600")
+	assertHeader(t, recorder, "Vary", "Origin")
+}
+
+func TestBackendRouterWritesCORSActualHeadersForAPI(t *testing.T) {
+	router, err := NewBackendRouter(BackendRoute{
+		Kind:   "api",
+		Method: http.MethodGet,
+		Path:   "/api/health",
+		Handler: func(writer http.ResponseWriter, _ *http.Request) bool {
+			writer.Header().Set("X-Total-Count", "1")
+			writer.WriteHeader(http.StatusNoContent)
+			return true
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := router.SetCORSPolicy(CORSPolicy{
+		AllowedOrigins: []string{"*"},
+		ExposedHeaders: []string{"X-Total-Count"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	request.Header.Set("Origin", "https://any.example")
+
+	if !router.Dispatch(recorder, request) {
+		t.Fatal("expected API request to be handled")
+	}
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	assertHeader(t, recorder, "Access-Control-Allow-Origin", "*")
+	assertHeader(t, recorder, "Access-Control-Expose-Headers", "X-Total-Count")
+	if got := recorder.Header().Get("Vary"); got != "" {
+		t.Fatalf("wildcard origin should not vary by Origin, got %q", got)
+	}
+}
+
+func TestBackendRouterRejectsClosedCORSPreflightForAPI(t *testing.T) {
+	router, err := NewBackendRouter(BackendRoute{
+		Kind:    "api",
+		Method:  http.MethodPost,
+		Path:    "/api/status",
+		Handler: func(http.ResponseWriter, *http.Request) bool { return true },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodOptions, "/api/status", nil)
+	request.Header.Set("Origin", "https://app.example")
+	request.Header.Set("Access-Control-Request-Method", http.MethodPost)
+
+	if !router.Dispatch(recorder, request) {
+		t.Fatal("expected existing API preflight to fail closed")
+	}
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("expected default-closed CORS preflight to return 403, got %d", recorder.Code)
+	}
+	if got := recorder.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("closed CORS policy must not emit allow-origin, got %q", got)
+	}
+}
+
+func TestBackendRouterRejectsWildcardCORSWithCredentials(t *testing.T) {
+	router, err := NewBackendRouter(BackendRoute{
+		Kind:    "api",
+		Method:  http.MethodGet,
+		Path:    "/api/health",
+		Handler: func(http.ResponseWriter, *http.Request) bool { return true },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = router.SetCORSPolicy(CORSPolicy{
+		AllowedOrigins:   []string{"*"},
+		AllowCredentials: true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "wildcard origin") {
+		t.Fatalf("expected wildcard credentials policy to fail, got %v", err)
+	}
+}
+
+func TestBackendRouterRejectsInvalidCORSMethod(t *testing.T) {
+	router, err := NewBackendRouter(BackendRoute{
+		Kind:    "api",
+		Method:  http.MethodGet,
+		Path:    "/api/health",
+		Handler: func(http.ResponseWriter, *http.Request) bool { return true },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = router.SetCORSPolicy(CORSPolicy{
+		AllowedOrigins: []string{"https://app.example"},
+		AllowedMethods: []string{"GET/POST"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "CORS method") {
+		t.Fatalf("expected invalid CORS method error, got %v", err)
+	}
+}
+
+func assertHeader(t *testing.T, recorder *httptest.ResponseRecorder, name string, expected string) {
+	t.Helper()
+	if got := recorder.Header().Get(name); got != expected {
+		t.Fatalf("unexpected %s header: got %q want %q", name, got, expected)
+	}
+}
+
 func TestHandlerDeniesGuardlessRouteWith403(t *testing.T) {
 	handler := Handler{
 		Root: fstest.MapFS{

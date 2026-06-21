@@ -1770,6 +1770,74 @@ func TestGenerateBackendAppWiresSecurityHeaders(t *testing.T) {
 	}
 }
 
+func TestGenerateWiresCORSForAPIRoutes(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "status", "index.html"), "<main>Status</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Build: gowdk.BuildConfig{CORS: gowdk.CORSConfig{
+			Enabled:          true,
+			AllowedOrigins:   []string{"https://app.example"},
+			AllowedMethods:   []string{http.MethodGet, http.MethodPost},
+			AllowedHeaders:   []string{"Content-Type", "X-CSRF"},
+			ExposedHeaders:   []string{"X-Total-Count"},
+			AllowCredentials: true,
+			MaxAgeSeconds:    600,
+		}}},
+		APIs: []APIEndpoint{{
+			Guards:  []string{"public"},
+			PageID:  "status",
+			APIName: "Health",
+			Method:  http.MethodGet,
+			Route:   "/api/health",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`backendRouter, err := gowdkruntime.NewBackendRouter(gowdkruntime.BackendRoute{Method: "GET", Path: "/api/health", Kind: "api", Handler: api})`,
+		`if err := backendRouter.SetCORSPolicy(gowdkruntime.CORSPolicy{AllowedOrigins: []string{"https://app.example"}, AllowedMethods: []string{"GET", "POST"}, AllowedHeaders: []string{"Content-Type", "X-CSRF"}, ExposedHeaders: []string{"X-Total-Count"}, AllowCredentials: true, MaxAgeSeconds: 600}); err != nil {`,
+		`return backendRouter, nil`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateRejectsInvalidCORSConfig(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "status", "index.html"), "<main>Status</main>")
+
+	_, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: gowdk.Config{Build: gowdk.BuildConfig{CORS: gowdk.CORSConfig{
+			Enabled:          true,
+			AllowedOrigins:   []string{"*"},
+			AllowCredentials: true,
+		}}},
+		APIs: []APIEndpoint{{
+			Guards:  []string{"public"},
+			PageID:  "status",
+			APIName: "Health",
+			Method:  http.MethodGet,
+			Route:   "/api/health",
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "wildcard origin") {
+		t.Fatalf("expected invalid CORS config error, got %v", err)
+	}
+}
+
 func TestGenerateSplitFrontendProxyMatchesAdapterRoutes(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

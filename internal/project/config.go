@@ -90,6 +90,9 @@ func validateLoadedConfig(path string, config gowdk.Config) error {
 	if err := config.Lifecycle.Validate(); err != nil {
 		return fmt.Errorf("%s lifecycle contract: %w", path, err)
 	}
+	if err := config.Build.CORS.Validate(); err != nil {
+		return fmt.Errorf("%s CORS policy: %w", path, err)
+	}
 	return nil
 }
 
@@ -555,6 +558,8 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 			build.Head = parseHeadConfig(field.Value)
 		case "CSRF":
 			build.CSRF = parseCSRFConfig(field.Value)
+		case "CORS":
+			build.CORS = parseCORSConfig(field.Value)
 		case "SecurityHeaders":
 			build.SecurityHeaders = parseSecurityHeadersConfig(field.Value)
 		case "BodyLimits":
@@ -570,6 +575,34 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 		}
 	}
 	return build
+}
+
+func parseCORSConfig(expression ast.Expr) gowdk.CORSConfig {
+	fields, ok := configLiteralFields(expression)
+	if !ok {
+		return gowdk.CORSConfig{}
+	}
+
+	var cors gowdk.CORSConfig
+	for _, field := range fields {
+		switch field.Name {
+		case "Enabled":
+			cors.Enabled = parseBool(field.Value)
+		case "AllowedOrigins":
+			cors.AllowedOrigins = parseStringList(field.Value)
+		case "AllowedMethods":
+			cors.AllowedMethods = parseStringList(field.Value)
+		case "AllowedHeaders":
+			cors.AllowedHeaders = parseStringList(field.Value)
+		case "ExposedHeaders":
+			cors.ExposedHeaders = parseStringList(field.Value)
+		case "AllowCredentials":
+			cors.AllowCredentials = parseBool(field.Value)
+		case "MaxAgeSeconds":
+			cors.MaxAgeSeconds = parseInt(field.Value)
+		}
+	}
+	return cors
 }
 
 func parseSecurityHeadersConfig(expression ast.Expr) gowdk.SecurityHeadersConfig {

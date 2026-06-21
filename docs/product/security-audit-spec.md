@@ -1,4 +1,4 @@
-# Feature Spec: Declarative Security Audit (M8)
+# Feature Spec: Declarative Security Audit
 
 ## Problem
 
@@ -35,8 +35,8 @@ posture acceptable?" from one artifact.
   runs the static baseline gate, but runtime audit tests stay explicit through
   `gowdk audit --run`.
 - Browser/E2E testing or testing user domain logic.
-- Full data-flow/taint analysis of raw-HTML sinks (M8 flags sinks; it does not
-  trace tainted inputs).
+- Full data-flow/taint analysis of raw-HTML sinks (the audit flags sinks; it
+  does not trace tainted inputs).
 
 ## Users And Permissions
 

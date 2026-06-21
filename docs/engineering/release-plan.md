@@ -305,8 +305,8 @@ Every 0.x minor release must have:
   preserving broad `parse_error` fallback diagnostics where no stable code
   exists.
 - [x] Add exact spans and suggestions for package declarations, imports, `use`,
-  metadata declarations, routes, layouts, render modes, `paths`, `build`, `load`, `view`,
-  `style`, `client`, `go`, `go ssr`, `go client`, `go addon.*`, actions, APIs,
+  metadata declarations, routes, layouts, render modes, `paths`, `build`, `server`, `view`,
+  `style`, `client`, `go`, `go server`, `go client`, `go addon.*`, actions, APIs,
   fragments, component props, component state, and WASM declarations. Current
   metadata/block/view/client surfaces have span and suggestion coverage where
   parser records exist; remaining broader exact-span work is deferred to #250.

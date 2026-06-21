@@ -14,6 +14,11 @@ Required pull-request lanes:
 - `VS Code extension`: extension version sync, Node syntax checks, and unit
   tests.
 - `Documentation links`: `scripts/check-docs-links.sh`.
+- `Removed source syntax`: `scripts/check-removed-syntax.sh` (runs in the
+  `Documentation links` job) flags pre-v0.6.0 source forms that the script lists
+  but that linger in docs as if still active. They are allowed only in changelog,
+  migration, and diagnostics references, in test fixtures, and on lines carrying
+  a `removed-syntax-ok` marker.
 - `Example reports`: `scripts/check-example-reports.sh`.
 - `Parser fuzz smoke`: `scripts/test-parser-fuzz.sh` with
   `GOWDK_FUZZTIME=1s`.
@@ -59,6 +64,7 @@ Run the same local checks before handoff when relevant:
 
   ```sh
   scripts/check-docs-links.sh
+  scripts/check-removed-syntax.sh
   scripts/check-example-reports.sh
   ```
 

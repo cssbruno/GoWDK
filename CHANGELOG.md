@@ -15,6 +15,11 @@ packages, and tooling contracts may change before 1.0.
 - The client expression runtime now receives its operator and builtin metadata
   from the Go compiler/runtime spec instead of hardcoded JavaScript tables,
   reducing Go/JS drift for generated islands.
+- Docs now use the current `server {}` / `go server {}` server-lane syntax
+  outside changelog/migration/diagnostics contexts, the README addon table
+  lists `observability` and `spa`, and the security-audit docs no longer tie the
+  audit to milestone M8. A new `scripts/check-removed-syntax.sh` CI check keeps
+  removed source forms from reappearing in docs.
 
 ### Fixed
 

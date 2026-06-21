@@ -188,8 +188,7 @@ Implemented today:
   (`g:if={count > 0 && status == "open"}`) evaluated at request time. The lane is
   chosen by the data source — a declared `server {}` field is server-rendered;
   `state`/`store` is a client island. See [ssr.md](ssr.md) for the full
-  server-region contract. (`g:each`/`g:when` were unified into `g:for`/`g:if`;
-  the old names parse to a migration nudge.)
+  server-region contract. (`g:each`/`g:when` were unified into `g:for`/`g:if`; the old names parse to a migration nudge.) <!-- removed-syntax-ok: documents the g:each/g:when -> g:for/g:if rename -->
 - Client handlers can mutate state arrays with compiler-owned built-ins:
   `append(Items, { Field: expr })`, `remove(Items, index)`, and
   `move(Items, from, to)`.

@@ -27,7 +27,7 @@ supplies an explicit `TraceAccess` function.
 Current generated instrumentation:
 
 - Backend request route spans extract incoming `traceparent`.
-- Generated SSR route and `load {}` spans record route IDs, render lane,
+- Generated SSR route and `server {}` spans record route IDs, render lane,
   source refs, response status, and load errors without storing raw request
   bodies or headers.
 - Generated action, API, fragment, command, and query routes record handler

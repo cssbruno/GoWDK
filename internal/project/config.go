@@ -90,6 +90,9 @@ func validateLoadedConfig(path string, config gowdk.Config) error {
 	if err := config.Lifecycle.Validate(); err != nil {
 		return fmt.Errorf("%s lifecycle contract: %w", path, err)
 	}
+	if err := config.Build.CORS.Validate(); err != nil {
+		return fmt.Errorf("%s CORS policy: %w", path, err)
+	}
 	return nil
 }
 
@@ -145,7 +148,9 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 				needsExecutableLoad = true
 				continue
 			}
-			config.Build = parseBuildConfig(field.Value)
+			build, buildNeedsExecutableLoad := parseBuildConfig(field.Value)
+			config.Build = build
+			needsExecutableLoad = needsExecutableLoad || buildNeedsExecutableLoad
 		case "CSS":
 			if needsConfigExpressionEvaluation(field.Value) {
 				needsExecutableLoad = true
@@ -536,13 +541,14 @@ func parseServiceRef(expression ast.Expr) (gowdk.ServiceRef, bool) {
 	return service, true
 }
 
-func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
+func parseBuildConfig(expression ast.Expr) (gowdk.BuildConfig, bool) {
 	fields, ok := configLiteralFields(expression)
 	if !ok {
-		return gowdk.BuildConfig{}
+		return gowdk.BuildConfig{}, false
 	}
 
 	var build gowdk.BuildConfig
+	var needsExecutableLoad bool
 	for _, field := range fields {
 		switch field.Name {
 		case "Output":
@@ -555,6 +561,10 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 			build.Head = parseHeadConfig(field.Value)
 		case "CSRF":
 			build.CSRF = parseCSRFConfig(field.Value)
+		case "CORS":
+			var corsNeedsExecutableLoad bool
+			build.CORS, corsNeedsExecutableLoad = parseCORSConfig(field.Value)
+			needsExecutableLoad = needsExecutableLoad || corsNeedsExecutableLoad
 		case "SecurityHeaders":
 			build.SecurityHeaders = parseSecurityHeadersConfig(field.Value)
 		case "BodyLimits":
@@ -569,7 +579,44 @@ func parseBuildConfig(expression ast.Expr) gowdk.BuildConfig {
 			build.Targets = parseBuildTargets(field.Value)
 		}
 	}
-	return build
+	return build, needsExecutableLoad
+}
+
+func parseCORSConfig(expression ast.Expr) (gowdk.CORSConfig, bool) {
+	fields, ok := configLiteralFields(expression)
+	if !ok {
+		return gowdk.CORSConfig{}, false
+	}
+
+	var cors gowdk.CORSConfig
+	var needsExecutableLoad bool
+	for _, field := range fields {
+		switch field.Name {
+		case "Enabled":
+			cors.Enabled = parseBool(field.Value)
+		case "AllowedOrigins":
+			var ok bool
+			cors.AllowedOrigins, ok = parseStaticStringList(field.Value)
+			needsExecutableLoad = needsExecutableLoad || !ok
+		case "AllowedMethods":
+			var ok bool
+			cors.AllowedMethods, ok = parseStaticStringList(field.Value)
+			needsExecutableLoad = needsExecutableLoad || !ok
+		case "AllowedHeaders":
+			var ok bool
+			cors.AllowedHeaders, ok = parseStaticStringList(field.Value)
+			needsExecutableLoad = needsExecutableLoad || !ok
+		case "ExposedHeaders":
+			var ok bool
+			cors.ExposedHeaders, ok = parseStaticStringList(field.Value)
+			needsExecutableLoad = needsExecutableLoad || !ok
+		case "AllowCredentials":
+			cors.AllowCredentials = parseBool(field.Value)
+		case "MaxAgeSeconds":
+			cors.MaxAgeSeconds = parseInt(field.Value)
+		}
+	}
+	return cors, needsExecutableLoad
 }
 
 func parseSecurityHeadersConfig(expression ast.Expr) gowdk.SecurityHeadersConfig {
@@ -1319,6 +1366,13 @@ func parseStringList(expression ast.Expr) []string {
 		values = append(values, value)
 	}
 	return values
+}
+
+func parseStaticStringList(expression ast.Expr) ([]string, bool) {
+	if identifier, ok := expression.(*ast.Ident); ok && identifier.Name == "nil" {
+		return nil, true
+	}
+	return parseLiteralStringList(expression)
 }
 
 func parseLiteralStringList(expression ast.Expr) ([]string, bool) {

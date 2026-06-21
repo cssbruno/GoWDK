@@ -2,6 +2,7 @@ package gowdk
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -236,6 +237,7 @@ type BuildConfig struct {
 	ObfuscateAssets     bool
 	Head                HeadConfig
 	CSRF                CSRFConfig
+	CORS                CORSConfig
 	SecurityHeaders     SecurityHeadersConfig
 	BodyLimits          BodyLimitsConfig
 	AllowMissingBackend bool
@@ -259,6 +261,104 @@ type HeadConfig struct {
 type SecurityHeadersConfig struct {
 	Enabled bool
 	Headers map[string]string
+}
+
+// CORSConfig controls generated CORS headers and preflight handling for API
+// and web contract endpoints. It is disabled by default, so generated
+// endpoints remain same-origin unless a policy is declared.
+type CORSConfig struct {
+	Enabled          bool
+	AllowedOrigins   []string
+	AllowedMethods   []string
+	AllowedHeaders   []string
+	ExposedHeaders   []string
+	AllowCredentials bool
+	MaxAgeSeconds    int
+}
+
+// EnabledForGeneratedAPIs reports whether generated API/contract routes should
+// install CORS handling.
+func (config CORSConfig) EnabledForGeneratedAPIs() bool {
+	return config.Enabled
+}
+
+// Validate checks structural safety rules for the generated CORS policy.
+func (config CORSConfig) Validate() error {
+	if !config.Enabled {
+		return nil
+	}
+	if config.MaxAgeSeconds < 0 {
+		return fmt.Errorf("Build.CORS.MaxAgeSeconds must be non-negative")
+	}
+	if len(config.AllowedOrigins) == 0 {
+		return fmt.Errorf("Build.CORS.AllowedOrigins must declare at least one origin when CORS is enabled")
+	}
+	for _, origin := range config.AllowedOrigins {
+		origin = strings.TrimSpace(origin)
+		if origin == "" {
+			return fmt.Errorf("Build.CORS.AllowedOrigins cannot contain an empty origin")
+		}
+		if origin == "*" && config.AllowCredentials {
+			return fmt.Errorf("Build.CORS cannot combine wildcard origin %q with AllowCredentials", origin)
+		}
+		if origin != "*" {
+			if err := validateCORSOrigin(origin); err != nil {
+				return err
+			}
+		}
+	}
+	for _, method := range config.AllowedMethods {
+		method = strings.TrimSpace(method)
+		if method == "" {
+			return fmt.Errorf("Build.CORS.AllowedMethods cannot contain an empty method")
+		}
+		if !isHTTPToken(method) {
+			return fmt.Errorf("Build.CORS.AllowedMethods contains invalid method %q", method)
+		}
+	}
+	for _, header := range append(append([]string{}, config.AllowedHeaders...), config.ExposedHeaders...) {
+		header = strings.TrimSpace(header)
+		if header == "" {
+			return fmt.Errorf("Build.CORS headers cannot contain an empty header name")
+		}
+		if !isHTTPToken(header) {
+			return fmt.Errorf("Build.CORS headers contains invalid header name %q", header)
+		}
+	}
+	return nil
+}
+
+func validateCORSOrigin(origin string) error {
+	if strings.ContainsAny(origin, "\r\n") {
+		return fmt.Errorf("Build.CORS.AllowedOrigins contains invalid origin %q", origin)
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return fmt.Errorf("Build.CORS.AllowedOrigins contains invalid origin %q: %w", origin, err)
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("Build.CORS.AllowedOrigins origin %q must use http or https", origin)
+	}
+	if parsed.User != nil || parsed.Host == "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("Build.CORS.AllowedOrigins origin %q must not include userinfo, query, or fragment", origin)
+	}
+	if parsed.Path != "" && parsed.Path != "/" {
+		return fmt.Errorf("Build.CORS.AllowedOrigins origin %q must not include a path", origin)
+	}
+	return nil
+}
+
+func isHTTPToken(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r > 127 || !strings.ContainsRune("!#$%&'*+-.^_`|~0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", r) {
+			return false
+		}
+	}
+	return true
 }
 
 const DefaultCSRFSecretEnv = "GOWDK_CSRF_SECRET"

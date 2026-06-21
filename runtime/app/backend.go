@@ -38,6 +38,7 @@ type BackendRoute struct {
 type BackendRouter struct {
 	routes   map[backendRouteKey]backendRouteEntry
 	patterns []backendPatternRouteEntry
+	cors     corsPolicy
 }
 
 type backendRouteKey struct {
@@ -46,6 +47,7 @@ type backendRouteKey struct {
 }
 
 type backendRouteEntry struct {
+	method  string
 	kind    string
 	path    string
 	source  gowdktrace.SourceRef
@@ -107,7 +109,21 @@ func (router *BackendRouter) handle(route BackendRoute) error {
 	if _, exists := router.routes[key]; exists {
 		return fmt.Errorf("duplicate backend route %s %s", key.method, key.path)
 	}
-	router.routes[key] = backendRouteEntry{kind: kind, path: key.path, source: route.Source, handler: handler}
+	router.routes[key] = backendRouteEntry{method: key.method, kind: kind, path: key.path, source: route.Source, handler: handler}
+	return nil
+}
+
+// SetCORSPolicy enables CORS handling for generated API and web contract
+// routes. The zero policy disables CORS.
+func (router *BackendRouter) SetCORSPolicy(policy CORSPolicy) error {
+	if router == nil {
+		return fmt.Errorf("backend router is nil")
+	}
+	normalized, err := normalizeCORSPolicy(policy)
+	if err != nil {
+		return err
+	}
+	router.cors = normalized
 	return nil
 }
 
@@ -126,6 +142,9 @@ func (router *BackendRouter) Dispatch(writer http.ResponseWriter, request *http.
 	if router == nil || request == nil {
 		return false
 	}
+	if router.dispatchCORSPreflight(writer, request) {
+		return true
+	}
 	key := backendRouteKey{
 		method: strings.ToUpper(strings.TrimSpace(request.Method)),
 		path:   normalizeBackendPath(request.URL.Path),
@@ -136,6 +155,9 @@ func (router *BackendRouter) Dispatch(writer http.ResponseWriter, request *http.
 	}
 	if route.kind == "query" && !isContractQueryRequest(request) {
 		return false
+	}
+	if backendRouteSupportsCORS(route.kind) {
+		router.cors.writeActualHeaders(writer, request, route.method)
 	}
 	return route.handler(writer, request)
 }
@@ -151,9 +173,56 @@ func (router *BackendRouter) dispatchPattern(writer http.ResponseWriter, request
 		if _, ok := gowdkroute.Match(route.key.path, request.URL.Path); !ok {
 			continue
 		}
+		if backendRouteSupportsCORS(route.kind) {
+			router.cors.writeActualHeaders(writer, request, route.key.method)
+		}
 		return route.handler(writer, request)
 	}
 	return false
+}
+
+func (router *BackendRouter) dispatchCORSPreflight(writer http.ResponseWriter, request *http.Request) bool {
+	if request.Method != http.MethodOptions || strings.TrimSpace(request.Header.Get("Access-Control-Request-Method")) == "" {
+		return false
+	}
+	requestedMethod, err := normalizeCORSMethod(request.Header.Get("Access-Control-Request-Method"))
+	if err != nil {
+		return false
+	}
+	route, ok := router.corsRoute(requestedMethod, request.URL.Path)
+	if !ok {
+		return false
+	}
+	if router.cors.writePreflight(writer, request, route.method) {
+		return true
+	}
+	response.WriteNoStoreError(writer, http.StatusForbidden, "cors preflight denied")
+	return true
+}
+
+func (router *BackendRouter) corsRoute(method string, requestPath string) (backendRouteEntry, bool) {
+	key := backendRouteKey{method: method, path: normalizeBackendPath(requestPath)}
+	if route := router.routes[key]; route.handler != nil && backendRouteSupportsCORS(route.kind) {
+		return route, true
+	}
+	for _, route := range router.patterns {
+		if route.key.method != method || !backendRouteSupportsCORS(route.kind) {
+			continue
+		}
+		if _, ok := gowdkroute.Match(route.key.path, requestPath); ok {
+			return backendRouteEntry{method: route.key.method, kind: route.kind, path: route.key.path, source: route.source, handler: route.handler}, true
+		}
+	}
+	return backendRouteEntry{}, false
+}
+
+func backendRouteSupportsCORS(kind string) bool {
+	switch kind {
+	case "api", "command", "query":
+		return true
+	default:
+		return false
+	}
 }
 
 func traceBackendRoute(kind, routePath string, source gowdktrace.SourceRef, handler BackendHandler) BackendHandler {

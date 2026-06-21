@@ -28,6 +28,7 @@ type testRouteManifest struct {
 		PageID string `json:"page"`
 		Route  string `json:"route"`
 		Path   string `json:"path"`
+		Locale string `json:"locale"`
 	} `json:"routes"`
 	Endpoints []struct {
 		Kind          string   `json:"kind"`

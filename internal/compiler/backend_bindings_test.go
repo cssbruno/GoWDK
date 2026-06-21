@@ -283,6 +283,28 @@ func LoadProfile(ssr.LoadContext) map[string]any {
 	return map[string]any{"user": "Ada"}
 }
 
+type TypedData struct {
+	User  UserData `+"`json:\"user\"`"+`
+	Count int      `+"`json:\"count\"`"+`
+	Users []UserData `+"`json:\"users\"`"+`
+}
+
+type UserData struct {
+	Name string `+"`json:\"name\"`"+`
+}
+
+type InvalidData struct {
+	UserData
+}
+
+func LoadTyped(ssr.LoadContext) (TypedData, error) {
+	return TypedData{}, nil
+}
+
+func LoadInvalid(ssr.LoadContext) InvalidData {
+	return InvalidData{}
+}
+
 func LoadBroken() map[string]any {
 	return nil
 }
@@ -308,9 +330,27 @@ func LoadBroken() map[string]any {
 			},
 		},
 		{
+			ID:     "typed",
+			Source: filepath.Join(root, "typed.page.gwdk"),
+			Route:  "/typed",
+			Render: gowdk.SSR,
+			Blocks: gwdkir.Blocks{
+				Server: true,
+			},
+		},
+		{
 			ID:     "broken",
 			Source: filepath.Join(root, "broken.page.gwdk"),
 			Route:  "/broken",
+			Render: gowdk.SSR,
+			Blocks: gwdkir.Blocks{
+				Server: true,
+			},
+		},
+		{
+			ID:     "invalid",
+			Source: filepath.Join(root, "invalid.page.gwdk"),
+			Route:  "/invalid",
 			Render: gowdk.SSR,
 			Blocks: gwdkir.Blocks{
 				Server: true,
@@ -330,8 +370,19 @@ func LoadBroken() map[string]any {
 	bindings := compilerBindingsByBlock(app.BackendBindings)
 	assertBinding(t, bindings["LoadDashboard"], source.BackendBindingBound, source.BackendSignatureLoadError, "", false)
 	assertBinding(t, bindings["LoadProfile"], source.BackendBindingBound, source.BackendSignatureLoad, "", false)
+	assertBinding(t, bindings["LoadTyped"], source.BackendBindingBound, source.BackendSignatureLoadStructError, "", false)
+	if bindings["LoadTyped"].ResultType != "TypedData" {
+		t.Fatalf("expected typed load result type, got %#v", bindings["LoadTyped"])
+	}
+	assertResultFields(t, bindings["LoadTyped"].ResultFields, "user:User:dashboard.UserData,User:User:dashboard.UserData,user.name:User.Name:string,user.Name:User.Name:string,User.name:User.Name:string,User.Name:User.Name:string,count:Count:int,Count:Count:int,users:Users:[]dashboard.UserData,Users:Users:[]dashboard.UserData")
+	if strings.Contains(resultFieldsString(bindings["LoadTyped"].ResultFields), "users.name") {
+		t.Fatalf("slice element fields must not be exposed as direct load paths: %#v", bindings["LoadTyped"].ResultFields)
+	}
 	if got := bindings["LoadBroken"]; got.Status != source.BackendBindingUnsupportedSignature {
 		t.Fatalf("expected LoadBroken unsupported signature, got %#v", got)
+	}
+	if got := bindings["LoadInvalid"]; got.Status != source.BackendBindingUnsupportedSignature || got.Signature != "" || !strings.Contains(got.Message, "cannot use embedded fields") {
+		t.Fatalf("expected LoadInvalid unsupported typed result metadata, got %#v", got)
 	}
 	if got := bindings["LoadMissing"]; got.Status != source.BackendBindingMissing {
 		t.Fatalf("expected LoadMissing missing binding, got %#v", got)
@@ -756,6 +807,22 @@ func assertInputFields(t *testing.T, fields []source.BackendInputField, expected
 	if strings.Join(parts, ",") != expected {
 		t.Fatalf("unexpected input fields: %s", strings.Join(parts, ","))
 	}
+}
+
+func assertResultFields(t *testing.T, fields []source.BackendResultField, expected string) {
+	t.Helper()
+	got := resultFieldsString(fields)
+	if got != expected {
+		t.Fatalf("unexpected result fields: %s", got)
+	}
+}
+
+func resultFieldsString(fields []source.BackendResultField) string {
+	parts := make([]string, 0, len(fields))
+	for _, field := range fields {
+		parts = append(parts, field.Path+":"+field.Selector+":"+field.Type)
+	}
+	return strings.Join(parts, ",")
 }
 
 func compilerBindingsByBlock(bindings []source.BackendBinding) map[string]source.BackendBinding {

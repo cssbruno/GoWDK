@@ -26,8 +26,9 @@ What works today:
 What does not work yet:
 
 - Arbitrary Go statements inside `build {}` are not supported.
-- Generated per-route param structs and typed load/action result accessors are
-  deferred.
+- Generated per-route param structs and typed action result accessors are
+  deferred. Typed SSR load result structs are supported for request-time
+  `server {}` data.
 
 `catalog.go` is the imported application code. The `.gwdk` page uses the import
 as its main data path, with no literal fallback.

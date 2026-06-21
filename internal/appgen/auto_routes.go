@@ -23,7 +23,7 @@ func resolveOptions(outputDir string, options Options) (Options, error) {
 		return Options{}, err
 	}
 
-	actions, err := actionEndpointsFromIR(ir)
+	actions, err := actionEndpointsFromIR(options.Config, ir)
 	if err != nil {
 		return Options{}, err
 	}
@@ -58,7 +58,7 @@ func resolveBackendOptions(options Options) (Options, error) {
 	if err != nil {
 		return Options{}, err
 	}
-	actions, err := actionEndpointsFromIR(ir)
+	actions, err := actionEndpointsFromIR(options.Config, ir)
 	if err != nil {
 		return Options{}, err
 	}
@@ -211,6 +211,7 @@ func ssrRoutes(artifacts []buildgen.SSRArtifact) []SSRRoute {
 			Render:           artifact.Render,
 			Cache:            artifact.Cache,
 			ErrorPage:        artifact.ErrorPage,
+			Locale:           artifact.Locale,
 			DynamicParams:    append([]string(nil), artifact.DynamicParams...),
 			RouteParams:      append([]source.RouteParam(nil), artifact.RouteParams...),
 			Layouts:          append([]string(nil), artifact.Layouts...),

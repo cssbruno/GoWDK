@@ -457,15 +457,18 @@ const (
 
 // Binding describes the selected Go backend handler when one is known.
 type Binding struct {
-	Status       source.BackendBindingStatus
-	Message      string
-	ImportPath   string
-	PackageName  string
-	FunctionName string
-	Signature    source.BackendSignatureKind
-	InputType    string
-	InputPointer bool
-	InputFields  []source.BackendInputField
+	Status        source.BackendBindingStatus
+	Message       string
+	ImportPath    string
+	PackageName   string
+	FunctionName  string
+	Signature     source.BackendSignatureKind
+	InputType     string
+	InputPointer  bool
+	InputFields   []source.BackendInputField
+	ResultType    string
+	ResultPointer bool
+	ResultFields  []source.BackendResultField
 }
 
 // Template records a renderable view block.

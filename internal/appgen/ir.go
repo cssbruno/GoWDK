@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 	view "github.com/cssbruno/gowdk/internal/viewrender"
 )
 
-func actionEndpointsFromIR(ir gwdkir.Program) ([]ActionEndpoint, error) {
+func actionEndpointsFromIR(config gowdk.Config, ir gwdkir.Program) ([]ActionEndpoint, error) {
 	bindings := irBindingsByEndpoint(ir.Endpoints)
 	var endpoints []ActionEndpoint
 	for _, page := range ir.Pages {
@@ -27,31 +28,34 @@ func actionEndpointsFromIR(ir gwdkir.Program) ([]ActionEndpoint, error) {
 			if route == "" {
 				route = page.Route
 			}
+			bindingRoute := route
 			fragments, err := actionFragmentsFromIR(action)
 			if err != nil {
 				return nil, fmt.Errorf("%s.%s: %w", page.ID, action.Name, err)
 			}
-			endpoints = append(endpoints, ActionEndpoint{
-				PageID:           page.ID,
-				ActionName:       action.Name,
-				Method:           method,
-				Route:            route,
-				Guards:           append([]string(nil), page.Guards...),
-				InputName:        action.InputName,
-				InputType:        action.InputType,
-				InputFields:      actionInputFields(fieldsByAction[action.Name]),
-				UploadFields:     actionUploadFields(fieldsByAction[action.Name]),
-				RequiredFields:   actionRequiredFields(fieldsByAction[action.Name]),
-				RequiredMessages: actionRequiredMessages(fieldsByAction[action.Name]),
-				ValidationRules:  actionValidationRules(fieldsByAction[action.Name]),
-				ValidatesInput:   action.ValidatesInput,
-				Redirect:         action.Redirect,
-				Fragments:        fragments,
-				ErrorPage:        action.ErrorPage,
-				Binding:          bindings[irEndpointKey(gwdkir.EndpointAction, page.ID, action.Name, method, route)],
-				Source:           page.Source,
-				SourceSpan:       action.Span,
-			})
+			for _, localized := range actionEndpointRoutes(config.I18N, page.Route, route, action.Route == "") {
+				endpoints = append(endpoints, ActionEndpoint{
+					PageID:           page.ID,
+					ActionName:       action.Name,
+					Method:           method,
+					Route:            localized,
+					Guards:           append([]string(nil), page.Guards...),
+					InputName:        action.InputName,
+					InputType:        action.InputType,
+					InputFields:      actionInputFields(fieldsByAction[action.Name]),
+					UploadFields:     actionUploadFields(fieldsByAction[action.Name]),
+					RequiredFields:   actionRequiredFields(fieldsByAction[action.Name]),
+					RequiredMessages: actionRequiredMessages(fieldsByAction[action.Name]),
+					ValidationRules:  actionValidationRules(fieldsByAction[action.Name]),
+					ValidatesInput:   action.ValidatesInput,
+					Redirect:         action.Redirect,
+					Fragments:        fragments,
+					ErrorPage:        action.ErrorPage,
+					Binding:          bindings[irEndpointKey(gwdkir.EndpointAction, page.ID, action.Name, method, bindingRoute)],
+					Source:           page.Source,
+					SourceSpan:       action.Span,
+				})
+			}
 		}
 	}
 	for _, endpoint := range ir.Endpoints {
@@ -75,6 +79,18 @@ func actionEndpointsFromIR(ir gwdkir.Program) ([]ActionEndpoint, error) {
 		return nil, err
 	}
 	return endpoints, nil
+}
+
+func actionEndpointRoutes(config gowdk.I18NConfig, pageRoute string, route string, inherited bool) []string {
+	if !inherited || !config.Enabled() {
+		return []string{route}
+	}
+	localized := config.LocalizedRoutes(pageRoute)
+	routes := make([]string, 0, len(localized))
+	for _, item := range localized {
+		routes = append(routes, item.Route)
+	}
+	return routes
 }
 
 func actionFormSchemaFromBlocks(blocks gwdkir.Blocks) (map[string][]view.ActionFormField, error) {
@@ -298,21 +314,24 @@ func irBindingsByEndpoint(endpoints []gwdkir.Endpoint) map[string]source.Backend
 			kind = "api"
 		}
 		out[irEndpointKey(endpoint.Kind, endpoint.PageID, endpoint.Symbol, endpoint.Method, endpoint.Path)] = source.BackendBinding{
-			Kind:         kind,
-			PageID:       endpoint.PageID,
-			Source:       endpoint.SourceFile,
-			BlockName:    endpoint.Symbol,
-			Method:       endpoint.Method,
-			Route:        endpoint.Path,
-			ImportPath:   endpoint.Binding.ImportPath,
-			PackageName:  endpoint.Binding.PackageName,
-			FunctionName: endpoint.Binding.FunctionName,
-			Signature:    endpoint.Binding.Signature,
-			InputType:    endpoint.Binding.InputType,
-			InputPointer: endpoint.Binding.InputPointer,
-			InputFields:  append([]source.BackendInputField(nil), endpoint.Binding.InputFields...),
-			Status:       endpoint.Binding.Status,
-			Message:      endpoint.Binding.Message,
+			Kind:          kind,
+			PageID:        endpoint.PageID,
+			Source:        endpoint.SourceFile,
+			BlockName:     endpoint.Symbol,
+			Method:        endpoint.Method,
+			Route:         endpoint.Path,
+			ImportPath:    endpoint.Binding.ImportPath,
+			PackageName:   endpoint.Binding.PackageName,
+			FunctionName:  endpoint.Binding.FunctionName,
+			Signature:     endpoint.Binding.Signature,
+			InputType:     endpoint.Binding.InputType,
+			InputPointer:  endpoint.Binding.InputPointer,
+			InputFields:   append([]source.BackendInputField(nil), endpoint.Binding.InputFields...),
+			ResultType:    endpoint.Binding.ResultType,
+			ResultPointer: endpoint.Binding.ResultPointer,
+			ResultFields:  append([]source.BackendResultField(nil), endpoint.Binding.ResultFields...),
+			Status:        endpoint.Binding.Status,
+			Message:       endpoint.Binding.Message,
 		}
 	}
 	return out

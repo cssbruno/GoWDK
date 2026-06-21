@@ -25,7 +25,7 @@ const (
 	renderModeRequestTime renderModePolicy = "request-time"
 )
 
-func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, data map[string]string, realtimeEventTypeNames map[string]string, queryTypeNames map[string]string, policy renderModePolicy) (string, ssrRegions, error) {
+func renderPage(config gowdk.Config, page gwdkir.Page, route string, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, data map[string]string, locale string, realtimeEventTypeNames map[string]string, queryTypeNames map[string]string, policy renderModePolicy) (string, ssrRegions, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
 	if policy == renderModeSPA && mode != gowdk.SPA && mode != gowdk.Action {
 		return "", ssrRegions{}, fmt.Errorf("%s: SPA build cannot emit request-time %s pages yet", page.ID, mode)
@@ -52,7 +52,7 @@ func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]vie
 	var lists []view.SSRListReplacement
 	var conds []view.SSRCondReplacement
 	body, err := renderPageView(viewSource, viewNodes, pageComponents, data, view.Options{
-		Actions:                actionRoutes(page, data),
+		Actions:                actionRoutes(page, route, data),
 		ActionInputFields:      actionFields,
 		Package:                page.Package,
 		Tainted:                requestTimeTaintedFields(page, policy),
@@ -73,7 +73,7 @@ func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]vie
 		return "", ssrRegions{}, fmt.Errorf("%s: %w", page.ID, err)
 	}
 	regions := ssrRegions{Lists: convertSSRListSpecs(lists), Conds: convertSSRCondSpecs(conds)}
-	return document(config, page, body, stylesheets, storeSeeds, scripts), regions, nil
+	return document(config, page, body, stylesheets, storeSeeds, scripts, locale), regions, nil
 }
 
 // ssrRegions carries the server-rendered g:for lists and g:if conditionals
@@ -296,12 +296,12 @@ func validateViewParamReferences(page gwdkir.Page, source string, nodes []view.N
 	return nil
 }
 
-func actionRoutes(page gwdkir.Page, data map[string]string) map[string]string {
+func actionRoutes(page gwdkir.Page, pageRoute string, data map[string]string) map[string]string {
 	routes := map[string]string{}
 	for _, action := range page.Blocks.Actions {
 		route := action.Route
 		if route == "" {
-			route = page.Route
+			route = pageRoute
 		}
 		route = expandRouteTemplate(route, data, url.PathEscape)
 		routes[action.Name] = route
@@ -607,7 +607,7 @@ func storeSchemaHash(resolved gotypes.Struct, seedJSON string) string {
 	return strconv.FormatUint(uint64(digest.Sum32()), 16)
 }
 
-func document(config gowdk.Config, page gwdkir.Page, body string, stylesheets []gowdk.Stylesheet, storeSeeds []pageStoreSeed, scripts []gowdk.Script) string {
+func document(config gowdk.Config, page gwdkir.Page, body string, stylesheets []gowdk.Stylesheet, storeSeeds []pageStoreSeed, scripts []gowdk.Script, locale string) string {
 	title := page.ID
 	if page.Metadata.Title != "" {
 		title = page.Metadata.Title
@@ -705,6 +705,9 @@ func document(config gowdk.Config, page gwdkir.Page, body string, stylesheets []
 	head = append(head, "</head>")
 
 	htmlAttrs := ""
+	if strings.TrimSpace(locale) != "" {
+		htmlAttrs += gowhtml.Attr("lang", strings.TrimSpace(locale))
+	}
 	if config.HasFeature(gowdk.FeatureObservability) && config.Build.DebugAssets() {
 		htmlAttrs += " data-gowdk-trace"
 	}

@@ -47,6 +47,10 @@ Implemented today:
   declare the layout.
 - Dynamic app routes with literal `paths {}` declarations are expanded by
   `gowdk build`.
+- Configured `I18N.Locales` expand generated page routes once per locale.
+  Localized SPA output receives locale-prefixed paths, generated HTML gets
+  `<html lang="...">`, `gowdk-routes.json` records the route `locale`, and
+  `gowdk.BuildParams.Locale` is passed to Go build helpers.
 - Literal dynamic route params can render in the current literal `view {}`
   interpolation subset.
 - Literal `build {}` data can render in the current literal `view {}`
@@ -174,10 +178,12 @@ Implemented today:
   generated request-time slice. Dynamic route params are substituted into
   generated SSR placeholders with request-time HTML escaping. Declared
   `server { => { field } }` pages call same-package Go load functions named
-  `Load<PageID>` with `ssr.LoadContext` and replace declared load placeholders
-  with escaped returned values. Load errors that wrap `ssr.RedirectError`
-  become no-store local redirects; other load failures use generated error-page
-  output.
+  `Load<PageID>` with `ssr.LoadContext`. Load functions can return
+  `map[string]any` or exported same-package typed result structs; generated
+  adapters convert typed struct results into the existing load-data map and
+  replace declared load placeholders with escaped returned values. Load errors
+  that wrap `ssr.RedirectError` become no-store local redirects; other load
+  failures use generated error-page output.
 - Request-time SSR and hybrid pages compose declared layouts before rendering
   the generated response, and load placeholders are shared across page and
   layout markup. Generated route metadata records the layout stack.
@@ -411,6 +417,8 @@ as `/blog/hello-gowdk`. The optional `endpoints` array records generated
 request-time action, API, fragment, command, and query adapter routes; it does
 not point at static files. Dynamic endpoint routes also include
 `dynamicParams` and typed `routeParams` when route parameters are declared.
+When locale routing is enabled, localized page entries also include `locale`.
+Endpoint routes are not rewritten by locale config.
 
 ## Current App Asset Manifest
 

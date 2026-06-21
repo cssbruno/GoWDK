@@ -98,6 +98,31 @@ func TestBuildEmitsSEOArtifactsWhenAddonEnabled(t *testing.T) {
 	requireBuildReportEvent(t, result.Report, "seo", "robots_written")
 }
 
+func TestBuildSEOIncludesLocalizedRoutes(t *testing.T) {
+	outputDir := t.TempDir()
+	config := gowdk.Config{
+		I18N: gowdk.I18NConfig{
+			Locales: []gowdk.LocaleConfig{{Code: "en"}, {Code: "pt"}},
+		},
+		Addons: []gowdk.Addon{seo.Addon(seo.Options{BaseURL: "https://example.com"})},
+	}
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{seoHomePage()}}
+
+	result, err := Build(config, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sitemap := readFile(t, result.SitemapPath)
+	for _, expected := range []string{
+		`<loc>https://example.com/en</loc>`,
+		`<loc>https://example.com/pt</loc>`,
+	} {
+		if !strings.Contains(sitemap, expected) {
+			t.Fatalf("expected localized sitemap URL %q:\n%s", expected, sitemap)
+		}
+	}
+}
+
 func TestBuildReportListsSEORouteExclusions(t *testing.T) {
 	outputDir := t.TempDir()
 	config := gowdk.Config{Addons: []gowdk.Addon{

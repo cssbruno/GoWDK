@@ -141,10 +141,17 @@ func bindLoadFromPackage(page gwdkir.Page, functionName string, pkg featurePacka
 	function := pkg.Functions[functionName]
 	if !function.Load() {
 		binding.Status = source.BackendBindingUnsupportedSignature
-		binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s must have signature func(ssr.LoadContext) map[string]any or func(ssr.LoadContext) (map[string]any, error)", bindingPackageLabel(binding, pkg), functionName)
+		if function.SupportMessage != "" {
+			binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s is unsupported: %s", bindingPackageLabel(binding, pkg), functionName, function.SupportMessage)
+		} else {
+			binding.Message = fmt.Sprintf("GOWDK SSR load handler %s.%s must have signature func(ssr.LoadContext) map[string]any, func(ssr.LoadContext) (map[string]any, error), func(ssr.LoadContext) Data, or func(ssr.LoadContext) (Data, error)", bindingPackageLabel(binding, pkg), functionName)
+		}
 		return binding
 	}
 	binding.Signature = function.Signature
+	binding.ResultType = function.ResultType
+	binding.ResultPointer = function.ResultPointer
+	binding.ResultFields = append([]source.BackendResultField(nil), function.ResultFields...)
 	binding.Status = source.BackendBindingBound
 	return binding
 }
@@ -451,20 +458,23 @@ func BackendBindingsFromIR(ir gwdkir.Program) []source.BackendBinding {
 
 func loadBindingFromIR(page gwdkir.Page) source.BackendBinding {
 	return source.BackendBinding{
-		Kind:         loadHandlerKind,
-		PageID:       page.ID,
-		Source:       page.Source,
-		Method:       "GET",
-		Route:        page.Route,
-		ImportPath:   page.LoadBinding.ImportPath,
-		PackageName:  page.LoadBinding.PackageName,
-		FunctionName: page.LoadBinding.FunctionName,
-		Signature:    page.LoadBinding.Signature,
-		InputType:    page.LoadBinding.InputType,
-		InputPointer: page.LoadBinding.InputPointer,
-		InputFields:  append([]source.BackendInputField(nil), page.LoadBinding.InputFields...),
-		Status:       page.LoadBinding.Status,
-		Message:      page.LoadBinding.Message,
+		Kind:          loadHandlerKind,
+		PageID:        page.ID,
+		Source:        page.Source,
+		Method:        "GET",
+		Route:         page.Route,
+		ImportPath:    page.LoadBinding.ImportPath,
+		PackageName:   page.LoadBinding.PackageName,
+		FunctionName:  page.LoadBinding.FunctionName,
+		Signature:     page.LoadBinding.Signature,
+		InputType:     page.LoadBinding.InputType,
+		InputPointer:  page.LoadBinding.InputPointer,
+		InputFields:   append([]source.BackendInputField(nil), page.LoadBinding.InputFields...),
+		ResultType:    page.LoadBinding.ResultType,
+		ResultPointer: page.LoadBinding.ResultPointer,
+		ResultFields:  append([]source.BackendResultField(nil), page.LoadBinding.ResultFields...),
+		Status:        page.LoadBinding.Status,
+		Message:       page.LoadBinding.Message,
 	}
 }
 
@@ -477,20 +487,23 @@ func backendBindingFromIR(endpoint gwdkir.Endpoint) source.BackendBinding {
 		kind = "fragment"
 	}
 	return source.BackendBinding{
-		Kind:         kind,
-		PageID:       endpoint.PageID,
-		Source:       endpoint.SourceFile,
-		BlockName:    endpoint.Symbol,
-		Method:       endpoint.Method,
-		Route:        endpoint.Path,
-		ImportPath:   endpoint.Binding.ImportPath,
-		PackageName:  endpoint.Binding.PackageName,
-		FunctionName: endpoint.Binding.FunctionName,
-		Signature:    endpoint.Binding.Signature,
-		InputType:    endpoint.Binding.InputType,
-		InputPointer: endpoint.Binding.InputPointer,
-		InputFields:  append([]source.BackendInputField(nil), endpoint.Binding.InputFields...),
-		Status:       endpoint.Binding.Status,
-		Message:      endpoint.Binding.Message,
+		Kind:          kind,
+		PageID:        endpoint.PageID,
+		Source:        endpoint.SourceFile,
+		BlockName:     endpoint.Symbol,
+		Method:        endpoint.Method,
+		Route:         endpoint.Path,
+		ImportPath:    endpoint.Binding.ImportPath,
+		PackageName:   endpoint.Binding.PackageName,
+		FunctionName:  endpoint.Binding.FunctionName,
+		Signature:     endpoint.Binding.Signature,
+		InputType:     endpoint.Binding.InputType,
+		InputPointer:  endpoint.Binding.InputPointer,
+		InputFields:   append([]source.BackendInputField(nil), endpoint.Binding.InputFields...),
+		ResultType:    endpoint.Binding.ResultType,
+		ResultPointer: endpoint.Binding.ResultPointer,
+		ResultFields:  append([]source.BackendResultField(nil), endpoint.Binding.ResultFields...),
+		Status:        endpoint.Binding.Status,
+		Message:       endpoint.Binding.Message,
 	}
 }

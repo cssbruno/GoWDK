@@ -16,6 +16,7 @@ const (
 	routeContextKey       contextKey = "gowdk-route"
 	endpointContextKey    contextKey = "gowdk-endpoint"
 	errorPagesContextKey  contextKey = "gowdk-error-pages"
+	localeContextKey      contextKey = "gowdk-locale"
 )
 
 // RouteMetadata describes one generated request-time page route.
@@ -27,6 +28,7 @@ type RouteMetadata struct {
 	Render        string
 	Cache         string
 	ErrorPage     string
+	Locale        string
 	DynamicParams []string
 	RouteParams   []RouteParamMetadata
 	Layouts       []string
@@ -120,6 +122,18 @@ func WithSession(ctx context.Context, session any) context.Context {
 // Session returns application session state attached to a request context.
 func Session(ctx context.Context) any {
 	return ctx.Value(sessionContextKey)
+}
+
+// WithLocale stores the active generated route locale in a context.
+func WithLocale(ctx context.Context, locale string) context.Context {
+	return context.WithValue(ctx, localeContextKey, locale)
+}
+
+// Locale returns the active generated route locale attached by generated
+// adapters. It returns an empty string when localization is not configured.
+func Locale(ctx context.Context) string {
+	locale, _ := ctx.Value(localeContextKey).(string)
+	return locale
 }
 
 // WithRoute stores generated route metadata in a context.

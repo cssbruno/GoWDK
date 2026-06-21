@@ -135,6 +135,13 @@ var Config = gowdk.Config{
 	Render: gowdk.RenderConfig{
 		Default: gowdk.Action,
 	},
+	I18N: gowdk.I18NConfig{
+		DefaultLocale: "en",
+		Locales: []gowdk.LocaleConfig{
+			{Code: "en", Name: "English"},
+			{Code: "pt-BR", PathPrefix: "/br", Name: "Brazilian Portuguese"},
+		},
+	},
 	Env: gowdk.EnvConfig{
 		Vars: []gowdk.EnvVar{
 			{Name: "GOWDK_TEST_BACKEND_ORIGIN", Required: true},
@@ -247,6 +254,9 @@ var Config = gowdk.Config{
 	}
 	if config.Render.Default != gowdk.Action {
 		t.Fatalf("unexpected render default: %q", config.Render.Default)
+	}
+	if config.I18N.DefaultLocale != "en" || len(config.I18N.Locales) != 2 || config.I18N.Locales[1].Code != "pt-BR" || config.I18N.Locales[1].PathPrefix != "/br" {
+		t.Fatalf("unexpected i18n config: %#v", config.I18N)
 	}
 	if len(config.Env.Vars) != 2 || config.Env.Vars[0].Name != "GOWDK_TEST_BACKEND_ORIGIN" || !config.Env.Vars[0].Required || config.Env.Vars[1].Name != "GOWDK_TEST_ADDR" || config.Env.Vars[1].Default != "127.0.0.1:8080" {
 		t.Fatalf("unexpected env vars: %#v", config.Env.Vars)
@@ -595,6 +605,31 @@ var Config = gowdk.Config{
 	}
 	if !config.HasFeature(gowdk.FeatureSSR) {
 		t.Fatal("expected parsed config to enable SSR")
+	}
+}
+
+func TestLoadConfigFileRejectsUnsafeI18NPolicy(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, DefaultConfigFile)
+	if err := os.WriteFile(path, []byte(`package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	I18N: gowdk.I18NConfig{
+		DefaultLocale: "pt",
+		Locales: []gowdk.LocaleConfig{
+			{Code: "en"},
+		},
+	},
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadConfigFile(path)
+	if err == nil || !strings.Contains(err.Error(), `I18N.DefaultLocale "pt" is not declared`) {
+		t.Fatalf("expected unsafe i18n validation error, got %v", err)
 	}
 }
 

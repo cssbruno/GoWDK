@@ -271,6 +271,47 @@ var Config = gowdk.Config{
 	}
 }
 
+func TestLoadConfigFilePreservesCORSMethodSelectors(t *testing.T) {
+	root := t.TempDir()
+	repoRoot := repositoryRoot(t)
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/site
+
+go 1.22
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+repoRoot+`
+`)
+	path := filepath.Join(root, DefaultConfigFile)
+	writeTestFile(t, path, `package app
+
+import (
+	"net/http"
+
+	"github.com/cssbruno/gowdk"
+)
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		CORS: gowdk.CORSConfig{
+			Enabled: true,
+			AllowedOrigins: []string{"https://app.example"},
+			AllowedMethods: []string{http.MethodGet},
+		},
+	},
+}
+`)
+	tidyTestModule(t, root)
+
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(config.Build.CORS.AllowedMethods, ",") != "GET" {
+		t.Fatalf("expected executable config to preserve CORS method selector, got %#v", config.Build.CORS.AllowedMethods)
+	}
+}
+
 func TestLoadConfigFileValidatesEnvContract(t *testing.T) {
 	missingName := "GOWDK_TEST_MISSING_DATABASE_URL"
 	unsetEnvForTest(t, missingName)

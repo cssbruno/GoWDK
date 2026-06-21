@@ -104,8 +104,12 @@ Implemented today:
   HTTP 413 for oversized submissions.
 - Generated apps return HTTP 422 for missing or empty direct SPA
   `required` fields when the action declares `valid(input)?`.
-- Generated build output emits `assets/gowdk/gowdk.js` only for pages that use
-  partial form metadata with fragment-producing actions.
+- Generated build output emits `assets/gowdk/gowdk.js` for pages that need
+  compiler-owned browser enhancement: partial form metadata with
+  fragment-producing actions, static-first SPA navigation, realtime
+  subscriptions or invalidated `g:query` regions, and `g:command` write forms.
+  Request-time SSR and hybrid pages use the same runtime when their rendered
+  markup declares those contract or partial-update surfaces.
 - Framework-owned browser runtime sources are authored as `.js` files under
   `internal/clientrt/assets/` and embedded with `go:embed`; generated output
   helpers only perform narrow placeholder substitution for component names,

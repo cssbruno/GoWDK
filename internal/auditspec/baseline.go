@@ -115,5 +115,19 @@ func Baseline() []Policy {
 				{Kind: RuleCheckSecurityHeaders},
 			},
 		},
+		{
+			Name:    "baseline.request_limits",
+			Builtin: true,
+			Selectors: []Selector{
+				{Raw: "act:*", Kind: SelectorEndpoint},
+				{Raw: "api:*", Kind: SelectorEndpoint},
+				{Raw: "fragment:*", Kind: SelectorEndpoint},
+				{Raw: "command:*", Kind: SelectorEndpoint},
+				{Raw: "query:*", Kind: SelectorEndpoint},
+			},
+			Rules: []Rule{
+				{Kind: RuleRequireRequestLimits},
+			},
+		},
 	}
 }

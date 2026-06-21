@@ -38,6 +38,10 @@ const (
 	RuleDenyPublic RuleKind = "deny_public"
 	// RuleMaxBody caps a matched endpoint's request body limit.
 	RuleMaxBody RuleKind = "max_body"
+	// RuleRequireRequestLimits requires a matched endpoint to declare an effective
+	// request-limit posture: a positive raw body cap installed before the body is
+	// parsed, and a multipart cap when multipart bodies are accepted.
+	RuleRequireRequestLimits RuleKind = "require_request_limits"
 	// RuleRequireHeader requires the app to be configured to emit a response
 	// header.
 	RuleRequireHeader RuleKind = "require_header"

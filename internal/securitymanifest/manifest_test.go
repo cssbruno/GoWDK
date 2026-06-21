@@ -190,6 +190,43 @@ func TestBuildHonorsConfiguredBodyLimits(t *testing.T) {
 	}
 }
 
+func TestBuildRecordsEffectiveRequestLimitPosture(t *testing.T) {
+	config := gowdk.Config{Build: gowdk.BuildConfig{BodyLimits: gowdk.BodyLimitsConfig{APIBytes: 512 << 10}}}
+	ir := gwdkir.Program{
+		Endpoints: []gwdkir.Endpoint{
+			{Kind: gwdkir.EndpointAction, Symbol: "Submit", Method: "POST", Path: "/a", PageID: "p", Guards: []string{"public"}},
+			{Kind: gwdkir.EndpointAPI, Symbol: "List", Method: "POST", Path: "/api/l", PageID: "p", Guards: []string{"public"}},
+		},
+	}
+	manifest := Build(config, ir)
+	byID := map[string]EndpointEntry{}
+	for _, endpoint := range manifest.Endpoints {
+		byID[endpoint.ID] = endpoint
+	}
+
+	api := byID["List"].RequestLimits
+	if api.RawBodyBytes != 512<<10 || byID["List"].BodyLimitBytes != api.RawBodyBytes {
+		t.Fatalf("api raw body limit should mirror BodyLimitBytes, got %#v", byID["List"])
+	}
+	if !api.InstalledBeforeParse || api.Phase != "before-body-parse-and-csrf" {
+		t.Fatalf("api limit should be installed before parse/CSRF, got %#v", api)
+	}
+	if api.CompressedBodyHandling != "raw-bytes-bounded" {
+		t.Fatalf("compressed bodies should be bounded by the raw cap, got %#v", api)
+	}
+	if api.Origin != "config:Build.BodyLimits.APIBytes" {
+		t.Fatalf("api limit origin should attribute to config, got %q", api.Origin)
+	}
+
+	action := byID["Submit"].RequestLimits
+	if action.RawBodyBytes != gowdk.DefaultRequestBodyLimitBytes {
+		t.Fatalf("action should fall back to the default cap, got %#v", action)
+	}
+	if action.Origin != "default:gowdk.DefaultRequestBodyLimitBytes" {
+		t.Fatalf("default action limit should attribute to the default, got %q", action.Origin)
+	}
+}
+
 func TestBuildRecordsGuardContractAndObservabilityEvidence(t *testing.T) {
 	root := t.TempDir()
 	absPage := filepath.Join(root, "patients.page.gwdk")

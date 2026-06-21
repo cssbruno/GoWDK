@@ -47,19 +47,77 @@ func TestBaselineFlagsMissingCSRFAndPublicAPI(t *testing.T) {
 	}
 }
 
+func soundLimits(kind string) securitymanifest.RequestLimitPosture {
+	return securitymanifest.RequestLimitPosture{
+		EndpointKind:           kind,
+		RawBodyBytes:           1 << 20,
+		CompressedBodyHandling: "raw-bytes-bounded",
+		InstalledBeforeParse:   true,
+		Phase:                  "before-body-parse-and-csrf",
+		Origin:                 "default:gowdk.DefaultRequestBodyLimitBytes",
+	}
+}
+
 func TestBaselinePassesWhenPostureIsSound(t *testing.T) {
 	manifest := securitymanifest.SecurityManifest{
 		Endpoints: []securitymanifest.EndpointEntry{
-			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", Guards: []string{"auth.required"}, CSRF: true},
-			{ID: "List", Kind: "api", Method: "GET", Path: "/api/list", Guards: []string{"permission:list.read"}},
-			{ID: "Update", Kind: "api", Method: "POST", Path: "/api/status", Guards: []string{"permission:status.write"}, CSRF: true},
-			{ID: "patients.CreatePatient", Kind: "command", Method: "POST", Path: "/patients", Guards: []string{"auth.required"}, CSRF: true},
-			{ID: "patients.GetPatientPage", Kind: "query", Method: "GET", Path: "/patients", Guards: []string{"auth.required"}},
+			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", Guards: []string{"auth.required"}, CSRF: true, RequestLimits: soundLimits("action")},
+			{ID: "List", Kind: "api", Method: "GET", Path: "/api/list", Guards: []string{"permission:list.read"}, RequestLimits: soundLimits("api")},
+			{ID: "Update", Kind: "api", Method: "POST", Path: "/api/status", Guards: []string{"permission:status.write"}, CSRF: true, RequestLimits: soundLimits("api")},
+			{ID: "patients.CreatePatient", Kind: "command", Method: "POST", Path: "/patients", Guards: []string{"auth.required"}, CSRF: true, RequestLimits: soundLimits("command")},
+			{ID: "patients.GetPatientPage", Kind: "query", Method: "GET", Path: "/patients", Guards: []string{"auth.required"}, RequestLimits: soundLimits("query")},
 		},
 	}
 	findings := Evaluate(manifest, Baseline())
 	if len(findings) != 0 {
 		t.Fatalf("expected no findings for a sound posture, got %#v", findings)
+	}
+}
+
+func TestBaselineFlagsMissingAndUnsafeRequestLimits(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Endpoints: []securitymanifest.EndpointEntry{
+			// No raw cap recorded at all -> missing.
+			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", Guards: []string{"auth.required"}, CSRF: true},
+			// Cap recorded but installed after parse -> phase unsafe.
+			{ID: "Ingest", Kind: "api", Method: "POST", Path: "/api/ingest", Guards: []string{"permission:x"}, CSRF: true,
+				RequestLimits: securitymanifest.RequestLimitPosture{EndpointKind: "api", RawBodyBytes: 1 << 20, InstalledBeforeParse: false}},
+			// Multipart accepted without a multipart cap -> unbounded multipart.
+			{ID: "Upload", Kind: "action", Method: "POST", Path: "/upload", Guards: []string{"auth.required"}, CSRF: true,
+				RequestLimits: securitymanifest.RequestLimitPosture{EndpointKind: "action", RawBodyBytes: 1 << 20, InstalledBeforeParse: true, MultipartEnabled: true}},
+		},
+	}
+	got := codes(Evaluate(manifest, Baseline()))
+	if got["audit_request_limit_missing"] != 1 {
+		t.Fatalf("expected one missing-limit finding, got %#v", got)
+	}
+	if got["audit_request_limit_phase_unsafe"] != 1 {
+		t.Fatalf("expected one phase-unsafe finding, got %#v", got)
+	}
+	if got["audit_request_limit_unbounded_multipart"] != 1 {
+		t.Fatalf("expected one unbounded-multipart finding, got %#v", got)
+	}
+}
+
+func TestRequestLimitsPerEndpointAndKindSplit(t *testing.T) {
+	// The same selector family can carry different effective caps per endpoint,
+	// and command/query/action/API caps are evaluated independently.
+	manifest := securitymanifest.SecurityManifest{
+		Endpoints: []securitymanifest.EndpointEntry{
+			{ID: "Small", Kind: "api", Method: "POST", Path: "/api/a", Guards: []string{"permission:x"}, CSRF: true, BodyLimitBytes: 256 << 10, RequestLimits: securitymanifest.RequestLimitPosture{EndpointKind: "api", RawBodyBytes: 256 << 10, InstalledBeforeParse: true}},
+			{ID: "Big", Kind: "api", Method: "POST", Path: "/api/b", Guards: []string{"permission:x"}, CSRF: true, BodyLimitBytes: 4 << 20, RequestLimits: securitymanifest.RequestLimitPosture{EndpointKind: "api", RawBodyBytes: 4 << 20, InstalledBeforeParse: true}},
+		},
+	}
+	// A declared policy caps only API endpoints at 1mb; the per-endpoint posture
+	// means only the oversized endpoint is flagged.
+	policies := ComposeBaseline([]Policy{{
+		Name:      "api_tight",
+		Source:    "x.audit.gwdk:1",
+		Selectors: []Selector{{Raw: "api:*", Kind: SelectorEndpoint}},
+		Rules:     []Rule{{Kind: RuleMaxBody, Value: "1mb", Code: "audit_max_body_exceeds_policy"}},
+	}})
+	if got := codes(Evaluate(manifest, policies)); got["audit_max_body_exceeds_policy"] != 1 {
+		t.Fatalf("expected only the oversized API endpoint to be flagged, got %#v", got)
 	}
 }
 

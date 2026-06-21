@@ -65,18 +65,37 @@ type RouteEntry struct {
 // EndpointEntry is the posture of one backend action/api/fragment/contract
 // endpoint.
 type EndpointEntry struct {
-	ID             string          `json:"id"`
-	Kind           string          `json:"kind"`
-	Method         string          `json:"method,omitempty"`
-	Path           string          `json:"path,omitempty"`
-	Guards         []string        `json:"guards,omitempty"`
-	GuardEvidence  []GuardEvidence `json:"guardEvidence,omitempty"`
-	CSRF           bool            `json:"csrf"`
-	BodyLimitBytes int64           `json:"bodyLimitBytes,omitempty"`
-	Public         bool            `json:"public"`
-	DefaultDeny    bool            `json:"defaultDeny"`
-	PageID         string          `json:"pageId,omitempty"`
-	Source         string          `json:"source,omitempty"`
+	ID             string              `json:"id"`
+	Kind           string              `json:"kind"`
+	Method         string              `json:"method,omitempty"`
+	Path           string              `json:"path,omitempty"`
+	Guards         []string            `json:"guards,omitempty"`
+	GuardEvidence  []GuardEvidence     `json:"guardEvidence,omitempty"`
+	CSRF           bool                `json:"csrf"`
+	BodyLimitBytes int64               `json:"bodyLimitBytes,omitempty"`
+	RequestLimits  RequestLimitPosture `json:"requestLimits"`
+	Public         bool                `json:"public"`
+	DefaultDeny    bool                `json:"defaultDeny"`
+	PageID         string              `json:"pageId,omitempty"`
+	Source         string              `json:"source,omitempty"`
+}
+
+// RequestLimitPosture is the effective request-limit posture of one generated
+// endpoint. It expresses more than a single byte cap: it distinguishes the raw
+// body cap from decoded-object and multipart caps, records how compressed
+// bodies are bounded, and records whether the cap is installed before the body
+// is parsed (so a body limit precedes CSRF token parsing and handler
+// execution). BodyLimitBytes on the parent entry mirrors RawBodyBytes.
+type RequestLimitPosture struct {
+	EndpointKind           string `json:"endpointKind,omitempty"`
+	RawBodyBytes           int64  `json:"rawBodyBytes"`
+	DecodedObjectBytes     int64  `json:"decodedObjectBytes,omitempty"`
+	MultipartEnabled       bool   `json:"multipartEnabled"`
+	MultipartMaxBytes      int64  `json:"multipartMaxBytes,omitempty"`
+	CompressedBodyHandling string `json:"compressedBodyHandling,omitempty"`
+	InstalledBeforeParse   bool   `json:"installedBeforeParse"`
+	Phase                  string `json:"phase,omitempty"`
+	Origin                 string `json:"origin,omitempty"`
 }
 
 // ContractEntry is the posture of one command/query contract reference.
@@ -208,6 +227,7 @@ func Build(config gowdk.Config, ir gwdkir.Program) SecurityManifest {
 			GuardEvidence:  guardEvidence(config, endpoint.Guards),
 			CSRF:           endpoint.CSRF,
 			BodyLimitBytes: bodyLimitFor(config, endpoint.Kind),
+			RequestLimits:  requestLimitsFor(config, endpoint.Kind),
 			Public:         hasPublicGuard(endpoint.Guards),
 			DefaultDeny:    len(endpoint.Guards) == 0,
 			PageID:         endpoint.PageID,
@@ -619,6 +639,40 @@ func bodyLimitFor(config gowdk.Config, kind compiler.EndpointKind) int64 {
 	default:
 		return config.Build.BodyLimits.ActionLimitBytes()
 	}
+}
+
+// requestLimitsFor projects the effective request-limit posture for one endpoint
+// kind. The generated runtime installs an http.MaxBytesReader on the raw body
+// before it is parsed (see runtime/app.prepareActionValues and
+// APIHandlerWithBodyLimit), so the raw cap bounds compressed input too and is in
+// force before CSRF token parsing and handler execution.
+func requestLimitsFor(config gowdk.Config, kind compiler.EndpointKind) RequestLimitPosture {
+	raw := bodyLimitFor(config, kind)
+	return RequestLimitPosture{
+		EndpointKind:           string(kind),
+		RawBodyBytes:           raw,
+		DecodedObjectBytes:     0, // bounded transitively by the raw body cap
+		MultipartEnabled:       false,
+		MultipartMaxBytes:      0,
+		CompressedBodyHandling: "raw-bytes-bounded",
+		InstalledBeforeParse:   true,
+		Phase:                  "before-body-parse-and-csrf",
+		Origin:                 bodyLimitOrigin(config, kind),
+	}
+}
+
+func bodyLimitOrigin(config gowdk.Config, kind compiler.EndpointKind) string {
+	switch kind {
+	case compiler.EndpointAPI, compiler.EndpointQuery:
+		if config.Build.BodyLimits.APIBytes > 0 {
+			return "config:Build.BodyLimits.APIBytes"
+		}
+	default:
+		if config.Build.BodyLimits.ActionBytes > 0 {
+			return "config:Build.BodyLimits.ActionBytes"
+		}
+	}
+	return "default:gowdk.DefaultRequestBodyLimitBytes"
 }
 
 func sourceRef(file string, span source.SourceSpan) string {

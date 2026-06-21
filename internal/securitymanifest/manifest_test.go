@@ -131,6 +131,47 @@ func TestBuildPopulatesFrontendAuditSurface(t *testing.T) {
 	}
 }
 
+func TestRawHTMLSinkFingerprintIsStableAndSourceSensitive(t *testing.T) {
+	base := RawHTMLFingerprint("page", "home", "{Body}", "home.page.gwdk:12", 0)
+	if base == "" {
+		t.Fatal("fingerprint should not be empty")
+	}
+	if base != RawHTMLFingerprint("page", "home", "{Body}", "home.page.gwdk:12", 0) {
+		t.Fatal("fingerprint should be stable for identical inputs")
+	}
+	if base == RawHTMLFingerprint("page", "home", "{Body}", "home.page.gwdk:40", 0) {
+		t.Fatal("moving the source should change the fingerprint")
+	}
+	if base == RawHTMLFingerprint("page", "home", "{Rendered}", "home.page.gwdk:12", 0) {
+		t.Fatal("changing the expression should change the fingerprint")
+	}
+	if base == RawHTMLFingerprint("page", "home", "{Body}", "home.page.gwdk:12", 1) {
+		t.Fatal("a different sink ordinal should change the fingerprint")
+	}
+}
+
+func TestBuildRecordsRawHTMLSinkFingerprint(t *testing.T) {
+	ir := gwdkir.Program{
+		Templates: []gwdkir.Template{{
+			OwnerKind: gwdkir.SourcePage,
+			OwnerID:   "home",
+			Source:    "home.page.gwdk",
+			Body:      `<main><div g:unsafe-html={Body}></div></main>`,
+			BodyStart: source.SourcePosition{Line: 12, Column: 1},
+			Span:      source.SourceSpan{Start: source.SourcePosition{Line: 11, Column: 1}},
+		}},
+	}
+	manifest := Build(gowdk.Config{}, ir)
+	if len(manifest.Frontend.RawHTMLSinks) != 1 {
+		t.Fatalf("expected one sink, got %#v", manifest.Frontend.RawHTMLSinks)
+	}
+	sink := manifest.Frontend.RawHTMLSinks[0]
+	want := RawHTMLFingerprint(sink.OwnerKind, sink.OwnerID, sink.Field, sink.Source, sink.Ordinal)
+	if sink.Fingerprint != want || sink.Fingerprint == "" {
+		t.Fatalf("sink fingerprint should match the exported derivation, got %#v", sink)
+	}
+}
+
 func hasBundleLeak(leaks []BundleLeak, source string, kind string) bool {
 	for _, leak := range leaks {
 		if leak.Source == source && leak.Kind == kind {

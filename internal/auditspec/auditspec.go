@@ -57,8 +57,13 @@ const (
 	// RuleAllowRawHTML rule in any resolved frontend policy.
 	RuleDenyRawHTMLSinks RuleKind = "deny_raw_html_sinks"
 	// RuleAllowRawHTML allowlists one raw-HTML sink (source:field); every sink
-	// not allowlisted is reported.
+	// not allowlisted is reported. This is the legacy coarse allowlist; prefer
+	// RuleExceptRawHTML for an exact, justified, expiring exception.
 	RuleAllowRawHTML RuleKind = "allow_raw_html"
+	// RuleExceptRawHTML suppresses exactly one raw-HTML sink by its fingerprint,
+	// and only when the exception carries an owner, justification, unexpired
+	// expiry, and sanitizer/trusted-type contract.
+	RuleExceptRawHTML RuleKind = "except_raw_html"
 	// RuleDenyRolelessContract reports a web-exposed command or query contract
 	// that declares no roles, so the data-layer authorization gate has no role to
 	// admit. The contract must declare at least one role (or RoleAny to be
@@ -86,6 +91,7 @@ type Rule struct {
 	Value  string
 	Code   string
 	Source string
+	Attrs  map[string]string
 }
 
 // Policy is a named, composable set of rules applied to selected targets.

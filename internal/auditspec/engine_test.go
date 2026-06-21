@@ -488,6 +488,104 @@ func TestFrontendRawHTMLAllowlistSuppressesBaselineFinding(t *testing.T) {
 	}
 }
 
+func rawHTMLSinkManifest(field, source string) securitymanifest.SecurityManifest {
+	fingerprint := securitymanifest.RawHTMLFingerprint("page", "home", field, source, 0)
+	return securitymanifest.SecurityManifest{
+		Frontend: securitymanifest.FrontendSurface{
+			RawHTMLSinks: []securitymanifest.RawHTMLSink{
+				{OwnerKind: "page", OwnerID: "home", Field: field, Source: source, Ordinal: 0, Fingerprint: fingerprint},
+			},
+		},
+	}
+}
+
+func exceptionPolicy(fingerprint string, attrs map[string]string) []Policy {
+	return ComposeBaseline([]Policy{{
+		Name:      "raw_html_waivers",
+		Source:    "security.audit.gwdk:3",
+		Extends:   []string{"baseline.frontend"},
+		Selectors: []Selector{{Raw: "frontend", Kind: SelectorFrontend}},
+		Rules:     []Rule{{Kind: RuleExceptRawHTML, Value: fingerprint, Source: "security.audit.gwdk:4", Attrs: attrs}},
+	}})
+}
+
+func goodExceptionAttrs() map[string]string {
+	return map[string]string{
+		"owner":         "team-content",
+		"justification": "server-sanitized markdown",
+		"expires":       "2999-12-31",
+		"sanitizer":     "bluemonday",
+	}
+}
+
+func TestRawHTMLExceptionExactFingerprintSuppresses(t *testing.T) {
+	manifest := rawHTMLSinkManifest("{Body}", "home.page.gwdk:12")
+	fingerprint := manifest.Frontend.RawHTMLSinks[0].Fingerprint
+	got := codes(Evaluate(manifest, exceptionPolicy(fingerprint, goodExceptionAttrs())))
+	if got["audit_raw_html_sink"] != 0 {
+		t.Fatalf("an exact active exception should suppress the sink, got %#v", got)
+	}
+	if got["audit_raw_html_exception_unmatched"]+got["audit_raw_html_exception_expired"]+got["audit_raw_html_exception_malformed"] != 0 {
+		t.Fatalf("active exception should not produce a state finding, got %#v", got)
+	}
+}
+
+func TestRawHTMLExceptionStaleSourceMovementIsUnmatched(t *testing.T) {
+	// Exception was pinned to the sink at its old line; the sink has since moved.
+	oldFingerprint := securitymanifest.RawHTMLFingerprint("page", "home", "{Body}", "home.page.gwdk:12", 0)
+	manifest := rawHTMLSinkManifest("{Body}", "home.page.gwdk:40")
+	got := codes(Evaluate(manifest, exceptionPolicy(oldFingerprint, goodExceptionAttrs())))
+	if got["audit_raw_html_exception_unmatched"] != 1 {
+		t.Fatalf("moved sink should leave the exception unmatched, got %#v", got)
+	}
+	if got["audit_raw_html_sink"] != 1 {
+		t.Fatalf("moved sink should be reported as unallowlisted, got %#v", got)
+	}
+}
+
+func TestRawHTMLExceptionChangedExpressionIsUnmatched(t *testing.T) {
+	oldFingerprint := securitymanifest.RawHTMLFingerprint("page", "home", "{Body}", "home.page.gwdk:12", 0)
+	manifest := rawHTMLSinkManifest("{RenderedBody}", "home.page.gwdk:12")
+	got := codes(Evaluate(manifest, exceptionPolicy(oldFingerprint, goodExceptionAttrs())))
+	if got["audit_raw_html_exception_unmatched"] != 1 || got["audit_raw_html_sink"] != 1 {
+		t.Fatalf("changed expression should unmatch the exception and report the sink, got %#v", got)
+	}
+}
+
+func TestRawHTMLExceptionExpired(t *testing.T) {
+	manifest := rawHTMLSinkManifest("{Body}", "home.page.gwdk:12")
+	fingerprint := manifest.Frontend.RawHTMLSinks[0].Fingerprint
+	attrs := goodExceptionAttrs()
+	attrs["expires"] = "2000-01-01"
+	got := codes(Evaluate(manifest, exceptionPolicy(fingerprint, attrs)))
+	if got["audit_raw_html_exception_expired"] != 1 {
+		t.Fatalf("expired exception should be reported, got %#v", got)
+	}
+	if got["audit_raw_html_sink"] != 1 {
+		t.Fatalf("expired exception should no longer suppress the sink, got %#v", got)
+	}
+}
+
+func TestRawHTMLExceptionMalformedRequiresEvidence(t *testing.T) {
+	manifest := rawHTMLSinkManifest("{Body}", "home.page.gwdk:12")
+	fingerprint := manifest.Frontend.RawHTMLSinks[0].Fingerprint
+	attrs := goodExceptionAttrs()
+	delete(attrs, "sanitizer") // missing sanitizer/trusted-type evidence
+	findings := Evaluate(manifest, exceptionPolicy(fingerprint, attrs))
+	got := codes(findings)
+	if got["audit_raw_html_exception_malformed"] != 1 {
+		t.Fatalf("missing sanitizer should make the exception malformed, got %#v", got)
+	}
+	if got["audit_raw_html_sink"] != 1 {
+		t.Fatalf("malformed exception must not suppress the sink, got %#v", got)
+	}
+	for _, finding := range findings {
+		if finding.Code == "audit_raw_html_exception_malformed" && finding.Source != "security.audit.gwdk:4" {
+			t.Fatalf("exception finding should carry the rule source, got %#v", finding)
+		}
+	}
+}
+
 func TestComposeBaselineLetsDeclaredPolicyOverrideBuiltin(t *testing.T) {
 	policies := ComposeBaseline([]Policy{{
 		Name:      "baseline.frontend",

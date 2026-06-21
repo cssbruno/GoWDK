@@ -31,6 +31,9 @@ func Evaluate(manifest securitymanifest.SecurityManifest, policies []Policy) []F
 
 	matchedAnything := map[string]bool{}
 	frontendRawHTMLAllowlist := rawHTMLAllowlist(resolved)
+	sinkFingerprints := rawHTMLSinkFingerprints(manifest.Frontend.RawHTMLSinks)
+	activeExceptions, exceptionFindings := classifyRawHTMLExceptions(collectRawHTMLExceptions(resolved), sinkFingerprints)
+	findings = append(findings, exceptionFindings...)
 
 	for _, endpoint := range manifest.Endpoints {
 		for _, policy := range resolved {
@@ -77,7 +80,7 @@ func Evaluate(manifest securitymanifest.SecurityManifest, policies []Policy) []F
 			continue
 		}
 		matchedAnything[policy.Name] = true
-		findings = append(findings, evalFrontend(manifest.Frontend, policy, frontendRawHTMLAllowlist, manifest.BuildMode)...)
+		findings = append(findings, evalFrontend(manifest.Frontend, policy, frontendRawHTMLAllowlist, activeExceptions, manifest.BuildMode)...)
 	}
 
 	findings = append(findings, unmatchedSelectorFindings(resolved, matchedAnything)...)
@@ -484,7 +487,7 @@ func observabilityAccessPolicyChecksOrigin(entry securitymanifest.ObservabilityE
 	return false
 }
 
-func evalFrontend(surface securitymanifest.FrontendSurface, policy Policy, rawHTMLAllowlist map[string]bool, buildMode string) []Finding {
+func evalFrontend(surface securitymanifest.FrontendSurface, policy Policy, rawHTMLAllowlist, activeExceptions map[string]bool, buildMode string) []Finding {
 	var findings []Finding
 	for _, rule := range policy.Rules {
 		switch rule.Kind {
@@ -509,28 +512,29 @@ func evalFrontend(surface securitymanifest.FrontendSurface, policy Policy, rawHT
 					"Declare guard public for an intentionally public page, or add a protective guard."))
 			}
 		case RuleDenyRawHTMLSinks:
-			findings = append(findings, evalRawHTMLSinks(surface, policy, rule, rawHTMLAllowlist)...)
-		case RuleAllowRawHTML:
-			// Handled by evalRawHTMLSinks against the resolved frontend allowlist.
+			findings = append(findings, evalRawHTMLSinks(surface, policy, rule, rawHTMLAllowlist, activeExceptions)...)
+		case RuleAllowRawHTML, RuleExceptRawHTML:
+			// Handled against the resolved frontend allowlist and exception set.
 		}
 	}
 	return findings
 }
 
-// evalRawHTMLSinks reports raw-HTML sinks that are not allowlisted by any
-// RuleAllowRawHTML rule on any resolved frontend policy.
-func evalRawHTMLSinks(surface securitymanifest.FrontendSurface, policy Policy, rule Rule, allow map[string]bool) []Finding {
+// evalRawHTMLSinks reports raw-HTML sinks that are neither allowlisted by a
+// RuleAllowRawHTML rule nor suppressed by an active fingerprinted exception on
+// any resolved frontend policy.
+func evalRawHTMLSinks(surface securitymanifest.FrontendSurface, policy Policy, rule Rule, allow, activeExceptions map[string]bool) []Finding {
 	if len(surface.RawHTMLSinks) == 0 {
 		return nil
 	}
 	var findings []Finding
 	for _, sink := range surface.RawHTMLSinks {
-		if rawHTMLSinkAllowed(allow, sink) {
+		if activeExceptions[sink.Fingerprint] || rawHTMLSinkAllowed(allow, sink) {
 			continue
 		}
 		findings = append(findings, finding(rule, policy, "frontend", sink.Source,
-			fmt.Sprintf("raw HTML sink %s:%s is not allowlisted", sink.OwnerID, sink.Field),
-			"Render escaped output, or add the sink to the policy raw-HTML allowlist."))
+			fmt.Sprintf("raw HTML sink %s:%s (fingerprint %s) is not allowlisted", sink.OwnerID, sink.Field, sink.Fingerprint),
+			"Render escaped output, or add an `except raw_html` exception pinning this fingerprint with owner, justification, expiry, and sanitizer."))
 	}
 	return findings
 }

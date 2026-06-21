@@ -106,7 +106,7 @@ func cweFor(code string) []string {
 		return []string{"CWE-863"}
 	case "audit_bundle_secret":
 		return []string{"CWE-798"}
-	case "audit_raw_html_sink":
+	case "audit_raw_html_sink", "audit_raw_html_exception_expired", "audit_raw_html_exception_unmatched", "audit_raw_html_exception_malformed":
 		return []string{"CWE-79"}
 	case "audit_header_csp_weak":
 		return []string{"CWE-1021", "CWE-79"}
@@ -136,7 +136,7 @@ func owaspFor(code string) []string {
 		return []string{"A01:2021-Broken Access Control"}
 	case "audit_bundle_secret", "audit_observability_production_exposed", "audit_observability_origin_unchecked", "audit_observability_content_type_missing", "audit_observability_absolute_source":
 		return []string{"A02:2021-Cryptographic Failures"}
-	case "audit_raw_html_sink":
+	case "audit_raw_html_sink", "audit_raw_html_exception_expired", "audit_raw_html_exception_unmatched", "audit_raw_html_exception_malformed":
 		return []string{"A03:2021-Injection"}
 	case "audit_max_body_exceeds_policy", "audit_observability_body_limit_missing", "audit_observability_batch_limit_missing",
 		"audit_request_limit_missing", "audit_request_limit_phase_unsafe", "audit_request_limit_unbounded_multipart":

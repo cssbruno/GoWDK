@@ -601,11 +601,14 @@ type AuditApply struct {
 	Span     source.SourceSpan
 }
 
-// AuditRule records one declared policy rule.
+// AuditRule records one declared policy rule. Attrs carries structured arguments
+// for rules that need more than a single value (for example a raw-HTML
+// exception's owner, justification, expiry, and sanitizer contract).
 type AuditRule struct {
 	Kind  string
 	Value string
 	Code  string
+	Attrs map[string]string `json:"Attrs,omitempty"`
 	Span  source.SourceSpan
 }
 

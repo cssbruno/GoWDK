@@ -13,11 +13,14 @@
 package securitymanifest
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
@@ -166,12 +169,18 @@ type BundleLeak struct {
 	Kind   string `json:"kind"`
 }
 
-// RawHTMLSink records one raw-HTML (g:unsafe-html) render site.
+// RawHTMLSink records one raw-HTML (g:unsafe-html) render site. Fingerprint is a
+// stable identity derived from the owner, source location, rendered
+// field/expression, and the sink's ordinal within its owner, so a policy
+// exception can target one exact sink and stop suppressing it when the source
+// moves or the expression changes.
 type RawHTMLSink struct {
-	OwnerKind string `json:"ownerKind"`
-	OwnerID   string `json:"ownerId"`
-	Field     string `json:"field"`
-	Source    string `json:"source"`
+	OwnerKind   string `json:"ownerKind"`
+	OwnerID     string `json:"ownerId"`
+	Field       string `json:"field"`
+	Source      string `json:"source"`
+	Ordinal     int    `json:"ordinal"`
+	Fingerprint string `json:"fingerprint"`
 }
 
 // ConfiguredHeader records one header configured for generated runtime output.
@@ -580,6 +589,7 @@ func rawHTMLSinks(ir gwdkir.Program) []RawHTMLSink {
 
 func rawHTMLSinksForNodes(nodes []viewmodel.Node, template gwdkir.Template) []RawHTMLSink {
 	var sinks []RawHTMLSink
+	ordinal := 0
 	var walk func([]viewmodel.Node)
 	walk = func(nodes []viewmodel.Node) {
 		for _, node := range nodes {
@@ -589,12 +599,19 @@ func rawHTMLSinksForNodes(nodes []viewmodel.Node, template gwdkir.Template) []Ra
 					if attr.Name != "g:unsafe-html" {
 						continue
 					}
+					ownerKind := string(template.OwnerKind)
+					ownerID := template.OwnerID
+					field := strings.TrimSpace(attr.Value)
+					source := sourceRef(template.Source, templateOffsetSpan(template, attr.Start))
 					sinks = append(sinks, RawHTMLSink{
-						OwnerKind: string(template.OwnerKind),
-						OwnerID:   template.OwnerID,
-						Field:     strings.TrimSpace(attr.Value),
-						Source:    sourceRef(template.Source, templateOffsetSpan(template, attr.Start)),
+						OwnerKind:   ownerKind,
+						OwnerID:     ownerID,
+						Field:       field,
+						Source:      source,
+						Ordinal:     ordinal,
+						Fingerprint: RawHTMLFingerprint(ownerKind, ownerID, field, source, ordinal),
 					})
+					ordinal++
 				}
 				walk(typed.Children)
 			case viewmodel.ComponentCall:
@@ -604,6 +621,17 @@ func rawHTMLSinksForNodes(nodes []viewmodel.Node, template gwdkir.Template) []Ra
 	}
 	walk(nodes)
 	return sinks
+}
+
+// RawHTMLFingerprint derives the stable identity of one raw-HTML sink. It is
+// exported so tooling and tests can compute the value a policy exception must
+// pin. The source location is part of the identity, so moving the sink (or
+// changing its expression) produces a new fingerprint and stops a stale
+// exception from suppressing a different sink.
+func RawHTMLFingerprint(ownerKind, ownerID, field, source string, ordinal int) string {
+	key := strings.Join([]string{ownerKind, ownerID, field, source, strconv.Itoa(ordinal)}, "\x00")
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:16])
 }
 
 func templateOffsetSpan(template gwdkir.Template, offset int) source.SourceSpan {

@@ -21,11 +21,19 @@ func PoliciesFromIR(specs []gwdkir.AuditSpec) []Policy {
 				out.Selectors = append(out.Selectors, ParseSelector(apply.Selector))
 			}
 			for _, rule := range policy.Rules {
+				var attrs map[string]string
+				if len(rule.Attrs) > 0 {
+					attrs = make(map[string]string, len(rule.Attrs))
+					for key, value := range rule.Attrs {
+						attrs[key] = value
+					}
+				}
 				out.Rules = append(out.Rules, Rule{
 					Kind:   RuleKind(rule.Kind),
 					Value:  rule.Value,
 					Code:   rule.Code,
 					Source: sourceRef(spec.Source, rule.Span),
+					Attrs:  attrs,
 				})
 			}
 			policies = append(policies, out)

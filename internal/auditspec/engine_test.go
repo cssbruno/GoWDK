@@ -353,6 +353,99 @@ func TestDeclaredRequireCSRFResolvesCodeByEndpointKind(t *testing.T) {
 	}
 }
 
+func TestRuleCodeOverrideValidation(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Routes: []securitymanifest.RouteEntry{
+			{PageID: "admin", Route: "/admin", Kind: "ssr", Guards: []string{"auth.required"}},
+		},
+	}
+	base := func(code string) []Policy {
+		return []Policy{{
+			Name:      "guards",
+			Source:    "security.audit.gwdk:3",
+			Selectors: []Selector{{Raw: "/admin/**", Kind: SelectorRoute}},
+			Rules:     []Rule{{Kind: RuleRequireGuard, Value: "role:admin", Code: code, Source: "security.audit.gwdk:4"}},
+		}}
+	}
+
+	// Valid override within the rule family.
+	got := codes(Evaluate(manifest, base("audit_required_guard_missing")))
+	if got["audit_required_guard_missing"] != 1 || got["policy_rule_code_incompatible"] != 0 {
+		t.Fatalf("valid in-family override should be accepted, got %#v", got)
+	}
+
+	// Unrelated code from a different family.
+	got = codes(Evaluate(manifest, base("audit_bundle_secret")))
+	if got["policy_rule_code_incompatible"] != 1 {
+		t.Fatalf("unrelated code should be incompatible, got %#v", got)
+	}
+	// Neutralized back to the default code so the rule still fires correctly.
+	if got["audit_required_guard_missing"] != 1 {
+		t.Fatalf("neutralized override should still emit the default-coded finding, got %#v", got)
+	}
+
+	// Unknown / unregistered code.
+	got = codes(Evaluate(manifest, base("audit_made_up_code")))
+	if got["policy_rule_code_unknown"] != 1 {
+		t.Fatalf("unknown code should be reported, got %#v", got)
+	}
+
+	// No override at all.
+	noOverride := []Policy{{
+		Name:      "guards",
+		Source:    "security.audit.gwdk:3",
+		Selectors: []Selector{{Raw: "/admin/**", Kind: SelectorRoute}},
+		Rules:     []Rule{{Kind: RuleRequireGuard, Value: "role:admin", Code: "audit_required_guard_missing"}},
+	}}
+	got = codes(Evaluate(manifest, noOverride))
+	if got["policy_rule_code_incompatible"]+got["policy_rule_code_unknown"]+got["policy_rule_code_severity_lowered"] != 0 {
+		t.Fatalf("no override should not raise a code-validation finding, got %#v", got)
+	}
+}
+
+func TestRuleCodeOverrideCannotLowerSeverity(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Endpoints: []securitymanifest.EndpointEntry{
+			{ID: "Refresh", Kind: "fragment", Method: "GET", Path: "/frag", DefaultDeny: true, RequestLimits: soundLimits("fragment")},
+		},
+	}
+	// require_any_guard defaults to an error code; audit_client_route_unguarded is
+	// in the same family but only a warning, so the override must be rejected.
+	policies := []Policy{{
+		Name:      "downgrade",
+		Source:    "security.audit.gwdk:1",
+		Selectors: []Selector{{Raw: "fragment:*", Kind: SelectorEndpoint}},
+		Rules:     []Rule{{Kind: RuleRequireAnyGuard, Code: "audit_client_route_unguarded", Source: "security.audit.gwdk:2"}},
+	}}
+	findings := Evaluate(manifest, policies)
+	got := codes(findings)
+	if got["policy_rule_code_severity_lowered"] != 1 {
+		t.Fatalf("expected a severity-lowered finding, got %#v", got)
+	}
+	// The downgraded code must not appear; the rule fires at full severity instead.
+	if got["audit_client_route_unguarded"] != 0 || got["audit_guardless_endpoint_page"] != 1 {
+		t.Fatalf("severity-lowering override should be neutralized to the default code, got %#v", got)
+	}
+	for _, finding := range findings {
+		if finding.Code == "policy_rule_code_severity_lowered" && finding.Source != "security.audit.gwdk:2" {
+			t.Fatalf("validation finding should carry the rule source span, got %#v", finding)
+		}
+	}
+}
+
+func TestFindingsRecordCodeSource(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Endpoints: []securitymanifest.EndpointEntry{
+			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", Guards: []string{"public"}, CSRF: false, Public: true, RequestLimits: soundLimits("action")},
+		},
+	}
+	for _, finding := range Evaluate(manifest, Baseline()) {
+		if finding.CodeSource != "baseline-default" {
+			t.Fatalf("baseline finding should record baseline-default code source, got %#v", finding)
+		}
+	}
+}
+
 func TestEvaluateDeduplicatesFindingsAcrossExtendingPolicies(t *testing.T) {
 	manifest := securitymanifest.SecurityManifest{
 		Frontend: securitymanifest.FrontendSurface{

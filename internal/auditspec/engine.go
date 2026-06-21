@@ -24,8 +24,10 @@ var endpointKindForSelector = map[string]string{
 // It first reports policy-resolution problems (cycles, unknown extends), then
 // the per-target rule violations. Findings are returned in a stable order.
 func Evaluate(manifest securitymanifest.SecurityManifest, policies []Policy) []Finding {
+	policies, codeFindings := validatePolicyRuleCodes(policies)
 	resolved, resolutionFindings := resolve(policies)
-	findings := append([]Finding(nil), resolutionFindings...)
+	findings := append([]Finding(nil), codeFindings...)
+	findings = append(findings, resolutionFindings...)
 
 	matchedAnything := map[string]bool{}
 	frontendRawHTMLAllowlist := rawHTMLAllowlist(resolved)
@@ -586,6 +588,7 @@ func finding(rule Rule, policy Policy, target, source, message, remediation stri
 	return Finding{
 		Code:        rule.Code,
 		Severity:    severityFor(rule.Code),
+		CodeSource:  codeSourceFor(policy, rule),
 		Target:      target,
 		Policy:      policy.Name,
 		Rule:        string(rule.Kind),

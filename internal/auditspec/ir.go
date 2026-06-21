@@ -22,9 +22,10 @@ func PoliciesFromIR(specs []gwdkir.AuditSpec) []Policy {
 			}
 			for _, rule := range policy.Rules {
 				out.Rules = append(out.Rules, Rule{
-					Kind:  RuleKind(rule.Kind),
-					Value: rule.Value,
-					Code:  rule.Code,
+					Kind:   RuleKind(rule.Kind),
+					Value:  rule.Value,
+					Code:   rule.Code,
+					Source: sourceRef(spec.Source, rule.Span),
 				})
 			}
 			policies = append(policies, out)

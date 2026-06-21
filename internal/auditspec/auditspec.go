@@ -79,11 +79,13 @@ type Selector struct {
 
 // Rule is one policy constraint. Code is the diagnostic code emitted when the
 // rule is violated; Value carries the rule argument (a guard ID, header name,
-// byte size, or allowlist entry) when the rule kind needs one.
+// byte size, or allowlist entry) when the rule kind needs one. Source records
+// where a declared rule originated so code-override validation can point at it.
 type Rule struct {
-	Kind  RuleKind
-	Value string
-	Code  string
+	Kind   RuleKind
+	Value  string
+	Code   string
+	Source string
 }
 
 // Policy is a named, composable set of rules applied to selected targets.
@@ -100,6 +102,7 @@ type Policy struct {
 type Finding struct {
 	Code        string               `json:"code"`
 	Severity    diagnostics.Severity `json:"severity"`
+	CodeSource  string               `json:"codeSource,omitempty"`
 	Fingerprint string               `json:"fingerprint,omitempty"`
 	Target      string               `json:"target,omitempty"`
 	Policy      string               `json:"policy,omitempty"`

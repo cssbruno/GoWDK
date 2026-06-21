@@ -10,6 +10,10 @@ Expected errors are user-owned handler results:
 - Return `runtime/response.Response` values for normal not-found, forbidden,
   invalid request, conflict, validation, redirect, HTML, fragment, and JSON
   outcomes.
+- Return typed expected errors with `response.NotFound`,
+  `response.Forbidden`, `response.ValidationFailed`, or
+  `response.ServerError` when a generated boundary should map the error to
+  404, 403, 422, or 500.
 - Return `response.NewHandlerError(status, message, cause)` when a generated
   action or API handler should fail with a specific HTTP status.
 - Return ordinary Go errors only for failures where HTTP 500 is acceptable.
@@ -17,6 +21,11 @@ Expected errors are user-owned handler results:
   HTTP 500.
 - Return `ssr.RedirectTo("/path")` or `ssr.Redirect("/path", status)` from SSR
   load functions for safe local redirects.
+- Return typed expected errors from SSR load functions when the page should use
+  a non-500 generated boundary. Expected 404 responses use `404.html` when it
+  exists. Expected 500 responses use the route-local `error` page or `500.html`
+  when available. Expected 403 and 422 responses use safe fallback text until
+  layout/status-specific boundaries are defined.
 
 Unexpected errors are generated-lane failures:
 

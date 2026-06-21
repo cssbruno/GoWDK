@@ -197,6 +197,10 @@ Implemented today:
   an intentional client message by returning `response.HandlerError` with an
   explicit `Message`; generated 4xx handler errors keep their application
   message contract.
+- Generated SSR load errors honor `response.HandlerStatus`, so typed expected
+  errors such as `response.NotFound`, `response.Forbidden`,
+  `response.ValidationFailed`, and `response.ServerError` write no-store
+  404/403/422/500 responses instead of forcing every load error to 500.
 - Generated apps can return partial fragment responses from
   action handlers for `X-GOWDK-Partial` requests and standalone
   `fragment Name GET "/path" "#target" { ... }` routes. Standalone fragment

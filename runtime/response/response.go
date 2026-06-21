@@ -23,6 +23,17 @@ const (
 	Reload   Kind = "reload"
 )
 
+// ErrorKind identifies expected application-owned error categories that
+// generated request-time lanes can map to HTTP status codes.
+type ErrorKind string
+
+const (
+	ErrorNotFound   ErrorKind = "not_found"
+	ErrorForbidden  ErrorKind = "forbidden"
+	ErrorValidation ErrorKind = "validation"
+	ErrorServer     ErrorKind = "server"
+)
+
 // SwapMode identifies how a fragment response should update its target.
 type SwapMode string
 
@@ -45,6 +56,7 @@ type Response struct {
 // HandlerError wraps failures raised by generated handlers.
 type HandlerError struct {
 	Status  int
+	Kind    ErrorKind
 	Message string
 	Cause   error
 }
@@ -69,6 +81,52 @@ func (err HandlerError) Unwrap() error {
 // NewHandlerError creates an error suitable for generated handlers.
 func NewHandlerError(status int, message string, cause error) error {
 	return HandlerError{Status: status, Message: message, Cause: cause}
+}
+
+// NewExpectedError creates a typed application-owned error for generated
+// boundaries. The message is client-facing; do not include secrets or internal
+// service details.
+func NewExpectedError(kind ErrorKind, message string, cause error) error {
+	status := expectedErrorStatus(kind)
+	if message == "" {
+		message = http.StatusText(status)
+	}
+	return HandlerError{Status: status, Kind: kind, Message: message, Cause: cause}
+}
+
+// NotFound creates an expected HTTP 404 error for generated boundaries.
+func NotFound(message string, cause error) error {
+	return NewExpectedError(ErrorNotFound, message, cause)
+}
+
+// Forbidden creates an expected HTTP 403 error for generated boundaries.
+func Forbidden(message string, cause error) error {
+	return NewExpectedError(ErrorForbidden, message, cause)
+}
+
+// ValidationFailed creates an expected HTTP 422 error for generated boundaries.
+func ValidationFailed(message string, cause error) error {
+	return NewExpectedError(ErrorValidation, message, cause)
+}
+
+// ServerError creates an expected HTTP 500 error for generated boundaries.
+func ServerError(message string, cause error) error {
+	return NewExpectedError(ErrorServer, message, cause)
+}
+
+func expectedErrorStatus(kind ErrorKind) int {
+	switch kind {
+	case ErrorNotFound:
+		return http.StatusNotFound
+	case ErrorForbidden:
+		return http.StatusForbidden
+	case ErrorValidation:
+		return http.StatusUnprocessableEntity
+	case ErrorServer:
+		return http.StatusInternalServerError
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 // HandlerStatus returns a handler error status, or fallback for ordinary errors.

@@ -3368,7 +3368,8 @@ func TestGenerateWritesSSRLoadHandler(t *testing.T) {
 		`loadData, err := dashboard.LoadDashboard(loadContext)`,
 		`redirectURL, redirectStatus, ok := gowdkssr.RedirectTarget(err)`,
 		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.Response{Kind: gowdkresponse.Redirect, Status: redirectStatus, URL: redirectURL})`,
-		`gowdkruntime.WriteErrorPage(response, request, http.StatusInternalServerError, gowdkresponse.HandlerErrorMessage(err, http.StatusInternalServerError))`,
+		`errorStatus := gowdkresponse.HandlerStatus(err, http.StatusInternalServerError)`,
+		`gowdkruntime.WriteErrorPage(response, request, errorStatus, gowdkresponse.HandlerErrorMessage(err, errorStatus))`,
 		`loadValue0, loadOK0 := gowdkssr.LoadPath(loadData, "user.name")`,
 		`gowdkruntime.WriteErrorPage(response, request, http.StatusInternalServerError, "missing load field user.name")`,
 		`strings.ReplaceAll(html, "__USER__", gowdkhtml.Escape(fmt.Sprint(loadValue0)))`,
@@ -5598,6 +5599,80 @@ func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	}
 	if strings.Contains(body, "secret database detail") {
 		t.Fatalf("custom error page leaked load error detail: %s", body)
+	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+}
+
+func TestGeneratedBinaryMapsExpectedSSRLoadErrorStatus(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "404.html"), "<main>Missing</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:  "dashboard",
+		Route:   "/dashboard",
+		Guards:  []string{"public"},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "gowdk-generated-app/dashboard",
+			PackageName:  "dashboard",
+			FunctionName: "LoadDashboard",
+			Signature:    source.BackendSignatureLoadError,
+		},
+		HTML: `<main><h1>__USER__</h1></main>`,
+		LoadReplacements: []SSRLoadReplacement{
+			{Path: "user.name", Placeholder: "__USER__"},
+		},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "dashboard", "dashboard.go"), `package dashboard
+
+import (
+	gowdkresponse "github.com/cssbruno/gowdk/runtime/response"
+	"github.com/cssbruno/gowdk/runtime/ssr"
+)
+
+func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
+	return nil, gowdkresponse.NotFound("dashboard missing", nil)
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/dashboard", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	payload, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(payload)
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 status, got %d with body %s", response.StatusCode, body)
+	}
+	if strings.TrimSpace(body) != "<main>Missing</main>" {
+		t.Fatalf("unexpected expected-error body: %s", body)
 	}
 	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
 		t.Fatalf("unexpected cache control: %q", cacheControl)

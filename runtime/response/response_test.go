@@ -432,6 +432,45 @@ func TestHandlerError(t *testing.T) {
 	}
 }
 
+func TestExpectedErrorsMapToStatuses(t *testing.T) {
+	tests := []struct {
+		name   string
+		err    error
+		kind   ErrorKind
+		status int
+	}{
+		{name: "not found", err: NotFound("missing patient", nil), kind: ErrorNotFound, status: http.StatusNotFound},
+		{name: "forbidden", err: Forbidden("session required", nil), kind: ErrorForbidden, status: http.StatusForbidden},
+		{name: "validation", err: ValidationFailed("invalid filter", nil), kind: ErrorValidation, status: http.StatusUnprocessableEntity},
+		{name: "server", err: ServerError("temporarily unavailable", nil), kind: ErrorServer, status: http.StatusInternalServerError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var handlerErr HandlerError
+			if !errors.As(tt.err, &handlerErr) {
+				t.Fatalf("expected HandlerError, got %T", tt.err)
+			}
+			if handlerErr.Kind != tt.kind {
+				t.Fatalf("unexpected kind: %q", handlerErr.Kind)
+			}
+			if got := HandlerStatus(tt.err, http.StatusInternalServerError); got != tt.status {
+				t.Fatalf("unexpected status: %d", got)
+			}
+			if HandlerErrorMessage(tt.err, tt.status) == "" {
+				t.Fatalf("expected non-empty message")
+			}
+		})
+	}
+}
+
+func TestExpectedErrorUsesDefaultMessage(t *testing.T) {
+	err := NotFound("", nil)
+
+	if got := HandlerErrorMessage(err, HandlerStatus(err, http.StatusInternalServerError)); got != http.StatusText(http.StatusNotFound) {
+		t.Fatalf("unexpected default message: %q", got)
+	}
+}
+
 func TestHandlerErrorMessageHidesOrdinary5xxDetails(t *testing.T) {
 	err := errors.New("sql: password=secret dsn=postgres://root:secret@db/app")
 

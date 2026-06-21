@@ -30,6 +30,10 @@ SSR is optional and must not become the default framework identity.
   `ssr.Redirect("/login", http.StatusTemporaryRedirect)` to ask generated SSR
   handlers to write a no-store local redirect. Redirect URLs must be local
   absolute paths.
+- Load functions can return typed expected errors from `runtime/response`, such
+  as `response.NotFound`, `response.Forbidden`, `response.ValidationFailed`, or
+  `response.ServerError`. Generated SSR maps those to 404, 403, 422, or 500 and
+  keeps the response no-store.
 - `error "/errors/dashboard.html"` declares a route-local generated HTML
   error document for SSR load failures, generated render failures, and route
   panics before response headers are written on that page. The path is

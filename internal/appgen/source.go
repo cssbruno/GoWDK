@@ -316,7 +316,7 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	decls = append(decls, observabilityDecls(full)...)
 	switch {
 	case adapter.HasRegistrations():
-		decls = append(decls, newBackendRouterDecl(adapter, generatedObservabilityEnabled(full)))
+		decls = append(decls, newBackendRouterDecl(adapter, generatedObservabilityEnabled(full), corsPolicyExpr(direct)))
 	case !full.ProxyBackend || !hasBackendRoutes(full):
 		decls = append(decls, emptyBackendHandlerDecl())
 	}
@@ -352,7 +352,7 @@ func backendGeneratedDecls(options Options) []ast.Decl {
 	decls = append(decls, realtimeDecls(options)...)
 	decls = append(decls, observabilityDecls(options)...)
 	if adapter.HasRegistrations() {
-		decls = append(decls, newBackendRouterDecl(adapter, generatedObservabilityEnabled(options)))
+		decls = append(decls, newBackendRouterDecl(adapter, generatedObservabilityEnabled(options), corsPolicyExpr(options)))
 	} else {
 		decls = append(decls, emptyBackendHandlerDecl())
 	}

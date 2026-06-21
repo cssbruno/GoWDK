@@ -468,6 +468,22 @@ func (ir BackendAdapterIR) BackendImports() map[string]string {
 	return imports
 }
 
+func (ir BackendAdapterIR) HasCORSRoutes() bool {
+	for _, registration := range ir.Registrations {
+		switch registration.Kind {
+		case BackendEndpointAPI, BackendEndpointCommand, BackendEndpointQuery:
+			return true
+		}
+	}
+	for _, exposure := range ir.ContractExposures {
+		switch exposure.Endpoint.Kind {
+		case BackendEndpointCommand, BackendEndpointQuery:
+			return true
+		}
+	}
+	return false
+}
+
 func backendContractEndpointKind(kind gwdkir.ContractKind) BackendEndpointKind {
 	switch kind {
 	case gwdkir.ContractQuery:

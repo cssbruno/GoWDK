@@ -72,6 +72,15 @@ var Config = gowdk.Config{
 			Image: "https://example.com/social.png",
 			TwitterCard: "summary",
 		},
+		CORS: gowdk.CORSConfig{
+			Enabled: true,
+			AllowedOrigins: []string{"https://app.example"},
+			AllowedMethods: []string{"GET", "POST"},
+			AllowedHeaders: []string{"Content-Type", "X-CSRF"},
+			ExposedHeaders: []string{"X-Total-Count"},
+			AllowCredentials: true,
+			MaxAgeSeconds: 600,
+		},
 		Stylesheets: []gowdk.Stylesheet{
 			{Href: "/assets/app.css"},
 		},
@@ -141,6 +150,30 @@ var Config = gowdk.Config{
 The addon module may import other GitHub/private/local modules. The project
 `go.mod` remains the source of truth for resolving those imports, including
 `require`, `replace`, `GOPRIVATE`, and module proxy configuration.
+
+## Generated API CORS
+
+`Build.CORS` is disabled by default. When enabled, generated embedded and
+backend-only apps install CORS handling for API, command, and query routes:
+
+```go
+type CORSConfig struct {
+	Enabled bool
+	AllowedOrigins []string
+	AllowedMethods []string
+	AllowedHeaders []string
+	ExposedHeaders []string
+	AllowCredentials bool
+	MaxAgeSeconds int
+}
+```
+
+`AllowedOrigins` accepts literal `http` or `https` origins, or `"*"` only when
+`AllowCredentials` is false. Preflight requests must match a generated
+API/command/query route and must request a method and headers allowed by the
+policy. `AllowedMethods` is optional; when omitted, the matched route method is
+returned. `AllowedHeaders` must include non-simple request headers such as
+`Content-Type` for JSON APIs and any configured CSRF header.
 
 ## Lifecycle Services
 

@@ -8,7 +8,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func newBackendRouterDecl(adapter BackendAdapterIR, trace bool) *ast.FuncDecl {
+func newBackendRouterDecl(adapter BackendAdapterIR, trace bool, cors ast.Expr) *ast.FuncDecl {
 	routes := []ast.Expr{}
 	for _, registration := range adapter.Registrations {
 		routes = append(routes, backendRouteExpr(registration, backendRegistrationMethodExpr(registration), id(registration.Handler), trace))
@@ -23,11 +23,66 @@ func newBackendRouterDecl(adapter BackendAdapterIR, trace bool) *ast.FuncDecl {
 			define([]ast.Expr{id("contractRegistry")}, call(id("ContractRegistry"))),
 		)
 	}
-	stmts = append(stmts, &ast.ReturnStmt{Results: []ast.Expr{call(sel("gowdkruntime", "NewBackendRouter"), routes...)}})
+	if cors == nil {
+		stmts = append(stmts, &ast.ReturnStmt{Results: []ast.Expr{call(sel("gowdkruntime", "NewBackendRouter"), routes...)}})
+	} else {
+		stmts = append(stmts,
+			define([]ast.Expr{id("backendRouter"), id("err")}, call(sel("gowdkruntime", "NewBackendRouter"), routes...)),
+			&ast.IfStmt{
+				Cond: notNil("err"),
+				Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil"), id("err")}}),
+			},
+			&ast.IfStmt{
+				Init: define([]ast.Expr{id("err")}, call(selExpr(id("backendRouter"), "SetCORSPolicy"), cors)),
+				Cond: notNil("err"),
+				Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil"), id("err")}}),
+			},
+			&ast.ReturnStmt{Results: []ast.Expr{id("backendRouter"), id("nil")}},
+		)
+	}
 	return funcDecl("newBackendRouter", nil, []*ast.Field{
 		{Type: &ast.StarExpr{X: sel("gowdkruntime", "BackendRouter")}},
 		{Type: id("error")},
 	}, stmts)
+}
+
+func validateCORSConfig(options Options) error {
+	if err := options.Config.Build.CORS.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func corsPolicyExpr(options Options) ast.Expr {
+	if !options.Config.Build.CORS.EnabledForGeneratedAPIs() {
+		return nil
+	}
+	if !backendAdapterIR(options).HasCORSRoutes() {
+		return nil
+	}
+	config := options.Config.Build.CORS
+	elts := []ast.Expr{
+		keyValue("AllowedOrigins", stringSliceExpr(config.AllowedOrigins)),
+	}
+	if len(config.AllowedMethods) > 0 {
+		elts = append(elts, keyValue("AllowedMethods", stringSliceExpr(config.AllowedMethods)))
+	}
+	if len(config.AllowedHeaders) > 0 {
+		elts = append(elts, keyValue("AllowedHeaders", stringSliceExpr(config.AllowedHeaders)))
+	}
+	if len(config.ExposedHeaders) > 0 {
+		elts = append(elts, keyValue("ExposedHeaders", stringSliceExpr(config.ExposedHeaders)))
+	}
+	if config.AllowCredentials {
+		elts = append(elts, keyValue("AllowCredentials", id("true")))
+	}
+	if config.MaxAgeSeconds > 0 {
+		elts = append(elts, keyValue("MaxAgeSeconds", intLit(config.MaxAgeSeconds)))
+	}
+	return &ast.CompositeLit{
+		Type: sel("gowdkruntime", "CORSPolicy"),
+		Elts: elts,
+	}
 }
 
 func backendRegistrationMethodExpr(registration BackendEndpointRegistration) ast.Expr {

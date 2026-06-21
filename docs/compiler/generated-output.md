@@ -91,6 +91,11 @@ Implemented today:
   matching query-owned region.
 - Generated apps pass one backend hook into `runtime/app.Handler`; generated
   action and API dispatch are internal details behind that hook.
+- Generated API, command, and query routes can install a config-level CORS
+  policy from `Build.CORS`. The generated backend router handles matching
+  `OPTIONS` preflights before guards, rate limits, CSRF validation, or user
+  handlers, and actual matched responses receive CORS headers for allowed
+  origins. CORS is disabled by default.
 - Generated app creation auto-detects supported action endpoints and supported
   SSR routes from the parsed manifest used by `gowdk build --app`, so the CLI
   does not need to manually register those handler hooks.

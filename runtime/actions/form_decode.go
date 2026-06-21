@@ -13,3 +13,12 @@ func DecodeForm(request *http.Request) (form.Values, error) {
 	}
 	return form.FromURLValues(request.PostForm), nil
 }
+
+// DecodeMultipartForm parses request multipart data for generated typed action
+// decoders.
+func DecodeMultipartForm(request *http.Request) (form.Data, error) {
+	if err := request.ParseMultipartForm(form.DefaultMultipartMemoryBytes); err != nil {
+		return form.Data{}, err
+	}
+	return form.FromMultipartForm(request.MultipartForm), nil
+}

@@ -91,6 +91,8 @@ Implemented today:
   `g:message:pattern` on literal controls inside `g:post` forms to attach
   request-shape validation messages to the generated action schema. Each
   message directive must match a literal HTML constraint on the same control.
+- `g:max-file-size` and `g:max-files` on literal `input type="file"` controls
+  inside multipart `g:post` forms to attach generated upload policy.
 - `g:on:<event>={...}` on elements inside stateful components. The first
   generated-JS expression subset supports field increment/decrement,
   assignment from typed scalar expressions, arithmetic, comparisons, boolean
@@ -237,6 +239,8 @@ These are the supported `g:` directives in `view {}` markup:
 - `g:target="#id"` and `g:swap="innerHTML|outerHTML"` on `g:post` forms.
 - `g:message:required`, `g:message:minlength`, `g:message:maxlength`, and
   `g:message:pattern` on literal form controls inside `g:post` forms.
+- `g:max-file-size` and `g:max-files` on literal file controls inside
+  multipart `g:post` forms.
 - `g:on:<event>[.<modifier>...]={Expr}` inside stateful components. Supported
   modifiers are `.prevent`, `.stop`, `.once`, `.capture`,
   `.debounce(duration)`, and `.throttle(duration)`.

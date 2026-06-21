@@ -394,6 +394,7 @@ type BackendSignatureKind string
 const (
 	BackendSignatureAction0       BackendSignatureKind = "action0"
 	BackendSignatureActionValues  BackendSignatureKind = "action_values"
+	BackendSignatureActionData    BackendSignatureKind = "action_data"
 	BackendSignatureActionForm    BackendSignatureKind = "action_form"
 	BackendSignatureActionFormPtr BackendSignatureKind = "action_form_ptr"
 	BackendSignatureAPI           BackendSignatureKind = "api"

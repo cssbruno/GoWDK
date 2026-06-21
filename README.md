@@ -229,7 +229,7 @@ This table describes the current demoable 0.x slice. Status levels:
 | Static build output | Works | `gowdk build --out` emits HTML, route metadata, asset metadata, build reports, and OpenAPI/AsyncAPI inspection reports for simple build-time pages. | Generated output is still pre-1.0. | [CLI](docs/reference/cli.md) | [Pages](examples/pages/home.page.gwdk) |
 | Dynamic SPA paths | Early | Dynamic SPA routes can be expanded from the first supported literal `paths {}` subset. | Dynamic SPA routes need `paths {}` unless the page uses request-time rendering. | [Routing](docs/reference/routing.md) | [Blog](examples/pages/blog-post.page.gwdk) |
 | Build-time Go data | Early | Literal build records and supported Go build functions, including `gowdk.BuildParams` route-param helpers for `paths {}` output, can feed SPA rendering. | Arbitrary build-time Go statements and broader data lifecycles are not stable. | [Data](docs/language/data.md) | [Go interop](examples/go-interop/README.md) |
-| Actions | Works, contract unstable | Generated apps can serve typed POST action handlers, decode supported form inputs, validate request shape, return redirects/fragments, and opt into CSRF. | File uploads, multipart generated forms, and domain validation stay in user-owned Go handlers. | [Actions](docs/language/actions.md) | [Login](examples/login/README.md) |
+| Actions | Works, contract unstable | Generated apps can serve typed POST action handlers, decode supported form inputs including bounded multipart uploads, validate request shape, return redirects/fragments, and opt into CSRF. | Upload storage/scanning and domain validation stay in user-owned Go handlers. | [Actions](docs/language/actions.md) | [Login](examples/login/README.md) |
 | APIs | Works, contract unstable | Feature-bound API handlers can be generated for supported signatures; public helpers cover strict JSON body decoding, typed query values, and JSON response envelopes. | Generated typed API signatures and broader examples remain planned. | [API](docs/language/api.md) | [API](examples/api/status.page.gwdk) |
 | Fragments | Works, contract unstable | Partial form submissions and standalone fragment routes can return server fragments and remount local islands. | Richer fragment rendering and broader local client behavior are still hardening work. | [Partials](docs/language/partials.md) | [Fragments](examples/partials/patients-fragment.page.gwdk) |
 | SSR | Works, contract unstable | Pages with `load {}` or `go ssr {}` can build request-time handlers when the SSR addon is enabled. | Typed route-param accessors, lifecycle docs, and error/cache contracts need more hardening. | [SSR](docs/language/ssr.md) | [SSR](examples/ssr/simple-ssr.page.gwdk) |
@@ -257,7 +257,7 @@ command POSTs enable CSRF by default with a fail-closed secret requirement and a
 403 invalid-token contract; redirects are validated against a safe allowlist (local
 paths only, no protocol-relative or CRLF, same-origin referer); and diagnostics
 redact secrets quoted from source.
-Still hardening: full auth/session, multipart uploads, and the broader
+Still hardening: full auth/session, richer upload operations, and the broader
 operations policy.
 
 Known gaps and release hardening work live in

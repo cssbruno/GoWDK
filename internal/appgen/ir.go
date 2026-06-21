@@ -40,6 +40,7 @@ func actionEndpointsFromIR(ir gwdkir.Program) ([]ActionEndpoint, error) {
 				InputName:        action.InputName,
 				InputType:        action.InputType,
 				InputFields:      actionInputFields(fieldsByAction[action.Name]),
+				UploadFields:     actionUploadFields(fieldsByAction[action.Name]),
 				RequiredFields:   actionRequiredFields(fieldsByAction[action.Name]),
 				RequiredMessages: actionRequiredMessages(fieldsByAction[action.Name]),
 				ValidationRules:  actionValidationRules(fieldsByAction[action.Name]),

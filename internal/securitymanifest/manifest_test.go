@@ -1,6 +1,7 @@
 package securitymanifest
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -160,4 +161,95 @@ func TestBuildHonorsConfiguredBodyLimits(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestBuildRecordsGuardContractAndObservabilityEvidence(t *testing.T) {
+	root := t.TempDir()
+	absPage := filepath.Join(root, "patients.page.gwdk")
+	config := gowdk.Config{
+		Addons: []gowdk.Addon{
+			gowdk.NewAddon("observability", gowdk.FeatureObservability),
+		},
+	}
+	ir := gwdkir.Program{
+		Routes: []gwdkir.Route{
+			{Kind: gwdkir.RouteSSR, Method: "GET", Path: "/admin", PageID: "admin", Render: gowdk.SSR, Guards: []string{"auth.required", "role:admin"}, Source: "admin.page.gwdk", Span: source.SourceSpan{Start: source.SourcePosition{Line: 4, Column: 1}}},
+		},
+		ContractRefs: []gwdkir.ContractReference{{
+			Kind:              gwdkir.ContractCommand,
+			Name:              "patients.CreatePatient",
+			Method:            "POST",
+			Path:              "/patients",
+			Guards:            []string{"role:admin"},
+			Status:            gwdkir.ContractBindingBound,
+			DeclarationSource: "contracts/patients.go",
+			DeclarationSpan:   source.SourceSpan{Start: source.SourcePosition{Line: 20, Column: 3}},
+			Source:            absPage,
+			Span:              source.SourceSpan{Start: source.SourcePosition{Line: 12, Column: 5}},
+		}},
+	}
+
+	manifest := Build(config, ir)
+
+	if len(manifest.Routes) != 1 {
+		t.Fatalf("expected one route, got %#v", manifest.Routes)
+	}
+	guards := manifest.Routes[0].GuardEvidence
+	if len(guards) != 2 {
+		t.Fatalf("expected two guard evidence entries, got %#v", guards)
+	}
+	if guards[0].ID != "auth.required" || guards[0].BindingStatus != "unverified-app-owned" || guards[0].Owner != "app-owned" {
+		t.Fatalf("expected auth.required to be unverified app-owned without auth addon, got %#v", guards[0])
+	}
+	if guards[1].ID != "role:admin" || guards[1].BindingStatus != "resolved-native" || guards[1].Owner != "gowdk-native" {
+		t.Fatalf("expected role guard to be native evidence, got %#v", guards[1])
+	}
+
+	if len(manifest.Contracts) != 1 {
+		t.Fatalf("expected one contract posture entry, got %#v", manifest.Contracts)
+	}
+	contract := manifest.Contracts[0]
+	if contract.DeclarationSource != "contracts/patients.go:20" || contract.ExposureSource != absPage+":12" || contract.SourceAttribution != "declaration-and-exposure" {
+		t.Fatalf("unexpected contract source attribution: %#v", contract)
+	}
+
+	if len(manifest.Observability) != 4 {
+		t.Fatalf("expected trace viewer/data/events/browser posture entries, got %#v", manifest.Observability)
+	}
+	browser, ok := observabilityEntry(manifest.Observability, "trace.browser", "/_gowdk/traces/browser", true)
+	if !ok {
+		t.Fatalf("expected browser ingestion posture with absolute-source flag, got %#v", manifest.Observability)
+	}
+	if !hasMethod(browser.Methods, http.MethodPost) || browser.BodyLimitBytes != 1<<20 {
+		t.Fatalf("expected browser ingestion body posture, got %#v", browser)
+	}
+	data, ok := observabilityEntry(manifest.Observability, "trace.data", "/_gowdk/traces/data", true)
+	if !ok || !hasMethod(data.Methods, http.MethodGet) || !hasMethod(data.Methods, http.MethodPost) || data.BodyLimitBytes != 1<<20 {
+		t.Fatalf("expected trace data GET/POST posture with body limit, got %#v", data)
+	}
+	events, ok := observabilityEntry(manifest.Observability, "trace.events", "/_gowdk/traces/events", true)
+	if !ok || !hasMethod(events.Methods, http.MethodGet) || !hasMethod(events.Methods, http.MethodPost) || events.BodyLimitBytes != 1<<20 {
+		t.Fatalf("expected trace events GET/POST posture with body limit, got %#v", events)
+	}
+	if events.SubscriberLimit != 0 {
+		t.Fatalf("trace events should not report an unenforced subscriber cap, got %#v", events)
+	}
+}
+
+func observabilityEntry(entries []ObservabilityEntry, id string, requestPath string, absoluteSources bool) (ObservabilityEntry, bool) {
+	for _, entry := range entries {
+		if entry.ID == id && entry.Path == requestPath && entry.ExportsAbsoluteSourcePaths == absoluteSources {
+			return entry, true
+		}
+	}
+	return ObservabilityEntry{}, false
+}
+
+func hasMethod(methods []string, method string) bool {
+	for _, candidate := range methods {
+		if candidate == method {
+			return true
+		}
+	}
+	return false
 }

@@ -487,27 +487,29 @@ type Template struct {
 // ContractReference records a source-level reference to a backend contract.
 // Binding to Go contract metadata is a later analyzer step.
 type ContractReference struct {
-	Kind         ContractKind
-	Name         string
-	ImportAlias  string
-	ImportPath   string
-	Type         string
-	Result       string
-	Roles        []string
-	Guards       []string
-	InputFields  []source.BackendInputField
-	ResultFields []source.BackendInputField
-	Method       string
-	Path         string
-	Status       ContractBindingStatus
-	Handler      string
-	Register     string
-	Message      string
-	OwnerKind    SourceKind
-	OwnerID      string
-	Package      string
-	Source       string
-	Span         source.SourceSpan
+	Kind              ContractKind
+	Name              string
+	ImportAlias       string
+	ImportPath        string
+	Type              string
+	Result            string
+	Roles             []string
+	Guards            []string
+	InputFields       []source.BackendInputField
+	ResultFields      []source.BackendInputField
+	Method            string
+	Path              string
+	Status            ContractBindingStatus
+	Handler           string
+	Register          string
+	Message           string
+	DeclarationSource string
+	DeclarationSpan   source.SourceSpan
+	OwnerKind         SourceKind
+	OwnerID           string
+	Package           string
+	Source            string
+	Span              source.SourceSpan
 }
 
 type ContractKind string

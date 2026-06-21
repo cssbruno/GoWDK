@@ -3,6 +3,7 @@
 package testkit
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,28 +12,49 @@ import (
 
 // Scenario describes one HTTP expectation against a generated app handler.
 type Scenario struct {
-	Name       string
-	Method     string
-	Path       string
-	Body       string
-	Headers    map[string]string
-	WantStatus int
-	WantHeader map[string]string
+	Name             string
+	Method           string
+	Path             string
+	Body             string
+	Headers          map[string]string
+	WantStatus       int
+	WantHeader       map[string]string
+	WantBodyContains string
 }
 
 // Run executes scenarios against handler.
 func Run(t testing.TB, handler http.Handler, scenarios []Scenario) {
 	t.Helper()
+	if runner, ok := t.(interface {
+		Run(string, func(*testing.T)) bool
+	}); ok {
+		for _, scenario := range scenarios {
+			scenario := scenario
+			runner.Run(scenarioName(scenario), func(t *testing.T) {
+				t.Helper()
+				runScenario(t, handler, scenario)
+			})
+		}
+		return
+	}
 	for _, scenario := range scenarios {
-		response := Response(handler, scenario)
-		if scenario.WantStatus != 0 && response.Code != scenario.WantStatus {
-			t.Fatalf("%s: expected status %d, got %d with body %q", scenarioName(scenario), scenario.WantStatus, response.Code, response.Body.String())
+		runScenario(t, handler, scenario)
+	}
+}
+
+func runScenario(t testing.TB, handler http.Handler, scenario Scenario) {
+	t.Helper()
+	response := Response(handler, scenario)
+	if scenario.WantStatus != 0 && response.Code != scenario.WantStatus {
+		t.Errorf("expected status %d, got %d with body %s", scenario.WantStatus, response.Code, responseBodySummary(response.Body.String()))
+	}
+	for name, want := range scenario.WantHeader {
+		if got := response.Header().Get(name); got != want {
+			t.Errorf("expected header %s=%q, got %q", name, want, got)
 		}
-		for name, want := range scenario.WantHeader {
-			if got := response.Header().Get(name); got != want {
-				t.Fatalf("%s: expected header %s=%q, got %q", scenarioName(scenario), name, want, got)
-			}
-		}
+	}
+	if want := strings.TrimSpace(scenario.WantBodyContains); want != "" && !strings.Contains(response.Body.String(), want) {
+		t.Errorf("expected body to contain %q, got %s", want, responseBodySummary(response.Body.String()))
 	}
 }
 
@@ -83,4 +105,11 @@ func scenarioName(scenario Scenario) string {
 		return scenario.Name
 	}
 	return strings.TrimSpace(scenario.Method + " " + scenario.Path)
+}
+
+func responseBodySummary(body string) string {
+	if body == "" {
+		return "<empty>"
+	}
+	return fmt.Sprintf("<%d byte response body redacted>", len(body))
 }

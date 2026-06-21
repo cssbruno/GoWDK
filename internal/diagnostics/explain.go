@@ -303,6 +303,13 @@ guard public
 			"Declare RoleAny only when the contract is intentionally callable by every role, including unauthenticated web callers.",
 		},
 	},
+	"audit_guard_unverified": {
+		Details: "A route or endpoint declares an app-owned guard whose implementation and failure behavior are not verified by audit fixture evidence. The static posture records the guard ID, but it cannot prove the app-owned authorization logic.",
+		NextSteps: []string{
+			"Add generated-app audit fixtures that exercise the real guard behavior.",
+			"Use auth.Addon, role:, or permission: guards when the intended check is covered by GOWDK-native guard behavior.",
+		},
+	},
 	"audit_guardless_endpoint_page": {
 		Details: "A page that declares backend endpoints has no guard. Actions, fragments, commands, queries, and APIs would be publicly callable even when the page GET route is denied, which contradicts default-deny.",
 		NextSteps: []string{
@@ -329,6 +336,48 @@ guard public
 		NextSteps: []string{
 			"Lower Build.BodyLimits (or the per-target limit) to the policy maximum.",
 			"Raise the policy max_body rule if the larger limit is intentional and justified.",
+		},
+	},
+	"audit_observability_absolute_source": {
+		Details: "Generated observability data can expose absolute source paths through span source metadata. Absolute paths can leak local user, checkout, or build-agent details.",
+		NextSteps: []string{
+			"Normalize source references before exporting span data.",
+			"Keep generated observability endpoints debug-only and loopback-only.",
+		},
+	},
+	"audit_observability_batch_limit_missing": {
+		Details: "The browser trace ingestion surface does not declare a span batch limit. Without a batch cap, one request can consume disproportionate memory or processing time.",
+		NextSteps: []string{
+			"Declare and enforce a maximum number of spans per ingestion request.",
+			"Disable browser trace ingestion where it is not needed.",
+		},
+	},
+	"audit_observability_body_limit_missing": {
+		Details: "The browser trace ingestion surface does not declare a request body limit. Trace collection endpoints should fail closed on oversized payloads.",
+		NextSteps: []string{
+			"Declare and enforce a bounded request body limit for trace ingestion.",
+			"Keep generated trace endpoints behind the debug-only loopback gate.",
+		},
+	},
+	"audit_observability_content_type_missing": {
+		Details: "The browser trace ingestion surface does not require a JSON content type. Content-type checks reduce accidental cross-surface ingestion and make request handling easier to audit.",
+		NextSteps: []string{
+			"Require application/json for browser trace ingestion.",
+			"Reject unsupported content types before reading the request body.",
+		},
+	},
+	"audit_observability_origin_unchecked": {
+		Details: "An observability endpoint lacks a loopback or origin access policy. Trace data can include route, source, and application timing metadata, so generated trace surfaces must not be broadly exposed.",
+		NextSteps: []string{
+			"Keep generated trace endpoints loopback-only.",
+			"Add an explicit app-owned access gate before exposing trace data beyond local development.",
+		},
+	},
+	"audit_observability_production_exposed": {
+		Details: "An observability endpoint is mounted outside the debug-only lane. Trace viewer, JSON, SSE, or browser-ingestion surfaces can expose internal metadata and should not be production-public by default.",
+		NextSteps: []string{
+			"Disable generated observability for production output.",
+			"Mount trace surfaces behind an app-owned authenticated access gate if production access is intentional.",
 		},
 	},
 	"audit_public_not_allowed": {

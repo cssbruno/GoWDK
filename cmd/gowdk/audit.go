@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"go/parser"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/appgen"
 	"github.com/cssbruno/gowdk/internal/auditspec"
 	"github.com/cssbruno/gowdk/internal/buildgen"
@@ -26,11 +28,31 @@ const auditUsage = "usage: gowdk audit [--config <file>] [--env-file <file>] [--
 // findings from evaluating the built-in baseline and declared policies against
 // it.
 type auditReport struct {
-	Version  int                               `json:"version"`
-	Status   string                            `json:"status"`
-	Summary  auditSummary                      `json:"summary"`
-	Findings []auditspec.Finding               `json:"findings"`
-	Manifest securitymanifest.SecurityManifest `json:"manifest"`
+	Version       int                               `json:"version"`
+	Schema        string                            `json:"schema"`
+	Tool          auditToolMetadata                 `json:"tool"`
+	PolicyDigest  string                            `json:"policyDigest"`
+	PostureDigest string                            `json:"postureDigest"`
+	BuildMode     string                            `json:"buildMode"`
+	Target        auditTargetMetadata               `json:"target"`
+	History       auditHistoryMetadata              `json:"history"`
+	Status        string                            `json:"status"`
+	Summary       auditSummary                      `json:"summary"`
+	Findings      []auditspec.Finding               `json:"findings"`
+	Manifest      securitymanifest.SecurityManifest `json:"manifest"`
+}
+
+type auditToolMetadata struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
+type auditTargetMetadata struct {
+	BuildMode string `json:"buildMode"`
+}
+
+type auditHistoryMetadata struct {
+	Mode string `json:"mode"`
 }
 
 type auditSummary struct {
@@ -89,14 +111,16 @@ func audit(args []string) error {
 
 	manifest := securitymanifest.Build(options.Config, ir)
 	declared := auditspec.PoliciesFromIR(ir.AuditSpecs)
-	findings := auditspec.Evaluate(manifest, auditspec.ComposeBaseline(declared))
+	policies := auditspec.ComposeBaseline(declared)
+	findings := auditspec.Evaluate(manifest, policies)
 	testFindings, err := handleAuditTests(auditOptions, options, ir, manifest)
 	if err != nil {
 		return err
 	}
 	findings = append(findings, testFindings...)
+	findings = auditspec.EnrichFindings(findings)
 	auditspec.SortFindings(findings)
-	report := buildAuditReport(manifest, findings)
+	report := buildAuditReport(options, manifest, findings, policies)
 
 	if options.JSON {
 		payload, err := json.MarshalIndent(report, "", "  ")
@@ -374,14 +398,22 @@ func auditDiagnosticSeverity(code string) diagnostics.Severity {
 	return diagnostics.SeverityError
 }
 
-func buildAuditReport(manifest securitymanifest.SecurityManifest, findings []auditspec.Finding) auditReport {
+func buildAuditReport(options cliOptions, manifest securitymanifest.SecurityManifest, findings []auditspec.Finding, policies []auditspec.Policy) auditReport {
 	summary := auditspec.Summarize(findings)
 	if findings == nil {
 		findings = []auditspec.Finding{}
 	}
+	buildMode := auditBuildMode(options.Config)
 	return auditReport{
-		Version: 1,
-		Status:  auditspec.Status(summary),
+		Version:       1,
+		Schema:        "gowdk.audit.report.v1",
+		Tool:          auditToolMetadata{Name: "gowdk audit", Version: version},
+		PolicyDigest:  auditDigest(policies),
+		PostureDigest: auditDigest(manifest),
+		BuildMode:     buildMode,
+		Target:        auditTargetMetadata{BuildMode: buildMode},
+		History:       auditHistoryMetadata{Mode: "not-tracked"},
+		Status:        auditspec.Status(summary),
 		Summary: auditSummary{
 			Routes:    len(manifest.Routes),
 			Endpoints: len(manifest.Endpoints),
@@ -393,6 +425,23 @@ func buildAuditReport(manifest securitymanifest.SecurityManifest, findings []aud
 		Findings: findings,
 		Manifest: manifest,
 	}
+}
+
+func auditBuildMode(config gowdk.Config) string {
+	mode := strings.TrimSpace(string(config.Build.Mode))
+	if mode == "" {
+		return string(gowdk.Development)
+	}
+	return mode
+}
+
+func auditDigest(value any) string {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		payload = []byte(fmt.Sprintf("%#v", value))
+	}
+	sum := sha256.Sum256(payload)
+	return fmt.Sprintf("sha256:%x", sum[:])
 }
 
 func printAuditReport(report auditReport) {

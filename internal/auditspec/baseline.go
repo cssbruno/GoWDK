@@ -74,6 +74,26 @@ func Baseline() []Policy {
 			},
 		},
 		{
+			Name:    "baseline.guards",
+			Builtin: true,
+			Selectors: []Selector{
+				{Raw: "/**", Kind: SelectorRoute},
+			},
+			Rules: []Rule{
+				{Kind: RuleRequireVerifiedGuards, Code: "audit_guard_unverified"},
+			},
+		},
+		{
+			Name:    "baseline.observability",
+			Builtin: true,
+			Selectors: []Selector{
+				{Raw: "observability", Kind: SelectorObservability},
+			},
+			Rules: []Rule{
+				{Kind: RuleCheckObservability},
+			},
+		},
+		{
 			Name:    "baseline.frontend",
 			Builtin: true,
 			Selectors: []Selector{

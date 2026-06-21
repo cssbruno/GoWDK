@@ -35,6 +35,9 @@ view {
 	if report.Version != 1 || report.Status != "ok" {
 		t.Fatalf("unexpected audit report: status=%q version=%d", report.Status, report.Version)
 	}
+	if report.Schema != "gowdk.audit.report.v1" || report.Tool.Version != version || report.PolicyDigest == "" || report.PostureDigest == "" || report.BuildMode != "development" {
+		t.Fatalf("audit report missing triage metadata: %#v", report)
+	}
 	if report.Summary.Errors != 0 || len(report.Findings) != 0 {
 		t.Fatalf("expected no findings for a clean project: %#v", report.Findings)
 	}

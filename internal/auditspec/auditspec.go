@@ -15,11 +15,12 @@ import "github.com/cssbruno/gowdk/internal/diagnostics"
 type SelectorKind string
 
 const (
-	SelectorRoute    SelectorKind = "route"
-	SelectorEndpoint SelectorKind = "endpoint"
-	SelectorContract SelectorKind = "contract"
-	SelectorFrontend SelectorKind = "frontend"
-	SelectorUnknown  SelectorKind = "unknown"
+	SelectorRoute         SelectorKind = "route"
+	SelectorEndpoint      SelectorKind = "endpoint"
+	SelectorContract      SelectorKind = "contract"
+	SelectorObservability SelectorKind = "observability"
+	SelectorFrontend      SelectorKind = "frontend"
+	SelectorUnknown       SelectorKind = "unknown"
 )
 
 // RuleKind classifies one policy rule.
@@ -56,6 +57,11 @@ const (
 	// admit. The contract must declare at least one role (or RoleAny to be
 	// intentionally public).
 	RuleDenyRolelessContract RuleKind = "deny_roleless_contract"
+	// RuleRequireVerifiedGuards reports guards whose implementation is app-owned
+	// and not backed by audit fixture evidence.
+	RuleRequireVerifiedGuards RuleKind = "require_verified_guards"
+	// RuleCheckObservability reports unsafe generated trace endpoint posture.
+	RuleCheckObservability RuleKind = "check_observability"
 )
 
 // Selector targets a set of routes, endpoints, or the frontend surface.
@@ -87,12 +93,29 @@ type Policy struct {
 type Finding struct {
 	Code        string               `json:"code"`
 	Severity    diagnostics.Severity `json:"severity"`
+	Fingerprint string               `json:"fingerprint,omitempty"`
 	Target      string               `json:"target,omitempty"`
 	Policy      string               `json:"policy,omitempty"`
 	Rule        string               `json:"rule,omitempty"`
+	Confidence  string               `json:"confidence,omitempty"`
+	Evidence    string               `json:"evidence,omitempty"`
+	CWE         []string             `json:"cwe,omitempty"`
+	OWASP       []string             `json:"owasp,omitempty"`
+	Suppression *Suppression         `json:"suppression,omitempty"`
 	Message     string               `json:"message"`
 	Source      string               `json:"source,omitempty"`
 	Remediation string               `json:"remediation,omitempty"`
+}
+
+// Suppression is reserved for explicit waiver records once the audit DSL grows
+// waiver syntax. Keeping the shape in JSON now lets downstream tooling preserve
+// the field without inventing an incompatible suppression contract later.
+type Suppression struct {
+	Owner         string `json:"owner,omitempty"`
+	Justification string `json:"justification,omitempty"`
+	Expires       string `json:"expires,omitempty"`
+	Ticket        string `json:"ticket,omitempty"`
+	DigestScope   string `json:"digestScope,omitempty"`
 }
 
 // Summary counts findings by severity.

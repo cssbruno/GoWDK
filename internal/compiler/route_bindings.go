@@ -91,17 +91,19 @@ type EndpointBinding struct {
 // ContractEndpointBinding describes a command/query contract exposed through a
 // generated backend endpoint.
 type ContractEndpointBinding struct {
-	Name        string
-	Kind        gwdkir.ContractKind
-	Status      gwdkir.ContractBindingStatus
-	Message     string
-	ImportAlias string
-	ImportPath  string
-	Type        string
-	Result      string
-	Roles       []string
-	Handler     string
-	Register    string
+	Name              string
+	Kind              gwdkir.ContractKind
+	Status            gwdkir.ContractBindingStatus
+	Message           string
+	ImportAlias       string
+	ImportPath        string
+	Type              string
+	Result            string
+	Roles             []string
+	Handler           string
+	Register          string
+	DeclarationSource string
+	DeclarationSpan   source.SourceSpan
 }
 
 // RouteInfo is non-fatal route metadata surfaced by CLI inspection commands.
@@ -299,17 +301,19 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 			PageID:         ref.OwnerID,
 			Handler:        "contracts." + string(ref.Kind) + "." + ref.Name,
 			Contract: ContractEndpointBinding{
-				Name:        ref.Name,
-				Kind:        ref.Kind,
-				Status:      contractBindingStatus(ref.Status),
-				Message:     ref.Message,
-				ImportAlias: ref.ImportAlias,
-				ImportPath:  ref.ImportPath,
-				Type:        ref.Type,
-				Result:      ref.Result,
-				Roles:       append([]string(nil), ref.Roles...),
-				Handler:     ref.Handler,
-				Register:    ref.Register,
+				Name:              ref.Name,
+				Kind:              ref.Kind,
+				Status:            contractBindingStatus(ref.Status),
+				Message:           ref.Message,
+				ImportAlias:       ref.ImportAlias,
+				ImportPath:        ref.ImportPath,
+				Type:              ref.Type,
+				Result:            ref.Result,
+				Roles:             append([]string(nil), ref.Roles...),
+				Handler:           ref.Handler,
+				Register:          ref.Register,
+				DeclarationSource: ref.DeclarationSource,
+				DeclarationSpan:   ref.DeclarationSpan,
 			},
 		})
 	}

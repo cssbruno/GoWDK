@@ -29,3 +29,11 @@ func TestAssertHelpers(t *testing.T) {
 	AssertStatus(t, handler, http.MethodGet, "/", "", http.StatusNoContent)
 	AssertHeader(t, handler, http.MethodGet, "/", "X-Frame-Options", "DENY")
 }
+
+func TestResponseBodySummaryRedactsPayload(t *testing.T) {
+	body := `secret_token=live_sk_abc123`
+	summary := responseBodySummary(body)
+	if summary == body || summary == "" {
+		t.Fatalf("expected redacted body summary, got %q", summary)
+	}
+}

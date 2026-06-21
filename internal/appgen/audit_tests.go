@@ -32,6 +32,13 @@ type auditScenario struct {
 	WantHeader map[string]string
 }
 
+type auditHeaderTarget struct {
+	Name       string
+	Method     string
+	Path       string
+	WantStatus int
+}
+
 var (
 	auditExpectStatusPattern = regexp.MustCompile(`^expect\s+([A-Za-z]+)\s+"([^"]+)"(?:\s+as\s+"([^"]+)")?\s+status\s+([0-9]{3})$`)
 	auditExpectHeaderPattern = regexp.MustCompile(`^expect\s+header\s+"([^"]+)"\s+"([^"]+)"$`)
@@ -93,6 +100,7 @@ func auditTestSource(packageName string, mode auditTestMode, config gowdk.Config
 	case auditTestStandalone:
 		writeStandaloneAuditHandler(&builder, config, manifest)
 	}
+	writeAuditGuardEvidenceLogs(&builder, manifest)
 	builder.WriteString("\tgowdktestkit.Run(t, handler, []gowdktestkit.Scenario{\n")
 	for _, scenario := range scenarios {
 		writeAuditScenario(&builder, scenario)
@@ -105,6 +113,35 @@ func auditTestSource(packageName string, mode auditTestMode, config gowdk.Config
 		return nil, fmt.Errorf("format generated audit tests: %w", err)
 	}
 	return formatted, nil
+}
+
+func writeAuditGuardEvidenceLogs(builder *strings.Builder, manifest securitymanifest.SecurityManifest) {
+	seen := map[string]bool{}
+	for _, evidence := range auditGuardEvidence(manifest) {
+		key := evidence.ID + "\x00" + evidence.RuntimeTestFixture
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		fmt.Fprintf(builder, "\tt.Log(%s)\n", strconv.Quote("GOWDK audit guard fixture: "+evidence.ID+" "+evidence.RuntimeTestFixture))
+	}
+}
+
+func auditGuardEvidence(manifest securitymanifest.SecurityManifest) []securitymanifest.GuardEvidence {
+	var evidence []securitymanifest.GuardEvidence
+	for _, route := range manifest.Routes {
+		evidence = append(evidence, route.GuardEvidence...)
+	}
+	for _, endpoint := range manifest.Endpoints {
+		evidence = append(evidence, endpoint.GuardEvidence...)
+	}
+	sort.SliceStable(evidence, func(i, j int) bool {
+		if evidence[i].ID != evidence[j].ID {
+			return evidence[i].ID < evidence[j].ID
+		}
+		return evidence[i].RuntimeTestFixture < evidence[j].RuntimeTestFixture
+	})
+	return evidence
 }
 
 func writeAuditTestImports(builder *strings.Builder, mode auditTestMode, usesActor bool) {
@@ -163,6 +200,7 @@ func auditGuardsUseNativeRBAC(guards []string) bool {
 
 func auditTestScenarios(mode auditTestMode, config gowdk.Config, manifest securitymanifest.SecurityManifest, specs []gwdkir.AuditSpec) ([]auditScenario, error) {
 	var scenarios []auditScenario
+	var headerTargets []auditHeaderTarget
 	routes := append([]securitymanifest.RouteEntry(nil), manifest.Routes...)
 	sort.SliceStable(routes, func(i, j int) bool {
 		if routes[i].Route != routes[j].Route {
@@ -179,32 +217,40 @@ func auditTestScenarios(mode auditTestMode, config gowdk.Config, manifest securi
 	}
 
 	for _, route := range routes {
-		routePath := path.Clean("/" + route.Route)
-		if !isConcreteAuditRoute(routePath) {
-			continue
-		}
+		routePath := auditRequestPath(route.Route)
 		if route.DefaultDeny {
-			scenarios = append(scenarios, auditScenario{
+			scenario := auditScenario{
 				Name:       "default-deny " + routePath,
 				Method:     http.MethodGet,
 				Path:       routePath,
 				WantStatus: http.StatusForbidden,
-			})
-		} else if !strings.EqualFold(route.Render, string(gowdk.SSR)) {
-			scenarios = append(scenarios, auditScenario{
+			}
+			scenarios = append(scenarios, scenario)
+			headerTargets = append(headerTargets, auditHeaderTarget{Name: "route " + routePath, Method: scenario.Method, Path: scenario.Path, WantStatus: scenario.WantStatus})
+		} else if isConcreteAuditRoute(routePath) && !strings.EqualFold(route.Render, string(gowdk.SSR)) {
+			scenario := auditScenario{
 				Name:       "route serves " + routePath,
 				Method:     http.MethodGet,
 				Path:       routePath,
 				WantStatus: http.StatusOK,
-			})
+			}
+			scenarios = append(scenarios, scenario)
+			headerTargets = append(headerTargets, auditHeaderTarget{Name: "route " + routePath, Method: scenario.Method, Path: scenario.Path, WantStatus: scenario.WantStatus})
 		}
-		if !postEndpoints[routePath] {
+		if isConcreteAuditRoute(routePath) && !postEndpoints[routePath] {
 			scenarios = append(scenarios, auditScenario{
 				Name:       "method denied " + routePath,
 				Method:     http.MethodPost,
 				Path:       routePath,
 				WantStatus: http.StatusMethodNotAllowed,
 			})
+		}
+	}
+
+	if mode == auditTestGeneratedApp {
+		for _, endpoint := range auditEndpointScenarios(manifest) {
+			scenarios = append(scenarios, endpoint)
+			headerTargets = append(headerTargets, auditHeaderTarget{Name: endpoint.KindName(), Method: endpoint.Method, Path: endpoint.Path, WantStatus: endpoint.WantStatus})
 		}
 	}
 
@@ -216,6 +262,15 @@ func auditTestScenarios(mode auditTestMode, config gowdk.Config, manifest securi
 			WantStatus: http.StatusOK,
 			WantHeader: map[string]string{header.Name: header.Value},
 		})
+		for _, target := range representativeAuditHeaderTargets(headerTargets) {
+			scenarios = append(scenarios, auditScenario{
+				Name:       "security header " + header.Name + " on " + target.Name,
+				Method:     target.Method,
+				Path:       target.Path,
+				WantStatus: target.WantStatus,
+				WantHeader: map[string]string{header.Name: header.Value},
+			})
+		}
 	}
 
 	testScenarios, err := auditDeclaredTestScenarios(mode, manifest, specs)
@@ -224,6 +279,69 @@ func auditTestScenarios(mode auditTestMode, config gowdk.Config, manifest securi
 	}
 	scenarios = append(scenarios, testScenarios...)
 	return scenarios, nil
+}
+
+func (scenario auditScenario) KindName() string {
+	name := strings.TrimSpace(scenario.Name)
+	if name == "" {
+		return strings.TrimSpace(scenario.Method + " " + scenario.Path)
+	}
+	return name
+}
+
+func auditEndpointScenarios(manifest securitymanifest.SecurityManifest) []auditScenario {
+	endpoints := append([]securitymanifest.EndpointEntry(nil), manifest.Endpoints...)
+	sort.SliceStable(endpoints, func(i, j int) bool {
+		if endpoints[i].Kind != endpoints[j].Kind {
+			return endpoints[i].Kind < endpoints[j].Kind
+		}
+		if endpoints[i].Path != endpoints[j].Path {
+			return endpoints[i].Path < endpoints[j].Path
+		}
+		return endpoints[i].ID < endpoints[j].ID
+	})
+	var scenarios []auditScenario
+	for _, endpoint := range endpoints {
+		if strings.TrimSpace(endpoint.Method) == "" || strings.TrimSpace(endpoint.Path) == "" {
+			continue
+		}
+		requestPath := auditRequestPath(endpoint.Path)
+		if endpoint.DefaultDeny {
+			scenarios = append(scenarios, auditScenario{
+				Name:       endpoint.Kind + " default-deny " + endpoint.ID,
+				Method:     strings.ToUpper(endpoint.Method),
+				Path:       requestPath,
+				WantStatus: http.StatusForbidden,
+			})
+			continue
+		}
+		if endpoint.CSRF && strings.EqualFold(endpoint.Method, http.MethodPost) {
+			scenarios = append(scenarios, auditScenario{
+				Name:       endpoint.Kind + " csrf rejection " + endpoint.ID,
+				Method:     http.MethodPost,
+				Path:       requestPath,
+				WantStatus: http.StatusForbidden,
+			})
+		}
+	}
+	return scenarios
+}
+
+func representativeAuditHeaderTargets(targets []auditHeaderTarget) []auditHeaderTarget {
+	seen := map[string]bool{}
+	var out []auditHeaderTarget
+	for _, target := range targets {
+		key := strings.TrimSpace(target.Name)
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, target)
+		if len(out) >= 6 {
+			break
+		}
+	}
+	return out
 }
 
 type auditHeaderExpectation struct {
@@ -494,6 +612,26 @@ func auditDeniedRoutePatterns(manifest securitymanifest.SecurityManifest) []stri
 
 func isConcreteAuditRoute(route string) bool {
 	return !strings.Contains(route, "{") && !strings.Contains(route, "}")
+}
+
+func auditRequestPath(route string) string {
+	route = path.Clean("/" + route)
+	if route == "/" {
+		return route
+	}
+	segments := strings.Split(strings.Trim(route, "/"), "/")
+	for index, segment := range segments {
+		if !strings.HasPrefix(segment, "{") || !strings.HasSuffix(segment, "}") {
+			continue
+		}
+		name := strings.TrimSuffix(strings.TrimPrefix(segment, "{"), "}")
+		if strings.HasSuffix(name, "...") {
+			segments[index] = "gowdk-audit/rest"
+			continue
+		}
+		segments[index] = "gowdk-audit"
+	}
+	return "/" + strings.Join(segments, "/")
 }
 
 func writeAuditScenario(builder *strings.Builder, scenario auditScenario) {

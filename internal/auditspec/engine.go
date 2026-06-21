@@ -60,6 +60,16 @@ func Evaluate(manifest securitymanifest.SecurityManifest, policies []Policy) []F
 		}
 	}
 
+	for _, entry := range manifest.Observability {
+		for _, policy := range resolved {
+			if !policy.matchesObservability(entry) {
+				continue
+			}
+			matchedAnything[policy.Name] = true
+			findings = append(findings, evalObservability(entry, policy)...)
+		}
+	}
+
 	for _, policy := range resolved {
 		if !policy.hasFrontendSelector() {
 			continue
@@ -69,7 +79,7 @@ func Evaluate(manifest securitymanifest.SecurityManifest, policies []Policy) []F
 	}
 
 	findings = append(findings, unmatchedSelectorFindings(resolved, matchedAnything)...)
-	return dedupeFindings(findings)
+	return EnrichFindings(dedupeFindings(findings))
 }
 
 // dedupeFindings drops findings that are identical except for the policy that
@@ -240,6 +250,23 @@ func (policy Policy) matchesContract(contract securitymanifest.ContractEntry) bo
 	return false
 }
 
+func (policy Policy) matchesObservability(entry securitymanifest.ObservabilityEntry) bool {
+	for _, selector := range policy.Selectors {
+		if selector.Kind != SelectorObservability {
+			continue
+		}
+		glob := strings.TrimPrefix(selector.Raw, "observability")
+		glob = strings.TrimPrefix(glob, ":")
+		if glob == "" {
+			glob = "*"
+		}
+		if matchGlob(glob, entry.ID) || matchGlob(glob, entry.Kind) {
+			return true
+		}
+	}
+	return false
+}
+
 func (policy Policy) hasFrontendSelector() bool {
 	for _, selector := range policy.Selectors {
 		if selector.Kind == SelectorFrontend {
@@ -291,6 +318,8 @@ func evalEndpoint(endpoint securitymanifest.EndpointEntry, policy Policy) []Find
 					fmt.Sprintf("%s endpoint %s body limit %d exceeds policy maximum %d", endpoint.Kind, endpoint.ID, endpoint.BodyLimitBytes, limit),
 					"Lower Build.BodyLimits, or raise the policy max_body if intentional."))
 			}
+		case RuleRequireVerifiedGuards:
+			findings = append(findings, evalGuardEvidence(rule, policy, endpointTarget(endpoint), endpoint.Source, endpoint.GuardEvidence)...)
 		}
 	}
 	return findings
@@ -318,7 +347,22 @@ func evalRoute(route securitymanifest.RouteEntry, policy Policy) []Finding {
 					fmt.Sprintf("route %s is public but policy denies public access", route.Route),
 					"Replace guard public with a protective guard, or narrow the policy selector."))
 			}
+		case RuleRequireVerifiedGuards:
+			findings = append(findings, evalGuardEvidence(rule, policy, routeTarget(route), route.Source, route.GuardEvidence)...)
 		}
+	}
+	return findings
+}
+
+func evalGuardEvidence(rule Rule, policy Policy, target string, source string, guards []securitymanifest.GuardEvidence) []Finding {
+	var findings []Finding
+	for _, guard := range guards {
+		if guard.BindingStatus != "unverified-app-owned" && guard.RuntimeTestFixture != "unverified-app-owned" {
+			continue
+		}
+		findings = append(findings, finding(rule, policy, target+"#guard:"+guard.ID, source,
+			fmt.Sprintf("guard %s is app-owned and has no runtime fixture evidence", guard.ID),
+			"Provide an app-owned audit fixture for this guard or use a GOWDK-native guard where applicable."))
 	}
 	return findings
 }
@@ -330,12 +374,76 @@ func evalContract(contract securitymanifest.ContractEntry, policy Policy) []Find
 			continue
 		}
 		if len(contract.Roles) == 0 {
-			findings = append(findings, finding(rule, policy, contractTarget(contract), "",
+			findings = append(findings, finding(rule, policy, contractTarget(contract), contractFindingSource(contract),
 				fmt.Sprintf("%s contract %s is web-exposed but declares no roles; the data-layer gate denies every web caller and the endpoint is unreachable", contract.Kind, contract.Name),
 				"Declare the roles permitted to execute the contract at registration, or RoleAny to expose it to every role intentionally."))
 		}
 	}
 	return findings
+}
+
+func evalObservability(entry securitymanifest.ObservabilityEntry, policy Policy) []Finding {
+	var findings []Finding
+	for _, rule := range policy.Rules {
+		if rule.Kind != RuleCheckObservability {
+			continue
+		}
+		target := "observability:" + entry.ID
+		if entry.Mounted && (!entry.DevOnly || strings.EqualFold(entry.BuildMode, "production")) {
+			typedRule := ruleWithCode(rule, "audit_observability_production_exposed")
+			findings = append(findings, finding(typedRule, policy, target, "",
+				fmt.Sprintf("observability endpoint %s is mounted outside the debug-only lane", entry.Path),
+				"Disable observability in production output or mount the trace viewer behind an app-owned access gate."))
+		}
+		if entry.Mounted && !observabilityAccessPolicyChecksOrigin(entry) {
+			typedRule := ruleWithCode(rule, "audit_observability_origin_unchecked")
+			findings = append(findings, finding(typedRule, policy, target, "",
+				fmt.Sprintf("observability endpoint %s does not declare an origin or loopback access policy", entry.Path),
+				"Keep generated trace endpoints loopback-only or add an explicit origin policy before exposing them."))
+		}
+		if entry.Kind == "browser-ingest" && entry.ContentTypeRequired == "" {
+			typedRule := ruleWithCode(rule, "audit_observability_content_type_missing")
+			findings = append(findings, finding(typedRule, policy, target, "",
+				fmt.Sprintf("browser trace ingestion endpoint %s does not require a JSON content type", entry.Path),
+				"Require application/json for browser trace ingestion."))
+		}
+		if entry.Kind == "browser-ingest" && entry.BodyLimitBytes <= 0 {
+			typedRule := ruleWithCode(rule, "audit_observability_body_limit_missing")
+			findings = append(findings, finding(typedRule, policy, target, "",
+				fmt.Sprintf("browser trace ingestion endpoint %s does not declare a request body limit", entry.Path),
+				"Declare and enforce a bounded request body limit for trace ingestion."))
+		}
+		if entry.Kind == "browser-ingest" && entry.BatchLimit <= 0 {
+			typedRule := ruleWithCode(rule, "audit_observability_batch_limit_missing")
+			findings = append(findings, finding(typedRule, policy, target, "",
+				fmt.Sprintf("browser trace ingestion endpoint %s does not declare a batch limit", entry.Path),
+				"Limit the number of spans accepted in one browser ingestion request."))
+		}
+		if entry.ExportsAbsoluteSourcePaths {
+			typedRule := ruleWithCode(rule, "audit_observability_absolute_source")
+			findings = append(findings, finding(typedRule, policy, target, "",
+				fmt.Sprintf("observability endpoint %s can export absolute source paths", entry.Path),
+				"Normalize trace source references before exporting span data."))
+		}
+	}
+	return findings
+}
+
+func ruleWithCode(rule Rule, code string) Rule {
+	rule.Code = code
+	return rule
+}
+
+func observabilityAccessPolicyChecksOrigin(entry securitymanifest.ObservabilityEntry) bool {
+	if strings.EqualFold(entry.AccessPolicy, "loopback-only") {
+		return true
+	}
+	for _, origin := range entry.AllowedOrigins {
+		if strings.TrimSpace(origin) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func evalFrontend(surface securitymanifest.FrontendSurface, policy Policy, rawHTMLAllowlist map[string]bool) []Finding {
@@ -475,6 +583,13 @@ func contractTarget(contract securitymanifest.ContractEntry) string {
 	return "contract:" + contract.Name
 }
 
+func contractFindingSource(contract securitymanifest.ContractEntry) string {
+	if contract.DeclarationSource != "" {
+		return contract.DeclarationSource
+	}
+	return contract.ExposureSource
+}
+
 func containsGuard(guards []string, want string) bool {
 	for _, guard := range guards {
 		if guard == want {
@@ -500,6 +615,8 @@ func ParseSelector(raw string) Selector {
 	switch {
 	case raw == "frontend":
 		return Selector{Raw: raw, Kind: SelectorFrontend}
+	case raw == "observability" || strings.HasPrefix(raw, "observability:"):
+		return Selector{Raw: raw, Kind: SelectorObservability}
 	case raw == "contract" || strings.HasPrefix(raw, "contract:"):
 		return Selector{Raw: raw, Kind: SelectorContract}
 	case strings.HasPrefix(raw, "/"):

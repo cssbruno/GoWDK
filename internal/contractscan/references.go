@@ -57,6 +57,8 @@ func LinkReferences(refs []gwdkir.ContractReference, report Report) []gwdkir.Con
 		}
 		linked[index].Handler = contract.Handler
 		linked[index].Register = contract.Register
+		linked[index].DeclarationSource = contract.Source
+		linked[index].DeclarationSpan = contractSourceSpan(contract)
 		if linked[index].Type == "" {
 			linked[index].Type = contract.Type
 		}
@@ -72,6 +74,13 @@ func LinkReferences(refs []gwdkir.ContractReference, report Report) []gwdkir.Con
 		linked[index].Status = gwdkir.ContractBindingBound
 	}
 	return linked
+}
+
+func contractSourceSpan(contract Contract) source.SourceSpan {
+	return source.SourceSpan{
+		Start: source.SourcePosition{Line: contract.Line, Column: contract.Column},
+		End:   source.SourcePosition{Line: contract.Line, Column: contract.Column + 1},
+	}
 }
 
 // LinkRealtimeSubscriptions resolves GOWDK IR realtime subscriptions against

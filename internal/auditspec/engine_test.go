@@ -65,13 +65,77 @@ func TestBaselinePassesWhenPostureIsSound(t *testing.T) {
 func TestBaselineFlagsRolelessContract(t *testing.T) {
 	manifest := securitymanifest.SecurityManifest{
 		Contracts: []securitymanifest.ContractEntry{
-			{Name: "patients.CreatePatient", Kind: "command"},
+			{Name: "patients.CreatePatient", Kind: "command", DeclarationSource: "contracts/patients.go:12", ExposureSource: "patients.page.gwdk:8"},
 			{Name: "patients.GetPatientPage", Kind: "query", Roles: []string{"web"}},
 		},
 	}
-	got := codes(Evaluate(manifest, Baseline()))
+	findings := Evaluate(manifest, Baseline())
+	got := codes(findings)
 	if got["audit_contract_roleless"] != 1 {
 		t.Fatalf("expected exactly one roleless-contract finding, got %d (%#v)", got["audit_contract_roleless"], got)
+	}
+	if findings[0].Source != "contracts/patients.go:12" {
+		t.Fatalf("expected contract finding to use declaration source, got %#v", findings[0])
+	}
+}
+
+func TestBaselineFlagsUnverifiedGuardEvidence(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Routes: []securitymanifest.RouteEntry{{
+			PageID: "admin",
+			Route:  "/admin",
+			Kind:   "ssr",
+			Guards: []string{"auth.required"},
+			GuardEvidence: []securitymanifest.GuardEvidence{{
+				ID:                 "auth.required",
+				BindingStatus:      "unverified-app-owned",
+				RuntimeTestFixture: "unverified-app-owned",
+			}},
+			Source: "admin.page.gwdk:4",
+		}},
+	}
+	findings := Evaluate(manifest, Baseline())
+	got := codes(findings)
+	if got["audit_guard_unverified"] != 1 {
+		t.Fatalf("expected unverified guard finding, got %#v", got)
+	}
+	if findings[0].Target != "route:/admin#guard:auth.required" || findings[0].Evidence != "inferred-static" || findings[0].Fingerprint == "" {
+		t.Fatalf("expected targeted guard metadata, got %#v", findings[0])
+	}
+}
+
+func TestBaselineFlagsUnsafeObservabilityPosture(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Observability: []securitymanifest.ObservabilityEntry{{
+			ID:                         "trace.browser",
+			Kind:                       "browser-ingest",
+			Path:                       "/_gowdk/traces/browser",
+			Mounted:                    true,
+			BuildMode:                  "production",
+			DevOnly:                    false,
+			AccessPolicy:               "public",
+			ExportsAbsoluteSourcePaths: true,
+			SpanDataLeavesProcess:      true,
+		}},
+	}
+	findings := Evaluate(manifest, Baseline())
+	got := codes(findings)
+	for _, code := range []string{
+		"audit_observability_production_exposed",
+		"audit_observability_origin_unchecked",
+		"audit_observability_content_type_missing",
+		"audit_observability_body_limit_missing",
+		"audit_observability_batch_limit_missing",
+		"audit_observability_absolute_source",
+	} {
+		if got[code] != 1 {
+			t.Fatalf("expected one %s finding, got %#v", code, got)
+		}
+	}
+	for _, finding := range findings {
+		if finding.Fingerprint == "" || finding.Confidence == "" || finding.Evidence != "static-observability-posture" {
+			t.Fatalf("observability finding missing triage metadata: %#v", finding)
+		}
 	}
 }
 

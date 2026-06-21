@@ -60,6 +60,8 @@ only from the diagnostic registry, so the baseline never hardcodes severity.
   generated runtime audit tests stay explicit through `gowdk audit`.
 - Every finding cites a named rule, a diagnostic code, and a source `file:line`;
   `gowdk explain <code>` gives the reasoning.
+- Findings include stable fingerprints, confidence/evidence classification,
+  CWE/OWASP tags where available, and report-level policy/posture digests.
 - The baseline is the gates already written in `security.md`, made executable —
   not new hidden policy.
 - Integration tests are emitted as readable `_test.go` files the user owns; the
@@ -72,6 +74,8 @@ only from the diagnostic registry, so the baseline never hardcodes severity.
       `gowdk audit --json`.
 - [x] `gowdk audit` applies the baseline, cites findings by code + `file:line`,
       and exits non-zero on error findings.
+- [x] Posture records guard binding evidence, contract declaration/exposure
+      sources, and generated observability endpoint exposure.
 - [x] New `audit_*` / `policy_*` codes are registered and `gowdk explain`-able.
 - [x] Frontend audits (secret leak, route-guard coverage, headers/CSP, raw-HTML).
 - [x] `*.audit.gwdk` parser → IR → composable policy engine (`extends`, selectors).

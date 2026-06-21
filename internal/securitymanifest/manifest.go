@@ -38,49 +38,88 @@ const PublicGuardID = "public"
 
 // SecurityManifest is the declarative posture of one built module.
 type SecurityManifest struct {
-	Version       int             `json:"version"`
-	GeneratedFrom string          `json:"generatedFrom"`
-	Routes        []RouteEntry    `json:"routes,omitempty"`
-	Endpoints     []EndpointEntry `json:"endpoints,omitempty"`
-	Contracts     []ContractEntry `json:"contracts,omitempty"`
-	Frontend      FrontendSurface `json:"frontend"`
+	Version       int                  `json:"version"`
+	GeneratedFrom string               `json:"generatedFrom"`
+	Routes        []RouteEntry         `json:"routes,omitempty"`
+	Endpoints     []EndpointEntry      `json:"endpoints,omitempty"`
+	Contracts     []ContractEntry      `json:"contracts,omitempty"`
+	Observability []ObservabilityEntry `json:"observability,omitempty"`
+	Frontend      FrontendSurface      `json:"frontend"`
 }
 
 // RouteEntry is the posture of one page/file route.
 type RouteEntry struct {
-	PageID      string   `json:"pageId"`
-	Route       string   `json:"route"`
-	Kind        string   `json:"kind"`
-	Method      string   `json:"method,omitempty"`
-	Render      string   `json:"render,omitempty"`
-	Guards      []string `json:"guards,omitempty"`
-	Public      bool     `json:"public"`
-	DefaultDeny bool     `json:"defaultDeny"`
-	Source      string   `json:"source,omitempty"`
+	PageID        string          `json:"pageId"`
+	Route         string          `json:"route"`
+	Kind          string          `json:"kind"`
+	Method        string          `json:"method,omitempty"`
+	Render        string          `json:"render,omitempty"`
+	Guards        []string        `json:"guards,omitempty"`
+	GuardEvidence []GuardEvidence `json:"guardEvidence,omitempty"`
+	Public        bool            `json:"public"`
+	DefaultDeny   bool            `json:"defaultDeny"`
+	Source        string          `json:"source,omitempty"`
 }
 
 // EndpointEntry is the posture of one backend action/api/fragment/contract
 // endpoint.
 type EndpointEntry struct {
-	ID             string   `json:"id"`
-	Kind           string   `json:"kind"`
-	Method         string   `json:"method,omitempty"`
-	Path           string   `json:"path,omitempty"`
-	Guards         []string `json:"guards,omitempty"`
-	CSRF           bool     `json:"csrf"`
-	BodyLimitBytes int64    `json:"bodyLimitBytes,omitempty"`
-	Public         bool     `json:"public"`
-	DefaultDeny    bool     `json:"defaultDeny"`
-	PageID         string   `json:"pageId,omitempty"`
-	Source         string   `json:"source,omitempty"`
+	ID             string          `json:"id"`
+	Kind           string          `json:"kind"`
+	Method         string          `json:"method,omitempty"`
+	Path           string          `json:"path,omitempty"`
+	Guards         []string        `json:"guards,omitempty"`
+	GuardEvidence  []GuardEvidence `json:"guardEvidence,omitempty"`
+	CSRF           bool            `json:"csrf"`
+	BodyLimitBytes int64           `json:"bodyLimitBytes,omitempty"`
+	Public         bool            `json:"public"`
+	DefaultDeny    bool            `json:"defaultDeny"`
+	PageID         string          `json:"pageId,omitempty"`
+	Source         string          `json:"source,omitempty"`
 }
 
 // ContractEntry is the posture of one command/query contract reference.
 type ContractEntry struct {
-	Name   string   `json:"name"`
-	Kind   string   `json:"kind"`
-	Roles  []string `json:"roles,omitempty"`
-	Status string   `json:"status,omitempty"`
+	Name              string   `json:"name"`
+	Kind              string   `json:"kind"`
+	Roles             []string `json:"roles,omitempty"`
+	Status            string   `json:"status,omitempty"`
+	DeclarationSource string   `json:"declarationSource,omitempty"`
+	ExposureSource    string   `json:"exposureSource,omitempty"`
+	SourceAttribution string   `json:"sourceAttribution"`
+}
+
+// GuardEvidence records what the compiler can prove about one declared guard.
+// App-owned guards are intentionally classified as unverified unless an
+// application-supplied fixture exercises them outside the synthetic audit hook.
+type GuardEvidence struct {
+	ID                 string `json:"id"`
+	Kind               string `json:"kind"`
+	BindingStatus      string `json:"bindingStatus"`
+	Owner              string `json:"owner"`
+	ExecutionPhase     string `json:"executionPhase"`
+	FailureContract    string `json:"failureContract"`
+	RuntimeTestFixture string `json:"runtimeTestFixture,omitempty"`
+}
+
+// ObservabilityEntry records one generated trace endpoint or export surface.
+type ObservabilityEntry struct {
+	ID                         string   `json:"id"`
+	Kind                       string   `json:"kind"`
+	Path                       string   `json:"path,omitempty"`
+	Methods                    []string `json:"methods,omitempty"`
+	Mounted                    bool     `json:"mounted"`
+	AccessPolicy               string   `json:"accessPolicy"`
+	BuildMode                  string   `json:"buildMode"`
+	DevOnly                    bool     `json:"devOnly"`
+	AllowedOrigins             []string `json:"allowedOrigins,omitempty"`
+	ContentTypeRequired        string   `json:"contentTypeRequired,omitempty"`
+	BodyLimitBytes             int64    `json:"bodyLimitBytes,omitempty"`
+	BatchLimit                 int      `json:"batchLimit,omitempty"`
+	SubscriberLimit            int      `json:"subscriberLimit,omitempty"`
+	SourceMetadataPolicy       string   `json:"sourceMetadataPolicy,omitempty"`
+	ExportsAbsoluteSourcePaths bool     `json:"exportsAbsoluteSourcePaths,omitempty"`
+	SpanDataLeavesProcess      bool     `json:"spanDataLeavesProcess"`
 }
 
 // FrontendSurface describes the build-time / client-facing security surface.
@@ -135,15 +174,16 @@ func Build(config gowdk.Config, ir gwdkir.Program) SecurityManifest {
 	for _, route := range metadata.Routes {
 		routeSource := sourceRef(route.Source, route.SourceSpan)
 		entry := RouteEntry{
-			PageID:      route.PageID,
-			Route:       route.Route,
-			Kind:        string(route.Kind),
-			Method:      route.Method,
-			Render:      string(route.Render),
-			Guards:      append([]string(nil), route.Guards...),
-			Public:      hasPublicGuard(route.Guards),
-			DefaultDeny: len(route.Guards) == 0,
-			Source:      routeSource,
+			PageID:        route.PageID,
+			Route:         route.Route,
+			Kind:          string(route.Kind),
+			Method:        route.Method,
+			Render:        string(route.Render),
+			Guards:        append([]string(nil), route.Guards...),
+			GuardEvidence: guardEvidence(config, route.Guards),
+			Public:        hasPublicGuard(route.Guards),
+			DefaultDeny:   len(route.Guards) == 0,
+			Source:        routeSource,
 		}
 		manifest.Routes = append(manifest.Routes, entry)
 		if entry.DefaultDeny {
@@ -152,29 +192,36 @@ func Build(config gowdk.Config, ir gwdkir.Program) SecurityManifest {
 	}
 
 	for _, endpoint := range metadata.Endpoints {
+		endpointSource := sourceRef(endpoint.Source, endpoint.SourceSpan)
 		manifest.Endpoints = append(manifest.Endpoints, EndpointEntry{
 			ID:             endpointID(endpoint),
 			Kind:           string(endpoint.Kind),
 			Method:         endpoint.Method,
 			Path:           endpoint.Route,
 			Guards:         append([]string(nil), endpoint.Guards...),
+			GuardEvidence:  guardEvidence(config, endpoint.Guards),
 			CSRF:           endpoint.CSRF,
 			BodyLimitBytes: bodyLimitFor(config, endpoint.Kind),
 			Public:         hasPublicGuard(endpoint.Guards),
 			DefaultDeny:    len(endpoint.Guards) == 0,
 			PageID:         endpoint.PageID,
-			Source:         sourceRef(endpoint.Source, endpoint.SourceSpan),
+			Source:         endpointSource,
 		})
 		if contract := endpoint.Contract; contract.Name != "" {
+			declarationSource := sourceRef(contract.DeclarationSource, contract.DeclarationSpan)
 			manifest.Contracts = append(manifest.Contracts, ContractEntry{
-				Name:   contract.Name,
-				Kind:   string(contract.Kind),
-				Roles:  append([]string(nil), contract.Roles...),
-				Status: string(contract.Status),
+				Name:              contract.Name,
+				Kind:              string(contract.Kind),
+				Roles:             append([]string(nil), contract.Roles...),
+				Status:            string(contract.Status),
+				DeclarationSource: declarationSource,
+				ExposureSource:    endpointSource,
+				SourceAttribution: sourceAttribution(declarationSource, endpointSource),
 			})
 		}
 	}
 
+	manifest.Observability = observabilityEntries(config, ir)
 	manifest.Frontend.UnguardedRoutes = unguarded
 	manifest.Frontend.BundleSecrets = bundleLeaks(ir)
 	manifest.Frontend.RawHTMLSinks = rawHTMLSinks(ir)
@@ -197,6 +244,171 @@ func hasPublicGuard(guards []string) bool {
 		}
 	}
 	return false
+}
+
+func guardEvidence(config gowdk.Config, guards []string) []GuardEvidence {
+	if len(guards) == 0 {
+		return nil
+	}
+	out := make([]GuardEvidence, 0, len(guards))
+	for _, guard := range guards {
+		guard = strings.TrimSpace(guard)
+		if guard == "" {
+			continue
+		}
+		out = append(out, guardEvidenceFor(config, guard))
+	}
+	return out
+}
+
+func guardEvidenceFor(config gowdk.Config, guard string) GuardEvidence {
+	switch {
+	case guard == PublicGuardID:
+		return GuardEvidence{
+			ID:                 guard,
+			Kind:               "public",
+			BindingStatus:      "not-applicable",
+			Owner:              "gowdk-native",
+			ExecutionPhase:     "none",
+			FailureContract:    "allows-request",
+			RuntimeTestFixture: "not-required",
+		}
+	case strings.HasPrefix(guard, "role:") || strings.HasPrefix(guard, "permission:"):
+		return GuardEvidence{
+			ID:                 guard,
+			Kind:               "native-rbac",
+			BindingStatus:      "resolved-native",
+			Owner:              "gowdk-native",
+			ExecutionPhase:     "before-body-decode",
+			FailureContract:    "fail-closed-403",
+			RuntimeTestFixture: "native-rbac-fixture",
+		}
+	case guard == "auth.required" && config.HasFeature(gowdk.FeatureAuth):
+		return GuardEvidence{
+			ID:                 guard,
+			Kind:               "auth-required",
+			BindingStatus:      "resolved-addon",
+			Owner:              "gowdk-native",
+			ExecutionPhase:     "before-body-decode",
+			FailureContract:    "fail-closed-403-or-redirect",
+			RuntimeTestFixture: "auth-addon-fixture",
+		}
+	default:
+		return GuardEvidence{
+			ID:                 guard,
+			Kind:               "custom",
+			BindingStatus:      "unverified-app-owned",
+			Owner:              "app-owned",
+			ExecutionPhase:     "before-body-decode",
+			FailureContract:    "app-owned",
+			RuntimeTestFixture: "unverified-app-owned",
+		}
+	}
+}
+
+func sourceAttribution(declarationSource, exposureSource string) string {
+	switch {
+	case declarationSource != "" && exposureSource != "":
+		return "declaration-and-exposure"
+	case declarationSource != "":
+		return "declaration-only"
+	case exposureSource != "":
+		return "exposure-only"
+	default:
+		return "unavailable"
+	}
+}
+
+func observabilityEntries(config gowdk.Config, ir gwdkir.Program) []ObservabilityEntry {
+	if !config.HasFeature(gowdk.FeatureObservability) || !config.Build.DebugAssets() {
+		return nil
+	}
+	buildMode := string(config.Build.Mode)
+	if strings.TrimSpace(buildMode) == "" {
+		buildMode = string(gowdk.Development)
+	}
+	absoluteSources := exportsAbsoluteSourcePaths(ir)
+	common := ObservabilityEntry{
+		Mounted:                    true,
+		AccessPolicy:               "loopback-only",
+		BuildMode:                  buildMode,
+		DevOnly:                    config.Build.DebugAssets(),
+		AllowedOrigins:             []string{"loopback"},
+		SourceMetadataPolicy:       "source-refs",
+		ExportsAbsoluteSourcePaths: absoluteSources,
+		SpanDataLeavesProcess:      true,
+	}
+	return []ObservabilityEntry{
+		mergeObservability(common, ObservabilityEntry{
+			ID:      "trace.viewer",
+			Kind:    "viewer",
+			Path:    "/_gowdk/traces",
+			Methods: []string{http.MethodGet},
+		}),
+		mergeObservability(common, ObservabilityEntry{
+			ID:      "trace.data",
+			Kind:    "json",
+			Path:    "/_gowdk/traces/data",
+			Methods: []string{http.MethodGet},
+		}),
+		mergeObservability(common, ObservabilityEntry{
+			ID:              "trace.events",
+			Kind:            "sse",
+			Path:            "/_gowdk/traces/events",
+			Methods:         []string{http.MethodGet},
+			SubscriberLimit: 1024,
+		}),
+		mergeObservability(common, ObservabilityEntry{
+			ID:                  "trace.browser",
+			Kind:                "browser-ingest",
+			Path:                "/_gowdk/traces/browser",
+			Methods:             []string{http.MethodPost},
+			ContentTypeRequired: "",
+			BodyLimitBytes:      1 << 20,
+			BatchLimit:          0,
+		}),
+	}
+}
+
+func mergeObservability(common, entry ObservabilityEntry) ObservabilityEntry {
+	entry.Mounted = common.Mounted
+	entry.AccessPolicy = common.AccessPolicy
+	entry.BuildMode = common.BuildMode
+	entry.DevOnly = common.DevOnly
+	entry.AllowedOrigins = append([]string(nil), common.AllowedOrigins...)
+	entry.SourceMetadataPolicy = common.SourceMetadataPolicy
+	entry.ExportsAbsoluteSourcePaths = common.ExportsAbsoluteSourcePaths
+	entry.SpanDataLeavesProcess = common.SpanDataLeavesProcess
+	return entry
+}
+
+func exportsAbsoluteSourcePaths(ir gwdkir.Program) bool {
+	for _, sourcePath := range programSourcePaths(ir) {
+		if filepath.IsAbs(filepath.FromSlash(sourcePath)) {
+			return true
+		}
+	}
+	return false
+}
+
+func programSourcePaths(ir gwdkir.Program) []string {
+	var paths []string
+	for _, route := range ir.Routes {
+		paths = append(paths, route.Source)
+	}
+	for _, endpoint := range ir.Endpoints {
+		paths = append(paths, endpoint.SourceFile)
+	}
+	for _, ref := range ir.ContractRefs {
+		paths = append(paths, ref.Source, ref.DeclarationSource)
+	}
+	for _, subscription := range ir.RealtimeSubscriptions {
+		paths = append(paths, subscription.Source)
+	}
+	for _, template := range ir.Templates {
+		paths = append(paths, template.Source)
+	}
+	return paths
 }
 
 func configuredHeaders(config gowdk.Config) []ConfiguredHeader {

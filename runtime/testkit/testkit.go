@@ -3,6 +3,7 @@
 package testkit
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,15 +24,32 @@ type Scenario struct {
 // Run executes scenarios against handler.
 func Run(t testing.TB, handler http.Handler, scenarios []Scenario) {
 	t.Helper()
-	for _, scenario := range scenarios {
-		response := Response(handler, scenario)
-		if scenario.WantStatus != 0 && response.Code != scenario.WantStatus {
-			t.Fatalf("%s: expected status %d, got %d with body %q", scenarioName(scenario), scenario.WantStatus, response.Code, response.Body.String())
+	if runner, ok := t.(interface {
+		Run(string, func(*testing.T)) bool
+	}); ok {
+		for _, scenario := range scenarios {
+			scenario := scenario
+			runner.Run(scenarioName(scenario), func(t *testing.T) {
+				t.Helper()
+				runScenario(t, handler, scenario)
+			})
 		}
-		for name, want := range scenario.WantHeader {
-			if got := response.Header().Get(name); got != want {
-				t.Fatalf("%s: expected header %s=%q, got %q", scenarioName(scenario), name, want, got)
-			}
+		return
+	}
+	for _, scenario := range scenarios {
+		runScenario(t, handler, scenario)
+	}
+}
+
+func runScenario(t testing.TB, handler http.Handler, scenario Scenario) {
+	t.Helper()
+	response := Response(handler, scenario)
+	if scenario.WantStatus != 0 && response.Code != scenario.WantStatus {
+		t.Errorf("expected status %d, got %d with body %s", scenario.WantStatus, response.Code, responseBodySummary(response.Body.String()))
+	}
+	for name, want := range scenario.WantHeader {
+		if got := response.Header().Get(name); got != want {
+			t.Errorf("expected header %s=%q, got %q", name, want, got)
 		}
 	}
 }
@@ -83,4 +101,11 @@ func scenarioName(scenario Scenario) string {
 		return scenario.Name
 	}
 	return strings.TrimSpace(scenario.Method + " " + scenario.Path)
+}
+
+func responseBodySummary(body string) string {
+	if body == "" {
+		return "<empty>"
+	}
+	return fmt.Sprintf("<%d byte response body redacted>", len(body))
 }

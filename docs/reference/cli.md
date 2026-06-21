@@ -23,7 +23,7 @@ gowdk inspect ir|tree|endpoint-graph|asset-graph|go-bindings [--config <file>] [
 gowdk generate stubs [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
 gowdk doctor [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...]
-gowdk audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--run] [files...]
+gowdk audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--run] [--run-timeout=<duration>] [files...]
 gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
@@ -70,8 +70,13 @@ gowdk lsp [--ssr]
   path from `--emit-tests=<file>`) that drives a `runtime/app` posture harness
   through `runtime/testkit`. `--run` builds a temporary generated app from the
   same validated IR and runs the generated app's audit test with
-  `go test ./gowdkapp`; a failed expectation is reported as
-  `audit_test_failed`.
+  `go test ./gowdkapp` under a strict execution boundary: a default 2m deadline
+  (override with `--run-timeout=<duration>`), bounded combined output truncated
+  with an explicit marker, and a minimized environment that keeps only the Go and
+  `GOWDK_*` variables required to run and disables dependency downloads
+  (`GOPROXY=off`, `GOTOOLCHAIN=local`). A failed expectation is reported as
+  `audit_test_failed`; exceeding the deadline is reported distinctly as
+  `audit_test_timeout`.
   `gowdk build` runs the same baseline gate, blocks production builds on
   error-severity findings unless `--allow-insecure` is set, and writes the
   posture alone to a non-served `.gowdk/reports/<output-name>/gowdk-security.json`

@@ -4,13 +4,10 @@ package trace
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 )
 
@@ -117,42 +114,20 @@ type TraceContext struct {
 type contextKey struct{}
 type tracerContextKey struct{}
 
-var idSequence uint64
-
-// NewTraceID creates a non-zero W3C trace ID.
+// NewTraceID returns a valid W3C trace ID from the default ID generator
+// (CryptoIDGenerator). It returns "" only when the system CSPRNG cannot
+// provide entropy; see EntropyFailureCount. It never falls back to a
+// predictable value.
 func NewTraceID() TraceID {
-	for {
-		var buf [16]byte
-		if _, err := rand.Read(buf[:]); err == nil {
-			id := TraceID(hex.EncodeToString(buf[:]))
-			if id.Valid() {
-				return id
-			}
-		}
-		seq := atomic.AddUint64(&idSequence, 1)
-		id := TraceID(fmt.Sprintf("%016x%016x", uint64(time.Now().UTC().UnixNano()), seq))
-		if id.Valid() {
-			return id
-		}
-	}
+	return defaultIDGenerator.NewTraceID()
 }
 
-// NewSpanID creates a non-zero W3C span ID.
+// NewSpanID returns a valid W3C span ID from the default ID generator
+// (CryptoIDGenerator). It returns "" only when the system CSPRNG cannot
+// provide entropy; see EntropyFailureCount. It never falls back to a
+// predictable value.
 func NewSpanID() SpanID {
-	for {
-		var buf [8]byte
-		if _, err := rand.Read(buf[:]); err == nil {
-			id := SpanID(hex.EncodeToString(buf[:]))
-			if id.Valid() {
-				return id
-			}
-		}
-		seq := atomic.AddUint64(&idSequence, 1)
-		id := SpanID(fmt.Sprintf("%016x", seq))
-		if id.Valid() {
-			return id
-		}
-	}
+	return defaultIDGenerator.NewSpanID()
 }
 
 // Valid reports whether id is a valid non-zero W3C trace ID.

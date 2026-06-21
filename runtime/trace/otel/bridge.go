@@ -5,14 +5,44 @@ package otel
 import (
 	"context"
 	"crypto/rand"
-	"fmt"
+	"sync/atomic"
 
 	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
+)
+
+const (
+	// instrumentationName and instrumentationVersion identify this bridge as
+	// the OpenTelemetry instrumentation scope. The version is the bridge's
+	// stable GOWDK-to-OpenTelemetry semantic-convention version, not the GOWDK
+	// release version, so downstream consumers can pin to a known mapping.
+	instrumentationName    = "github.com/cssbruno/gowdk/runtime/trace"
+	instrumentationVersion = "0.1.0"
+
+	// defaultServiceName is the service.name applied to the default resource of
+	// a GOWDK-owned provider when the application does not supply its own.
+	defaultServiceName = "gowdk"
+
+	// AttrGOWDKEventLevel carries a GOWDK span event's level (for example
+	// "info", "warn", "error") on the emitted OTel event, which has no native
+	// level field.
+	AttrGOWDKEventLevel = "gowdk.event.level"
+	// AttrGOWDKDroppedAttributes lists the keys of attributes that could not be
+	// represented in OpenTelemetry's closed value model and were dropped. It is
+	// the documented loss marker for unsupported attribute values.
+	AttrGOWDKDroppedAttributes = "gowdk.dropped_attributes"
+
+	attrGOWDKTraceID         = "gowdk.trace_id"
+	attrGOWDKSpanID          = "gowdk.span_id"
+	attrGOWDKParentSpanID    = "gowdk.parent_span_id"
+	attrGOWDKSourceOwnerKind = "gowdk.source.owner_kind"
+	attrGOWDKSourceOwnerID   = "gowdk.source.owner_id"
 )
 
 // Option configures the OTLP HTTP bridge.
@@ -51,10 +81,30 @@ func WithHeaders(headers map[string]string) Option {
 	}
 }
 
+// unsupportedAttributes counts attribute values that could not be represented
+// in OpenTelemetry's closed value model and were dropped.
+var unsupportedAttributes atomic.Uint64
+
+// UnsupportedAttributeCount reports how many attribute values have been dropped
+// because their Go type is outside the supported scalar/array model. Dropped
+// keys are also recorded on the span or event via AttrGOWDKDroppedAttributes.
+func UnsupportedAttributeCount() uint64 {
+	return unsupportedAttributes.Load()
+}
+
 // Sink records GOWDK spans through an OpenTelemetry TracerProvider.
 type Sink struct {
 	provider *sdktrace.TracerProvider
 	tracer   oteltrace.Tracer
+	// ownsProvider is true when this sink created the provider (NewSink) or was
+	// explicitly granted ownership (WithProviderShutdown). Only an owned
+	// provider is shut down by Sink.Shutdown.
+	ownsProvider bool
+	// preservesIdentity is true when the provider is guaranteed to emit native
+	// OTel trace/span IDs equal to the GOWDK snapshot IDs (it uses
+	// SnapshotIDGenerator). When true the GOWDK IDs are not duplicated as
+	// ordinary attributes.
+	preservesIdentity bool
 }
 
 type snapshotIDContextKey struct{}
@@ -64,7 +114,31 @@ type snapshotIDs struct {
 	spanID  oteltrace.SpanID
 }
 
-// NewSink creates an OTLP HTTP-backed sink.
+// ProviderOption configures how a Sink relates to an app-supplied provider.
+type ProviderOption func(*Sink)
+
+// WithProviderShutdown transfers provider lifecycle ownership to the sink, so
+// Sink.Shutdown flushes and shuts the provider down. Without it a provider
+// passed to NewSinkWithProvider is treated as app-owned and left running by
+// Sink.Shutdown.
+func WithProviderShutdown() ProviderOption {
+	return func(sink *Sink) { sink.ownsProvider = true }
+}
+
+// WithNativeIdentity asserts that the supplied provider was configured with
+// SnapshotIDGenerator, so emitted OTel trace/span IDs equal the GOWDK snapshot
+// IDs. When set, the bridge relies on native identity and does not duplicate
+// the GOWDK IDs as ordinary attributes. Set it only when the provider really
+// uses SnapshotIDGenerator; otherwise leave it unset and the GOWDK IDs are
+// preserved as gowdk.trace_id / gowdk.span_id attributes.
+func WithNativeIdentity() ProviderOption {
+	return func(sink *Sink) { sink.preservesIdentity = true }
+}
+
+// NewSink creates an OTLP HTTP-backed sink. GOWDK owns the resulting provider:
+// it is configured with SnapshotIDGenerator (so native OTel identity equals the
+// GOWDK snapshot identity) and a default service resource, and Sink.Shutdown
+// shuts it down.
 func NewSink(ctx context.Context, options ...Option) (*Sink, error) {
 	var cfg config
 	for _, option := range options {
@@ -89,24 +163,68 @@ func NewSink(ctx context.Context, options ...Option) (*Sink, error) {
 	provider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
 		sdktrace.WithIDGenerator(SnapshotIDGenerator{}),
+		sdktrace.WithResource(defaultResource()),
 	)
-	return NewSinkWithProvider(provider), nil
+	sink := newSink(provider)
+	sink.ownsProvider = true
+	sink.preservesIdentity = true
+	return sink, nil
 }
 
-// NewSinkWithProvider creates a sink backed by an existing provider. It is
-// useful when applications already own OpenTelemetry lifecycle and resources.
-// Providers should be configured with SnapshotIDGenerator when exact GOWDK
-// trace/span identity preservation is required.
-func NewSinkWithProvider(provider *sdktrace.TracerProvider) *Sink {
+// NewSinkWithProvider creates a sink backed by an existing, app-owned provider.
+// It is useful when applications already own the OpenTelemetry lifecycle and
+// resources.
+//
+// By default the provider is treated as borrowed: Sink.Shutdown does not shut
+// it down, and GOWDK trace/span IDs are preserved as gowdk.trace_id /
+// gowdk.span_id attributes because native OTel identity is not guaranteed. Pass
+// WithProviderShutdown to transfer lifecycle ownership, and WithNativeIdentity
+// when the provider is configured with SnapshotIDGenerator. A nil provider is a
+// shorthand for a GOWDK-owned, identity-preserving provider.
+func NewSinkWithProvider(provider *sdktrace.TracerProvider, options ...ProviderOption) *Sink {
 	if provider == nil {
-		provider = sdktrace.NewTracerProvider(sdktrace.WithIDGenerator(SnapshotIDGenerator{}))
+		provider = sdktrace.NewTracerProvider(
+			sdktrace.WithIDGenerator(SnapshotIDGenerator{}),
+			sdktrace.WithResource(defaultResource()),
+		)
+		sink := newSink(provider)
+		sink.ownsProvider = true
+		sink.preservesIdentity = true
+		return sink
 	}
-	return &Sink{provider: provider, tracer: provider.Tracer("github.com/cssbruno/gowdk/runtime/trace")}
+	sink := newSink(provider)
+	for _, option := range options {
+		if option != nil {
+			option(sink)
+		}
+	}
+	return sink
 }
 
-// Shutdown flushes and closes the underlying TracerProvider.
+func newSink(provider *sdktrace.TracerProvider) *Sink {
+	return &Sink{
+		provider: provider,
+		tracer:   provider.Tracer(instrumentationName, oteltrace.WithInstrumentationVersion(instrumentationVersion)),
+	}
+}
+
+// defaultResource returns the default GOWDK service resource. It merges the
+// SDK's default resource (process and SDK metadata) with a stable GOWDK
+// service.name so app-owned providers that omit a resource still emit
+// identifiable spans.
+func defaultResource() *resource.Resource {
+	merged, err := resource.Merge(resource.Default(), resource.NewSchemaless(semconv.ServiceName(defaultServiceName)))
+	if err != nil {
+		return resource.Default()
+	}
+	return merged
+}
+
+// Shutdown flushes and closes the underlying TracerProvider, but only when the
+// sink owns it. A borrowed (app-owned) provider is left running so the
+// application controls its lifecycle.
 func (sink *Sink) Shutdown(ctx context.Context) error {
-	if sink == nil || sink.provider == nil {
+	if sink == nil || sink.provider == nil || !sink.ownsProvider {
 		return nil
 	}
 	return sink.provider.Shutdown(ctx)
@@ -126,15 +244,29 @@ func (sink *Sink) RecordSpan(ctx context.Context, span gowdktrace.Snapshot) erro
 		return err
 	}
 	parent = context.WithValue(parent, snapshotIDContextKey{}, ids)
-	attrs := spanAttributes(span)
+
+	spanAttrs, dropped := convertAttributes(span.Attributes)
+	spanAttrs = append(spanAttrs, semanticAttributes(span, sink.preservesIdentity)...)
+	if len(dropped) > 0 {
+		spanAttrs = append(spanAttrs, attribute.StringSlice(AttrGOWDKDroppedAttributes, dropped))
+	}
+
 	_, otelSpan := sink.tracer.Start(parent, span.Name,
 		oteltrace.WithTimestamp(span.StartTime),
-		oteltrace.WithAttributes(attrs...),
+		oteltrace.WithSpanKind(spanKind(span)),
+		oteltrace.WithAttributes(spanAttrs...),
 	)
 	for _, event := range span.Events {
+		eventAttrs, droppedEvent := convertAttributes(event.Attributes)
+		if event.Level != "" {
+			eventAttrs = append(eventAttrs, attribute.String(AttrGOWDKEventLevel, event.Level))
+		}
+		if len(droppedEvent) > 0 {
+			eventAttrs = append(eventAttrs, attribute.StringSlice(AttrGOWDKDroppedAttributes, droppedEvent))
+		}
 		otelSpan.AddEvent(event.Message,
 			oteltrace.WithTimestamp(event.Time),
-			oteltrace.WithAttributes(attributes(event.Attributes)...),
+			oteltrace.WithAttributes(eventAttrs...),
 		)
 	}
 	switch span.Status.Code {
@@ -145,6 +277,57 @@ func (sink *Sink) RecordSpan(ctx context.Context, span gowdktrace.Snapshot) erro
 	}
 	otelSpan.End(oteltrace.WithTimestamp(span.EndTime))
 	return nil
+}
+
+// spanKind maps a GOWDK lane to an OpenTelemetry span kind. Request-handling
+// lanes are servers, outbound contract calls are clients, and everything else
+// is internal.
+func spanKind(span gowdktrace.Snapshot) oteltrace.SpanKind {
+	switch span.Lane {
+	case gowdktrace.LaneRoute, gowdktrace.LaneHandler, gowdktrace.LaneSSR,
+		gowdktrace.LaneAction, gowdktrace.LaneAPI:
+		return oteltrace.SpanKindServer
+	case gowdktrace.LaneContract:
+		return oteltrace.SpanKindClient
+	default:
+		return oteltrace.SpanKindInternal
+	}
+}
+
+// semanticAttributes builds the gowdk.* attributes describing surface, lane,
+// and source. The GOWDK trace/span IDs are added only when native OTel identity
+// is not guaranteed (preservesIdentity is false); otherwise they would
+// duplicate the span's own IDs. The source file is normalized through the
+// active trace source policy so absolute filesystem paths are not exported.
+func semanticAttributes(span gowdktrace.Snapshot, preservesIdentity bool) []attribute.KeyValue {
+	attrs := make([]attribute.KeyValue, 0, 8)
+	if !preservesIdentity {
+		attrs = append(attrs,
+			attribute.String(attrGOWDKTraceID, string(span.TraceID)),
+			attribute.String(attrGOWDKSpanID, string(span.SpanID)),
+			attribute.String(attrGOWDKParentSpanID, string(span.ParentSpanID)),
+		)
+	}
+	attrs = append(attrs,
+		attribute.String(gowdktrace.AttrGOWDKSurface, string(span.Surface)),
+		attribute.String(gowdktrace.AttrGOWDKLane, string(span.Lane)),
+	)
+	if file := gowdktrace.NormalizeSourceFile(span.Source.File, gowdktrace.CurrentSourcePolicy()); file != "" {
+		attrs = append(attrs, attribute.String(gowdktrace.AttrGOWDKSourceFile, file))
+	}
+	if span.Source.Line > 0 {
+		attrs = append(attrs, attribute.Int(gowdktrace.AttrGOWDKSourceLine, span.Source.Line))
+	}
+	if span.Source.Column > 0 {
+		attrs = append(attrs, attribute.Int(gowdktrace.AttrGOWDKSourceCol, span.Source.Column))
+	}
+	if span.Source.OwnerKind != "" {
+		attrs = append(attrs, attribute.String(attrGOWDKSourceOwnerKind, span.Source.OwnerKind))
+	}
+	if span.Source.OwnerID != "" {
+		attrs = append(attrs, attribute.String(attrGOWDKSourceOwnerID, span.Source.OwnerID))
+	}
+	return attrs
 }
 
 func snapshotIDsFromSpan(span gowdktrace.Snapshot) (snapshotIDs, error) {
@@ -219,41 +402,48 @@ func randomSpanID() oteltrace.SpanID {
 	}
 }
 
-func spanAttributes(span gowdktrace.Snapshot) []attribute.KeyValue {
-	attrs := attributes(span.Attributes)
-	attrs = append(attrs,
-		attribute.String("gowdk.trace_id", string(span.TraceID)),
-		attribute.String("gowdk.span_id", string(span.SpanID)),
-		attribute.String("gowdk.parent_span_id", string(span.ParentSpanID)),
-		attribute.String("gowdk.surface", string(span.Surface)),
-		attribute.String("gowdk.lane", string(span.Lane)),
-		attribute.String("gowdk.source.file", span.Source.File),
-		attribute.Int("gowdk.source.line", span.Source.Line),
-		attribute.Int("gowdk.source.column", span.Source.Column),
-		attribute.String("gowdk.source.owner_kind", span.Source.OwnerKind),
-		attribute.String("gowdk.source.owner_id", span.Source.OwnerID),
-	)
-	return attrs
+// convertAttributes maps GOWDK attributes to OTel key/values using the closed
+// scalar/array value model. Values outside the model are dropped (not
+// stringified): they increment the unsupported-attribute counter and their keys
+// are returned so the caller can record them via AttrGOWDKDroppedAttributes.
+func convertAttributes(attrs []gowdktrace.Attribute) (out []attribute.KeyValue, dropped []string) {
+	out = make([]attribute.KeyValue, 0, len(attrs))
+	for _, attr := range attrs {
+		keyValue, ok := convertAttribute(attr)
+		if !ok {
+			unsupportedAttributes.Add(1)
+			dropped = append(dropped, attr.Key)
+			continue
+		}
+		out = append(out, keyValue)
+	}
+	return out, dropped
 }
 
-func attributes(attrs []gowdktrace.Attribute) []attribute.KeyValue {
-	out := make([]attribute.KeyValue, 0, len(attrs))
-	for _, attr := range attrs {
-		key := attribute.Key(attr.Key)
-		switch value := attr.Value.(type) {
-		case string:
-			out = append(out, key.String(value))
-		case bool:
-			out = append(out, key.Bool(value))
-		case int:
-			out = append(out, key.Int(value))
-		case int64:
-			out = append(out, key.Int64(value))
-		case float64:
-			out = append(out, key.Float64(value))
-		default:
-			out = append(out, key.String(fmt.Sprint(value)))
-		}
+func convertAttribute(attr gowdktrace.Attribute) (attribute.KeyValue, bool) {
+	key := attribute.Key(attr.Key)
+	switch value := attr.Value.(type) {
+	case string:
+		return key.String(value), true
+	case bool:
+		return key.Bool(value), true
+	case int:
+		return key.Int(value), true
+	case int64:
+		return key.Int64(value), true
+	case float64:
+		return key.Float64(value), true
+	case []string:
+		return key.StringSlice(value), true
+	case []bool:
+		return key.BoolSlice(value), true
+	case []int:
+		return key.IntSlice(value), true
+	case []int64:
+		return key.Int64Slice(value), true
+	case []float64:
+		return key.Float64Slice(value), true
+	default:
+		return attribute.KeyValue{}, false
 	}
-	return out
 }

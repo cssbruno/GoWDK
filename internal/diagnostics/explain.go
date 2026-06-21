@@ -415,6 +415,13 @@ guard public
 			"Fix the handler, the guard configuration, or the test expectation as appropriate.",
 		},
 	},
+	"audit_test_timeout": {
+		Details: "gowdk audit --run executes the generated app's audit tests under a strict deadline (default 2m). The run exceeded that deadline and was terminated, so the audit could not confirm the runtime posture.",
+		NextSteps: []string{
+			"Inspect the generated app for a hanging handler, guard, or test before trusting the posture.",
+			"Raise the deadline for a legitimately slow suite with gowdk audit --run --run-timeout=<duration>.",
+		},
+	},
 	"policy_duplicate_name": {
 		Details: "Two audit policies declare the same name. Policy names must be unique so extends and override resolution is unambiguous.",
 		NextSteps: []string{

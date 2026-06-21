@@ -111,7 +111,13 @@ Request-time pages with `server {}` bind same-package functions named
 ```go
 func LoadDashboard(ssr.LoadContext) map[string]any
 func LoadDashboard(ssr.LoadContext) (map[string]any, error)
+func LoadDashboard(ssr.LoadContext) DashboardData
+func LoadDashboard(ssr.LoadContext) (DashboardData, error)
 ```
+
+Typed load result structs must be exported same-package structs. Exported
+fields are visible to `server {}` declarations by Go field name or `json` tag
+name, and `json:"-"` hides a field.
 
 `context.Context` is available through `ssr.LoadContext` /
 `runtime/guard.Context`. Route, endpoint, params, typed params, CSRF, session,
@@ -126,9 +132,9 @@ The lower-level `runtime/route` helpers decode `string`, `int`, `int64`,
 `uint`, `uint64`, `bool`, and `float64` from raw params without echoing raw
 request values in errors.
 
-Generated per-route param struct types are deferred. Typed load-result and
-action-result accessors are also deferred until those result contracts are
-stable.
+Generated per-route param struct types are deferred. Typed SSR load result
+structs are supported for declared `server {}` data; action-result accessors are
+deferred until action result contracts are stable.
 
 ## Middleware And Hooks
 

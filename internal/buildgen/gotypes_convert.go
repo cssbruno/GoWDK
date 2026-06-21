@@ -13,14 +13,17 @@ import (
 // a page load binding and are left empty.
 func sourceBackendBinding(binding gwdkir.Binding) source.BackendBinding {
 	return source.BackendBinding{
-		ImportPath:   binding.ImportPath,
-		PackageName:  binding.PackageName,
-		FunctionName: binding.FunctionName,
-		Signature:    binding.Signature,
-		InputType:    binding.InputType,
-		InputPointer: binding.InputPointer,
-		InputFields:  binding.InputFields,
-		Status:       binding.Status,
-		Message:      binding.Message,
+		ImportPath:    binding.ImportPath,
+		PackageName:   binding.PackageName,
+		FunctionName:  binding.FunctionName,
+		Signature:     binding.Signature,
+		InputType:     binding.InputType,
+		InputPointer:  binding.InputPointer,
+		InputFields:   binding.InputFields,
+		ResultType:    binding.ResultType,
+		ResultPointer: binding.ResultPointer,
+		ResultFields:  append([]source.BackendResultField(nil), binding.ResultFields...),
+		Status:        binding.Status,
+		Message:       binding.Message,
 	}
 }

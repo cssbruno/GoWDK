@@ -3379,6 +3379,57 @@ func TestGenerateWritesSSRLoadHandler(t *testing.T) {
 	}
 }
 
+func TestGenerateWritesTypedSSRLoadResultAdapter(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:  "dashboard",
+		Route:   "/dashboard",
+		Guards:  []string{"public"},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "example.com/app/dashboard",
+			PackageName:  "dashboard",
+			FunctionName: "LoadDashboard",
+			Signature:    source.BackendSignatureLoadStructError,
+			ResultType:   "DashboardData",
+			ResultFields: []source.BackendResultField{
+				{Path: "user", Selector: "User"},
+				{Path: "User", Selector: "User"},
+				{Path: "user.name", Selector: "User.Name"},
+				{Path: "count", Selector: "Count"},
+				{Path: "Count", Selector: "Count"},
+			},
+		},
+		HTML: `<main><h1>__USER__</h1></main>`,
+		LoadReplacements: []SSRLoadReplacement{{
+			Path:        "user.name",
+			Placeholder: "__USER__",
+		}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`typedLoadData, err := dashboard.LoadDashboard(loadContext)`,
+		`loadData := map[string]any{"Count": typedLoadData.Count, "User": typedLoadData.User, "count": typedLoadData.Count, "user": typedLoadData.User}`,
+		`loadValue0, loadOK0 := gowdkssr.LoadPath(loadData, "user.name")`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
 func TestGenerateWritesURLAwareSSRLoadReplacements(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -5002,6 +5053,82 @@ func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	}
 	if cacheControl := headers.Get("Cache-Control"); cacheControl != "no-store" {
 		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+}
+
+func TestGeneratedBinaryExecutesTypedSSRLoadUserLogic(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:  "dashboard",
+		Route:   "/dashboard",
+		Guards:  []string{"public"},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "gowdk-generated-app/dashboard",
+			PackageName:  "dashboard",
+			FunctionName: "LoadDashboard",
+			Signature:    source.BackendSignatureLoadStructError,
+			ResultType:   "DashboardData",
+			ResultFields: []source.BackendResultField{
+				{Path: "user", Selector: "User"},
+				{Path: "user.name", Selector: "User.Name"},
+				{Path: "count", Selector: "Count"},
+			},
+		},
+		HTML: `<main><h1>__USER__</h1><p>__COUNT__</p></main>`,
+		LoadReplacements: []SSRLoadReplacement{
+			{Path: "user.name", Placeholder: "__USER__"},
+			{Path: "count", Placeholder: "__COUNT__"},
+		},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "dashboard", "dashboard.go"), `package dashboard
+
+import "github.com/cssbruno/gowdk/runtime/ssr"
+
+type DashboardData struct {
+	User  UserData `+"`json:\"user\"`"+`
+	Count int      `+"`json:\"count\"`"+`
+}
+
+type UserData struct {
+	Name string `+"`json:\"name\"`"+`
+}
+
+func LoadDashboard(ctx ssr.LoadContext) (DashboardData, error) {
+	return DashboardData{User: UserData{Name: "Ada <admin>"}, Count: 3}, nil
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, _, err := waitForHTTPResponse("http://" + addr + "/dashboard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"Ada &lt;admin&gt;", "<p>3</p>"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected typed SSR load response to contain %q, got %s", expected, body)
+		}
 	}
 }
 

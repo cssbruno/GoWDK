@@ -189,6 +189,7 @@ var Registry = []Code{
 	{Code: "server_if_invalid", Area: "pages", Stability: StabilityStable, Severity: SeverityError, Summary: "server-lane g:if condition is not a single server {} field"},
 	{Code: "server_if_nested_scope", Area: "pages", Stability: StabilityStable, Severity: SeverityError, Summary: "nested server-lane g:if condition does not reference the enclosing row item"},
 	{Code: "server_load_field_conflict", Area: "pages", Stability: StabilityStable, Severity: SeverityError, Summary: "server {} load field conflicts with build data or route params"},
+	{Code: "server_load_field_unknown", Area: "pages", Stability: StabilityExperimental, Severity: SeverityError, Summary: "server {} load field is not exported by the typed load result"},
 	{Code: "server_region_directive", Area: "pages", Stability: StabilityStable, Severity: SeverityError, Summary: "server-lane g:for/g:if region contains unsupported directives or component calls"},
 	{Code: "server_requires_request_render", Area: "rendering", Stability: StabilityStable, Severity: SeverityError, Summary: "server block conflicts with a non-request-time render mode"},
 	{Code: "server_url_tainted", Area: "pages", Stability: StabilityStable, Severity: SeverityError, Summary: "request-time route params or server {} fields are interpolated into a URL-bearing or unsafe attribute"},

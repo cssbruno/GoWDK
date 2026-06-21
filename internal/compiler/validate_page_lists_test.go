@@ -6,6 +6,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func validatePageListsFor(t *testing.T, page gwdkir.Page) []ValidationError {
@@ -236,6 +237,55 @@ func TestValidateRejectsServerLoadFieldConflictingWithBuildData(t *testing.T) {
 	}
 	if !strings.Contains(diag.Message, "build data") {
 		t.Fatalf("diagnostic should name build data conflict: %q", diag.Message)
+	}
+}
+
+func TestValidateAcceptsTypedServerLoadResultFields(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		LoadBinding: gwdkir.Binding{
+			Status:     source.BackendBindingBound,
+			ResultType: "DashboardData",
+			ResultFields: []source.BackendResultField{
+				{Path: "user", Selector: "User"},
+				{Path: "user.name", Selector: "User.Name"},
+				{Path: "count", Selector: "Count"},
+			},
+		},
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { user.name, count }`,
+			View:       true,
+			ViewBody:   `<main>{user.name} {count}</main>`,
+		},
+	})
+	if _, ok := findCode(report, "server_load_field_unknown"); ok {
+		t.Fatalf("typed load result fields should be accepted, got %v", report)
+	}
+}
+
+func TestValidateRejectsUnknownTypedServerLoadResultField(t *testing.T) {
+	report := validatePageListsFor(t, gwdkir.Page{
+		LoadBinding: gwdkir.Binding{
+			Status:     source.BackendBindingBound,
+			ResultType: "DashboardData",
+			ResultFields: []source.BackendResultField{
+				{Path: "user", Selector: "User"},
+				{Path: "user.name", Selector: "User.Name"},
+			},
+		},
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { user.email }`,
+			View:       true,
+			ViewBody:   `<main>{user.email}</main>`,
+		},
+	})
+	diag, ok := findCode(report, "server_load_field_unknown")
+	if !ok {
+		t.Fatalf("expected server_load_field_unknown, got %v", report)
+	}
+	if !strings.Contains(diag.Message, `"user.email"`) || !strings.Contains(diag.Message, "DashboardData") {
+		t.Fatalf("diagnostic should name field and result type: %q", diag.Message)
 	}
 }
 

@@ -20,6 +20,12 @@ packages, and tooling contracts may change before 1.0.
   lists `observability` and `spa`, and the security-audit docs no longer tie the
   audit to milestone M8. A new `scripts/check-removed-syntax.sh` CI check keeps
   removed source forms from reappearing in docs.
+- The "What Works Today" support matrix now separates `Current Limit`
+  (GOWDK-intended capabilities that are not yet stable) from `App-owned by
+  design` (boundaries that intentionally stay in app Go), so deliberate
+  ownership lines no longer read as missing framework features. The same framing
+  is applied across the README, requirements, and security-audit/observability
+  docs.
 
 ### Fixed
 

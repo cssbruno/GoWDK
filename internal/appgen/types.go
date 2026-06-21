@@ -123,6 +123,7 @@ type SSRRoute struct {
 	Render           gowdk.RenderMode
 	Cache            string
 	ErrorPage        string
+	LayoutErrorPages []LayoutErrorPage
 	DynamicParams    []string
 	RouteParams      []source.RouteParam
 	Layouts          []string
@@ -138,6 +139,11 @@ type SSRRoute struct {
 	ListSpecs        []SSRListSpec
 	CondSpecs        []SSRCondSpec
 	QueryRegions     []SSRQueryRegion
+}
+
+type LayoutErrorPage struct {
+	Layout    string
+	ErrorPage string
 }
 
 type SSRReplacement = source.SSRReplacement

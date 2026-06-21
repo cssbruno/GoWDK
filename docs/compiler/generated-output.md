@@ -201,6 +201,10 @@ Implemented today:
   errors such as `response.NotFound`, `response.Forbidden`,
   `response.ValidationFailed`, and `response.ServerError` write no-store
   404/403/422/500 responses instead of forcing every load error to 500.
+- Generated SSR route metadata includes layout-level error pages declared by
+  `.layout.gwdk` files. Runtime 500 boundaries select route-local error pages,
+  then nearest layout error pages, then outer layout error pages, then
+  `500.html`.
 - Generated apps can return partial fragment responses from
   action handlers for `X-GOWDK-Partial` requests and standalone
   `fragment Name GET "/path" "#target" { ... }` routes. Standalone fragment

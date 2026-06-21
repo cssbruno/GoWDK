@@ -439,6 +439,9 @@ func ssrRouteContextStmts(route SSRRoute, includeParams bool) []ast.Stmt {
 	if route.ErrorPage != "" {
 		metadata = append(metadata, keyValue("ErrorPage", stringLit(route.ErrorPage)))
 	}
+	if len(route.LayoutErrorPages) > 0 {
+		metadata = append(metadata, keyValue("LayoutErrorPages", layoutErrorPageMetadataExpr(route.LayoutErrorPages)))
+	}
 	dynamicParams := route.DynamicParams
 	if len(dynamicParams) == 0 {
 		dynamicParams = ssrRoutePatternParams(route.Route)
@@ -574,6 +577,23 @@ func routeParamMetadataExpr(params []source.RouteParam) ast.Expr {
 	}
 	return &ast.CompositeLit{
 		Type: &ast.ArrayType{Elt: sel("gowdkruntime", "RouteParamMetadata")},
+		Elts: elts,
+	}
+}
+
+func layoutErrorPageMetadataExpr(errorPages []LayoutErrorPage) ast.Expr {
+	elts := make([]ast.Expr, 0, len(errorPages))
+	for _, errorPage := range errorPages {
+		elts = append(elts, &ast.CompositeLit{
+			Type: sel("gowdkruntime", "LayoutErrorPageMetadata"),
+			Elts: []ast.Expr{
+				keyValue("Layout", stringLit(errorPage.Layout)),
+				keyValue("ErrorPage", stringLit(errorPage.ErrorPage)),
+			},
+		})
+	}
+	return &ast.CompositeLit{
+		Type: &ast.ArrayType{Elt: sel("gowdkruntime", "LayoutErrorPageMetadata")},
 		Elts: elts,
 	}
 }

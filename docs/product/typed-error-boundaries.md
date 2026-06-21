@@ -11,12 +11,14 @@ intended a not-found, forbidden, or validation response.
 
 - Provide typed expected-error helpers for common generated-boundary categories.
 - Map expected errors to stable HTTP statuses in generated SSR load handling.
+- Let layout files declare generated HTML error boundaries that compose with
+  route-local and global error pages.
 - Preserve no-store generated error boundaries and production detail hiding.
 
 ## Non-Goals
 
 - Do not expose panic values, stack traces, submitted form values, or secrets.
-- Do not add layout-level error boundary syntax in this slice.
+- Do not add templated in-layout error-region syntax in this slice.
 - Do not replace app-owned normal `response.Response` results for actions/APIs.
 
 ## Users And Permissions
@@ -34,6 +36,9 @@ intended a not-found, forbidden, or validation response.
    `response.ValidationFailed`, or `response.ServerError`.
 3. Generated SSR writes a no-store response with the mapped status and the
    applicable generated error page or safe fallback text.
+4. Internal SSR failures prefer a route-local `error` page, then the nearest
+   loaded layout-level `error` page, then outer layout boundaries, then
+   `500.html`.
 
 ## Requirements
 
@@ -44,6 +49,9 @@ intended a not-found, forbidden, or validation response.
 - Expected validation errors map to HTTP 422.
 - Expected server errors map to HTTP 500.
 - SSR load errors use `response.HandlerStatus` instead of forcing 500.
+- Layout files can declare `error "/errors/layout.html"`.
+- Layout-level error pages compose with SSR route metadata in nearest-to-
+  outermost order after route-local `error` pages and before global `500.html`.
 
 ### Non-Functional
 
@@ -56,22 +64,27 @@ intended a not-found, forbidden, or validation response.
 - [x] Runtime helpers produce typed `HandlerError` values with stable statuses.
 - [x] Generated SSR load errors honor expected statuses.
 - [x] Generated 404 pages are selected for expected not-found SSR load errors.
-- [x] Docs state that layout-level error boundaries remain planned.
+- [x] Layout-level generated HTML error pages are selected for SSR 500
+  boundaries when no route-local error page applies.
+- [x] Docs state that richer templated error-region syntax remains planned.
 
 ## Edge Cases
 
 - Empty expected-error messages default to the HTTP status text.
 - Existing route-local `error` pages still apply to internal server errors.
-- Expected 403 and 422 responses use safe fallback text until typed/layout
-  boundary rendering exists for those statuses.
+- Expected 403 and 422 responses use safe fallback text until status-specific
+  generated documents are defined.
+- Missing layout-level error documents fall through to the next boundary.
 
 ## Dependencies
 
-- Internal: `runtime/response`, generated SSR adapter code, runtime error pages.
+- Internal: `runtime/response`, generated SSR adapter code, runtime error pages,
+  parser/layout IR metadata.
 - External: none.
 
 ## Open Questions
 
-- What source syntax should layout-level error boundary composition use?
 - Should action/API endpoint-local error pages render expected 4xx statuses, or
   remain panic/internal-error boundaries only?
+- Should a later source contract support templated in-layout error regions with
+  typed error values?

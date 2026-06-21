@@ -39,9 +39,13 @@ SSR is optional and must not become the default framework identity.
   panics before response headers are written on that page. The path is
   output-relative, may be written with a leading slash, must end in `.html`,
   and must not contain `..`, query strings, fragments, or backslashes.
+- Layout files can also declare `error "/errors/app-shell.html"`. SSR 500
+  boundaries select route-local error pages first, then the nearest layout
+  error page, then outer layout error pages, then `500.html`.
 - Generated embedded apps load optional `404.html` and `500.html` documents
-  from build output, plus any route-local `error` documents selected by SSR
-  routes. Missing error documents fall back to `http.Error`.
+  from build output, plus any route-local or layout-level `error` documents
+  selected by SSR routes. Missing error documents fall through to the next
+  boundary and eventually `http.Error`.
 - Generated SSR route handlers run inside a runtime panic boundary. A panic
   before response headers are written becomes a no-store HTTP 500 response,
   using the route-local `error` page when declared or `500.html` when present,

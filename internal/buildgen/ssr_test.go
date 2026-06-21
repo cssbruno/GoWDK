@@ -3,6 +3,7 @@ package buildgen
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -555,5 +556,58 @@ func TestSSRArtifactsComposePageLoadThroughLayouts(t *testing.T) {
 	}
 	if !strings.Contains(artifact.HTML, "<header>"+placeholder+"</header><main>"+placeholder+"</main>") {
 		t.Fatalf("expected layout and page to compose around page load data, got:\n%s", artifact.HTML)
+	}
+}
+
+func TestSSRArtifactsIncludeLayoutErrorPageBoundaries(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:      "dashboard",
+			Route:   "/dashboard",
+			Render:  gowdk.SSR,
+			Layouts: []string{"section"},
+			Blocks: gwdkir.Blocks{
+				Server:     true,
+				ServerBody: `=> { user.name }`,
+				View:       true,
+				ViewBody:   `<main>{user.name}</main>`,
+			},
+		}},
+		Layouts: []gwdkir.Layout{
+			{
+				ID:        "root",
+				ErrorPage: "errors/root.html",
+				Blocks: gwdkir.Blocks{
+					View:     true,
+					ViewBody: `<body><slot /></body>`,
+				},
+			},
+			{
+				ID:        "section",
+				Layouts:   []string{"root"},
+				ErrorPage: "errors/section.html",
+				Blocks: gwdkir.Blocks{
+					View:     true,
+					ViewBody: `<section><slot /></section>`,
+				},
+			},
+		},
+	}
+
+	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected one artifact, got %#v", artifacts)
+	}
+	got := artifacts[0].LayoutErrorPages
+	want := []LayoutErrorPage{
+		{Layout: "section", ErrorPage: "errors/section.html"},
+		{Layout: "root", ErrorPage: "errors/root.html"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected layout error pages:\n got %#v\nwant %#v", got, want)
 	}
 }

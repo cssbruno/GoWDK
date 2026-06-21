@@ -717,6 +717,11 @@ func customErrorPagePaths(options Options) []string {
 		if route.ErrorPage != "" {
 			seen[route.ErrorPage] = true
 		}
+		for _, errorPage := range route.LayoutErrorPages {
+			if errorPage.ErrorPage != "" {
+				seen[errorPage.ErrorPage] = true
+			}
+		}
 	}
 	paths := make([]string, 0, len(seen))
 	for path := range seen {

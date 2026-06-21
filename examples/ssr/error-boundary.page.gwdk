@@ -1,0 +1,16 @@
+package ssr
+
+page ssr.error.boundary
+route "/ssr/error-boundary"
+layout shell
+guard public
+
+go server {
+}
+
+view {
+  <main>
+    <h1>SSR Error Boundary</h1>
+    <p>This page uses a layout-level generated error boundary.</p>
+  </main>
+}

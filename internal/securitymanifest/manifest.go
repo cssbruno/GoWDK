@@ -40,6 +40,7 @@ const PublicGuardID = "public"
 type SecurityManifest struct {
 	Version       int                  `json:"version"`
 	GeneratedFrom string               `json:"generatedFrom"`
+	BuildMode     string               `json:"buildMode,omitempty"`
 	Routes        []RouteEntry         `json:"routes,omitempty"`
 	Endpoints     []EndpointEntry      `json:"endpoints,omitempty"`
 	Contracts     []ContractEntry      `json:"contracts,omitempty"`
@@ -155,8 +156,12 @@ type RawHTMLSink struct {
 }
 
 // ConfiguredHeader records one header configured for generated runtime output.
+// Value carries the normalized effective value so audit policy can distinguish a
+// weak configuration (for example Content-Security-Policy: *) from a meaningful
+// one. Secret-shaped values are redacted so the posture stays safe to publish.
 type ConfiguredHeader struct {
-	Name string `json:"name"`
+	Name  string `json:"name"`
+	Value string `json:"value,omitempty"`
 }
 
 // Build projects validated IR into a SecurityManifest. It reuses
@@ -167,6 +172,7 @@ func Build(config gowdk.Config, ir gwdkir.Program) SecurityManifest {
 	manifest := SecurityManifest{
 		Version:       SchemaVersion,
 		GeneratedFrom: "ir",
+		BuildMode:     buildMode(config),
 		Frontend:      FrontendSurface{ConfiguredHeaders: configuredHeaders(config)},
 	}
 
@@ -416,23 +422,34 @@ func programSourcePaths(ir gwdkir.Program) []string {
 	return paths
 }
 
+func buildMode(config gowdk.Config) string {
+	mode := strings.TrimSpace(string(config.Build.Mode))
+	if mode == "" {
+		return string(gowdk.Development)
+	}
+	return mode
+}
+
 func configuredHeaders(config gowdk.Config) []ConfiguredHeader {
 	if !config.Build.SecurityHeaders.Enabled || len(config.Build.SecurityHeaders.Headers) == 0 {
 		return []ConfiguredHeader{}
 	}
 	type candidate struct {
-		key  string
-		name string
+		key   string
+		name  string
+		value string
 	}
 	candidates := make([]candidate, 0, len(config.Build.SecurityHeaders.Headers))
-	for name := range config.Build.SecurityHeaders.Headers {
+	for name, value := range config.Build.SecurityHeaders.Headers {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
 		}
+		canonical := http.CanonicalHeaderKey(name)
 		candidates = append(candidates, candidate{
-			key:  strings.ToLower(name),
-			name: http.CanonicalHeaderKey(name),
+			key:   strings.ToLower(name),
+			name:  canonical,
+			value: normalizeHeaderValue(canonical, value),
 		})
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
@@ -448,9 +465,25 @@ func configuredHeaders(config gowdk.Config) []ConfiguredHeader {
 			continue
 		}
 		seen[candidate.key] = true
-		headers = append(headers, ConfiguredHeader{Name: candidate.name})
+		headers = append(headers, ConfiguredHeader{Name: candidate.name, Value: candidate.value})
 	}
 	return headers
+}
+
+// normalizeHeaderValue trims and collapses internal whitespace so weak and
+// strong configurations compare predictably, and redacts a value that scans as a
+// secret (including when the header name marks it as a credential) so the
+// published posture never leaks credentials carried in a header.
+func normalizeHeaderValue(name, value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	value = strings.Join(strings.Fields(value), " ")
+	if _, ok := securitytext.FirstSecretKind(name + ": " + value); ok {
+		return "[redacted]"
+	}
+	return value
 }
 
 func bundleLeaks(ir gwdkir.Program) []BundleLeak {

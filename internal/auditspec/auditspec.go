@@ -41,6 +41,9 @@ const (
 	// RuleRequireHeader requires the app to be configured to emit a response
 	// header.
 	RuleRequireHeader RuleKind = "require_header"
+	// RuleCheckSecurityHeaders audits the semantic strength of configured
+	// security response headers (CSP, nosniff, Referrer-Policy, HSTS, framing).
+	RuleCheckSecurityHeaders RuleKind = "check_security_headers"
 	// RuleRequireClientRouteGuards reports client-visible routes that rely on
 	// default-deny because the source declared no guard.
 	RuleRequireClientRouteGuards RuleKind = "require_client_route_guards"

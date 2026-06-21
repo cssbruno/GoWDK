@@ -105,5 +105,15 @@ func Baseline() []Policy {
 				{Kind: RuleDenyRawHTMLSinks, Code: "audit_raw_html_sink"},
 			},
 		},
+		{
+			Name:    "baseline.headers",
+			Builtin: true,
+			Selectors: []Selector{
+				{Raw: "frontend", Kind: SelectorFrontend},
+			},
+			Rules: []Rule{
+				{Kind: RuleCheckSecurityHeaders},
+			},
+		},
 	}
 }

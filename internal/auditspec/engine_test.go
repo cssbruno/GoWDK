@@ -1,6 +1,7 @@
 package auditspec
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cssbruno/gowdk/internal/diagnostics"
@@ -183,6 +184,86 @@ func TestPolicyRequireHeaderUsesConfiguredHeaders(t *testing.T) {
 	}}
 	if findings := Evaluate(present, []Policy{policy}); len(findings) != 0 {
 		t.Fatalf("expected configured header to satisfy policy, got %#v", findings)
+	}
+}
+
+func headerManifest(buildMode string, headers ...securitymanifest.ConfiguredHeader) securitymanifest.SecurityManifest {
+	return securitymanifest.SecurityManifest{
+		BuildMode: buildMode,
+		Frontend:  securitymanifest.FrontendSurface{ConfiguredHeaders: headers},
+	}
+}
+
+func TestBaselineFlagsWeakSecurityHeaders(t *testing.T) {
+	manifest := headerManifest("production",
+		securitymanifest.ConfiguredHeader{Name: "Content-Security-Policy", Value: "default-src 'self'; script-src 'unsafe-inline'"},
+		securitymanifest.ConfiguredHeader{Name: "Referrer-Policy", Value: "unsafe-url"},
+		securitymanifest.ConfiguredHeader{Name: "Strict-Transport-Security", Value: "max-age=600"},
+		securitymanifest.ConfiguredHeader{Name: "X-Frame-Options", Value: "DENY"},
+		securitymanifest.ConfiguredHeader{Name: "Content-Security-Policy-2", Value: ""}, // ignored, distinct name
+	)
+	got := codes(Evaluate(manifest, Baseline()))
+	for _, code := range []string{
+		"audit_header_csp_weak",
+		"audit_header_nosniff_missing",
+		"audit_header_referrer_weak",
+		"audit_header_hsts_weak",
+	} {
+		if got[code] != 1 {
+			t.Fatalf("expected one %s finding, got %#v", code, got)
+		}
+	}
+	for _, finding := range Evaluate(manifest, Baseline()) {
+		if strings.HasPrefix(finding.Code, "audit_header_") {
+			if finding.Source != "config:Build.SecurityHeaders" || finding.Remediation == "" {
+				t.Fatalf("header finding missing source/remediation: %#v", finding)
+			}
+		}
+	}
+}
+
+func TestBaselineAcceptsStrongSecurityHeaders(t *testing.T) {
+	manifest := headerManifest("production",
+		securitymanifest.ConfiguredHeader{Name: "Content-Security-Policy", Value: "default-src 'self'; frame-ancestors 'none'; object-src 'none'"},
+		securitymanifest.ConfiguredHeader{Name: "X-Content-Type-Options", Value: "nosniff"},
+		securitymanifest.ConfiguredHeader{Name: "Referrer-Policy", Value: "strict-origin-when-cross-origin"},
+		securitymanifest.ConfiguredHeader{Name: "Strict-Transport-Security", Value: "max-age=31536000; includeSubDomains"},
+		securitymanifest.ConfiguredHeader{Name: "X-Frame-Options", Value: "DENY"},
+	)
+	for _, finding := range Evaluate(manifest, Baseline()) {
+		if strings.HasPrefix(finding.Code, "audit_header_") {
+			t.Fatalf("strong headers should not produce a header finding: %#v", finding)
+		}
+	}
+}
+
+func TestBaselineFlagsMissingNosniff(t *testing.T) {
+	manifest := headerManifest("development",
+		securitymanifest.ConfiguredHeader{Name: "Content-Security-Policy", Value: "default-src 'self'"},
+	)
+	if got := codes(Evaluate(manifest, Baseline())); got["audit_header_nosniff_missing"] != 1 {
+		t.Fatalf("expected missing nosniff finding, got %#v", got)
+	}
+}
+
+func TestBaselineFlagsConflictingFramePolicy(t *testing.T) {
+	manifest := headerManifest("development",
+		securitymanifest.ConfiguredHeader{Name: "X-Content-Type-Options", Value: "nosniff"},
+		securitymanifest.ConfiguredHeader{Name: "X-Frame-Options", Value: "DENY"},
+		securitymanifest.ConfiguredHeader{Name: "Content-Security-Policy", Value: "default-src 'self'; frame-ancestors https://embed.example.com"},
+	)
+	if got := codes(Evaluate(manifest, Baseline())); got["audit_header_frame_conflict"] != 1 {
+		t.Fatalf("expected one frame-conflict finding, got %#v", got)
+	}
+}
+
+func TestBaselineHSTSAllowedInDevelopmentWithShortMaxAge(t *testing.T) {
+	manifest := headerManifest("development",
+		securitymanifest.ConfiguredHeader{Name: "X-Content-Type-Options", Value: "nosniff"},
+		securitymanifest.ConfiguredHeader{Name: "Strict-Transport-Security", Value: "max-age=600"},
+	)
+	if got := codes(Evaluate(manifest, Baseline())); got["audit_header_hsts_weak"] != 0 {
+		t.Fatalf("short max-age should be tolerated outside production, got %#v", got)
 	}
 }
 

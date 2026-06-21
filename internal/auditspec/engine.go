@@ -75,7 +75,7 @@ func Evaluate(manifest securitymanifest.SecurityManifest, policies []Policy) []F
 			continue
 		}
 		matchedAnything[policy.Name] = true
-		findings = append(findings, evalFrontend(manifest.Frontend, policy, frontendRawHTMLAllowlist)...)
+		findings = append(findings, evalFrontend(manifest.Frontend, policy, frontendRawHTMLAllowlist, manifest.BuildMode)...)
 	}
 
 	findings = append(findings, unmatchedSelectorFindings(resolved, matchedAnything)...)
@@ -446,10 +446,12 @@ func observabilityAccessPolicyChecksOrigin(entry securitymanifest.ObservabilityE
 	return false
 }
 
-func evalFrontend(surface securitymanifest.FrontendSurface, policy Policy, rawHTMLAllowlist map[string]bool) []Finding {
+func evalFrontend(surface securitymanifest.FrontendSurface, policy Policy, rawHTMLAllowlist map[string]bool, buildMode string) []Finding {
 	var findings []Finding
 	for _, rule := range policy.Rules {
 		switch rule.Kind {
+		case RuleCheckSecurityHeaders:
+			findings = append(findings, evalSecurityHeaders(surface, policy, buildMode)...)
 		case RuleNoSecretsInBundle:
 			for _, leak := range surface.BundleSecrets {
 				findings = append(findings, finding(rule, policy, "frontend", leak.Source,

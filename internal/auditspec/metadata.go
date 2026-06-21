@@ -108,6 +108,16 @@ func cweFor(code string) []string {
 		return []string{"CWE-798"}
 	case "audit_raw_html_sink":
 		return []string{"CWE-79"}
+	case "audit_header_csp_weak":
+		return []string{"CWE-1021", "CWE-79"}
+	case "audit_header_frame_conflict":
+		return []string{"CWE-1021"}
+	case "audit_header_hsts_weak":
+		return []string{"CWE-319"}
+	case "audit_header_nosniff_missing":
+		return []string{"CWE-693"}
+	case "audit_header_referrer_weak":
+		return []string{"CWE-200"}
 	case "audit_max_body_exceeds_policy", "audit_observability_body_limit_missing", "audit_observability_batch_limit_missing":
 		return []string{"CWE-770"}
 	case "audit_observability_production_exposed", "audit_observability_origin_unchecked", "audit_observability_content_type_missing", "audit_observability_absolute_source":
@@ -130,6 +140,9 @@ func owaspFor(code string) []string {
 	case "audit_max_body_exceeds_policy", "audit_observability_body_limit_missing", "audit_observability_batch_limit_missing":
 		return []string{"A05:2021-Security Misconfiguration"}
 	default:
+		if strings.HasPrefix(code, "audit_header_") {
+			return []string{"A05:2021-Security Misconfiguration"}
+		}
 		return nil
 	}
 }

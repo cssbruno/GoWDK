@@ -140,6 +140,33 @@ func hasBundleLeak(leaks []BundleLeak, source string, kind string) bool {
 	return false
 }
 
+func TestBuildRecordsNormalizedAndRedactedHeaderValues(t *testing.T) {
+	config := gowdk.Config{Build: gowdk.BuildConfig{
+		Mode: gowdk.Production,
+		SecurityHeaders: gowdk.SecurityHeadersConfig{
+			Enabled: true,
+			Headers: map[string]string{
+				"Content-Security-Policy": "  default-src   'self' ",
+				"X-Internal-Token":        "live_sk_abcdef0123456789abcdef",
+			},
+		},
+	}}
+	manifest := Build(config, gwdkir.Program{})
+	if manifest.BuildMode != string(gowdk.Production) {
+		t.Fatalf("expected production build mode in manifest, got %q", manifest.BuildMode)
+	}
+	byName := map[string]string{}
+	for _, header := range manifest.Frontend.ConfiguredHeaders {
+		byName[header.Name] = header.Value
+	}
+	if got := byName["Content-Security-Policy"]; got != "default-src 'self'" {
+		t.Fatalf("expected normalized CSP value, got %q", got)
+	}
+	if got := byName["X-Internal-Token"]; got != "[redacted]" {
+		t.Fatalf("expected secret-shaped header value to be redacted, got %q", got)
+	}
+}
+
 func TestBuildHonorsConfiguredBodyLimits(t *testing.T) {
 	config := gowdk.Config{Build: gowdk.BuildConfig{BodyLimits: gowdk.BodyLimitsConfig{ActionBytes: 256 << 10, APIBytes: 512 << 10}}}
 	ir := gwdkir.Program{

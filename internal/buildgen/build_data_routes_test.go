@@ -1023,6 +1023,45 @@ func TestBuildExpandsTypedDynamicSPAPathsAndInheritedActionRoutes(t *testing.T) 
 	}
 }
 
+func TestBuildLocalizesInheritedActionRoutes(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:     "contact",
+		Route:  "/contact",
+		Render: gowdk.Action,
+		Guards: []string{"public"},
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main><form g:post={Submit}><input name="email" /></form></main>`,
+			Actions: []gwdkir.Action{{
+				Name: "Submit",
+			}},
+		},
+	}}}
+
+	result, err := Build(gowdk.Config{I18N: gowdk.I18NConfig{
+		Locales: []gowdk.LocaleConfig{{Code: "en"}, {Code: "pt-BR", PathPrefix: "/br"}},
+	}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Artifacts) != 2 {
+		t.Fatalf("expected localized artifacts, got %#v", result.Artifacts)
+	}
+	for _, item := range []struct {
+		path string
+		want string
+	}{
+		{path: filepath.Join(outputDir, "en", "contact", "index.html"), want: `action="/en/contact"`},
+		{path: filepath.Join(outputDir, "br", "contact", "index.html"), want: `action="/br/contact"`},
+	} {
+		html := readFile(t, item.path)
+		if !strings.Contains(html, item.want) {
+			t.Fatalf("expected localized inherited action %s in %s:\n%s", item.want, item.path, html)
+		}
+	}
+}
+
 func TestBuildRejectsUnknownDynamicInterpolationBeforeWriting(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{

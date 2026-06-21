@@ -48,7 +48,7 @@ func pageOutputArtifacts(config gowdk.Config, outputDir string, page gwdkir.Page
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", page.ID, err)
 		}
-		html, _, err := renderPage(config, page, components, layouts, stylesheets, actionFields, data, output.locale, realtimeEventTypeNames, queryTypeNames, renderModeSPA)
+		html, _, err := renderPage(config, page, output.route, components, layouts, stylesheets, actionFields, data, output.locale, realtimeEventTypeNames, queryTypeNames, renderModeSPA)
 		if err != nil {
 			return nil, err
 		}

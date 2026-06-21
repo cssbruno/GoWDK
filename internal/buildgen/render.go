@@ -25,7 +25,7 @@ const (
 	renderModeRequestTime renderModePolicy = "request-time"
 )
 
-func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, data map[string]string, locale string, realtimeEventTypeNames map[string]string, queryTypeNames map[string]string, policy renderModePolicy) (string, ssrRegions, error) {
+func renderPage(config gowdk.Config, page gwdkir.Page, route string, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, data map[string]string, locale string, realtimeEventTypeNames map[string]string, queryTypeNames map[string]string, policy renderModePolicy) (string, ssrRegions, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
 	if policy == renderModeSPA && mode != gowdk.SPA && mode != gowdk.Action {
 		return "", ssrRegions{}, fmt.Errorf("%s: SPA build cannot emit request-time %s pages yet", page.ID, mode)
@@ -52,7 +52,7 @@ func renderPage(config gowdk.Config, page gwdkir.Page, components map[string]vie
 	var lists []view.SSRListReplacement
 	var conds []view.SSRCondReplacement
 	body, err := renderPageView(viewSource, viewNodes, pageComponents, data, view.Options{
-		Actions:                actionRoutes(page, data),
+		Actions:                actionRoutes(page, route, data),
 		ActionInputFields:      actionFields,
 		Package:                page.Package,
 		Tainted:                requestTimeTaintedFields(page, policy),
@@ -296,12 +296,12 @@ func validateViewParamReferences(page gwdkir.Page, source string, nodes []view.N
 	return nil
 }
 
-func actionRoutes(page gwdkir.Page, data map[string]string) map[string]string {
+func actionRoutes(page gwdkir.Page, pageRoute string, data map[string]string) map[string]string {
 	routes := map[string]string{}
 	for _, action := range page.Blocks.Actions {
 		route := action.Route
 		if route == "" {
-			route = page.Route
+			route = pageRoute
 		}
 		route = expandRouteTemplate(route, data, url.PathEscape)
 		routes[action.Name] = route

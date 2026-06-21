@@ -83,9 +83,9 @@ view {
 	}
 	output := string(payload)
 	for _, expected := range []string{
-		`"route": "/en/"`,
+		`"route": "/en"`,
 		`"locale": "en"`,
-		`"route": "/pt/"`,
+		`"route": "/pt"`,
 		`"locale": "pt"`,
 	} {
 		if !strings.Contains(output, expected) {

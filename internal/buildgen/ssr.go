@@ -110,7 +110,7 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, route gowdk.LocalizedRou
 	for key, value := range loadData {
 		data[key] = value
 	}
-	html, regions, err := renderPage(config, page, components, layouts, stylesheets, actionFields, data, route.Locale, realtimeEventTypeNames, queryTypeNames, renderModeRequestTime)
+	html, regions, err := renderPage(config, page, route.Route, components, layouts, stylesheets, actionFields, data, route.Locale, realtimeEventTypeNames, queryTypeNames, renderModeRequestTime)
 	if err != nil {
 		return SSRArtifact{}, err
 	}

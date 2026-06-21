@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Config describes how a GOWDK application should be discovered, compiled,
@@ -166,7 +167,7 @@ func (config I18NConfig) LocalizeRoute(route string, locale string) string {
 	}
 	route = "/" + strings.TrimLeft(route, "/")
 	if route == "/" {
-		return prefix + "/"
+		return prefix
 	}
 	return prefix + route
 }
@@ -249,6 +250,14 @@ func validateLocalePathPrefix(prefix string) error {
 	}
 	if strings.ContainsAny(prefix, "?#{}") {
 		return fmt.Errorf("%q must not contain query, fragment, or route parameter syntax", prefix)
+	}
+	if strings.Contains(prefix, `\`) {
+		return fmt.Errorf("%q must not contain backslashes", prefix)
+	}
+	for _, char := range prefix {
+		if unicode.IsSpace(char) || char < 0x20 || char == 0x7f {
+			return fmt.Errorf("%q must not contain whitespace or control characters", prefix)
+		}
 	}
 	for _, segment := range strings.Split(strings.Trim(prefix, "/"), "/") {
 		if segment == "" || segment == "." || segment == ".." {

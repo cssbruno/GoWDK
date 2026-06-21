@@ -24,7 +24,7 @@ func TestI18NConfigLocalizesRoutes(t *testing.T) {
 	if routes[1].Locale != "pt-BR" || routes[1].Route != "/br/about" {
 		t.Fatalf("unexpected second route: %#v", routes[1])
 	}
-	if root := config.LocalizeRoute("/", "en"); root != "/en/" {
+	if root := config.LocalizeRoute("/", "en"); root != "/en" {
 		t.Fatalf("expected localized root, got %q", root)
 	}
 	caseRoute := I18NConfig{Locales: []LocaleConfig{{Code: "en-GB"}}}.LocalizedRoutes("/news")
@@ -40,7 +40,7 @@ func TestI18NConfigCanOmitDefaultPrefix(t *testing.T) {
 	}
 
 	routes := config.LocalizedRoutes("/")
-	if len(routes) != 2 || routes[0].Route != "/" || routes[1].Route != "/pt/" {
+	if len(routes) != 2 || routes[0].Route != "/" || routes[1].Route != "/pt" {
 		t.Fatalf("unexpected localized root routes: %#v", routes)
 	}
 }
@@ -58,7 +58,7 @@ func TestI18NConfigOmittedDefaultPrefixDoesNotReserveSyntheticPrefix(t *testing.
 		t.Fatalf("expected omitted default prefix to allow /en for another locale: %v", err)
 	}
 	routes := config.LocalizedRoutes("/")
-	if len(routes) != 2 || routes[0].Route != "/" || routes[1].Route != "/en/" {
+	if len(routes) != 2 || routes[0].Route != "/" || routes[1].Route != "/en" {
 		t.Fatalf("unexpected routes: %#v", routes)
 	}
 }
@@ -88,6 +88,21 @@ func TestI18NConfigValidateRejectsUnsafePolicy(t *testing.T) {
 			name:   "unsafe prefix",
 			config: I18NConfig{Locales: []LocaleConfig{{Code: "en", PathPrefix: "/../en"}}},
 			want:   "unsafe path segment",
+		},
+		{
+			name:   "backslash prefix",
+			config: I18NConfig{Locales: []LocaleConfig{{Code: "en", PathPrefix: `/\admin`}}},
+			want:   "backslashes",
+		},
+		{
+			name:   "whitespace prefix",
+			config: I18NConfig{Locales: []LocaleConfig{{Code: "en", PathPrefix: "/en docs"}}},
+			want:   "whitespace or control characters",
+		},
+		{
+			name:   "control prefix",
+			config: I18NConfig{Locales: []LocaleConfig{{Code: "en", PathPrefix: "/en\nadmin"}}},
+			want:   "whitespace or control characters",
 		},
 		{
 			name:   "missing default",

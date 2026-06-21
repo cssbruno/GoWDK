@@ -8611,7 +8611,7 @@ func waitForHTTPStatusWithHeaders(url, method, body string, headers map[string]s
 // through the production manifest->IR path, asserting against exactly what the
 // generated-app pipeline derives.
 func actionEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]ActionEndpoint, error) {
-	return actionEndpointsFromIR(gwdkanalysis.BuildProgram(gowdk.Config{}, app))
+	return actionEndpointsFromIR(gowdk.Config{}, gwdkanalysis.BuildProgram(gowdk.Config{}, app))
 }
 
 func apiEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]APIEndpoint, error) {
@@ -8653,7 +8653,7 @@ func TestDeniedPageRoutesLocalizeGuardlessStaticPages(t *testing.T) {
 	}
 
 	denied := deniedPageRoutes(options)
-	if strings.Join(denied, ",") != "/en/,/pt/" {
+	if strings.Join(denied, ",") != "/en,/pt" {
 		t.Fatalf("expected localized guardless static routes, got %#v", denied)
 	}
 }

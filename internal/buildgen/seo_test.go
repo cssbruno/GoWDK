@@ -114,8 +114,8 @@ func TestBuildSEOIncludesLocalizedRoutes(t *testing.T) {
 	}
 	sitemap := readFile(t, result.SitemapPath)
 	for _, expected := range []string{
-		`<loc>https://example.com/en/</loc>`,
-		`<loc>https://example.com/pt/</loc>`,
+		`<loc>https://example.com/en</loc>`,
+		`<loc>https://example.com/pt</loc>`,
 	} {
 		if !strings.Contains(sitemap, expected) {
 			t.Fatalf("expected localized sitemap URL %q:\n%s", expected, sitemap)

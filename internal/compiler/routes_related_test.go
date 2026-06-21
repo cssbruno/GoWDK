@@ -3,6 +3,7 @@ package compiler
 import (
 	"testing"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -29,7 +30,7 @@ func TestDuplicateRouteCarriesRelatedFirstDeclaration(t *testing.T) {
 		{ID: "index", Source: "index.page.gwdk", Route: "/", Spans: gwdkir.PageSpans{Route: span(3, 1, 9)}},
 	}
 
-	diagnostic, ok := findByCode(validateUniquePageRoutes(pages), "duplicate_route")
+	diagnostic, ok := findByCode(validateUniquePageRoutes(gowdk.Config{}, pages), "duplicate_route")
 	if !ok {
 		t.Fatal("expected a duplicate_route diagnostic")
 	}
@@ -92,7 +93,7 @@ func TestContractRouteConflictCarriesRelatedFirstDeclaration(t *testing.T) {
 		{Kind: gwdkir.ContractQuery, Name: "Summary", Method: "GET", Path: "/reports", Source: "summary.gwdk", Span: span(7, 1, 12)},
 	}
 
-	diagnostic, ok := findByCode(validateRouteMethodConflicts(nil, nil, refs), "route_method_conflict")
+	diagnostic, ok := findByCode(validateRouteMethodConflicts(gowdk.Config{}, nil, nil, refs), "route_method_conflict")
 	if !ok {
 		t.Fatal("expected a route_method_conflict diagnostic")
 	}

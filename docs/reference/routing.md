@@ -154,7 +154,7 @@ var Config = gowdk.Config{
 ```
 
 With that config, `route "/about"` emits `/en/about` and `/br/about`. The
-root route `/` emits `/en/` and `/br/`. `OmitDefaultPrefix` keeps the default
+root route `/` emits `/en` and `/br`. `OmitDefaultPrefix` keeps the default
 locale on the original route, so `route "/about"` can emit `/about` plus
 `/br/about`.
 

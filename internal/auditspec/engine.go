@@ -75,12 +75,19 @@ func Evaluate(manifest securitymanifest.SecurityManifest, policies []Policy) []F
 		}
 	}
 
+	fctx := frontendContext{
+		surface:          manifest.Frontend,
+		rawHTMLAllowlist: frontendRawHTMLAllowlist,
+		activeExceptions: activeExceptions,
+		buildMode:        manifest.BuildMode,
+		cors:             manifest.CORS,
+	}
 	for _, policy := range resolved {
 		if !policy.hasFrontendSelector() {
 			continue
 		}
 		matchedAnything[policy.Name] = true
-		findings = append(findings, evalFrontend(manifest.Frontend, policy, frontendRawHTMLAllowlist, activeExceptions, manifest.BuildMode)...)
+		findings = append(findings, evalFrontend(fctx, policy)...)
 	}
 
 	findings = append(findings, unmatchedSelectorFindings(resolved, matchedAnything)...)
@@ -487,12 +494,25 @@ func observabilityAccessPolicyChecksOrigin(entry securitymanifest.ObservabilityE
 	return false
 }
 
-func evalFrontend(surface securitymanifest.FrontendSurface, policy Policy, rawHTMLAllowlist, activeExceptions map[string]bool, buildMode string) []Finding {
+// frontendContext bundles the global posture frontend rules reason over so the
+// per-policy evaluation signature stays small as new global gates are added.
+type frontendContext struct {
+	surface          securitymanifest.FrontendSurface
+	rawHTMLAllowlist map[string]bool
+	activeExceptions map[string]bool
+	buildMode        string
+	cors             securitymanifest.CORSPosture
+}
+
+func evalFrontend(ctx frontendContext, policy Policy) []Finding {
+	surface := ctx.surface
 	var findings []Finding
 	for _, rule := range policy.Rules {
 		switch rule.Kind {
 		case RuleCheckSecurityHeaders:
-			findings = append(findings, evalSecurityHeaders(surface, policy, buildMode)...)
+			findings = append(findings, evalSecurityHeaders(surface, policy, ctx.buildMode)...)
+		case RuleCheckCORS:
+			findings = append(findings, evalCORS(ctx.cors, policy, rule)...)
 		case RuleNoSecretsInBundle:
 			for _, leak := range surface.BundleSecrets {
 				findings = append(findings, finding(rule, policy, "frontend", leak.Source,
@@ -512,12 +532,30 @@ func evalFrontend(surface securitymanifest.FrontendSurface, policy Policy, rawHT
 					"Declare guard public for an intentionally public page, or add a protective guard."))
 			}
 		case RuleDenyRawHTMLSinks:
-			findings = append(findings, evalRawHTMLSinks(surface, policy, rule, rawHTMLAllowlist, activeExceptions)...)
+			findings = append(findings, evalRawHTMLSinks(surface, policy, rule, ctx.rawHTMLAllowlist, ctx.activeExceptions)...)
 		case RuleAllowRawHTML, RuleExceptRawHTML:
 			// Handled against the resolved frontend allowlist and exception set.
 		}
 	}
 	return findings
+}
+
+// evalCORS flags risky generated cross-origin policy. A wildcard origin is a
+// warning (every site may call the API); a wildcard origin combined with
+// credentials is an error.
+func evalCORS(cors securitymanifest.CORSPosture, policy Policy, rule Rule) []Finding {
+	if !cors.Enabled || !cors.AllowsAnyOrigin {
+		return nil
+	}
+	source := cors.Origin
+	if cors.AllowCredentials {
+		return []Finding{finding(ruleWithCode(rule, "audit_cors_credentialed_wildcard"), policy, "cors", source,
+			"CORS allows any origin together with credentials, exposing credentialed responses to every site",
+			"Replace the wildcard origin with an explicit allowlist, or disable AllowCredentials.")}
+	}
+	return []Finding{finding(ruleWithCode(rule, "audit_cors_wildcard_origin"), policy, "cors", source,
+		"CORS allows any origin, so generated API and contract endpoints accept cross-origin requests from any site",
+		"Restrict Build.CORS.AllowedOrigins to the specific origins that must call the API.")}
 }
 
 // evalRawHTMLSinks reports raw-HTML sinks that are neither allowlisted by a

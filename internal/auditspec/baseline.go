@@ -129,5 +129,15 @@ func Baseline() []Policy {
 				{Kind: RuleRequireRequestLimits},
 			},
 		},
+		{
+			Name:    "baseline.cors",
+			Builtin: true,
+			Selectors: []Selector{
+				{Raw: "frontend", Kind: SelectorFrontend},
+			},
+			Rules: []Rule{
+				{Kind: RuleCheckCORS},
+			},
+		},
 	}
 }

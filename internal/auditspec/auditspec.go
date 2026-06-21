@@ -48,6 +48,9 @@ const (
 	// RuleCheckSecurityHeaders audits the semantic strength of configured
 	// security response headers (CSP, nosniff, Referrer-Policy, HSTS, framing).
 	RuleCheckSecurityHeaders RuleKind = "check_security_headers"
+	// RuleCheckCORS audits the generated cross-origin policy for risky
+	// combinations such as a wildcard origin (optionally with credentials).
+	RuleCheckCORS RuleKind = "check_cors"
 	// RuleRequireClientRouteGuards reports client-visible routes that rely on
 	// default-deny because the source declared no guard.
 	RuleRequireClientRouteGuards RuleKind = "require_client_route_guards"

@@ -104,6 +104,8 @@ func cweFor(code string) []string {
 		return []string{"CWE-862"}
 	case "audit_contract_roleless":
 		return []string{"CWE-863"}
+	case "audit_cors_wildcard_origin", "audit_cors_credentialed_wildcard":
+		return []string{"CWE-942"}
 	case "audit_bundle_secret":
 		return []string{"CWE-798"}
 	case "audit_raw_html_sink", "audit_raw_html_exception_expired", "audit_raw_html_exception_unmatched", "audit_raw_html_exception_malformed":
@@ -132,7 +134,8 @@ func owaspFor(code string) []string {
 	switch code {
 	case "audit_action_missing_csrf", "audit_api_missing_csrf", "audit_command_missing_csrf":
 		return []string{"A01:2021-Broken Access Control"}
-	case "audit_api_public_by_omission", "audit_guardless_endpoint_page", "audit_client_route_unguarded", "audit_public_not_allowed", "audit_required_guard_missing", "audit_guard_unverified", "audit_contract_roleless":
+	case "audit_api_public_by_omission", "audit_guardless_endpoint_page", "audit_client_route_unguarded", "audit_public_not_allowed", "audit_required_guard_missing", "audit_guard_unverified", "audit_contract_roleless",
+		"audit_cors_wildcard_origin", "audit_cors_credentialed_wildcard":
 		return []string{"A01:2021-Broken Access Control"}
 	case "audit_bundle_secret", "audit_observability_production_exposed", "audit_observability_origin_unchecked", "audit_observability_content_type_missing", "audit_observability_absolute_source":
 		return []string{"A02:2021-Cryptographic Failures"}

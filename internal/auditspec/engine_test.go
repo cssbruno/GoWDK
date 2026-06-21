@@ -325,6 +325,80 @@ func TestBaselineHSTSAllowedInDevelopmentWithShortMaxAge(t *testing.T) {
 	}
 }
 
+func TestBaselineFlagsWildcardCORS(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		CORS: securitymanifest.CORSPosture{Enabled: true, AllowsAnyOrigin: true, Origin: "config:Build.CORS"},
+	}
+	if got := codes(Evaluate(manifest, Baseline())); got["audit_cors_wildcard_origin"] != 1 {
+		t.Fatalf("expected wildcard CORS warning, got %#v", got)
+	}
+
+	credentialed := securitymanifest.SecurityManifest{
+		CORS: securitymanifest.CORSPosture{Enabled: true, AllowsAnyOrigin: true, AllowCredentials: true, Origin: "config:Build.CORS"},
+	}
+	if got := codes(Evaluate(credentialed, Baseline())); got["audit_cors_credentialed_wildcard"] != 1 {
+		t.Fatalf("expected credentialed wildcard CORS error, got %#v", got)
+	}
+
+	scoped := securitymanifest.SecurityManifest{
+		CORS: securitymanifest.CORSPosture{Enabled: true, AllowedOrigins: []string{"https://app.example.com"}, AllowCredentials: true},
+	}
+	if got := codes(Evaluate(scoped, Baseline())); got["audit_cors_wildcard_origin"]+got["audit_cors_credentialed_wildcard"] != 0 {
+		t.Fatalf("a scoped origin allowlist should not be flagged, got %#v", got)
+	}
+}
+
+// TestBaselinePoliciesMapToImplementedChecks proves every built-in baseline
+// policy maps to an implemented engine check: a manifest that violates every
+// gate produces at least one finding attributed to each baseline policy.
+func TestBaselinePoliciesMapToImplementedChecks(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		BuildMode: "production",
+		Endpoints: []securitymanifest.EndpointEntry{
+			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", DefaultDeny: true, CSRF: false},
+			{ID: "Frag", Kind: "fragment", Method: "GET", Path: "/frag", DefaultDeny: true},
+			{ID: "Api", Kind: "api", Method: "POST", Path: "/api/x", DefaultDeny: true, CSRF: false},
+			{ID: "Cmd", Kind: "command", Method: "POST", Path: "/cmd", DefaultDeny: true, CSRF: false},
+			{ID: "Qry", Kind: "query", Method: "GET", Path: "/qry", DefaultDeny: true},
+		},
+		Contracts: []securitymanifest.ContractEntry{{Name: "patients.Create", Kind: "command"}},
+		Observability: []securitymanifest.ObservabilityEntry{{
+			ID: "trace.browser", Kind: "browser-ingest", Path: "/_gowdk/traces/browser", Mounted: true, BuildMode: "production", AccessPolicy: "public",
+		}},
+		CORS: securitymanifest.CORSPosture{Enabled: true, AllowsAnyOrigin: true},
+		Frontend: securitymanifest.FrontendSurface{
+			UnguardedRoutes:   []securitymanifest.UnguardedRoute{{Route: "/draft", Source: "draft.page.gwdk:4"}},
+			BundleSecrets:     []securitymanifest.BundleLeak{{Kind: "unsafe-asset:.env", Source: "card.cmp.gwdk:4"}},
+			RawHTMLSinks:      []securitymanifest.RawHTMLSink{{OwnerKind: "page", OwnerID: "home", Field: "{X}", Source: "home.page.gwdk:12", Fingerprint: "fp"}},
+			ConfiguredHeaders: []securitymanifest.ConfiguredHeader{{Name: "Content-Security-Policy", Value: "default-src *"}},
+		},
+		Routes: []securitymanifest.RouteEntry{{
+			PageID: "admin", Route: "/admin", Kind: "ssr", Guards: []string{"auth.required"},
+			GuardEvidence: []securitymanifest.GuardEvidence{{ID: "auth.required", BindingStatus: "unverified-app-owned", RuntimeTestFixture: "unverified-app-owned"}},
+		}},
+	}
+	policies := codesByPolicy(Evaluate(manifest, Baseline()))
+	for _, name := range []string{
+		"baseline.actions", "baseline.fragments", "baseline.api", "baseline.contract_commands",
+		"baseline.contract_queries", "baseline.contracts", "baseline.guards", "baseline.observability",
+		"baseline.frontend", "baseline.headers", "baseline.request_limits", "baseline.cors",
+	} {
+		if policies[name] == 0 {
+			t.Fatalf("baseline policy %q produced no finding, so it has no implemented check: %#v", name, policies)
+		}
+	}
+}
+
+func codesByPolicy(findings []Finding) map[string]int {
+	counts := map[string]int{}
+	for _, finding := range findings {
+		if finding.Policy != "" {
+			counts[finding.Policy]++
+		}
+	}
+	return counts
+}
+
 func TestDeclaredRequireCSRFResolvesCodeByEndpointKind(t *testing.T) {
 	manifest := securitymanifest.SecurityManifest{
 		Endpoints: []securitymanifest.EndpointEntry{

@@ -48,7 +48,20 @@ type SecurityManifest struct {
 	Endpoints     []EndpointEntry      `json:"endpoints,omitempty"`
 	Contracts     []ContractEntry      `json:"contracts,omitempty"`
 	Observability []ObservabilityEntry `json:"observability,omitempty"`
+	CORS          CORSPosture          `json:"cors"`
 	Frontend      FrontendSurface      `json:"frontend"`
+}
+
+// CORSPosture records the generated cross-origin policy for API and web contract
+// endpoints. The zero value means CORS is disabled and endpoints stay
+// same-origin.
+type CORSPosture struct {
+	Enabled          bool     `json:"enabled"`
+	AllowsAnyOrigin  bool     `json:"allowsAnyOrigin"`
+	AllowedOrigins   []string `json:"allowedOrigins,omitempty"`
+	AllowCredentials bool     `json:"allowCredentials"`
+	MaxAgeSeconds    int      `json:"maxAgeSeconds,omitempty"`
+	Origin           string   `json:"origin,omitempty"`
 }
 
 // RouteEntry is the posture of one page/file route.
@@ -257,6 +270,7 @@ func Build(config gowdk.Config, ir gwdkir.Program) SecurityManifest {
 	}
 
 	manifest.Observability = observabilityEntries(config, ir)
+	manifest.CORS = corsPosture(config)
 	manifest.Frontend.UnguardedRoutes = unguarded
 	manifest.Frontend.BundleSecrets = bundleLeaks(ir)
 	manifest.Frontend.RawHTMLSinks = rawHTMLSinks(ir)
@@ -449,6 +463,31 @@ func programSourcePaths(ir gwdkir.Program) []string {
 		paths = append(paths, template.Source)
 	}
 	return paths
+}
+
+func corsPosture(config gowdk.Config) CORSPosture {
+	cors := config.Build.CORS
+	if !cors.Enabled {
+		return CORSPosture{}
+	}
+	posture := CORSPosture{
+		Enabled:          true,
+		AllowCredentials: cors.AllowCredentials,
+		MaxAgeSeconds:    cors.MaxAgeSeconds,
+		Origin:           "config:Build.CORS",
+	}
+	for _, origin := range cors.AllowedOrigins {
+		origin = strings.TrimSpace(origin)
+		if origin == "" {
+			continue
+		}
+		if origin == "*" {
+			posture.AllowsAnyOrigin = true
+			continue
+		}
+		posture.AllowedOrigins = append(posture.AllowedOrigins, origin)
+	}
+	return posture
 }
 
 func buildMode(config gowdk.Config) string {

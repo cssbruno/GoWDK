@@ -687,7 +687,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, backendBindi
 		if isRequestTimePage(config, page) {
 			continue
 		}
-		routeArtifacts, err := pageRouteArtifacts(outputDir, page)
+		routeArtifacts, err := pageRouteArtifacts(config, outputDir, page)
 		if err != nil {
 			failures = append(failures, err.Error())
 			continue

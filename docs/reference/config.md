@@ -12,6 +12,7 @@ type Config struct {
 	Lifecycle LifecycleConfig
 	Build     BuildConfig
 	CSS       CSSConfig
+	I18N      I18NConfig
 	Addons    []Addon
 }
 ```
@@ -125,6 +126,13 @@ var Config = gowdk.Config{
 		Include: []string{"styles/**/*.css"},
 		Default: []string{"global", "tokens"},
 	},
+	I18N: gowdk.I18NConfig{
+		DefaultLocale: "en",
+		Locales: []gowdk.LocaleConfig{
+			{Code: "en", Name: "English"},
+			{Code: "pt-BR", PathPrefix: "/br", Name: "Brazilian Portuguese"},
+		},
+	},
 }
 ```
 
@@ -150,6 +158,41 @@ var Config = gowdk.Config{
 The addon module may import other GitHub/private/local modules. The project
 `go.mod` remains the source of truth for resolving those imports, including
 `require`, `replace`, `GOPRIVATE`, and module proxy configuration.
+
+## Localization
+
+`I18N` declares locale-prefixed page output. When `Locales` is empty, route
+generation is unchanged. When locales are configured, each generated page route
+is emitted once per locale:
+
+```go
+type I18NConfig struct {
+	Locales           []LocaleConfig
+	DefaultLocale     string
+	OmitDefaultPrefix bool
+}
+
+type LocaleConfig struct {
+	Code       string
+	PathPrefix string
+	Name       string
+}
+```
+
+`Code` must be a BCP-47-like ASCII locale code such as `en`, `pt-BR`, or
+`zh-Hant`. By default, the path prefix is `"/" + strings.ToLower(Code)`. Set
+`PathPrefix` for explicit URL shape, for example
+`{Code: "pt-BR", PathPrefix: "/br"}`. Prefixes must be absolute clean path
+prefixes and cannot resolve to the root path.
+
+`DefaultLocale` selects the fallback locale for helper APIs. If it is omitted,
+the first declared locale is the default. Set `OmitDefaultPrefix` to keep the
+default locale on the original page route while prefixing other locales.
+
+Localized build output passes the active locale to Go build helpers through
+`gowdk.BuildParams.Locale` and `BuildParams.LocaleCode()`. Generated
+request-time SSR route handlers attach the same locale to
+`runtime/app.Locale(ctx)`. Typed message catalogs live in `runtime/i18n`.
 
 ## Generated API CORS
 

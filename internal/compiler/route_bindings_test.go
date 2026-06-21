@@ -202,6 +202,27 @@ func TestBuildRouteMetadataFromIR(t *testing.T) {
 	}
 }
 
+func TestBuildRouteMetadataLocalizesPageRoutes(t *testing.T) {
+	config := gowdk.Config{I18N: gowdk.I18NConfig{
+		Locales: []gowdk.LocaleConfig{{Code: "en"}, {Code: "pt"}},
+	}}
+	metadata := BuildRouteMetadataFromIR(config, gwdkir.Program{
+		Routes: []gwdkir.Route{{Kind: gwdkir.RouteSPA, Method: "GET", Path: "/about", PageID: "about", Render: gowdk.SPA}},
+	})
+
+	en := findRoute(t, metadata.Routes, RouteSPA, "GET", "/en/about")
+	if en.Locale != "en" {
+		t.Fatalf("expected English route locale, got %#v", en)
+	}
+	pt := findRoute(t, metadata.Routes, RouteSPA, "GET", "/pt/about")
+	if pt.Locale != "pt" {
+		t.Fatalf("expected Portuguese route locale, got %#v", pt)
+	}
+	if len(metadata.Routes) != 2 {
+		t.Fatalf("expected two localized routes, got %#v", metadata.Routes)
+	}
+}
+
 func TestBuildRouteMetadataIncludesDerivedCommandEndpointRoute(t *testing.T) {
 	ir := appFixture{Pages: []gwdkir.Page{{
 		Package: "pages",
@@ -222,12 +243,22 @@ func TestBuildRouteMetadataIncludesDerivedCommandEndpointRoute(t *testing.T) {
 
 func assertRoute(t *testing.T, routes []RouteBinding, kind RouteKind, method, route, handler string) {
 	t.Helper()
-	for _, binding := range routes {
-		if binding.Kind == kind && binding.Method == method && binding.Route == route && binding.Handler == handler {
-			return
-		}
+	binding := findRoute(t, routes, kind, method, route)
+	if binding.Handler == handler {
+		return
 	}
 	t.Fatalf("Missing route kind=%s method=%s route=%s handler=%s in %#v", kind, method, route, handler, routes)
+}
+
+func findRoute(t *testing.T, routes []RouteBinding, kind RouteKind, method, route string) RouteBinding {
+	t.Helper()
+	for _, binding := range routes {
+		if binding.Kind == kind && binding.Method == method && binding.Route == route {
+			return binding
+		}
+	}
+	t.Fatalf("Missing route kind=%s method=%s route=%s in %#v", kind, method, route, routes)
+	return RouteBinding{}
 }
 
 func assertEndpoint(t *testing.T, endpoints []EndpointBinding, kind EndpointKind, method, route, handler string) {

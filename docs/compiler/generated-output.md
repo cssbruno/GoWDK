@@ -47,6 +47,10 @@ Implemented today:
   declare the layout.
 - Dynamic app routes with literal `paths {}` declarations are expanded by
   `gowdk build`.
+- Configured `I18N.Locales` expand generated page routes once per locale.
+  Localized SPA output receives locale-prefixed paths, generated HTML gets
+  `<html lang="...">`, `gowdk-routes.json` records the route `locale`, and
+  `gowdk.BuildParams.Locale` is passed to Go build helpers.
 - Literal dynamic route params can render in the current literal `view {}`
   interpolation subset.
 - Literal `build {}` data can render in the current literal `view {}`
@@ -408,6 +412,8 @@ as `/blog/hello-gowdk`. The optional `endpoints` array records generated
 request-time action, API, fragment, command, and query adapter routes; it does
 not point at static files. Dynamic endpoint routes also include
 `dynamicParams` and typed `routeParams` when route parameters are declared.
+When locale routing is enabled, localized page entries also include `locale`.
+Endpoint routes are not rewritten by locale config.
 
 ## Current App Asset Manifest
 

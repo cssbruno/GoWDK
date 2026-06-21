@@ -81,6 +81,16 @@ func TestHandlerWritesConfiguredSecurityHeaders(t *testing.T) {
 	}
 }
 
+func TestLocaleContextAccessors(t *testing.T) {
+	ctx := WithLocale(context.Background(), "pt-BR")
+	if got := Locale(ctx); got != "pt-BR" {
+		t.Fatalf("unexpected locale: %q", got)
+	}
+	if got := Locale(context.Background()); got != "" {
+		t.Fatalf("expected empty locale for unlocalized context, got %q", got)
+	}
+}
+
 func TestHandlerRunsMiddlewaresInOrder(t *testing.T) {
 	type contextKey struct{}
 	var events []string

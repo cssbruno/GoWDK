@@ -72,6 +72,59 @@ func TestBuildRendersLiteralBuildData(t *testing.T) {
 	}
 }
 
+func TestBuildEmitsLocalizedRoutesAndPassesLocaleToBuildParams(t *testing.T) {
+	outputDir := t.TempDir()
+	source := filepath.Join("..", "..", "examples", "go-interop", "localized-about.page.gwdk")
+	config := gowdk.Config{I18N: gowdk.I18NConfig{
+		Locales: []gowdk.LocaleConfig{
+			{Code: "en"},
+			{Code: "pt", PathPrefix: "/pt"},
+		},
+		DefaultLocale: "en",
+	}}
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:      "about",
+		Package: "pages",
+		Source:  source,
+		Route:   "/about",
+		Blocks: gwdkir.Blocks{
+			Build:     true,
+			BuildBody: `=> AboutForBuild()`,
+			GoBlocks: []gwdkir.GoBlock{{
+				Body: `type PageCopy struct {
+	Title string ` + "`json:\"title\"`" + `
+}
+
+func AboutForBuild(params gowdkbuildparams.BuildParams) PageCopy {
+	return PageCopy{Title: "Locale " + params.LocaleCode()}
+}`,
+			}},
+			View:     true,
+			ViewBody: `<main><h1>{title}</h1></main>`,
+		},
+	}}}
+
+	result, err := Build(config, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	en := readFile(t, filepath.Join(outputDir, "en", "about", "index.html"))
+	if !strings.Contains(en, `<html lang="en">`) || !strings.Contains(en, `<h1>Locale en</h1>`) {
+		t.Fatalf("expected localized English output:\n%s", en)
+	}
+	pt := readFile(t, filepath.Join(outputDir, "pt", "about", "index.html"))
+	if !strings.Contains(pt, `<html lang="pt">`) || !strings.Contains(pt, `<h1>Locale pt</h1>`) {
+		t.Fatalf("expected localized Portuguese output:\n%s", pt)
+	}
+	if len(result.Artifacts) != 2 {
+		t.Fatalf("expected two localized artifacts, got %#v", result.Artifacts)
+	}
+	manifest := readRouteManifest(t, outputDir)
+	if len(manifest.Routes) != 2 || manifest.Routes[0].Locale != "en" || manifest.Routes[1].Locale != "pt" {
+		t.Fatalf("expected localized route manifest entries, got %#v", manifest.Routes)
+	}
+}
+
 func TestBuildUsesTypedPathAndBuildRecords(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{

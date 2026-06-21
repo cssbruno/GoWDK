@@ -14,6 +14,7 @@ type Config struct {
 	Source    SourceConfig
 	Modules   []ModuleConfig
 	Render    RenderConfig
+	I18N      I18NConfig
 	Env       EnvConfig
 	Lifecycle LifecycleConfig
 	Build     BuildConfig
@@ -44,7 +45,8 @@ type RenderConfig struct {
 
 // BuildParams carries compile-time route values into Go build helpers.
 type BuildParams struct {
-	Route map[string]string `json:"route,omitempty"`
+	Route  map[string]string `json:"route,omitempty"`
+	Locale string            `json:"locale,omitempty"`
 }
 
 // Param returns a declared dynamic route param by name.
@@ -69,12 +71,222 @@ func (params BuildParams) RouteParams() map[string]string {
 	return out
 }
 
+// LocaleCode returns the active build locale, when localized route generation
+// is enabled.
+func (params BuildParams) LocaleCode() string {
+	return strings.TrimSpace(params.Locale)
+}
+
 // DefaultMode returns SPA when no explicit default render mode is set.
 func (config RenderConfig) DefaultMode() RenderMode {
 	if config.Default == "" {
 		return SPA
 	}
 	return config.Default
+}
+
+// I18NConfig controls locale-aware route generation. When Locales is empty,
+// GOWDK emits the existing single-locale routes.
+type I18NConfig struct {
+	Locales           []LocaleConfig
+	DefaultLocale     string
+	OmitDefaultPrefix bool
+}
+
+// LocaleConfig declares one locale available to build-time and request-time
+// generated routes. PathPrefix is optional; when omitted, "/<Code>" is used.
+type LocaleConfig struct {
+	Code       string
+	PathPrefix string
+	Name       string
+}
+
+// LocalizedRoute describes one locale-expanded route.
+type LocalizedRoute struct {
+	Locale string
+	Route  string
+}
+
+// Enabled reports whether localized route generation is configured.
+func (config I18NConfig) Enabled() bool {
+	return len(config.Locales) > 0
+}
+
+// DefaultLocaleCode returns the configured default locale or the first locale.
+func (config I18NConfig) DefaultLocaleCode() string {
+	if len(config.Locales) == 0 {
+		return ""
+	}
+	if strings.TrimSpace(config.DefaultLocale) != "" {
+		return strings.TrimSpace(config.DefaultLocale)
+	}
+	return strings.TrimSpace(config.Locales[0].Code)
+}
+
+// LocaleCodes returns configured locale codes in declaration order.
+func (config I18NConfig) LocaleCodes() []string {
+	if len(config.Locales) == 0 {
+		return nil
+	}
+	codes := make([]string, 0, len(config.Locales))
+	for _, locale := range config.Locales {
+		code := strings.TrimSpace(locale.Code)
+		if code != "" {
+			codes = append(codes, code)
+		}
+	}
+	return codes
+}
+
+// LocalizedRoutes returns the concrete route variants for the configured
+// locale policy. With no locale policy it returns the original route.
+func (config I18NConfig) LocalizedRoutes(route string) []LocalizedRoute {
+	if !config.Enabled() {
+		return []LocalizedRoute{{Route: route}}
+	}
+	routes := make([]LocalizedRoute, 0, len(config.Locales))
+	for _, locale := range config.Locales {
+		code := strings.TrimSpace(locale.Code)
+		if code == "" {
+			continue
+		}
+		routes = append(routes, LocalizedRoute{
+			Locale: code,
+			Route:  config.LocalizeRoute(route, code),
+		})
+	}
+	return routes
+}
+
+// LocalizeRoute applies the configured path-prefix policy for one locale.
+func (config I18NConfig) LocalizeRoute(route string, locale string) string {
+	prefix := config.PathPrefix(locale)
+	if prefix == "" {
+		return route
+	}
+	route = "/" + strings.TrimLeft(route, "/")
+	if route == "/" {
+		return prefix + "/"
+	}
+	return prefix + route
+}
+
+// PathPrefix returns the normalized route prefix for one configured locale.
+func (config I18NConfig) PathPrefix(locale string) string {
+	locale = strings.TrimSpace(locale)
+	if locale == "" || !config.Enabled() {
+		return ""
+	}
+	if config.OmitDefaultPrefix && strings.EqualFold(locale, config.DefaultLocaleCode()) {
+		return ""
+	}
+	for _, candidate := range config.Locales {
+		if !strings.EqualFold(strings.TrimSpace(candidate.Code), locale) {
+			continue
+		}
+		return localePathPrefix(candidate)
+	}
+	return ""
+}
+
+// Validate checks the locale route policy.
+func (config I18NConfig) Validate() error {
+	if !config.Enabled() {
+		return nil
+	}
+	seenCodes := map[string]bool{}
+	seenPrefixes := map[string]string{}
+	defaultLocale := strings.TrimSpace(config.DefaultLocale)
+	if defaultLocale == "" {
+		defaultLocale = strings.TrimSpace(config.Locales[0].Code)
+	}
+	for index, locale := range config.Locales {
+		code := strings.TrimSpace(locale.Code)
+		if code == "" {
+			return fmt.Errorf("I18N.Locales[%d].Code is required", index)
+		}
+		if !validLocaleCode(code) {
+			return fmt.Errorf("I18N.Locales[%d].Code %q is not a supported locale code", index, code)
+		}
+		codeKey := strings.ToLower(code)
+		if seenCodes[codeKey] {
+			return fmt.Errorf("I18N.Locales contains duplicate locale %q", code)
+		}
+		seenCodes[codeKey] = true
+		prefix := localePathPrefix(locale)
+		if err := validateLocalePathPrefix(prefix); err != nil {
+			return fmt.Errorf("I18N.Locales[%d].PathPrefix: %w", index, err)
+		}
+		if config.OmitDefaultPrefix && strings.EqualFold(code, defaultLocale) {
+			continue
+		}
+		if previous := seenPrefixes[prefix]; previous != "" {
+			return fmt.Errorf("I18N.Locales prefix %q is used by both %q and %q", prefix, previous, code)
+		}
+		seenPrefixes[prefix] = code
+	}
+	if strings.TrimSpace(config.DefaultLocale) != "" && !seenCodes[strings.ToLower(defaultLocale)] {
+		return fmt.Errorf("I18N.DefaultLocale %q is not declared in I18N.Locales", defaultLocale)
+	}
+	return nil
+}
+
+func localePathPrefix(locale LocaleConfig) string {
+	prefix := strings.TrimSpace(locale.PathPrefix)
+	if prefix == "" {
+		prefix = "/" + strings.ToLower(strings.TrimSpace(locale.Code))
+	}
+	prefix = "/" + strings.Trim(strings.TrimSpace(prefix), "/")
+	if prefix == "/" {
+		return ""
+	}
+	return prefix
+}
+
+func validateLocalePathPrefix(prefix string) error {
+	if prefix == "" {
+		return fmt.Errorf("must not resolve to the root path")
+	}
+	if strings.ContainsAny(prefix, "?#{}") {
+		return fmt.Errorf("%q must not contain query, fragment, or route parameter syntax", prefix)
+	}
+	for _, segment := range strings.Split(strings.Trim(prefix, "/"), "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return fmt.Errorf("%q contains unsafe path segment %q", prefix, segment)
+		}
+	}
+	return nil
+}
+
+func validLocaleCode(code string) bool {
+	parts := strings.Split(code, "-")
+	if len(parts) == 0 || len(parts[0]) < 2 || len(parts[0]) > 3 {
+		return false
+	}
+	for _, r := range parts[0] {
+		if !asciiLetter(r) {
+			return false
+		}
+	}
+	for _, part := range parts[1:] {
+		if len(part) < 2 || len(part) > 8 {
+			return false
+		}
+		for _, r := range part {
+			if !asciiLetter(r) && !asciiDigit(r) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func asciiLetter(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+}
+
+func asciiDigit(r rune) bool {
+	return r >= '0' && r <= '9'
 }
 
 // EnvConfig declares the runtime environment contract for generated apps.

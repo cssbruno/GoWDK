@@ -114,6 +114,7 @@ type SSRRoute struct {
 	Render           gowdk.RenderMode
 	Cache            string
 	ErrorPage        string
+	Locale           string
 	DynamicParams    []string
 	RouteParams      []source.RouteParam
 	Layouts          []string

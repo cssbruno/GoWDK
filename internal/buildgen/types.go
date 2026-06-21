@@ -5,6 +5,7 @@ type Artifact struct {
 	Route       string
 	Path        string
 	CachePolicy string
+	Locale      string
 }
 
 type CSSArtifact struct {

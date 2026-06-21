@@ -20,22 +20,22 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
-func runBuildDataCallRef(ref buildCallRef, imports []gwdkir.Import, scripts []gwdkir.GoBlock, source string, routeParams map[string]string) (map[string]string, error) {
+func runBuildDataCallRef(ref buildCallRef, imports []gwdkir.Import, scripts []gwdkir.GoBlock, source string, routeParams map[string]string, locale string) (map[string]string, error) {
 	if ref.Alias == "" {
 		if script, ok := packageScriptWithFunction(scripts, ref.Function); ok {
-			return runInlineBuildDataCall(script, imports, source, ref.Function, routeParams)
+			return runInlineBuildDataCall(script, imports, source, ref.Function, routeParams, locale)
 		}
 		importPath, err := samePackageImportPath(source)
 		if err != nil {
 			return nil, err
 		}
-		return runBuildDataCall("gowdkbuilddata", importPath, ref.Function, sourceDir(source), routeParams)
+		return runBuildDataCall("gowdkbuilddata", importPath, ref.Function, sourceDir(source), routeParams, locale)
 	}
 	item, ok := findBuildImport(ref.Alias, imports)
 	if !ok {
 		return nil, fmt.Errorf("build import %q is not declared", ref.Alias)
 	}
-	return runBuildDataCall(ref.Alias, item.Path, ref.Function, sourceDir(source), routeParams)
+	return runBuildDataCall(ref.Alias, item.Path, ref.Function, sourceDir(source), routeParams, locale)
 }
 
 func packageScriptWithFunction(scripts []gwdkir.GoBlock, function string) (gwdkir.GoBlock, bool) {
@@ -66,10 +66,10 @@ func isStaticPackageGoBlockTarget(target string) bool {
 	}
 }
 
-func runInlineBuildDataCall(script gwdkir.GoBlock, imports []gwdkir.Import, source string, function string, routeParams map[string]string) (map[string]string, error) {
+func runInlineBuildDataCall(script gwdkir.GoBlock, imports []gwdkir.Import, source string, function string, routeParams map[string]string, locale string) (map[string]string, error) {
 	var lastErr error
 	for _, candidate := range buildDataRunnerCandidates(routeParams) {
-		runnerSource, err := inlineBuildDataRunnerSource(script, imports, source, function, candidate, routeParams)
+		runnerSource, err := inlineBuildDataRunnerSource(script, imports, source, function, candidate, routeParams, locale)
 		if err != nil {
 			return nil, err
 		}
@@ -96,7 +96,7 @@ func buildDataRunnerCandidates(routeParams map[string]string) []buildDataRunnerC
 	}
 }
 
-func inlineBuildDataRunnerSource(script gwdkir.GoBlock, imports []gwdkir.Import, source string, function string, candidate buildDataRunnerCandidate, routeParams map[string]string) (string, error) {
+func inlineBuildDataRunnerSource(script gwdkir.GoBlock, imports []gwdkir.Import, source string, function string, candidate buildDataRunnerCandidate, routeParams map[string]string, locale string) (string, error) {
 	if !isLiteralName(function) {
 		return "", fmt.Errorf("invalid build function name %q", function)
 	}
@@ -112,7 +112,7 @@ func inlineBuildDataRunnerSource(script gwdkir.GoBlock, imports []gwdkir.Import,
 		}
 		decls = append(decls, declaration)
 	}
-	decls = append(decls, inlineBuildDataMainDecl(function, candidate, routeParams))
+	decls = append(decls, inlineBuildDataMainDecl(function, candidate, routeParams, locale))
 
 	runner := &ast.File{Name: ast.NewIdent("main"), Decls: decls}
 	var buffer bytes.Buffer
@@ -214,8 +214,8 @@ func importKey(alias string, path string) string {
 	return alias + "\x00" + path
 }
 
-func inlineBuildDataMainDecl(function string, candidate buildDataRunnerCandidate, routeParams map[string]string) ast.Decl {
-	args := buildDataCallArgs(candidate, routeParams)
+func inlineBuildDataMainDecl(function string, candidate buildDataRunnerCandidate, routeParams map[string]string, locale string) ast.Decl {
+	args := buildDataCallArgs(candidate, routeParams, locale)
 	var statements []ast.Stmt
 	if candidate.returnsError {
 		statements = append(statements,
@@ -291,10 +291,10 @@ func sourceDir(source string) string {
 	return filepath.Dir(source)
 }
 
-func runBuildDataCall(alias, importPath, function string, workDir string, routeParams map[string]string) (map[string]string, error) {
+func runBuildDataCall(alias, importPath, function string, workDir string, routeParams map[string]string, locale string) (map[string]string, error) {
 	var lastErr error
 	for _, candidate := range buildDataRunnerCandidates(routeParams) {
-		source, err := buildDataRunnerSource(alias, importPath, function, candidate, routeParams)
+		source, err := buildDataRunnerSource(alias, importPath, function, candidate, routeParams, locale)
 		if err != nil {
 			return nil, err
 		}
@@ -316,7 +316,7 @@ func findBuildImport(alias string, imports []gwdkir.Import) (gwdkir.Import, bool
 	return gwdkir.Import{}, false
 }
 
-func buildDataRunnerSource(alias, importPath, function string, candidate buildDataRunnerCandidate, routeParams map[string]string) (string, error) {
+func buildDataRunnerSource(alias, importPath, function string, candidate buildDataRunnerCandidate, routeParams map[string]string, locale string) (string, error) {
 	if !isLiteralName(alias) {
 		return "", fmt.Errorf("invalid build import alias %q", alias)
 	}
@@ -330,7 +330,7 @@ func buildDataRunnerSource(alias, importPath, function string, candidate buildDa
 		Name: ast.NewIdent("main"),
 		Decls: []ast.Decl{
 			buildDataImportDecl(alias, importPath, candidate),
-			buildDataMainDecl(alias, function, candidate, routeParams),
+			buildDataMainDecl(alias, function, candidate, routeParams, locale),
 		},
 	}
 	var buffer bytes.Buffer
@@ -359,8 +359,8 @@ func buildDataImportDecl(alias, importPath string, candidate buildDataRunnerCand
 	return &ast.GenDecl{Tok: token.IMPORT, Specs: specs}
 }
 
-func buildDataMainDecl(alias, function string, candidate buildDataRunnerCandidate, routeParams map[string]string) ast.Decl {
-	args := buildDataCallArgs(candidate, routeParams)
+func buildDataMainDecl(alias, function string, candidate buildDataRunnerCandidate, routeParams map[string]string, locale string) ast.Decl {
+	args := buildDataCallArgs(candidate, routeParams, locale)
 	var statements []ast.Stmt
 	if candidate.returnsError {
 		statements = append(statements,
@@ -386,21 +386,32 @@ func buildDataMainDecl(alias, function string, candidate buildDataRunnerCandidat
 	}
 }
 
-func buildDataCallArgs(candidate buildDataRunnerCandidate, routeParams map[string]string) []ast.Expr {
+func buildDataCallArgs(candidate buildDataRunnerCandidate, routeParams map[string]string, locale string) []ast.Expr {
 	if !candidate.withParams {
 		return nil
 	}
-	return []ast.Expr{buildDataParamsExpr(routeParams)}
+	return []ast.Expr{buildDataParamsExpr(routeParams, locale)}
 }
 
-func buildDataParamsExpr(routeParams map[string]string) ast.Expr {
+func buildDataParamsExpr(routeParams map[string]string, locale string) ast.Expr {
 	return &ast.CompositeLit{
 		Type: &ast.SelectorExpr{X: ast.NewIdent("gowdkbuildparams"), Sel: ast.NewIdent("BuildParams")},
-		Elts: []ast.Expr{&ast.KeyValueExpr{
-			Key:   ast.NewIdent("Route"),
-			Value: buildDataStringMapLit(routeParams),
-		}},
+		Elts: buildDataParamsElts(routeParams, locale),
 	}
+}
+
+func buildDataParamsElts(routeParams map[string]string, locale string) []ast.Expr {
+	elts := []ast.Expr{&ast.KeyValueExpr{
+		Key:   ast.NewIdent("Route"),
+		Value: buildDataStringMapLit(routeParams),
+	}}
+	if strings.TrimSpace(locale) != "" {
+		elts = append(elts, &ast.KeyValueExpr{
+			Key:   ast.NewIdent("Locale"),
+			Value: buildDataStringLit(strings.TrimSpace(locale)),
+		})
+	}
+	return elts
 }
 
 func buildDataStringMapLit(values map[string]string) ast.Expr {

@@ -23,20 +23,22 @@ var supportedDirectiveNames = map[string]bool{
 	// g:for and g:if span both lanes: over server {} request-time data they
 	// render server-side (the former g:each/g:when), and over client state/store
 	// they bind reactive islands. The compiler infers the lane from the operand.
-	"g:for":         true,
-	"g:unsafe-html": true,
-	"g:if":          true,
-	"g:island":      true,
-	"g:key":         true,
-	"g:transition":  true,
-	"g:animate":     true,
-	"g:post":        true,
-	"g:query":       true,
-	"g:ref":         true,
-	"g:slot":        true,
-	"g:subscribe":   true,
-	"g:swap":        true,
-	"g:target":      true,
+	"g:for":           true,
+	"g:unsafe-html":   true,
+	"g:if":            true,
+	"g:island":        true,
+	"g:key":           true,
+	"g:max-file-size": true,
+	"g:max-files":     true,
+	"g:transition":    true,
+	"g:animate":       true,
+	"g:post":          true,
+	"g:query":         true,
+	"g:ref":           true,
+	"g:slot":          true,
+	"g:subscribe":     true,
+	"g:swap":          true,
+	"g:target":        true,
 }
 
 // supportedMessageDirectives are the g:message:* validation-message rules.

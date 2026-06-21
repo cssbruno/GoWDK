@@ -53,6 +53,7 @@ type BackendActionAdapter struct {
 	InputName        string
 	InputType        string
 	InputFields      []string
+	UploadFields     []ActionUploadField
 	RequiredFields   []string
 	RequiredMessages map[string]string
 	ValidationRules  []ActionValidationRule
@@ -167,6 +168,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 			InputName:        action.InputName,
 			InputType:        action.InputType,
 			InputFields:      append([]string(nil), action.InputFields...),
+			UploadFields:     cloneActionUploadFields(action.UploadFields),
 			RequiredFields:   append([]string(nil), action.RequiredFields...),
 			RequiredMessages: copyStringMap(action.RequiredMessages),
 			ValidationRules:  append([]ActionValidationRule(nil), action.ValidationRules...),
@@ -351,6 +353,18 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 	}
 	reserveGeneratedBackendAdapterAliases(&ir)
 	return ir
+}
+
+func cloneActionUploadFields(fields []ActionUploadField) []ActionUploadField {
+	if len(fields) == 0 {
+		return nil
+	}
+	out := make([]ActionUploadField, 0, len(fields))
+	for _, field := range fields {
+		field.AllowedContentTypes = append([]string(nil), field.AllowedContentTypes...)
+		out = append(out, field)
+	}
+	return out
 }
 
 func reserveGeneratedBackendAdapterAliases(ir *BackendAdapterIR) {

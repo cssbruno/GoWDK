@@ -100,6 +100,85 @@ func TestDecodeExpectedPreservesRepeatedValues(t *testing.T) {
 	}
 }
 
+func TestDecodeExpectedDataEnforcesFilePolicy(t *testing.T) {
+	data := Data{
+		Values: Values{"caption": {"profile"}},
+		Files: Files{"avatar": {{
+			Filename:    "avatar.png",
+			Size:        512,
+			ContentType: "image/png",
+		}}},
+	}
+	schema := Schema{Fields: []Field{
+		{Name: "caption"},
+		{Name: "avatar", File: &FilePolicy{
+			MaxFiles:            1,
+			MaxBytes:            1024,
+			AllowedContentTypes: []string{"image/png"},
+		}},
+	}}
+
+	decoded, err := DecodeExpectedData(data, schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := decoded.Values.First("caption"); got != "profile" {
+		t.Fatalf("unexpected caption: %q", got)
+	}
+	file, ok, err := decoded.File("avatar")
+	if err != nil || !ok || file.Filename != "avatar.png" {
+		t.Fatalf("unexpected file: %#v ok=%v err=%v", file, ok, err)
+	}
+	if !decoded.HasSubmitted("avatar") {
+		t.Fatal("uploaded file should count as submitted")
+	}
+}
+
+func TestDecodeExpectedDataRejectsUnexpectedAndInvalidFiles(t *testing.T) {
+	schema := Schema{Fields: []Field{{Name: "avatar", File: &FilePolicy{
+		MaxFiles:            1,
+		MaxBytes:            100,
+		AllowedContentTypes: []string{"image/*"},
+	}}}}
+	tests := []struct {
+		name    string
+		data    Data
+		message string
+	}{
+		{
+			name:    "unexpected file",
+			data:    Data{Files: Files{"other": {{Filename: "x.png", Size: 1, ContentType: "image/png"}}}},
+			message: "other: unexpected file field",
+		},
+		{
+			name:    "too many files",
+			data:    Data{Files: Files{"avatar": {{Filename: "a.png", Size: 1, ContentType: "image/png"}, {Filename: "b.png", Size: 1, ContentType: "image/png"}}}},
+			message: "avatar: too many files",
+		},
+		{
+			name:    "too large",
+			data:    Data{Files: Files{"avatar": {{Filename: "a.png", Size: 101, ContentType: "image/png"}}}},
+			message: "avatar: file too large",
+		},
+		{
+			name:    "wrong type",
+			data:    Data{Files: Files{"avatar": {{Filename: "a.txt", Size: 1, ContentType: "text/plain"}}}},
+			message: "avatar: file content type is not allowed",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := DecodeExpectedData(test.data, schema)
+			if err == nil {
+				t.Fatal("expected decode error")
+			}
+			if !strings.Contains(err.Error(), test.message) {
+				t.Fatalf("expected %q, got %v", test.message, err)
+			}
+		})
+	}
+}
+
 func TestScalarHelpersDecodeValuesWithoutReflection(t *testing.T) {
 	values := Values{
 		"email":  {"reader@example.com"},

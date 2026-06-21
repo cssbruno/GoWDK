@@ -13,6 +13,8 @@ const (
 	BackendInputFieldKindSignedInt   BackendInputFieldKind = "signed_int"
 	BackendInputFieldKindUnsignedInt BackendInputFieldKind = "unsigned_int"
 	BackendInputFieldKindStringSlice BackendInputFieldKind = "string_slice"
+	BackendInputFieldKindFile        BackendInputFieldKind = "file"
+	BackendInputFieldKindFileSlice   BackendInputFieldKind = "file_slice"
 )
 
 const (
@@ -31,6 +33,8 @@ const (
 	BackendInputTypeUint64      = "uint64"
 	BackendInputTypeByte        = "byte"
 	BackendInputTypeStringSlice = "[]string"
+	BackendInputTypeFile        = "form.File"
+	BackendInputTypeFileSlice   = "[]form.File"
 )
 
 // BackendInputFieldTypeInfo describes one Go type accepted for generated
@@ -57,6 +61,8 @@ var backendInputFieldTypes = map[string]BackendInputFieldTypeInfo{
 	BackendInputTypeUint64:      {Name: BackendInputTypeUint64, Kind: BackendInputFieldKindUnsignedInt, BitSize: 64},
 	BackendInputTypeByte:        {Name: BackendInputTypeByte, Kind: BackendInputFieldKindUnsignedInt, BitSize: 8},
 	BackendInputTypeStringSlice: {Name: BackendInputTypeStringSlice, Kind: BackendInputFieldKindStringSlice},
+	BackendInputTypeFile:        {Name: BackendInputTypeFile, Kind: BackendInputFieldKindFile},
+	BackendInputTypeFileSlice:   {Name: BackendInputTypeFileSlice, Kind: BackendInputFieldKindFileSlice},
 }
 
 // LookupBackendInputFieldType returns the canonical metadata for a supported

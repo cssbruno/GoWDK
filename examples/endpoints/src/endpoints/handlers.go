@@ -41,6 +41,34 @@ func ResetSettings(context.Context, form.Values) (response.Response, error) {
 	return response.FragmentFor("#settings-result", `<section id="settings-result"><p>Settings reset to defaults.</p></section>`), nil
 }
 
+type UploadInput struct {
+	Avatar  form.File `form:"avatar"`
+	Caption string    `form:"caption"`
+}
+
+func UploadAvatar(_ context.Context, input UploadInput) (response.Response, error) {
+	uploaded, err := input.Avatar.Open()
+	if err != nil {
+		return response.FragmentFor("#upload-result", alertUploadHTML("Upload could not be opened.")), nil
+	}
+	defer uploaded.Close()
+	bytes, err := io.Copy(io.Discard, uploaded)
+	if err != nil {
+		return response.FragmentFor("#upload-result", alertUploadHTML("Upload could not be read.")), nil
+	}
+	caption := strings.TrimSpace(input.Caption)
+	if caption == "" {
+		caption = "uncaptioned"
+	}
+	body := fmt.Sprintf(`<section id="upload-result"><p>Received %s (%s, %d bytes streamed) with caption %s.</p></section>`,
+		escape(input.Avatar.Filename),
+		escape(input.Avatar.ContentType),
+		bytes,
+		escape(caption),
+	)
+	return response.FragmentFor("#upload-result", body), nil
+}
+
 func RefreshInventory(context.Context, form.Values) (response.Response, error) {
 	return response.FragmentSwap("#inventory", response.SwapOuterHTML, `<tbody id="inventory"><tr><td>Keyboard</td><td>stocked</td></tr><tr><td>Mouse</td><td>stocked</td></tr></tbody>`)
 }
@@ -178,6 +206,10 @@ func queryID(request *http.Request) (int, error) {
 
 func alertHTML(message string) string {
 	return `<section id="contact-result" role="status"><p>` + escape(message) + `</p></section>`
+}
+
+func alertUploadHTML(message string) string {
+	return `<section id="upload-result" role="status"><p>` + escape(message) + `</p></section>`
 }
 
 func valueOr(value, fallback string) string {

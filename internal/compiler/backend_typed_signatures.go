@@ -44,6 +44,9 @@ func typedActionSignature(function *types.Signature, pkg *types.Package) (source
 	if isTypedNamed(second, formImportPath, "Values") {
 		return source.BackendSignatureActionValues, "", false, nil, "", true
 	}
+	if isTypedNamed(second, formImportPath, "Data") {
+		return source.BackendSignatureActionData, "", false, nil, "", true
+	}
 	inputName, inputPointer, inputType, ok := typedLocalInputType(second, pkg)
 	if !ok {
 		return "", "", false, nil, "", false

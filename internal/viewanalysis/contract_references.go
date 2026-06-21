@@ -372,6 +372,15 @@ func elementDirectiveValues(node viewmodel.Element) (viewDirectives, error) {
 		if attr.Name == "g:event" {
 			return viewDirectives{}, fmt.Errorf("frontend templates must not declare g:event; domain and integration events are backend-owned facts, use g:command for backend intent or g:on:* for local UI events")
 		}
+		if attr.Name == "g:max-file-size" || attr.Name == "g:max-files" {
+			if node.Name != "input" {
+				return viewDirectives{}, fmt.Errorf("%s is only supported on <input type=\"file\">", attr.Name)
+			}
+			if attr.Boolean || strings.TrimSpace(attr.Value) == "" {
+				return viewDirectives{}, fmt.Errorf("%s requires a value", attr.Name)
+			}
+			continue
+		}
 		if attr.Name != "g:post" && attr.Name != "g:command" && attr.Name != "g:query" && attr.Name != "g:subscribe" && attr.Name != "g:target" && attr.Name != "g:swap" {
 			return viewDirectives{}, fmt.Errorf("unsupported directive attribute %q in SPA build", attr.Name)
 		}

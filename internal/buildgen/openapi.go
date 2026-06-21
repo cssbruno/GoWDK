@@ -307,6 +307,11 @@ func schemaForGoType(goType string) openAPISchema {
 	case source.BackendInputFieldKindStringSlice:
 		item := openAPISchema{Type: "string"}
 		return openAPISchema{Type: "array", Items: &item}
+	case source.BackendInputFieldKindFile:
+		return openAPISchema{Type: "string", Format: "binary"}
+	case source.BackendInputFieldKindFileSlice:
+		item := openAPISchema{Type: "string", Format: "binary"}
+		return openAPISchema{Type: "array", Items: &item}
 	case source.BackendInputFieldKindString:
 		return openAPISchema{Type: "string"}
 	default:

@@ -12,10 +12,11 @@ func collectActionFormFields(nodes []Node, fields map[string]map[string]ActionFo
 				if fields[action] == nil {
 					fields[action] = map[string]ActionFormField{}
 				}
-				if err := validateActionForm(typed); err != nil {
+				multipart, err := validateActionForm(typed)
+				if err != nil {
 					return err
 				}
-				if err := collectNamedControls(typed.Children, fields[action]); err != nil {
+				if err := collectNamedControls(typed.Children, fields[action], multipart); err != nil {
 					return err
 				}
 				continue

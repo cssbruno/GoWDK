@@ -1,6 +1,7 @@
 package securitymanifest
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -215,14 +216,38 @@ func TestBuildRecordsGuardContractAndObservabilityEvidence(t *testing.T) {
 	if len(manifest.Observability) != 4 {
 		t.Fatalf("expected trace viewer/data/events/browser posture entries, got %#v", manifest.Observability)
 	}
-	if !hasObservabilityEntry(manifest.Observability, "trace.browser", "/_gowdk/traces/browser", true) {
+	browser, ok := observabilityEntry(manifest.Observability, "trace.browser", "/_gowdk/traces/browser", true)
+	if !ok {
 		t.Fatalf("expected browser ingestion posture with absolute-source flag, got %#v", manifest.Observability)
+	}
+	if !hasMethod(browser.Methods, http.MethodPost) || browser.BodyLimitBytes != 1<<20 {
+		t.Fatalf("expected browser ingestion body posture, got %#v", browser)
+	}
+	data, ok := observabilityEntry(manifest.Observability, "trace.data", "/_gowdk/traces/data", true)
+	if !ok || !hasMethod(data.Methods, http.MethodGet) || !hasMethod(data.Methods, http.MethodPost) || data.BodyLimitBytes != 1<<20 {
+		t.Fatalf("expected trace data GET/POST posture with body limit, got %#v", data)
+	}
+	events, ok := observabilityEntry(manifest.Observability, "trace.events", "/_gowdk/traces/events", true)
+	if !ok || !hasMethod(events.Methods, http.MethodGet) || !hasMethod(events.Methods, http.MethodPost) || events.BodyLimitBytes != 1<<20 {
+		t.Fatalf("expected trace events GET/POST posture with body limit, got %#v", events)
+	}
+	if events.SubscriberLimit != 0 {
+		t.Fatalf("trace events should not report an unenforced subscriber cap, got %#v", events)
 	}
 }
 
-func hasObservabilityEntry(entries []ObservabilityEntry, id string, requestPath string, absoluteSources bool) bool {
+func observabilityEntry(entries []ObservabilityEntry, id string, requestPath string, absoluteSources bool) (ObservabilityEntry, bool) {
 	for _, entry := range entries {
 		if entry.ID == id && entry.Path == requestPath && entry.ExportsAbsoluteSourcePaths == absoluteSources {
+			return entry, true
+		}
+	}
+	return ObservabilityEntry{}, false
+}
+
+func hasMethod(methods []string, method string) bool {
+	for _, candidate := range methods {
+		if candidate == method {
 			return true
 		}
 	}

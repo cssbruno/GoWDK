@@ -24,12 +24,13 @@ const (
 )
 
 type auditScenario struct {
-	Name       string
-	Method     string
-	Path       string
-	Actor      string
-	WantStatus int
-	WantHeader map[string]string
+	Name             string
+	Method           string
+	Path             string
+	Actor            string
+	WantStatus       int
+	WantHeader       map[string]string
+	WantBodyContains string
 }
 
 type auditHeaderTarget struct {
@@ -82,7 +83,7 @@ func auditTestSource(packageName string, mode auditTestMode, config gowdk.Config
 		return nil, nil
 	}
 	usesActor := auditScenariosUseActor(scenarios)
-	installAuthProvider := mode == auditTestGeneratedApp && usesActor && auditManifestUsesNativeGuards(manifest)
+	installAuthProvider := mode == auditTestGeneratedApp && usesActor && auditManifestSupportsGeneratedAuthProvider(manifest)
 
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "package %s\n\n", packageName)
@@ -175,23 +176,12 @@ func auditScenariosUseActor(scenarios []auditScenario) bool {
 	return false
 }
 
-func auditManifestUsesNativeGuards(manifest securitymanifest.SecurityManifest) bool {
-	for _, route := range manifest.Routes {
-		if auditGuardsUseNativeRBAC(route.Guards) {
+func auditManifestSupportsGeneratedAuthProvider(manifest securitymanifest.SecurityManifest) bool {
+	for _, evidence := range auditGuardEvidence(manifest) {
+		switch {
+		case evidence.Kind == "native-rbac":
 			return true
-		}
-	}
-	for _, endpoint := range manifest.Endpoints {
-		if auditGuardsUseNativeRBAC(endpoint.Guards) {
-			return true
-		}
-	}
-	return false
-}
-
-func auditGuardsUseNativeRBAC(guards []string) bool {
-	for _, guard := range guards {
-		if strings.HasPrefix(guard, "role:") || strings.HasPrefix(guard, "permission:") {
+		case evidence.ID == authRequiredGuard && evidence.BindingStatus == "resolved-addon":
 			return true
 		}
 	}
@@ -217,7 +207,9 @@ func auditTestScenarios(mode auditTestMode, config gowdk.Config, manifest securi
 	}
 
 	for _, route := range routes {
+		routePattern := path.Clean("/" + route.Route)
 		routePath := auditRequestPath(route.Route)
+		routeIsConcrete := isConcreteAuditRoute(routePattern)
 		if route.DefaultDeny {
 			scenario := auditScenario{
 				Name:       "default-deny " + routePath,
@@ -227,7 +219,7 @@ func auditTestScenarios(mode auditTestMode, config gowdk.Config, manifest securi
 			}
 			scenarios = append(scenarios, scenario)
 			headerTargets = append(headerTargets, auditHeaderTarget{Name: "route " + routePath, Method: scenario.Method, Path: scenario.Path, WantStatus: scenario.WantStatus})
-		} else if isConcreteAuditRoute(routePath) && !strings.EqualFold(route.Render, string(gowdk.SSR)) {
+		} else if routeIsConcrete && !strings.EqualFold(route.Render, string(gowdk.SSR)) {
 			scenario := auditScenario{
 				Name:       "route serves " + routePath,
 				Method:     http.MethodGet,
@@ -237,7 +229,7 @@ func auditTestScenarios(mode auditTestMode, config gowdk.Config, manifest securi
 			scenarios = append(scenarios, scenario)
 			headerTargets = append(headerTargets, auditHeaderTarget{Name: "route " + routePath, Method: scenario.Method, Path: scenario.Path, WantStatus: scenario.WantStatus})
 		}
-		if isConcreteAuditRoute(routePath) && !postEndpoints[routePath] {
+		if routeIsConcrete && !postEndpoints[routePath] {
 			scenarios = append(scenarios, auditScenario{
 				Name:       "method denied " + routePath,
 				Method:     http.MethodPost,
@@ -317,14 +309,28 @@ func auditEndpointScenarios(manifest securitymanifest.SecurityManifest) []auditS
 		}
 		if endpoint.CSRF && strings.EqualFold(endpoint.Method, http.MethodPost) {
 			scenarios = append(scenarios, auditScenario{
-				Name:       endpoint.Kind + " csrf rejection " + endpoint.ID,
-				Method:     http.MethodPost,
-				Path:       requestPath,
-				WantStatus: http.StatusForbidden,
+				Name:             endpoint.Kind + " csrf rejection " + endpoint.ID,
+				Method:           http.MethodPost,
+				Path:             requestPath,
+				Actor:            auditCSRFActor(endpoint),
+				WantStatus:       http.StatusForbidden,
+				WantBodyContains: "invalid csrf token",
 			})
 		}
 	}
 	return scenarios
+}
+
+func auditCSRFActor(endpoint securitymanifest.EndpointEntry) string {
+	for _, evidence := range endpoint.GuardEvidence {
+		switch {
+		case evidence.Kind == "native-rbac":
+			return evidence.ID
+		case evidence.ID == authRequiredGuard && evidence.BindingStatus == "resolved-addon":
+			return "authenticated"
+		}
+	}
+	return ""
 }
 
 func representativeAuditHeaderTargets(targets []auditHeaderTarget) []auditHeaderTarget {
@@ -516,6 +522,8 @@ func writeGeneratedAuditAuthProvider(builder *strings.Builder) {
 	builder.WriteString("\t\tswitch {\n")
 	builder.WriteString("\t\tcase actor == \"\" || actor == \"anonymous\":\n")
 	builder.WriteString("\t\t\treturn nil, nil\n")
+	builder.WriteString("\t\tcase actor == \"authenticated\":\n")
+	builder.WriteString("\t\t\treturn &gowdkauth.Principal{ID: \"audit\"}, nil\n")
 	builder.WriteString("\t\tcase strings.HasPrefix(actor, \"role:\"):\n")
 	builder.WriteString("\t\t\treturn &gowdkauth.Principal{ID: \"audit\", Roles: []string{strings.TrimPrefix(actor, \"role:\")}}, nil\n")
 	builder.WriteString("\t\tcase strings.HasPrefix(actor, \"permission:\"):\n")
@@ -658,6 +666,9 @@ func writeAuditScenario(builder *strings.Builder, scenario auditScenario) {
 			fmt.Fprintf(builder, "\t\t\t\t%s: %s,\n", strconv.Quote(name), strconv.Quote(scenario.WantHeader[name]))
 		}
 		builder.WriteString("\t\t\t},\n")
+	}
+	if strings.TrimSpace(scenario.WantBodyContains) != "" {
+		fmt.Fprintf(builder, "\t\t\tWantBodyContains: %s,\n", strconv.Quote(strings.TrimSpace(scenario.WantBodyContains)))
 	}
 	builder.WriteString("\t\t},\n")
 }

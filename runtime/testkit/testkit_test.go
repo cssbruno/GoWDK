@@ -9,14 +9,16 @@ func TestRunChecksStatusAndHeaders(t *testing.T) {
 	handler := http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		response.Header().Set("X-Test", "ok")
 		response.WriteHeader(http.StatusAccepted)
+		_, _ = response.Write([]byte("accepted by test handler"))
 	})
 
 	Run(t, handler, []Scenario{{
-		Name:       "accepted",
-		Method:     http.MethodPost,
-		Path:       "/submit",
-		WantStatus: http.StatusAccepted,
-		WantHeader: map[string]string{"X-Test": "ok"},
+		Name:             "accepted",
+		Method:           http.MethodPost,
+		Path:             "/submit",
+		WantStatus:       http.StatusAccepted,
+		WantHeader:       map[string]string{"X-Test": "ok"},
+		WantBodyContains: "test handler",
 	}})
 }
 

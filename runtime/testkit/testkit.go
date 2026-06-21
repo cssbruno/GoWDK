@@ -12,13 +12,14 @@ import (
 
 // Scenario describes one HTTP expectation against a generated app handler.
 type Scenario struct {
-	Name       string
-	Method     string
-	Path       string
-	Body       string
-	Headers    map[string]string
-	WantStatus int
-	WantHeader map[string]string
+	Name             string
+	Method           string
+	Path             string
+	Body             string
+	Headers          map[string]string
+	WantStatus       int
+	WantHeader       map[string]string
+	WantBodyContains string
 }
 
 // Run executes scenarios against handler.
@@ -51,6 +52,9 @@ func runScenario(t testing.TB, handler http.Handler, scenario Scenario) {
 		if got := response.Header().Get(name); got != want {
 			t.Errorf("expected header %s=%q, got %q", name, want, got)
 		}
+	}
+	if want := strings.TrimSpace(scenario.WantBodyContains); want != "" && !strings.Contains(response.Body.String(), want) {
+		t.Errorf("expected body to contain %q, got %s", want, responseBodySummary(response.Body.String()))
 	}
 }
 

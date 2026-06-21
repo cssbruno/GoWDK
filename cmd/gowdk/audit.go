@@ -48,8 +48,7 @@ type auditToolMetadata struct {
 }
 
 type auditTargetMetadata struct {
-	ProjectRoot string `json:"projectRoot,omitempty"`
-	BuildMode   string `json:"buildMode"`
+	BuildMode string `json:"buildMode"`
 }
 
 type auditHistoryMetadata struct {
@@ -412,7 +411,7 @@ func buildAuditReport(options cliOptions, manifest securitymanifest.SecurityMani
 		PolicyDigest:  auditDigest(policies),
 		PostureDigest: auditDigest(manifest),
 		BuildMode:     buildMode,
-		Target:        auditTargetMetadata{ProjectRoot: options.ProjectRoot, BuildMode: buildMode},
+		Target:        auditTargetMetadata{BuildMode: buildMode},
 		History:       auditHistoryMetadata{Mode: "not-tracked"},
 		Status:        auditspec.Status(summary),
 		Summary: auditSummary{

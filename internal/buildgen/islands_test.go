@@ -1067,7 +1067,8 @@ func TestBuildEmitsClientHelperFunctionsForJSIsland(t *testing.T) {
 	component := counterComponent()
 	component.Blocks.Client = true
 	component.Blocks.ClientBody = `fn Next(value int) int {
-  return value + 1
+  let doubled int = value * 2
+  return switch doubled { case 0: 1 default: doubled + 1 }
 }
 
 fn Add() {
@@ -1097,7 +1098,7 @@ fn Add() {
 	html := readFile(t, filepath.Join(outputDir, "counter", "index.html"))
 	for _, expected := range []string{
 		`&#34;handlers&#34;:{&#34;Add&#34;:{&#34;statements&#34;:[&#34;Count = Next(Count)&#34;]}}`,
-		`&#34;helpers&#34;:{&#34;Next&#34;:{&#34;params&#34;:[&#34;value&#34;],&#34;return&#34;:&#34;value + 1&#34;}}`,
+		`&#34;helpers&#34;:{&#34;Next&#34;:{&#34;params&#34;:[&#34;value&#34;],&#34;locals&#34;:[{&#34;name&#34;:&#34;doubled&#34;,&#34;expr&#34;:&#34;value * 2&#34;}],&#34;return&#34;:&#34;switch doubled { case 0: 1 default: doubled + 1 }&#34;}}`,
 		`data-gowdk-on-click="Add()"`,
 	} {
 		if !strings.Contains(html, expected) {
@@ -1107,6 +1108,7 @@ fn Add() {
 	js := readSharedIslandRuntime(t, outputDir)
 	for _, expected := range []string{
 		`function callHelper(name, args, state, helpers, stack)`,
+		`nextScope[local.name] = valueOf(local.expr || "", state, nextScope, helpers, stack.concat([name]));`,
 		`return callHelper(expr.name, args, state, helpers, stack);`,
 		`const helpers = client.helpers || {};`,
 	} {

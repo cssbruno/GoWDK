@@ -11,8 +11,13 @@ state ui.CartState = ui.NewCartState()
 client {
   use cart
 
+  func Next(value int) int {
+    let next int = value + 1
+    return switch next { case 1: 1 default: next }
+  }
+
   func Add() {
-    Count++
+    Count = Next(Count)
   }
 
   // `clear cart` resets the used store to its build-time init and drops the

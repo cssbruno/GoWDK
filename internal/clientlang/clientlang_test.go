@@ -198,6 +198,44 @@ fn Add() {
 	}
 }
 
+func TestParseHelperFunctionAllowsLocalStatementsBeforeReturn(t *testing.T) {
+	program, err := Parse(`
+fn Next(value int) int {
+  let doubled int = value * 2
+  let adjusted int = switch doubled { case 0: 1 default: doubled + 1 }
+  return adjusted
+}
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	helpers := program.HelperMap()
+	helper := helpers["Next"]
+	if helper.Return != "adjusted" || helper.ReturnType != TypeInt {
+		t.Fatalf("unexpected helper return: %#v", helper)
+	}
+	if len(helper.Locals) != 2 ||
+		helper.Locals[0].Name != "doubled" || helper.Locals[0].Expr != "value * 2" || helper.Locals[0].Type != TypeInt ||
+		helper.Locals[1].Name != "adjusted" || helper.Locals[1].Expr != `switch doubled { case 0: 1 default: doubled + 1 }` || helper.Locals[1].Type != TypeInt {
+		t.Fatalf("unexpected helper locals: %#v", helper.Locals)
+	}
+}
+
+func TestParseRejectsHelperNonLetBeforeReturn(t *testing.T) {
+	_, err := Parse(`
+fn Next(value int) int {
+  value = value + 1
+  return value
+}
+`)
+	if err == nil {
+		t.Fatal("expected helper local syntax error")
+	}
+	if !strings.Contains(err.Error(), "can only declare `let name type = expr`") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestParseRejectsReturnInEventHandler(t *testing.T) {
 	_, err := Parse(`
 fn Add() {

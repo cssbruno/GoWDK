@@ -69,6 +69,17 @@ func TestCanonicalExprNormalizesWhitespaceAndLiterals(t *testing.T) {
 	}
 }
 
+func TestCanonicalExprNormalizesMatchToSwitch(t *testing.T) {
+	got, err := CanonicalExpr(`match Status{case "draft":Label default:"Unknown"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `switch Status { case "draft": Label default: "Unknown" }`
+	if got != want {
+		t.Fatalf("unexpected canonical expression:\nwant %s\ngot  %s", want, got)
+	}
+}
+
 func TestCheckExprRejectsTypeMismatch(t *testing.T) {
 	_, _, err := CheckExpr(`Count && Open`, map[string]ValueType{
 		"Count": TypeInt,
@@ -177,6 +188,22 @@ func TestCheckExprParsesConditionalInParenthesesAndIndex(t *testing.T) {
 	}
 	if typ != TypeString {
 		t.Fatalf("expected string type for conditional index, got %s", typ)
+	}
+}
+
+func TestCheckExprParsesSwitchExpression(t *testing.T) {
+	typ, fields, err := CheckExpr(`switch Status { case "draft": "Draft" case "live": Label default: "Unknown" }`, map[string]ValueType{
+		"Status": TypeString,
+		"Label":  TypeString,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if typ != TypeString {
+		t.Fatalf("expected string type, got %s", typ)
+	}
+	if strings.Join(fields, ",") != "Label,Status" {
+		t.Fatalf("unexpected fields: %#v", fields)
 	}
 }
 
@@ -299,11 +326,11 @@ func TestCheckExprRejectsNilObjectComparison(t *testing.T) {
 }
 
 func TestExprCallsCollectsHelperCalls(t *testing.T) {
-	calls, err := ExprCalls(`A(B(Count), if Open { C() } else { 0 })`)
+	calls, err := ExprCalls(`A(B(Count), if Open { C() } else { switch Kind { case "d": D() default: E() } })`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(calls, ",") != "A,B,C" {
+	if strings.Join(calls, ",") != "A,B,C,D,E" {
 		t.Fatalf("unexpected calls: %#v", calls)
 	}
 }
@@ -329,6 +356,30 @@ func TestCheckExprRejectsGoishConditionalNonBoolCondition(t *testing.T) {
 		t.Fatal("expected non-bool condition diagnostic")
 	}
 	if !strings.Contains(err.Error(), "if expression condition requires bool") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckExprRejectsSwitchCaseTypeMismatch(t *testing.T) {
+	_, _, err := CheckExpr(`switch Count { case "1": 1 default: 0 }`, map[string]ValueType{
+		"Count": TypeInt,
+	})
+	if err == nil {
+		t.Fatal("expected case type mismatch")
+	}
+	if !strings.Contains(err.Error(), "switch case requires comparable matching types") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckExprRejectsSwitchBranchTypeMismatch(t *testing.T) {
+	_, _, err := CheckExpr(`switch Count { case 1: 1 default: "many" }`, map[string]ValueType{
+		"Count": TypeInt,
+	})
+	if err == nil {
+		t.Fatal("expected branch type mismatch")
+	}
+	if !strings.Contains(err.Error(), "switch expression branches must have matching types") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -392,6 +443,19 @@ func TestEvalScalarEvaluatesGoishConditionalExpression(t *testing.T) {
 	}
 	if got != "Ada" {
 		t.Fatalf("expected Ada, got %q", got)
+	}
+}
+
+func TestEvalScalarEvaluatesSwitchExpression(t *testing.T) {
+	got, err := EvalScalar(`match Status { case "open": Count case "closed": 0 default: 1 }`, map[string]string{
+		"Count":  "3",
+		"Status": "open",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "3" {
+		t.Fatalf("expected 3, got %q", got)
 	}
 }
 

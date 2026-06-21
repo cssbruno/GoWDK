@@ -22,6 +22,22 @@ func actionRequiredFields(fields []view.ActionFormField) []string {
 	return names
 }
 
+func actionUploadFields(fields []view.ActionFormField) []ActionUploadField {
+	out := make([]ActionUploadField, 0, len(fields))
+	for _, field := range fields {
+		if !field.File {
+			continue
+		}
+		out = append(out, ActionUploadField{
+			Field:               field.Name,
+			MaxFiles:            field.MaxFiles,
+			MaxBytes:            field.MaxFileSize,
+			AllowedContentTypes: append([]string(nil), field.AllowedFileTypes...),
+		})
+	}
+	return out
+}
+
 func actionRequiredMessages(fields []view.ActionFormField) map[string]string {
 	messages := map[string]string{}
 	for _, field := range fields {

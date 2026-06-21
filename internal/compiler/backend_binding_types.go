@@ -62,7 +62,7 @@ type featureFunction struct {
 
 func (function featureFunction) Action() bool {
 	switch function.Signature {
-	case source.BackendSignatureAction0, source.BackendSignatureActionValues, source.BackendSignatureActionForm, source.BackendSignatureActionFormPtr:
+	case source.BackendSignatureAction0, source.BackendSignatureActionValues, source.BackendSignatureActionData, source.BackendSignatureActionForm, source.BackendSignatureActionFormPtr:
 		return true
 	default:
 		return false

@@ -560,8 +560,10 @@ at the HTTPS edge unless the generated app is directly responsible for TLS.
 `BodyLimits` controls generated request body caps in bytes. Omitted or
 non-positive values use the default 1 MiB cap. `ActionBytes` applies to
 generated action POST handlers and web command form adapters before form
-decoding. `APIBytes` applies to generated API handlers before user code reads
-the request body.
+decoding, including multipart action forms. Per-file upload policy is declared
+on file controls with `g:max-file-size`, `g:max-files`, and MIME `accept`.
+`APIBytes` applies to generated API handlers before user code reads the request
+body.
 
 `Name` is required. `Output` is optional and defaults to
 `.gowdk/output/<target-name>` when omitted. `Modules` selects configured

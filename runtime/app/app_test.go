@@ -2,9 +2,11 @@ package app
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -1686,6 +1688,50 @@ func TestActionValuesWithBodyLimitRejectsTooLargeBody(t *testing.T) {
 
 	if recorder.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+}
+
+func TestActionDataParsesMultipartFiles(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("caption", "profile"); err != nil {
+		t.Fatal(err)
+	}
+	part, err := writer.CreateFormFile("avatar", "avatar.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write([]byte("png")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := ActionData(func(ctx context.Context, data form.Data) (response.Response, error) {
+		if _, ok := Request(ctx); !ok {
+			t.Fatal("expected request in context")
+		}
+		if got := data.Values.First("caption"); got != "profile" {
+			t.Fatalf("unexpected caption: %q", got)
+		}
+		file, ok, err := data.File("avatar")
+		if err != nil || !ok || file.Filename != "avatar.png" || file.Size != 3 {
+			t.Fatalf("unexpected file: %#v ok=%v err=%v", file, ok, err)
+		}
+		return response.HTMLBody(http.StatusOK, "<p>uploaded</p>"), nil
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/upload", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+
+	handler(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if got := recorder.Body.String(); got != "<p>uploaded</p>" {
+		t.Fatalf("unexpected body: %s", got)
 	}
 }
 

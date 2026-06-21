@@ -2351,12 +2351,12 @@ func TestActionFormSchemaRejectsDynamicConstraint(t *testing.T) {
 	}
 }
 
-func TestActionFormSchemaRejectsFileInputs(t *testing.T) {
+func TestActionFormSchemaRejectsFileInputsWithoutMultipart(t *testing.T) {
 	_, err := ActionFormSchema(`<form g:post={submit}><input name="avatar" type="FILE" /></form>`)
 	if err == nil {
 		t.Fatal("expected file input error")
 	}
-	if !strings.Contains(err.Error(), `file input "avatar" is not supported`) {
+	if !strings.Contains(err.Error(), `file input "avatar" requires enctype="multipart/form-data"`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -2371,13 +2371,73 @@ func TestActionFormSchemaRejectsDynamicInputType(t *testing.T) {
 	}
 }
 
-func TestActionFormSchemaRejectsMultipartForms(t *testing.T) {
-	_, err := ActionFormSchema(`<form g:post={submit} enctype="multipart/form-data"><input name="email" /></form>`)
-	if err == nil {
-		t.Fatal("expected multipart form error")
+func TestActionFormSchemaAllowsMultipartFormsWithoutFiles(t *testing.T) {
+	schema, err := ActionFormSchema(`<form g:post={submit} enctype="multipart/form-data"><input name="email" /></form>`)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(err.Error(), `multipart action forms are not supported`) {
-		t.Fatalf("unexpected error: %v", err)
+	if len(schema["submit"]) != 1 || schema["submit"][0].Name != "email" || schema["submit"][0].File {
+		t.Fatalf("unexpected schema: %#v", schema)
+	}
+}
+
+func TestActionFormSchemaInfersUploadPolicy(t *testing.T) {
+	schema, err := ActionFormSchema(`<form g:post={submit} enctype="multipart/form-data"><input name="avatar" type="file" required g:max-file-size="1048576" g:max-files="1" accept="image/png,image/jpeg" /></form>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := schema["submit"]
+	if len(fields) != 1 {
+		t.Fatalf("expected one field, got %#v", fields)
+	}
+	field := fields[0]
+	if field.Name != "avatar" || !field.File || !field.Required || field.MaxFileSize != 1048576 || field.MaxFiles != 1 || strings.Join(field.AllowedFileTypes, ",") != "image/png,image/jpeg" {
+		t.Fatalf("unexpected upload policy: %#v", field)
+	}
+}
+
+func TestActionFormSchemaRejectsUploadPolicyGaps(t *testing.T) {
+	tests := []struct {
+		name    string
+		source  string
+		message string
+	}{
+		{
+			name:    "missing max size",
+			source:  `<form g:post={submit} enctype="multipart/form-data"><input name="avatar" type="file" g:max-files="1" accept="image/png" /></form>`,
+			message: `must declare g:max-file-size`,
+		},
+		{
+			name:    "missing max files",
+			source:  `<form g:post={submit} enctype="multipart/form-data"><input name="avatar" type="file" g:max-file-size="1024" accept="image/png" /></form>`,
+			message: `must declare g:max-files`,
+		},
+		{
+			name:    "missing accept",
+			source:  `<form g:post={submit} enctype="multipart/form-data"><input name="avatar" type="file" g:max-file-size="1024" g:max-files="1" /></form>`,
+			message: `must declare accept with MIME types`,
+		},
+		{
+			name:    "extension accept",
+			source:  `<form g:post={submit} enctype="multipart/form-data"><input name="avatar" type="file" g:max-file-size="1024" g:max-files="1" accept=".png" /></form>`,
+			message: `extensions such as ".png" are not supported`,
+		},
+		{
+			name:    "non-file policy",
+			source:  `<form g:post={submit}><input name="avatar" g:max-file-size="1024" /></form>`,
+			message: `declares upload policy on a non-file control`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := ActionFormSchema(test.source)
+			if err == nil {
+				t.Fatal("expected upload policy error")
+			}
+			if !strings.Contains(err.Error(), test.message) {
+				t.Fatalf("expected %q, got %v", test.message, err)
+			}
+		})
 	}
 }
 

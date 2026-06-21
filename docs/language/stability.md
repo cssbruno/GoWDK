@@ -87,6 +87,7 @@ Supported exact-name directives (the closed set in
 | `g:bind:value` / `g:bind:checked` | Partial | Two-way bindings. |
 | `g:on:*` | Partial | Event handlers with `.prevent`/`.stop`/`.once`/`.capture`/`.debounce`/`.throttle`. |
 | `g:post` / `g:target` / `g:swap` | Partial | Progressive form/fragment submission. |
+| `g:max-file-size` / `g:max-files` | Partial | Server-side upload policy for multipart action forms. |
 | `g:message:*` | Partial | `required`, `minlength`, `maxlength`, `pattern`. |
 | `g:island` | Partial | `js` or `wasm` island. |
 | `g:command` / `g:query` | Partial | Contract web adapters. |

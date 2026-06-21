@@ -227,7 +227,7 @@ Every 0.x minor release must have:
   boundaries, and no-store request-time responses.
 - [x] List incomplete production areas: auth/session policy, full guard
   contract, CSRF secret rotation, full redirect policy, per-route body/header
-  limit policy beyond current defaults, file upload policy, public API
+  limit policy beyond current defaults, upload storage/scanning policy, public API
   hardening, realtime security policy, and admin tooling policy.
 - [x] Enable GitHub private vulnerability reporting if available.
 - [x] Add a vulnerability report contact path.
@@ -443,7 +443,7 @@ Every 0.x minor release must have:
   unsupported handler, redirect, guard failure, CSRF failure, panic, no-store
   response, and method not allowed.
 - [x] Fully document action syntax, methods, form encoding, JSON support,
-  direct file input rejection, multipart rejection, user-owned uploads, typed
+  bounded multipart action uploads, user-owned upload storage/scanning, typed
   input decoding, scalar decoding, unknown field policy, missing/repeated field
   policy, checkbox/radio/select policy, submit intent, request-shape
   validation, domain validation handoff, validation error shape, partial

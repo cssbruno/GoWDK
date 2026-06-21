@@ -54,6 +54,8 @@ func Completions() []Completion {
 		{Label: "g:post", Detail: "Bind a form to an action."},
 		{Label: "g:target", Detail: "Select partial update target."},
 		{Label: "g:swap", Detail: "Select partial update swap behavior."},
+		{Label: "g:max-file-size", Detail: "Set the generated per-file upload size limit."},
+		{Label: "g:max-files", Detail: "Set the generated upload file count limit."},
 		{Label: "g:island", Detail: "Select the generated JavaScript or explicit WASM island mode."},
 		{Label: "g:on:click", Detail: "Call a client handler on click."},
 		{Label: "g:on:input", Detail: "Call a client handler on input."},

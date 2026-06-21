@@ -210,8 +210,10 @@ Implemented today:
   known components at app generation time. If the source package exports
   `func Name(context.Context) (response.Response, error)`, the generated
   fragment handler calls that request-time hook instead of the static fallback.
-- Generated app action endpoint extraction rejects direct file inputs and
-  multipart `g:post` forms. Uploads belong in user-owned API/server handlers.
+- Generated app action endpoint extraction accepts multipart `g:post` forms
+  only when direct file inputs declare literal `g:max-file-size`,
+  `g:max-files`, and MIME `accept` policy. Upload storage, scanning, and
+  persistence remain user-owned handler behavior.
 - `internal/compiler` resolves same-package action, API, fragment, and SSR load
   handlers through `go/packages` and `go/types`, so build tags, renamed imports,
   type aliases, and package load errors follow ordinary Go package semantics.
@@ -351,8 +353,9 @@ Action handlers decode allowlisted form fields into named input wrappers,
 cap request bodies before parsing, preserve repeated values, return HTTP 413
 for oversized submissions, return HTTP 400 for unexpected fields, and return
 HTTP 422 for generated required-field validation failures. Direct file inputs
-and multipart action forms are rejected before generated app output because
-uploads are user-owned API/server behavior. For
+inside multipart action forms decode to `form.File` or `[]form.File` only when
+the view declares explicit file count, size, and MIME policy; generated code
+enforces those limits before user handlers run. For
 partial requests, generated handlers can return the first parsed action
 fragment matching `X-GOWDK-Target` and expose fragment target/swap metadata in
 headers. Feature-bound generated action handlers can call no-input,

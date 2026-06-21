@@ -2533,6 +2533,30 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 				Signature:    source.BackendSignatureAction0,
 			},
 		},
+		{
+			Guards:      []string{"public"},
+			PageID:      "Upload",
+			ActionName:  "Upload",
+			Route:       "/upload",
+			InputFields: []string{"avatar", "photos", "caption"},
+			UploadFields: []ActionUploadField{
+				{Field: "avatar", MaxFiles: 1, MaxBytes: 2048, AllowedContentTypes: []string{"image/png"}},
+				{Field: "photos", MaxFiles: 3, MaxBytes: 4096, AllowedContentTypes: []string{"image/*"}},
+			},
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
+				ImportPath:   "example.com/app/auth",
+				PackageName:  "auth",
+				FunctionName: "Upload",
+				Signature:    source.BackendSignatureActionForm,
+				InputType:    "UploadInput",
+				InputFields: []source.BackendInputField{
+					{FieldName: "Avatar", FormName: "avatar", Type: "form.File"},
+					{FieldName: "Photos", FormName: "photos", Type: "[]form.File"},
+					{FieldName: "Caption", FormName: "caption", Type: "string"},
+				},
+			},
+		},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -2562,6 +2586,16 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 		`result, err := auth.Login(ctx, input)`,
 		`result, err := auth.Save(ctx, &input)`,
 		`result, err := auth.Ping(ctx)`,
+		`request.ParseMultipartForm(gowdkform.DefaultMultipartMemoryBytes)`,
+		`gowdkform.DecodeExpectedData(data, gowdkform.Schema{Fields: []gowdkform.Field{{Name: "avatar", File: &gowdkform.FilePolicy{MaxFiles: 1, MaxBytes: 2048, AllowedContentTypes: []string{"image/png"}}}, {Name: "photos", File: &gowdkform.FilePolicy{MaxFiles: 3, MaxBytes: 4096, AllowedContentTypes: []string{"image/*"}}}, {Name: "caption"}}})`,
+		`func decodeUploadUploadBoundInput(data gowdkform.Data) (auth.UploadInput, error)`,
+		`field0, ok, err := data.File("avatar")`,
+		`input.Avatar = field0`,
+		`field1 := data.FileList("photos")`,
+		`input.Photos = field1`,
+		`field2, ok, err := gowdkform.String(values, "caption")`,
+		`input.Caption = field2`,
+		`result, err := auth.Upload(ctx, input)`,
 		`gowdkresponse.WriteNoStoreHTTP(response, result)`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -4244,7 +4278,7 @@ func TestFragmentEndpointsRenderComponents(t *testing.T) {
 	}
 }
 
-func TestActionEndpointsRejectsFileInputsWithPageContext(t *testing.T) {
+func TestActionEndpointsRejectsFileInputsWithoutMultipartWithPageContext(t *testing.T) {
 	_, err := actionEndpointsFromManifestFixture(gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "profile",
 		Route: "/profile",
@@ -4259,8 +4293,32 @@ func TestActionEndpointsRejectsFileInputsWithPageContext(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected file input error")
 	}
-	if !strings.Contains(err.Error(), `profile: file input "avatar" is not supported`) {
+	if !strings.Contains(err.Error(), `profile: file input "avatar" requires enctype="multipart/form-data"`) {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestActionEndpointsInfersUploadFieldsFromMultipartForm(t *testing.T) {
+	routes, err := actionEndpointsFromManifestFixture(gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:    "profile",
+		Route: "/profile",
+		Blocks: gwdkir.Blocks{
+			ViewBody: `<form g:post={save} enctype="multipart/form-data"><input name="avatar" type="file" g:max-file-size="2048" g:max-files="1" accept="image/png,image/*" /></form>`,
+			Actions: []gwdkir.Action{{
+				Name:     "save",
+				Redirect: "/profile?ok=1",
+			}},
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(routes) != 1 || len(routes[0].UploadFields) != 1 {
+		t.Fatalf("expected one upload field, got %#v", routes)
+	}
+	upload := routes[0].UploadFields[0]
+	if upload.Field != "avatar" || upload.MaxFiles != 1 || upload.MaxBytes != 2048 || strings.Join(upload.AllowedContentTypes, ",") != "image/png,image/*" {
+		t.Fatalf("unexpected upload field: %#v", upload)
 	}
 }
 

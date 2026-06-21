@@ -23,9 +23,11 @@ Do not treat current `act`, `api`, `partial`, `guard`, or SSR scaffolding as com
   another cross-site request strategy is enforced, and every runtime environment
   must provide a stable CSRF secret.
 - Generated form decoders must validate expected fields and avoid mass assignment.
-- Generated action forms must reject direct file inputs and multipart posts.
-  Uploads are user-owned API/server behavior with explicit size, storage,
-  validation, cleanup, auth, and logging rules.
+- Generated action forms must reject direct file inputs unless the enclosing
+  `g:post` form is multipart and every file control declares explicit count,
+  size, and MIME allow-list policy.
+  Upload storage, content scanning, persistence, domain validation, cleanup,
+  auth, and logging rules remain user-owned handler behavior.
 - Generated action handlers must cap request bodies before parsing submitted
   form values.
 - Generated server entrypoints must set conservative `http.Server` read,

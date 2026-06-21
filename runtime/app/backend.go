@@ -437,6 +437,32 @@ func ActionValuesWithBodyLimit(bodyLimit int64, handler func(context.Context, fo
 	}
 }
 
+// ActionData adapts a low-level multipart-capable form.Data action handler.
+func ActionData(handler func(context.Context, form.Data) (response.Response, error)) BackendHandler {
+	return ActionDataWithBodyLimit(DefaultActionBodyLimit, handler)
+}
+
+// ActionDataWithBodyLimit adapts a low-level multipart-capable form.Data action
+// handler with a custom request body limit. Non-positive limits use
+// DefaultActionBodyLimit.
+func ActionDataWithBodyLimit(bodyLimit int64, handler func(context.Context, form.Data) (response.Response, error)) BackendHandler {
+	if handler == nil {
+		return NotImplemented("GOWDK action handler is not implemented")
+	}
+	return func(writer http.ResponseWriter, request *http.Request) bool {
+		ctx, data, cleanup, ok := prepareActionData(writer, request, bodyLimit)
+		if cleanup != nil {
+			defer cleanup()
+		}
+		if !ok {
+			return true
+		}
+		result, err := handler(ctx, data)
+		writeBackendResult(writer, result, err)
+		return true
+	}
+}
+
 // APIHandler adapts an API handler.
 func APIHandler(handler func(context.Context, *http.Request) (response.Response, error)) BackendHandler {
 	return APIHandlerWithBodyLimit(DefaultAPIBodyLimit, handler)
@@ -491,6 +517,50 @@ func prepareActionValues(writer http.ResponseWriter, request *http.Request, body
 	}
 	ctx := WithRequest(request.Context(), request)
 	return ctx, form.FromURLValues(request.PostForm), true
+}
+
+func prepareActionData(writer http.ResponseWriter, request *http.Request, bodyLimit int64) (context.Context, form.Data, func(), bool) {
+	if request.Method != http.MethodPost {
+		writer.Header().Set("Allow", http.MethodPost)
+		response.WriteNoStoreError(writer, http.StatusMethodNotAllowed, "method not allowed")
+		return nil, form.Data{}, nil, false
+	}
+	request.Body = http.MaxBytesReader(writer, request.Body, normalizeBodyLimit(bodyLimit, DefaultActionBodyLimit))
+	if isMultipartRequest(request) {
+		if err := request.ParseMultipartForm(form.DefaultMultipartMemoryBytes); err != nil {
+			if strings.Contains(err.Error(), "request body too large") {
+				response.WriteNoStoreError(writer, http.StatusRequestEntityTooLarge, "request body too large")
+				return nil, form.Data{}, nil, false
+			}
+			response.WriteNoStoreError(writer, http.StatusBadRequest, "invalid form")
+			return nil, form.Data{}, nil, false
+		}
+		cleanup := func() {
+			if request.MultipartForm != nil {
+				_ = request.MultipartForm.RemoveAll()
+			}
+		}
+		ctx := WithRequest(request.Context(), request)
+		return ctx, form.FromMultipartForm(request.MultipartForm), cleanup, true
+	}
+	if err := request.ParseForm(); err != nil {
+		if strings.Contains(err.Error(), "request body too large") {
+			response.WriteNoStoreError(writer, http.StatusRequestEntityTooLarge, "request body too large")
+			return nil, form.Data{}, nil, false
+		}
+		response.WriteNoStoreError(writer, http.StatusBadRequest, "invalid form")
+		return nil, form.Data{}, nil, false
+	}
+	ctx := WithRequest(request.Context(), request)
+	return ctx, form.Data{Values: form.FromURLValues(request.PostForm), Files: form.Files{}}, nil, true
+}
+
+func isMultipartRequest(request *http.Request) bool {
+	if request == nil {
+		return false
+	}
+	contentType := strings.ToLower(strings.TrimSpace(request.Header.Get("Content-Type")))
+	return strings.HasPrefix(contentType, "multipart/form-data")
 }
 
 func normalizeBodyLimit(bodyLimit int64, fallback int64) int64 {

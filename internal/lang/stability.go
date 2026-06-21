@@ -73,6 +73,8 @@ func ConstructStabilities() []ConstructStability {
 		{Name: "g:post", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:target", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:swap", Kind: ConstructDirective, Tier: TierPartial},
+		{Name: "g:max-file-size", Kind: ConstructDirective, Tier: TierPartial},
+		{Name: "g:max-files", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:island", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:command", Kind: ConstructDirective, Tier: TierPartial},
 		{Name: "g:query", Kind: ConstructDirective, Tier: TierPartial},

@@ -38,6 +38,12 @@ type LoginInput struct {
 	ignored string
 }
 
+type UploadInput struct {
+	Avatar form.File `+"`form:\"avatar\"`"+`
+	Photos []form.File `+"`form:\"photos\"`"+`
+	Caption string `+"`form:\"caption\"`"+`
+}
+
 type BrokenInput struct {
 	Nested map[string]string `+"`form:\"nested\"`"+`
 }
@@ -55,6 +61,14 @@ func LoginPtr(context.Context, *LoginInput) (response.Response, error) {
 }
 
 func Raw(context.Context, form.Values) (response.Response, error) {
+	return response.Response{}, nil
+}
+
+func RawData(context.Context, form.Data) (response.Response, error) {
+	return response.Response{}, nil
+}
+
+func Upload(context.Context, UploadInput) (response.Response, error) {
 	return response.Response{}, nil
 }
 
@@ -89,6 +103,8 @@ func BrokenFragment(context.Context, *http.Request) (response.Response, error) {
 				{Name: "Login"},
 				{Name: "LoginPtr"},
 				{Name: "Raw"},
+				{Name: "RawData"},
+				{Name: "Upload"},
 				{Name: "Broken"},
 				{Name: "Bad"},
 				{Name: "Missing"},
@@ -111,8 +127,11 @@ func BrokenFragment(context.Context, *http.Request) (response.Response, error) {
 	assertBinding(t, bindings["Login"], source.BackendBindingBound, source.BackendSignatureActionForm, "LoginInput", false)
 	assertBinding(t, bindings["LoginPtr"], source.BackendBindingBound, source.BackendSignatureActionFormPtr, "LoginInput", true)
 	assertBinding(t, bindings["Raw"], source.BackendBindingBound, source.BackendSignatureActionValues, "", false)
+	assertBinding(t, bindings["RawData"], source.BackendBindingBound, source.BackendSignatureActionData, "", false)
+	assertBinding(t, bindings["Upload"], source.BackendBindingBound, source.BackendSignatureActionForm, "UploadInput", false)
 	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
 	assertInputFields(t, bindings["Login"].InputFields, "Email:email:string,Tags:tag:[]string,Remember:remember:bool,Age:age:int,Score:score:uint64,Code:code:byte,Letter:letter:rune")
+	assertInputFields(t, bindings["Upload"].InputFields, "Avatar:avatar:form.File,Photos:photos:[]form.File,Caption:caption:string")
 	if got := bindings["Broken"]; got.Status != source.BackendBindingUnsupportedSignature {
 		t.Fatalf("expected Broken unsupported signature, got %#v", got)
 	}

@@ -33,7 +33,7 @@ func inspectInlineScriptFeaturePackage(page gwdkir.Page, target string) featureP
 	if len(files) == 0 {
 		return pkg
 	}
-	inputStructs := collectInputStructs(files)
+	inputStructs := collectInputStructs(files, importMaps)
 	for index, file := range files {
 		imports := importMaps[index]
 		for _, declaration := range file.Decls {
@@ -109,6 +109,9 @@ func actionSignature(function *ast.FuncType, imports map[string]string) (source.
 	second := function.Params.List[1].Type
 	if isSelector(second, imports, formImportPath, "Values") {
 		return source.BackendSignatureActionValues, "", false, true
+	}
+	if isSelector(second, imports, formImportPath, "Data") {
+		return source.BackendSignatureActionData, "", false, true
 	}
 	if ident, ok := second.(*ast.Ident); ok && ident.IsExported() {
 		return source.BackendSignatureActionForm, ident.Name, false, true

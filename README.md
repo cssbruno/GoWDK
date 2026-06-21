@@ -258,7 +258,7 @@ command POSTs enable CSRF by default with a fail-closed secret requirement and a
 403 invalid-token contract; redirects are validated against a safe allowlist (local
 paths only, no protocol-relative or CRLF, same-origin referer); and diagnostics
 redact secrets quoted from source.
-Still hardening: full auth/session, multipart uploads, and the broader
+Still hardening: full auth/session, richer upload operations, and the broader
 operations policy.
 
 Known gaps and release hardening work live in

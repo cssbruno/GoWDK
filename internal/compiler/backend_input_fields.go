@@ -11,9 +11,13 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func collectInputStructs(files []*ast.File) map[string]inputStruct {
+func collectInputStructs(files []*ast.File, importMaps []map[string]string) map[string]inputStruct {
 	structs := map[string]inputStruct{}
-	for _, file := range files {
+	for index, file := range files {
+		var imports map[string]string
+		if index < len(importMaps) {
+			imports = importMaps[index]
+		}
 		for _, declaration := range file.Decls {
 			gen, ok := declaration.(*ast.GenDecl)
 			if !ok || gen.Tok != token.TYPE {
@@ -28,14 +32,14 @@ func collectInputStructs(files []*ast.File) map[string]inputStruct {
 				if !ok {
 					continue
 				}
-				structs[typeSpec.Name.Name] = backendInputStruct(typeSpec.Name.Name, structType)
+				structs[typeSpec.Name.Name] = backendInputStruct(typeSpec.Name.Name, structType, imports)
 			}
 		}
 	}
 	return structs
 }
 
-func backendInputStruct(typeName string, structType *ast.StructType) inputStruct {
+func backendInputStruct(typeName string, structType *ast.StructType, imports map[string]string) inputStruct {
 	if structType == nil || structType.Fields == nil {
 		return inputStruct{}
 	}
@@ -61,7 +65,7 @@ func backendInputStruct(typeName string, structType *ast.StructType) inputStruct
 		if explicit && len(exportedNames) > 1 {
 			return inputStruct{Message: fmt.Sprintf("typed action input %s cannot reuse one explicit form tag across multiple fields", typeName)}
 		}
-		fieldType, ok := backendInputFieldType(field.Type)
+		fieldType, ok := backendInputFieldType(field.Type, imports)
 		if !ok {
 			return inputStruct{Message: fmt.Sprintf("typed action input %s uses unsupported field type", typeName)}
 		}
@@ -188,22 +192,27 @@ func structTagValue(tag string, key string) (string, bool, error) {
 	return "", false, nil
 }
 
-func backendInputFieldType(expression ast.Expr) (string, bool) {
+func backendInputFieldType(expression ast.Expr, imports map[string]string) (string, bool) {
 	if ident, ok := expression.(*ast.Ident); ok {
 		if fieldType, ok := source.LookupBackendInputFieldType(ident.Name); ok {
 			return fieldType.Name, true
 		}
 		return "", false
 	}
+	if isSelector(expression, imports, formImportPath, "File") {
+		return source.BackendInputTypeFile, true
+	}
 	array, ok := expression.(*ast.ArrayType)
 	if !ok || array.Len != nil {
 		return "", false
 	}
-	ident, ok := array.Elt.(*ast.Ident)
-	if !ok || ident.Name != "string" {
-		return "", false
+	if ident, ok := array.Elt.(*ast.Ident); ok && ident.Name == "string" {
+		return source.BackendInputTypeStringSlice, true
 	}
-	return source.BackendInputTypeStringSlice, true
+	if isSelector(array.Elt, imports, formImportPath, "File") {
+		return source.BackendInputTypeFileSlice, true
+	}
+	return "", false
 }
 
 func backendTypedInputFieldType(typ types.Type) (string, bool) {
@@ -214,13 +223,19 @@ func backendTypedInputFieldType(typ types.Type) (string, bool) {
 		}
 		return "", false
 	}
+	if isTypedNamed(typ, formImportPath, "File") {
+		return source.BackendInputTypeFile, true
+	}
 	slice, ok := typ.Underlying().(*types.Slice)
 	if !ok {
 		return "", false
 	}
-	basic, ok := types.Unalias(slice.Elem()).Underlying().(*types.Basic)
-	if !ok || basic.Kind() != types.String {
-		return "", false
+	if isTypedNamed(slice.Elem(), formImportPath, "File") {
+		return source.BackendInputTypeFileSlice, true
 	}
-	return source.BackendInputTypeStringSlice, true
+	basic, ok := types.Unalias(slice.Elem()).Underlying().(*types.Basic)
+	if ok && basic.Kind() == types.String {
+		return source.BackendInputTypeStringSlice, true
+	}
+	return "", false
 }

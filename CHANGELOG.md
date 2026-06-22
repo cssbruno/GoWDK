@@ -15,6 +15,11 @@ packages, and tooling contracts may change before 1.0.
 - The client expression runtime now receives its operator and builtin metadata
   from the Go compiler/runtime spec instead of hardcoded JavaScript tables,
   reducing Go/JS drift for generated islands.
+- Recorded ADR 0017: parent-child communication collapses into callback props
+  (discrete actions, lowered to the existing `data-gowdk-parent-on-*` transport)
+  plus writable scoped cells (continuous state), with `bind:` as sugar,
+  replacing `emit`/`exports`/`g:bind`. Direction only; implementation is phased
+  and the state half depends on #517.
 - Docs now use the current `server {}` / `go server {}` server-lane syntax
   outside changelog/migration/diagnostics contexts, the README addon table
   lists `observability` and `spa`, and the security-audit docs no longer tie the

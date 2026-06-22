@@ -8,10 +8,11 @@ import (
 
 var defaultTracer = NewTracer()
 
-// Tracer owns sampling and completed-span delivery.
+// Tracer owns sampling, identity generation, and completed-span delivery.
 type Tracer struct {
 	sink    Sink
 	sampler Sampler
+	idGen   IDGenerator
 }
 
 // TracerOption configures a Tracer.
@@ -31,14 +32,28 @@ func WithSampler(sampler Sampler) TracerOption {
 	}
 }
 
+// WithIDGenerator sets the trace/span ID generator. Nil keeps the default
+// CryptoIDGenerator. Tests use this to inject deterministic identifiers without
+// relying on entropy failure.
+func WithIDGenerator(generator IDGenerator) TracerOption {
+	return func(tracer *Tracer) {
+		if generator != nil {
+			tracer.idGen = generator
+		}
+	}
+}
+
 // NewTracer creates a Tracer.
 func NewTracer(options ...TracerOption) *Tracer {
-	tracer := &Tracer{sampler: AlwaysOn()}
+	tracer := &Tracer{sampler: AlwaysOn(), idGen: defaultIDGenerator}
 	for _, option := range options {
 		option(tracer)
 	}
 	if tracer.sampler == nil {
 		tracer.sampler = AlwaysOn()
+	}
+	if tracer.idGen == nil {
+		tracer.idGen = defaultIDGenerator
 	}
 	return tracer
 }
@@ -68,11 +83,21 @@ func (tracer *Tracer) Start(ctx context.Context, name string, options ...StartOp
 		return ctx, nil
 	}
 	parent, hasParent := TraceContextFromContext(ctx)
+	generator := cfg.tracer.idGen
+	if generator == nil {
+		generator = defaultIDGenerator
+	}
 	traceID := parent.TraceID
 	if !traceID.Valid() {
-		traceID = NewTraceID()
+		traceID = generator.NewTraceID()
 	}
-	spanID := NewSpanID()
+	spanID := generator.NewSpanID()
+	if !traceID.Valid() || !spanID.Valid() {
+		// Identity could not be generated (an entropy failure on the default
+		// generator). Drop the span rather than emit a predictable identifier.
+		// The loss is observable through EntropyFailureCount / the handler.
+		return ctx, nil
+	}
 	samplingContext := SamplingContext{
 		TraceID:      traceID,
 		ParentSpanID: parent.SpanID,

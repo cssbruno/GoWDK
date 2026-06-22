@@ -159,8 +159,7 @@ lane from the **data source**, not from a separate directive:
 So `g:for={col in columns}` over a `server {}` field is a server-rendered list,
 while `g:for={todo in todos}` over component `state` is a client island — same
 directive, lane chosen by where the data lives. A name that is neither a declared
-`server {}` field nor client state is rejected. There are no separate `g:each` /
-`g:when` directives; the lane is inferred.
+`server {}` field nor client state is rejected. There are no separate `g:each`/`g:when` directives; the lane is inferred. <!-- removed-syntax-ok: documents the g:each/g:when -> g:for/g:if rename -->
 
 ## Server-rendered lists (`g:for` over `server {}`)
 

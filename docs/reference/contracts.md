@@ -126,7 +126,7 @@ applies a single-flight region refresh: the generated adapter computes which
 without waiting for the realtime fanout that refreshes every other connected
 client.
 
-For a parameterless region whose data comes from the page's `load {}`, the
+For a parameterless region whose data comes from the page's `server {}`, the
 adapter goes one step further and renders the invalidated region inline — true
 single-flight. It returns a `{ result, patches: [{ query, html }] }` envelope
 (signalled by the `X-GOWDK-Patches` response header) and the client swaps the

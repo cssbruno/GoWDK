@@ -77,7 +77,10 @@ Raw HTML allowlist values match either the exact source reference reported by
 `test {}` blocks become generated Go tests. `gowdk audit --emit-tests` writes a
 readable standalone `gowdk_audit_test.go`; `gowdk audit --run` builds a
 temporary generated app and runs its generated `gowdkapp/gowdk_audit_test.go`
-with `go test ./gowdkapp`.
+with `go test ./gowdkapp`. The run is bounded: a default 2m deadline
+(`--run-timeout=<duration>` overrides it), truncated combined output, and a
+minimized, download-free environment. A timeout is reported as
+`audit_test_timeout`, distinct from an expectation failure (`audit_test_failed`).
 
 Supported expectations:
 

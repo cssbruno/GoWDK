@@ -18,7 +18,7 @@ line-by-line text heuristics:
 - Top-level declarations, comments, and blank lines keep their content; only
   indentation and blank-line grouping are normalized.
 - Block kinds and boundaries come from the parser, so `style`, `client`, `go`,
-  `go ssr`, `go client`, `go addon.*`, `server`, and the record/contract blocks
+  `go server`, `go client`, `go addon.*`, `server`, and the record/contract blocks
   are each indented by brace depth using the parser's string/comment-aware
   scanner. Braces inside string literals, comments, and template literals do not
   skew indentation.

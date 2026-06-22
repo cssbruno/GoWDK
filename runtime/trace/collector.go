@@ -103,6 +103,11 @@ func (collector *Collector) RecordSpan(ctx context.Context, span Snapshot) error
 	if collector == nil {
 		return nil
 	}
+	// Normalize here so externally ingested spans (browser POST) are subject to
+	// the same source-path policy as locally produced spans before they reach
+	// the JSON, SSE, or viewer surfaces. Locally produced spans are already
+	// normalized; re-applying the policy is idempotent.
+	span = normalizeSnapshotSource(span)
 	if err := collector.ring.RecordSpan(ctx, span); err != nil {
 		return err
 	}

@@ -96,6 +96,7 @@ var Registry = []Code{
 	{Code: "audit_required_guard_missing", Area: "audit", Stability: StabilityExperimental, Severity: SeverityError, Summary: "target does not declare a role or permission guard required by policy"},
 	{Code: "audit_runtime_mismatch", Area: "audit", Stability: StabilityExperimental, Severity: SeverityError, Summary: "runtime behavior does not match the declared security posture"},
 	{Code: "audit_test_failed", Area: "audit", Stability: StabilityExperimental, Severity: SeverityError, Summary: "an audit integration test expectation did not hold"},
+	{Code: "audit_test_timeout", Area: "audit", Stability: StabilityExperimental, Severity: SeverityError, Summary: "the audit integration test run exceeded its deadline"},
 	{Code: "backend_binding_required", Area: "backend", Stability: StabilityStable, Severity: SeverityError, Summary: "strict builds require a supported backend handler binding"},
 	{Code: "client_go_block_wasm_build_error", Area: "wasm", Stability: StabilityExperimental, Severity: SeverityError, Summary: "page go client WASM build failed"},
 	{Code: "client_go_block_wasm_entrypoint_error", Area: "wasm", Stability: StabilityExperimental, Severity: SeverityError, Summary: "page go client WASM entrypoint is missing or invalid"},

@@ -33,8 +33,8 @@ are tracked in the
 | `endpoints/` | Endpoint cookbook with action redirects, validation fragments, partial responses, APIs, JSON CRUD, webhooks, and standalone fragments. | `cd examples/endpoints && make build` |
 | `partials/patients-fragment.page.gwdk` | Partial/server fragment metadata example with `fragment`, `g:target`, and `g:swap`. | `go run ./cmd/gowdk manifest examples/partials/patients-fragment.page.gwdk` |
 | `api/status.page.gwdk` | API route metadata example with a named `GET` endpoint. | `go run ./cmd/gowdk routes examples/api/status.page.gwdk` |
-| `ssr/simple-ssr.page.gwdk` | Simple generated SSR page without `load {}`. | `go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/ssr/simple-ssr.page.gwdk` |
-| `ssr/hybrid-static.page.gwdk` | Generated hybrid request-time page without `load {}`. | `go run ./cmd/gowdk build --ssr --out /tmp/gowdk-hybrid-build --app /tmp/gowdk-hybrid-app --bin /tmp/gowdk-hybrid-site examples/ssr/hybrid-static.page.gwdk` |
+| `ssr/simple-ssr.page.gwdk` | Simple generated SSR page without `server {}`. | `go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/ssr/simple-ssr.page.gwdk` |
+| `ssr/hybrid-static.page.gwdk` | Generated hybrid request-time page without `server {}`. | `go run ./cmd/gowdk build --ssr --out /tmp/gowdk-hybrid-build --app /tmp/gowdk-hybrid-app --bin /tmp/gowdk-hybrid-site examples/ssr/hybrid-static.page.gwdk` |
 | `ssr/dynamic-ssr.page.gwdk` | Validation example for dynamic SSR route metadata. | `go run ./cmd/gowdk check --ssr examples/ssr/dynamic-ssr.page.gwdk` |
 | `ssr/dashboard.page.gwdk` | SSR page with `load` and guard metadata. | `go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk` |
 | `go-interop/imported-build.page.gwdk` | Buildable `.gwdk` import example that calls Go code from `build {}`. | `go run ./cmd/gowdk build --out /tmp/gowdk-go-interop examples/go-interop/imported-build.page.gwdk` |
@@ -129,7 +129,7 @@ go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-a
 test -x /tmp/gowdk-ssr-site
 ```
 
-Build the current generated hybrid page without `load {}`:
+Build the current generated hybrid page without `server {}`:
 
 ```sh
 go run ./cmd/gowdk build --ssr --out /tmp/gowdk-hybrid-build --app /tmp/gowdk-hybrid-app --bin /tmp/gowdk-hybrid-site examples/ssr/hybrid-static.page.gwdk
@@ -268,19 +268,19 @@ grep -F 'data-gowdk-persist="local"' /tmp/gowdk-store-persist/shop/index.html
   an embedded binary with `gowdk build --app --bin`; the current generated
   binary supports action redirects, partial action fragments, form input
   decoder wrappers, and required-field validation, plus concrete and dynamic
-  SSR pages with declared `load {}` fields and hybrid pages with or without
-  declared `load {}` data. It runs declared guards for generated
+  SSR pages with declared `server {}` fields and hybrid pages with or without
+  declared `server {}` data. It runs declared guards for generated
   SSR/action/API routes, uses `auth.Addon` defaults for `auth.required` and
   native `role:` / `permission:` session guards when configured, and fails Go
   compilation when required custom guard backing code is missing.
 - `view {}` bodies are parsed only for a small app-shell HTML subset; `act` bodies
   support the first form-input/redirect subset, `api` bodies support the first
-  method/route metadata line, and `load` bodies are still not parsed beyond
+  method/route metadata line, and `server` bodies are still not parsed beyond
   top-level block detection.
 - `.gwdk` page imports currently support the first build-time data slice:
   `build { => alias.Func() }` for a Go function returning a JSON object.
   Dynamic `paths {}` builds can pass route params to helpers that declare one
-  `gowdk.BuildParams` argument. Generated action, API, partial, and `load {}`
+  `gowdk.BuildParams` argument. Generated action, API, partial, and `server {}`
   user handler wiring is implemented for the supported first request-time
   signatures.
 - `guard` is enforced by generated SSR/action/API handlers. Custom guarded

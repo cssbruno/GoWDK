@@ -30,7 +30,7 @@ Expected build outputs:
 | Action login form with generated field validation | `src/app/home.page.gwdk`, `src/app/app.go` |
 | API status endpoint | `src/app/home.page.gwdk`, `src/app/app.go` |
 | Server fragment and partial form update | `src/app/home.page.gwdk`, `src/app/app.go` |
-| Protected SSR dashboard with `load {}` | `src/app/dashboard.page.gwdk`, `apphooks/flagship_hooks.go.txt` |
+| Protected SSR dashboard with `server {}` | `src/app/dashboard.page.gwdk`, `apphooks/flagship_hooks.go.txt` |
 | Hybrid request-time page | `src/app/hybrid.page.gwdk` |
 | Component asset and configured CSS | `src/app/asset-badge.cmp.gwdk`, `src/app/badge.svg`, `styles/flagship.css` |
 | Command/query contracts | `src/contracts/contracts.go` |

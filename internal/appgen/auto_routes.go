@@ -2,7 +2,9 @@ package appgen
 
 import (
 	"fmt"
+	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"unicode"
@@ -10,11 +12,13 @@ import (
 	"github.com/cssbruno/gowdk/internal/buildgen"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
+	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 )
 
 func resolveOptions(outputDir string, options Options) (Options, error) {
 	resolved := options
 	if !options.AutoRoutes {
+		normalizeTraceSources(&resolved, filepath.Dir(outputDir), nil)
 		assignBackendAliases(&resolved)
 		return resolved, nil
 	}
@@ -44,6 +48,7 @@ func resolveOptions(outputDir string, options Options) (Options, error) {
 	resolved.APIs = append(append([]APIEndpoint(nil), options.APIs...), apis...)
 	resolved.Fragments = append(append([]FragmentEndpoint(nil), options.Fragments...), fragments...)
 	resolved.SSR = append(append([]SSRRoute(nil), options.SSR...), ssrRoutes(ssrArtifacts)...)
+	normalizeTraceSources(&resolved, filepath.Dir(outputDir), &ir)
 	assignBackendAliases(&resolved)
 	return resolved, nil
 }
@@ -51,6 +56,7 @@ func resolveOptions(outputDir string, options Options) (Options, error) {
 func resolveBackendOptions(options Options) (Options, error) {
 	resolved := options
 	if !options.AutoRoutes {
+		normalizeTraceSources(&resolved, "", nil)
 		assignBackendAliases(&resolved)
 		return resolved, nil
 	}
@@ -74,6 +80,7 @@ func resolveBackendOptions(options Options) (Options, error) {
 	resolved.APIs = append(append([]APIEndpoint(nil), options.APIs...), apis...)
 	resolved.Fragments = append(append([]FragmentEndpoint(nil), options.Fragments...), fragments...)
 	resolved.SSR = nil
+	normalizeTraceSources(&resolved, "", &ir)
 	assignBackendAliases(&resolved)
 	return resolved, nil
 }
@@ -86,6 +93,113 @@ func optionsIR(options Options) (gwdkir.Program, error) {
 		return *options.IR, nil
 	}
 	return gwdkir.Program{}, fmt.Errorf("auto route detection requires compiler IR")
+}
+
+func normalizeTraceSources(options *Options, outputRoot string, ir *gwdkir.Program) {
+	normalizer := newTraceSourceNormalizer(outputRoot, ir)
+	for index := range options.Actions {
+		options.Actions[index].Source = normalizer.normalize(options.Actions[index].Source)
+		options.Actions[index].Binding = normalizeTraceBindingSource(options.Actions[index].Binding, normalizer)
+	}
+	for index := range options.APIs {
+		options.APIs[index].Source = normalizer.normalize(options.APIs[index].Source)
+		options.APIs[index].Binding = normalizeTraceBindingSource(options.APIs[index].Binding, normalizer)
+	}
+	for index := range options.Fragments {
+		options.Fragments[index].Source = normalizer.normalize(options.Fragments[index].Source)
+		options.Fragments[index].Binding = normalizeTraceBindingSource(options.Fragments[index].Binding, normalizer)
+	}
+	for index := range options.SSR {
+		options.SSR[index].Source = normalizer.normalize(options.SSR[index].Source)
+		options.SSR[index].LoadBinding = normalizeTraceBindingSource(options.SSR[index].LoadBinding, normalizer)
+	}
+}
+
+func normalizeTraceBindingSource(binding source.BackendBinding, normalizer traceSourceNormalizer) source.BackendBinding {
+	binding.Source = normalizer.normalize(binding.Source)
+	return binding
+}
+
+type traceSourceNormalizer struct {
+	roots []string
+}
+
+func newTraceSourceNormalizer(outputRoot string, ir *gwdkir.Program) traceSourceNormalizer {
+	var roots []string
+	addRoot := func(root string) {
+		root = strings.TrimSpace(root)
+		if root == "" {
+			return
+		}
+		abs, err := filepath.Abs(root)
+		if err != nil {
+			return
+		}
+		abs = filepath.Clean(abs)
+		for _, existing := range roots {
+			if existing == abs {
+				return
+			}
+		}
+		roots = append(roots, abs)
+	}
+
+	addRoot(outputRoot)
+	if workingDir, err := os.Getwd(); err == nil {
+		addRoot(workingDir)
+	}
+	if ir != nil {
+		for _, pkg := range ir.Packages {
+			for _, dir := range pkg.SourceDirs {
+				addRoot(filepath.Dir(dir))
+				addRoot(dir)
+			}
+		}
+	}
+	return traceSourceNormalizer{roots: roots}
+}
+
+func (normalizer traceSourceNormalizer) normalize(file string) string {
+	file = strings.TrimSpace(file)
+	if file == "" {
+		return ""
+	}
+	if !isAbsoluteTraceSource(file) {
+		return gowdktrace.NormalizeSourceFile(file, gowdktrace.SourcePolicy{})
+	}
+	for _, root := range normalizer.roots {
+		if rel, ok := relativeTraceSource(root, file); ok {
+			return gowdktrace.NormalizeSourceFile(rel, gowdktrace.SourcePolicy{})
+		}
+	}
+	return gowdktrace.NormalizeSourceFile(file, gowdktrace.SourcePolicy{})
+}
+
+func isAbsoluteTraceSource(file string) bool {
+	slashed := strings.ReplaceAll(file, `\`, "/")
+	return filepath.IsAbs(file) ||
+		strings.HasPrefix(slashed, "//") ||
+		(len(slashed) >= 3 && slashed[1] == ':' && slashed[2] == '/' && isASCIILetter(slashed[0]))
+}
+
+func relativeTraceSource(root string, file string) (string, bool) {
+	absFile := file
+	if !filepath.IsAbs(absFile) {
+		var err error
+		absFile, err = filepath.Abs(absFile)
+		if err != nil {
+			return "", false
+		}
+	}
+	rel, err := filepath.Rel(root, filepath.Clean(absFile))
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, "../") || strings.HasPrefix(rel, `..\`) {
+		return "", false
+	}
+	return filepath.ToSlash(rel), true
+}
+
+func isASCIILetter(char byte) bool {
+	return (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z')
 }
 
 func assignBackendAliases(options *Options) {

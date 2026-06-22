@@ -1,6 +1,6 @@
 ---
 name: gowdk-language-change
-description: Change GOWDK language syntax or semantics. Use for parser, formatter, lexer, analyzer, diagnostics, `.gwdk` metadata, `view {}` markup, guards, routes, layouts, actions, APIs, `build`, `load`, `paths`, or docs/examples for language behavior.
+description: Change GOWDK language syntax or semantics. Use for parser, formatter, lexer, analyzer, diagnostics, `.gwdk` metadata, `view {}` markup, guards, routes, layouts, actions, APIs, `build`, `server`, `paths`, or docs/examples for language behavior.
 ---
 
 # GOWDK Language Change
@@ -11,9 +11,9 @@ Treat language changes as compiler contract changes.
 
 - Grammar source of truth: `docs/language/grammar.md`. Canonical declaration
   forms: metadata lines (`package`, `page`, `route "/"`, `guard`, `layout`,
-  `css`, `title`, `import`, `use`), blocks (`paths`, `build`, `load`, `view`,
+  `css`, `title`, `import`, `use`), blocks (`paths`, `build`, `server`, `view`,
   `style`, `props`, `state`, `store`, `client`), Go blocks (`go {}`,
-  `go ssr {}`, `go client {}`), endpoints (`act Name POST "/path"`,
+  `go server {}`, `go client {}`), endpoints (`act Name POST "/path"`,
   `api Name METHOD "/path"` with GET|POST|PUT|PATCH|DELETE).
 - Parser entry points: `ParsePage` / `ParsePageWithDefaultID` /
   `ParseComponent` / `ParseLayout` / `ParseSyntax` in `internal/parser`,
@@ -65,7 +65,7 @@ go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/ssr/*.gwdk
   plain keywords (`page home`, not `@page home`).
 - Keep diagnostic codes stable; renames go through the registry and its docs.
 - Dynamic SPA routes still require `paths {}` unless the page switches to
-  request-time SSR via `load {}` / `go ssr {}`.
+  request-time SSR via `server {}` / `go server {}`.
 
 ## Report
 

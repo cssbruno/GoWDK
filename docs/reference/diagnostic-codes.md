@@ -184,7 +184,8 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `audit_observability_production_exposed`,
   `audit_raw_html_sink`, `audit_max_body_exceeds_policy`,
   `audit_public_not_allowed`, `audit_required_guard_missing`,
-  `audit_runtime_mismatch`, `audit_test_failed`, `policy_duplicate_name`,
+  `audit_runtime_mismatch`, `audit_test_failed`, `audit_test_timeout`,
+  `policy_duplicate_name`,
   `policy_extends_cycle`, `policy_unknown_extends`,
   `policy_unknown_selector`, `policy_selector_matched_nothing`. These are
   experimental and emitted by `gowdk audit`, declared audit policies, or the

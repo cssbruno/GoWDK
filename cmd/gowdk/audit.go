@@ -1,16 +1,17 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"go/parser"
 	"go/token"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/appgen"
@@ -22,7 +23,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/securitymanifest"
 )
 
-const auditUsage = "usage: gowdk audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--run] [files...]"
+const auditUsage = "usage: gowdk audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--run] [--run-timeout=<duration>] [files...]"
 
 // auditReport is the gowdk audit result: the derived security posture plus the
 // findings from evaluating the built-in baseline and declared policies against
@@ -65,9 +66,10 @@ type auditSummary struct {
 }
 
 type auditCommandOptions struct {
-	EmitTests bool
-	RunTests  bool
-	TestPath  string
+	EmitTests  bool
+	RunTests   bool
+	TestPath   string
+	RunTimeout time.Duration
 }
 
 type auditExitError struct {
@@ -153,6 +155,16 @@ func parseAuditCommandOptions(args []string) (auditCommandOptions, []string, err
 			}
 		case arg == "--run":
 			options.RunTests = true
+		case strings.HasPrefix(arg, "--run-timeout="):
+			value := strings.TrimSpace(strings.TrimPrefix(arg, "--run-timeout="))
+			duration, err := time.ParseDuration(value)
+			if err != nil {
+				return options, nil, fmt.Errorf("invalid --run-timeout %q: %w", value, err)
+			}
+			if duration <= 0 {
+				return options, nil, fmt.Errorf("invalid --run-timeout %q: must be positive", value)
+			}
+			options.RunTimeout = duration
 		default:
 			projectArgs = append(projectArgs, arg)
 		}
@@ -191,21 +203,50 @@ func handleAuditTests(auditOptions auditCommandOptions, options cliOptions, ir g
 		return nil, nil
 	}
 
-	runPath, output, err := runGeneratedAppAuditTests(options, ir)
-	if err == nil {
-		if runPath != "" {
-			fmt.Fprintf(os.Stderr, "audit generated app tests passed: %s\n", runPath)
-		}
+	runOptions := defaultAuditRunOptions()
+	if auditOptions.RunTimeout > 0 {
+		runOptions.Timeout = auditOptions.RunTimeout
+	}
+
+	testPath, result, err := runGeneratedAppAuditTests(options, ir, runOptions)
+	if err != nil {
+		return nil, err
+	}
+	if testPath == "" {
+		// No generated audit tests exist for this program; nothing to run.
 		return nil, nil
 	}
-	return []auditspec.Finding{{
-		Code:        "audit_test_failed",
-		Severity:    auditDiagnosticSeverity("audit_test_failed"),
-		Target:      "runtime",
-		Source:      runPath,
-		Message:     "generated audit integration tests failed",
-		Remediation: "Run gowdk audit --run locally, then update generated runtime behavior or policy expectations.",
-	}}, writeAuditRunOutput(output)
+
+	switch {
+	case result.TimedOut:
+		writeAuditRunOutput(result)
+		fmt.Fprintf(os.Stderr, "audit generated app tests timed out after %s: %s\n", runOptions.Timeout, testPath)
+		return []auditspec.Finding{{
+			Code:        "audit_test_timeout",
+			Severity:    auditDiagnosticSeverity("audit_test_timeout"),
+			Target:      "runtime",
+			Source:      testPath,
+			Message:     fmt.Sprintf("generated audit integration tests timed out after %s", runOptions.Timeout),
+			Remediation: "Investigate the hanging test, or raise the deadline with gowdk audit --run --run-timeout=<duration>.",
+		}}, nil
+	case result.ExitErr != nil:
+		writeAuditRunOutput(result)
+		message := "generated audit integration tests failed"
+		if result.Truncated {
+			message += " (output truncated)"
+		}
+		return []auditspec.Finding{{
+			Code:        "audit_test_failed",
+			Severity:    auditDiagnosticSeverity("audit_test_failed"),
+			Target:      "runtime",
+			Source:      testPath,
+			Message:     message,
+			Remediation: "Run gowdk audit --run locally, then update generated runtime behavior or policy expectations.",
+		}}, nil
+	default:
+		fmt.Fprintf(os.Stderr, "audit generated app tests passed: %s\n", testPath)
+		return nil, nil
+	}
 }
 
 func standaloneAuditPackageName(dir string) string {
@@ -224,34 +265,40 @@ func standaloneAuditPackageName(dir string) string {
 	return names[0] + "_test"
 }
 
-func runGeneratedAppAuditTests(options cliOptions, ir gwdkir.Program) (string, string, error) {
+// runGeneratedAppAuditTests builds and generates a throwaway app from the
+// validated IR, then runs its audit test package under the bounded execution
+// boundary in runAuditTestCommand. The returned testPath is empty when the
+// program has no generated audit tests. A non-nil error reports an
+// infrastructure failure (build or generation); test execution outcomes,
+// including non-zero exit and timeout, are reported through auditRunResult.
+func runGeneratedAppAuditTests(options cliOptions, ir gwdkir.Program, runOptions auditRunOptions) (string, auditRunResult, error) {
 	source, err := appgen.GeneratedAuditTestSource(appgen.OptionsFromIR(options.Config, &ir))
 	if err != nil || len(source) == 0 {
-		return "", "", err
+		return "", auditRunResult{}, err
 	}
 
 	tempRoot, err := os.MkdirTemp("", "gowdk-audit-run-*")
 	if err != nil {
-		return "", "", err
+		return "", auditRunResult{}, err
 	}
 	defer os.RemoveAll(tempRoot)
 
 	outputDir := filepath.Join(tempRoot, "output")
 	appDir := filepath.Join(tempRoot, "app")
 	if _, err := buildgen.BuildFromValidatedIR(options.Config, ir, outputDir); err != nil {
-		return "", "", err
+		return "", auditRunResult{}, err
 	}
 	app, err := appgen.GenerateWithOptions(outputDir, appDir, appgen.OptionsFromIR(options.Config, &ir))
 	if err != nil {
-		return "", "", err
+		return "", auditRunResult{}, err
 	}
 	if err := writeGeneratedAppAuditRunHooks(app.AppDir, ir); err != nil {
-		return "", "", err
+		return "", auditRunResult{}, err
 	}
 
 	testPath := filepath.Join(app.AppDir, "gowdkapp", "gowdk_audit_test.go")
-	output, err := runGeneratedAppTestPackage(app.AppDir)
-	return testPath, output, err
+	result := runAuditTestCommand(context.Background(), app.AppDir, runOptions)
+	return testPath, result, nil
 }
 
 func writeGeneratedAppAuditRunHooks(appDir string, ir gwdkir.Program) error {
@@ -376,19 +423,15 @@ func auditGuardsUseNativeRBAC(guards []string) bool {
 	return false
 }
 
-func runGeneratedAppTestPackage(appDir string) (string, error) {
-	command := exec.Command("go", "test", "./gowdkapp")
-	command.Dir = appDir
-	output, err := command.CombinedOutput()
-	return string(output), err
-}
-
-func writeAuditRunOutput(output string) error {
-	output = strings.TrimSpace(output)
-	if output != "" {
+// writeAuditRunOutput prints the bounded test output to stderr, followed by an
+// explicit truncation marker when the output exceeded the capture limit.
+func writeAuditRunOutput(result auditRunResult) {
+	if output := strings.TrimSpace(result.Output); output != "" {
 		fmt.Fprintln(os.Stderr, output)
 	}
-	return nil
+	if result.Truncated {
+		fmt.Fprintln(os.Stderr, auditRunTruncationMarker)
+	}
 }
 
 func auditDiagnosticSeverity(code string) diagnostics.Severity {

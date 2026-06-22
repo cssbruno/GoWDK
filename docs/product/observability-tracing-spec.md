@@ -52,6 +52,37 @@ Sentry, or a hosted observability backend.
 - The exporter adapter produces an OTLP-like span shape without importing
   OpenTelemetry packages.
 
+### Hardening
+
+- Console output is for development and local diagnostics. `ConsoleSink` escapes
+  control characters in every field (span names, status messages, source paths,
+  and event messages), so untrusted values cannot forge log lines or emit
+  terminal control sequences. Use `JSONLSink` for production logging where
+  downstream tooling parses structured records.
+- Trace and span IDs come from an injectable `IDGenerator`. The default
+  `CryptoIDGenerator` uses `crypto/rand` and never falls back to a predictable
+  value: on entropy failure it records the loss through `EntropyFailureCount` and
+  the handler set by `SetEntropyFailureHandler`, and the tracer drops the span
+  rather than emit a guessable ID. Tests inject deterministic IDs through
+  `WithIDGenerator`.
+- `SourceRef.File` is normalized before a snapshot leaves the process. The
+  default `SourcePolicy` (relative mode) reduces absolute filesystem paths to
+  project-relative logical paths consistently across the viewer, JSON/SSE,
+  console, and OTLP surfaces; `SourcePathAbsolute` is an opt-in debug mode for
+  local development only. In production, only project-relative source paths
+  leave the process.
+- The `runtime/trace/otel` bridge distinguishes GOWDK-owned providers (`NewSink`,
+  and `NewSinkWithProvider(nil)`) from app-owned providers
+  (`NewSinkWithProvider(provider)`): `Shutdown` only shuts down a provider the
+  sink owns, unless `WithProviderShutdown` transfers ownership.
+  `WithNativeIdentity` asserts the provider uses `SnapshotIDGenerator`, so GOWDK
+  IDs are not duplicated as attributes; otherwise they are preserved as
+  `gowdk.trace_id`/`gowdk.span_id`. The bridge sets span kind by lane, preserves
+  event level as `gowdk.event.level`, applies a stable instrumentation
+  name/version and default `service.name` resource, converts only the closed
+  scalar/array value model, and drops unsupported values (counted, and listed in
+  `gowdk.dropped_attributes`) instead of stringifying them.
+
 ### Non-Functional
 
 - Runtime package imports must stay standard-library only.

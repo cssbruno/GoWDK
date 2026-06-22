@@ -1301,6 +1301,59 @@ func TestGenerateObservabilityTracesSSRRouteAndLoad(t *testing.T) {
 	}
 }
 
+func TestGenerateObservabilityNormalizesAbsoluteSourcePaths(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "dashboard", "index.html"), "<main>Dashboard</main>")
+
+	config := csrfDisabledConfig()
+	config.Addons = []gowdk.Addon{gowdk.NewAddon("observability", gowdk.FeatureObservability)}
+	pageSource := filepath.Join(root, "pages", "dashboard.page.gwdk")
+	ssrRoute := SSRRoute{
+		PageID:     "dashboard",
+		Route:      "/dashboard",
+		Render:     gowdk.SSR,
+		Guards:     []string{"public"},
+		HasLoad:    true,
+		Source:     pageSource,
+		SourceSpan: source.SourceSpan{Start: source.SourcePosition{Line: 3, Column: 1}},
+		LoadBinding: source.BackendBinding{
+			Kind:         "load",
+			PageID:       "dashboard",
+			Source:       pageSource,
+			Span:         source.SourceSpan{Start: source.SourcePosition{Line: 6, Column: 1}},
+			Status:       source.BackendBindingBound,
+			ImportPath:   "example.com/app/dashboard",
+			PackageName:  "dashboard",
+			FunctionName: "LoadDashboard",
+			Signature:    source.BackendSignatureLoadError,
+		},
+		HTML: "<main>Dashboard</main>",
+	}
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Config: config, SSR: []SSRRoute{ssrRoute}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated := string(payload)
+	if strings.Contains(generated, filepath.ToSlash(root)) {
+		t.Fatalf("generated trace source leaked project root %q:\n%s", root, generated)
+	}
+	for _, expected := range []string{
+		`gowdktrace.WithSource(gowdktrace.SourceRef{File: "pages/dashboard.page.gwdk", Line: 3, Column: 1, OwnerKind: "page", OwnerID: "dashboard"})`,
+		`gowdktrace.WithSource(gowdktrace.SourceRef{File: "pages/dashboard.page.gwdk", Line: 6, Column: 1, OwnerKind: "load", OwnerID: "dashboard"})`,
+	} {
+		if !strings.Contains(generated, expected) {
+			t.Fatalf("expected generated source to contain %q:\n%s", expected, generated)
+		}
+	}
+}
+
 func TestGenerateSkipsSingleFlightRegionRenderersForGuardedRoutes(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

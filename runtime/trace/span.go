@@ -200,7 +200,10 @@ func (span *Span) snapshotLocked() Snapshot {
 	if duration < 0 {
 		duration = 0
 	}
-	return Snapshot{
+	// Normalize the source path here, the single point every completed-span
+	// snapshot is created, so the viewer, JSON/SSE, console, and OTLP surfaces
+	// never observe an absolute local filesystem path by default.
+	return normalizeSnapshotSource(Snapshot{
 		TraceID:      span.traceID,
 		SpanID:       span.spanID,
 		ParentSpanID: span.parentSpanID,
@@ -214,7 +217,7 @@ func (span *Span) snapshotLocked() Snapshot {
 		StartTime:    span.start,
 		EndTime:      end,
 		DurationNS:   duration.Nanoseconds(),
-	}
+	})
 }
 
 func attributesFromMap(attrs map[string]any) []Attribute {

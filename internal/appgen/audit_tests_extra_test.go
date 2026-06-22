@@ -62,6 +62,58 @@ func TestGeneratedAuditTestSourceExpandsRuntimeScenarioMatrix(t *testing.T) {
 	}
 }
 
+func TestGeneratedAuditTestSkipsAnonymousRBACProbeWhenCSRFMasksIt(t *testing.T) {
+	// A CSRF-protected POST guarded by a native role: an anonymous, token-less
+	// request is denied by the CSRF gate even if the role guard is missing, so an
+	// anonymous probe cannot serve as role-guard evidence and must not be emitted.
+	source, err := GeneratedAuditTestSource(Options{
+		IR: &gwdkir.Program{
+			Endpoints: []gwdkir.Endpoint{{
+				Kind:   gwdkir.EndpointAction,
+				Symbol: "Submit",
+				Method: "POST",
+				Path:   "/submit",
+				Guards: []string{"role:admin"},
+				CSRF:   true,
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := string(source)
+	if strings.Contains(payload, "anonymous denied") {
+		t.Fatalf("CSRF-protected POST must not emit an anonymous RBAC probe:\n%s", payload)
+	}
+	// The CSRF rejection scenario still covers the endpoint.
+	if !strings.Contains(payload, "action csrf rejection Submit") {
+		t.Fatalf("expected the csrf rejection scenario to remain:\n%s", payload)
+	}
+}
+
+func TestGeneratedAuditTestEmitsAnonymousRBACProbeWithoutCSRF(t *testing.T) {
+	// Identical endpoint without CSRF: the anonymous 403 is attributable to the
+	// role guard alone, so the probe is meaningful and must be emitted.
+	source, err := GeneratedAuditTestSource(Options{
+		IR: &gwdkir.Program{
+			Endpoints: []gwdkir.Endpoint{{
+				Kind:   gwdkir.EndpointAction,
+				Symbol: "Submit",
+				Method: "POST",
+				Path:   "/submit",
+				Guards: []string{"role:admin"},
+				CSRF:   false,
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(source), "anonymous denied") {
+		t.Fatalf("native-RBAC endpoint without CSRF must emit an anonymous RBAC probe:\n%s", source)
+	}
+}
+
 func TestGeneratedAuditTestCSRFProbeAuthenticatesNativeGuards(t *testing.T) {
 	source, err := GeneratedAuditTestSource(Options{
 		IR: &gwdkir.Program{

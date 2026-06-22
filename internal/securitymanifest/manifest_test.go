@@ -4,12 +4,68 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
+
+func TestRelativizeMakesPosturePortableAcrossCheckouts(t *testing.T) {
+	// The same project checked out at two different absolute roots must produce
+	// an identical relativized posture, so any digest derived from it (and the
+	// raw-HTML fingerprints a policy exception pins) match across machines/CI.
+	build := func(root string) SecurityManifest {
+		source := filepath.Join(root, "pages", "home.page.gwdk")
+		return SecurityManifest{
+			Version: SchemaVersion,
+			Routes:  []RouteEntry{{PageID: "home", Route: "/", Source: source + ":4"}},
+			Endpoints: []EndpointEntry{{
+				ID: "Submit", Kind: "action", Method: "POST", Path: "/submit",
+				Source: filepath.Join(root, "pages", "home.go") + ":12",
+			}},
+			Frontend: FrontendSurface{
+				UnguardedRoutes: []UnguardedRoute{{Route: "/draft", Source: source + ":2"}},
+				RawHTMLSinks: []RawHTMLSink{{
+					OwnerKind: "page", OwnerID: "home", Field: "{X}", Source: source + ":9", Ordinal: 0,
+				}},
+			},
+		}
+	}
+
+	rootA := filepath.Join(string(filepath.Separator)+"home", "dev", "app")
+	rootB := filepath.Join(string(filepath.Separator)+"workspace", "ci", "checkout")
+	relA := build(rootA).Relativize(rootA)
+	relB := build(rootB).Relativize(rootB)
+
+	if got := relA.Routes[0].Source; got != "pages/home.page.gwdk:4" {
+		t.Fatalf("route source not relativized: %q", got)
+	}
+	if relA.Frontend.RawHTMLSinks[0].Fingerprint == "" {
+		t.Fatal("expected the raw-HTML fingerprint to be recomputed from the relative source")
+	}
+	if !reflect.DeepEqual(relA, relB) {
+		t.Fatalf("relativized posture differs across checkouts:\n%#v\n%#v", relA, relB)
+	}
+}
+
+func TestRelativizeLeavesNonFileAndRelativeRefsUntouched(t *testing.T) {
+	manifest := SecurityManifest{
+		Version: SchemaVersion,
+		Routes: []RouteEntry{
+			{PageID: "a", Route: "/a", Source: "config:Build.SecurityHeaders"},
+			{PageID: "b", Route: "/b", Source: "already/relative.page.gwdk:3"},
+		},
+	}
+	out := manifest.Relativize(filepath.Join(string(filepath.Separator)+"root"))
+	if out.Routes[0].Source != "config:Build.SecurityHeaders" {
+		t.Fatalf("non-file source must pass through, got %q", out.Routes[0].Source)
+	}
+	if out.Routes[1].Source != "already/relative.page.gwdk:3" {
+		t.Fatalf("already-relative source must pass through, got %q", out.Routes[1].Source)
+	}
+}
 
 func TestBuildProjectsRoutesAndEndpoints(t *testing.T) {
 	ir := gwdkir.Program{

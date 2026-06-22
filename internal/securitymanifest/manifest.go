@@ -738,6 +738,119 @@ func RawHTMLFingerprint(ownerKind, ownerID, field, source string, ordinal int) s
 	return hex.EncodeToString(sum[:16])
 }
 
+// Relativize returns a copy of the manifest with every source-location field
+// rewritten relative to root using forward slashes. Absolute discovery paths
+// otherwise embed the checkout location in the posture, so the digests derived
+// from it differ between machines and gowdk audit --check-tests can fail in CI
+// even when the schema, policy, and posture are unchanged. RawHTMLSink
+// fingerprints are recomputed from the relativized source so a pinned policy
+// exception stays portable too. An empty root, or a reference that cannot be
+// made relative to root, leaves the reference unchanged.
+func (manifest SecurityManifest) Relativize(root string) SecurityManifest {
+	if strings.TrimSpace(root) == "" {
+		return manifest
+	}
+	out := manifest
+	if len(manifest.Routes) > 0 {
+		routes := append([]RouteEntry(nil), manifest.Routes...)
+		for index := range routes {
+			routes[index].Source = RelativizeSourceRef(routes[index].Source, root)
+		}
+		out.Routes = routes
+	}
+	if len(manifest.Endpoints) > 0 {
+		endpoints := append([]EndpointEntry(nil), manifest.Endpoints...)
+		for index := range endpoints {
+			endpoints[index].Source = RelativizeSourceRef(endpoints[index].Source, root)
+		}
+		out.Endpoints = endpoints
+	}
+	if len(manifest.Contracts) > 0 {
+		contracts := append([]ContractEntry(nil), manifest.Contracts...)
+		for index := range contracts {
+			contracts[index].DeclarationSource = RelativizeSourceRef(contracts[index].DeclarationSource, root)
+			contracts[index].ExposureSource = RelativizeSourceRef(contracts[index].ExposureSource, root)
+		}
+		out.Contracts = contracts
+	}
+	if len(manifest.Waivers) > 0 {
+		waivers := append([]WaiverDeclaration(nil), manifest.Waivers...)
+		for index := range waivers {
+			waivers[index].Source = RelativizeSourceRef(waivers[index].Source, root)
+		}
+		out.Waivers = waivers
+	}
+	out.Frontend = relativizeFrontend(manifest.Frontend, root)
+	return out
+}
+
+func relativizeFrontend(frontend FrontendSurface, root string) FrontendSurface {
+	out := frontend
+	if len(frontend.UnguardedRoutes) > 0 {
+		routes := append([]UnguardedRoute(nil), frontend.UnguardedRoutes...)
+		for index := range routes {
+			routes[index].Source = RelativizeSourceRef(routes[index].Source, root)
+		}
+		out.UnguardedRoutes = routes
+	}
+	if len(frontend.BundleSecrets) > 0 {
+		secrets := append([]BundleLeak(nil), frontend.BundleSecrets...)
+		for index := range secrets {
+			secrets[index].Source = RelativizeSourceRef(secrets[index].Source, root)
+		}
+		out.BundleSecrets = secrets
+	}
+	if len(frontend.RawHTMLSinks) > 0 {
+		sinks := append([]RawHTMLSink(nil), frontend.RawHTMLSinks...)
+		for index := range sinks {
+			sink := &sinks[index]
+			sink.Source = RelativizeSourceRef(sink.Source, root)
+			sink.Fingerprint = RawHTMLFingerprint(sink.OwnerKind, sink.OwnerID, sink.Field, sink.Source, sink.Ordinal)
+		}
+		out.RawHTMLSinks = sinks
+	}
+	return out
+}
+
+// RelativizeSourceRef rewrites a "file" or "file:line" source reference so the
+// file portion is relative to root and uses forward slashes. It returns the
+// reference unchanged when root is empty, the file portion is not absolute, or
+// it cannot be made relative to root, so non-file references (for example
+// "config:Build.X") and already-relative paths pass through untouched. It is
+// exported so audit policy sources can be relativized with the same rule.
+func RelativizeSourceRef(ref, root string) string {
+	if strings.TrimSpace(root) == "" {
+		return ref
+	}
+	if ref == "" {
+		return ref
+	}
+	file, suffix := ref, ""
+	if index := strings.LastIndexByte(ref, ':'); index >= 0 && isAllDigits(ref[index+1:]) {
+		file, suffix = ref[:index], ref[index:]
+	}
+	if !filepath.IsAbs(file) {
+		return ref
+	}
+	rel, err := filepath.Rel(root, file)
+	if err != nil {
+		return ref
+	}
+	return filepath.ToSlash(rel) + suffix
+}
+
+func isAllDigits(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, char := range value {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func templateOffsetSpan(template gwdkir.Template, offset int) source.SourceSpan {
 	line := template.BodyStart.Line
 	if line <= 0 {

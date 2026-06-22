@@ -91,3 +91,58 @@ func DropSpansNamed(name string) gowdktrace.SamplerRule {
 func KeepSpansNamed(name string) gowdktrace.SamplerRule {
 	return gowdktrace.KeepSpansNamed(name)
 }
+
+// SamplingContext is the per-span context a SamplerRule matcher inspects.
+type SamplingContext = gowdktrace.SamplingContext
+
+// Surface identifies where a span was produced. Re-exported with its values so
+// MatchSurface rules can be written without importing runtime/trace directly.
+type Surface = gowdktrace.Surface
+
+// Surface values for use with MatchSurface.
+const (
+	SurfaceBackend  = gowdktrace.SurfaceBackend
+	SurfaceFrontend = gowdktrace.SurfaceFrontend
+	SurfaceWorker   = gowdktrace.SurfaceWorker
+)
+
+// Lane identifies the GOWDK execution lane a span represents. Re-exported with
+// its values so MatchLane rules can be written without importing runtime/trace
+// directly.
+type Lane = gowdktrace.Lane
+
+// Lane values for use with MatchLane.
+const (
+	LaneRoute    = gowdktrace.LaneRoute
+	LaneGuard    = gowdktrace.LaneGuard
+	LaneHandler  = gowdktrace.LaneHandler
+	LaneSSR      = gowdktrace.LaneSSR
+	LaneAction   = gowdktrace.LaneAction
+	LaneAPI      = gowdktrace.LaneAPI
+	LaneFragment = gowdktrace.LaneFragment
+	LaneContract = gowdktrace.LaneContract
+	LaneJob      = gowdktrace.LaneJob
+	LaneIsland   = gowdktrace.LaneIsland
+	LaneNav      = gowdktrace.LaneNav
+	LaneUser     = gowdktrace.LaneUser
+)
+
+// MatchSpanName builds a matcher for spans whose name equals name.
+func MatchSpanName(name string) func(SamplingContext) bool {
+	return gowdktrace.MatchSpanName(name)
+}
+
+// MatchSpanNamePrefix builds a matcher for spans whose name starts with prefix.
+func MatchSpanNamePrefix(prefix string) func(SamplingContext) bool {
+	return gowdktrace.MatchSpanNamePrefix(prefix)
+}
+
+// MatchLane builds a matcher for spans on the given GOWDK lane.
+func MatchLane(lane Lane) func(SamplingContext) bool {
+	return gowdktrace.MatchLane(lane)
+}
+
+// MatchSurface builds a matcher for spans on the given GOWDK surface.
+func MatchSurface(surface Surface) func(SamplingContext) bool {
+	return gowdktrace.MatchSurface(surface)
+}

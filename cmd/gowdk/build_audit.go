@@ -69,9 +69,12 @@ func buildErrorIsBypassed(options cliOptions, code string) bool {
 // dev iteration. The --allow-insecure flag downgrades the production gate to a
 // warning for 0.x experimentation.
 func enforceBuildSecurityAudit(options cliOptions, ir gwdkir.Program) error {
-	manifest := securitymanifest.Build(options.Config, ir)
+	// Relativize source locations to the project root so the posture digest the
+	// build-time gate computes (and the digests a waiver pins) match what gowdk
+	// audit produces regardless of checkout location.
+	manifest := securitymanifest.Build(options.Config, ir).Relativize(options.ProjectRoot)
 	declared := auditspec.PoliciesFromIR(ir.AuditSpecs)
-	policies := auditspec.ComposeBaseline(declared)
+	policies := relativizeAuditPolicies(auditspec.ComposeBaseline(declared), options.ProjectRoot)
 	waiverCtx := auditspec.WaiverContext{
 		PolicyDigest:  auditPolicyDigest(policies),
 		PostureDigest: auditPostureDigest(manifest),

@@ -64,8 +64,12 @@ func NewTracer(options ...TracerOption) *Tracer {
 	return tracer
 }
 
-// Start starts a span. If sampling rejects the span, the returned context is
-// unchanged and the returned span is nil.
+// Start starts a span. If sampling rejects the span the returned span is nil.
+// A dynamic sampler's rejection still propagates the generated trace identity
+// with Sampled:false on the returned context, so a descendant started from it
+// inherits the drop (parent-based sampling keeps an unsampled trace whole)
+// instead of re-rolling as a new root. A statically-off tracer (AlwaysOff)
+// short-circuits earlier and returns the context unchanged without allocating.
 func (tracer *Tracer) Start(ctx context.Context, name string, options ...StartOption) (context.Context, *Span) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -117,7 +121,12 @@ func (tracer *Tracer) Start(ctx context.Context, name string, options ...StartOp
 		Attributes:    cloneAttributes(cfg.attributes),
 	}
 	if cfg.tracer.sampler != nil && !cfg.tracer.sampler.Sample(samplingContext) {
-		return ctx, nil
+		// Sampling rejected this span. Propagate the generated identity with
+		// Sampled:false so a descendant started from the returned context
+		// inherits the drop rather than re-rolling as a new root. No tracer is
+		// attached and no span is allocated, so the dropped span is never
+		// recorded or exported.
+		return ContextWithTraceContext(ctx, TraceContext{TraceID: traceID, SpanID: spanID, Sampled: false, TraceState: traceState}), nil
 	}
 	cfg.tracer.sampledSpans.Add(1)
 	ctx = ContextWithTracer(ctx, cfg.tracer)

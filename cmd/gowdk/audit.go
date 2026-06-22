@@ -192,9 +192,12 @@ func audit(args []string) error {
 		return err
 	}
 
-	manifest := securitymanifest.Build(options.Config, ir)
+	// Relativize source locations to the project root so the posture — and the
+	// digests, findings, and emitted tests derived from it — are identical
+	// regardless of where the project is checked out.
+	manifest := securitymanifest.Build(options.Config, ir).Relativize(options.ProjectRoot)
 	declared := auditspec.PoliciesFromIR(ir.AuditSpecs)
-	policies := auditspec.ComposeBaseline(declared)
+	policies := relativizeAuditPolicies(auditspec.ComposeBaseline(declared), options.ProjectRoot)
 	waiverCtx := auditspec.WaiverContext{
 		PolicyDigest:  auditPolicyDigest(policies),
 		PostureDigest: auditPostureDigest(manifest),
@@ -399,7 +402,7 @@ func handleAuditTests(auditOptions auditCommandOptions, options cliOptions, ir g
 		if len(source) == 0 {
 			return nil, nil
 		}
-		source = generatedStandaloneAuditTestSource(source, manifest, auditspec.ComposeBaseline(auditspec.PoliciesFromIR(ir.AuditSpecs)))
+		source = generatedStandaloneAuditTestSource(source, manifest, relativizeAuditPolicies(auditspec.ComposeBaseline(auditspec.PoliciesFromIR(ir.AuditSpecs)), options.ProjectRoot))
 		if err := os.MkdirAll(filepath.Dir(testPath), 0o755); err != nil {
 			return nil, err
 		}
@@ -749,7 +752,7 @@ func checkStandaloneAuditTests(auditOptions auditCommandOptions, options cliOpti
 	if err != nil {
 		return nil, err
 	}
-	policies := auditspec.ComposeBaseline(auditspec.PoliciesFromIR(ir.AuditSpecs))
+	policies := relativizeAuditPolicies(auditspec.ComposeBaseline(auditspec.PoliciesFromIR(ir.AuditSpecs)), options.ProjectRoot)
 
 	existing, readErr := os.ReadFile(testPath)
 	switch {
@@ -775,10 +778,40 @@ func checkStandaloneAuditTests(auditOptions auditCommandOptions, options cliOpti
 		return []auditspec.Finding{staleAuditTestFinding(testPath,
 			"the checked-in audit test carries no identity metadata")}, nil
 	}
+	body, extracted := standaloneAuditTestBody(existing)
+	if !extracted {
+		return []auditspec.Finding{staleAuditTestFinding(testPath,
+			"the checked-in audit test is missing its generated header")}, nil
+	}
+	// Verify the actual checked-in body against the freshly generated body, not
+	// just the recorded identity line: a generated test can be hand-edited while
+	// leaving the metadata header (and its source= digest) intact, which a
+	// header-only comparison would miss. Trusting the embedded digest would let a
+	// tampered body pass, so the live body digest replaces it before comparison.
+	got.Source = auditDigest(body)
 	if diff := auditTestMetadataDiff(got, auditTestMetadataFor(source, manifest, policies)); diff != "" {
 		return []auditspec.Finding{staleAuditTestFinding(testPath, diff)}, nil
 	}
 	return nil, nil
+}
+
+// standaloneAuditTestBody recovers the generated source body from an emitted
+// audit test by stripping the generated marker and the identity metadata line,
+// exactly inverting generatedStandaloneAuditTestSource. It returns false when
+// the header is absent so the caller can report the file as not generated.
+func standaloneAuditTestBody(payload []byte) ([]byte, bool) {
+	if !bytes.HasPrefix(payload, []byte(auditGeneratedMarker)) {
+		return nil, false
+	}
+	rest := payload[len(auditGeneratedMarker):]
+	if !bytes.HasPrefix(rest, []byte(auditGeneratedMetadataPrefix)) {
+		return nil, false
+	}
+	sep := bytes.Index(rest, []byte("\n\n"))
+	if sep < 0 {
+		return nil, false
+	}
+	return rest[sep+2:], true
 }
 
 func staleAuditTestFinding(testPath, reason string) auditspec.Finding {
@@ -994,6 +1027,29 @@ func auditPolicyDigest(policies []auditspec.Policy) string {
 		stripped = append(stripped, policy)
 	}
 	return auditDigest(stripped)
+}
+
+// relativizeAuditPolicies returns the policies with their declaration source and
+// per-rule sources rewritten relative to root, so the policy digest and
+// policy-resolution findings are identical regardless of checkout location.
+// Built-in baseline policies carry no file source and pass through unchanged.
+func relativizeAuditPolicies(policies []auditspec.Policy, root string) []auditspec.Policy {
+	if strings.TrimSpace(root) == "" || len(policies) == 0 {
+		return policies
+	}
+	out := make([]auditspec.Policy, len(policies))
+	for index, policy := range policies {
+		policy.Source = securitymanifest.RelativizeSourceRef(policy.Source, root)
+		if len(policy.Rules) > 0 {
+			rules := append([]auditspec.Rule(nil), policy.Rules...)
+			for ruleIndex := range rules {
+				rules[ruleIndex].Source = securitymanifest.RelativizeSourceRef(rules[ruleIndex].Source, root)
+			}
+			policy.Rules = rules
+		}
+		out[index] = policy
+	}
+	return out
 }
 
 func printAuditReport(report auditReport) {

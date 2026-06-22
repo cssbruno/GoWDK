@@ -309,11 +309,17 @@ func auditEndpointScenarios(manifest securitymanifest.SecurityManifest) []auditS
 		}
 		// A native role/permission guard fails closed with 403 for an anonymous
 		// caller (GuardEvidence FailureContract fail-closed-403), so an explicit
-		// anonymous probe exercises the deny path against the generated app. This
-		// holds regardless of method: an anonymous POST is rejected by the guard or
-		// the CSRF gate, both 403. auth.required is excluded because it may redirect
-		// instead of returning 403.
-		if endpointHasNativeRBACGuard(endpoint) {
+		// anonymous probe exercises the deny path against the generated app.
+		// auth.required is excluded because it may redirect instead of returning
+		// 403.
+		//
+		// The probe is skipped when the CSRF gate would return 403 on its own: a
+		// CSRF-protected state-changing request carries no token, so it is denied
+		// even if the role/permission guard is missing. Such a probe cannot
+		// isolate the guard — the regression it exists to catch — and the harness
+		// cannot mint a valid token for an anonymous caller. The csrf rejection
+		// scenario below still exercises that endpoint.
+		if endpointHasNativeRBACGuard(endpoint) && !endpointCSRFGuardsMethod(endpoint) {
 			scenarios = append(scenarios, auditScenario{
 				Name:       endpoint.Kind + " anonymous denied " + endpoint.ID,
 				Method:     strings.ToUpper(endpoint.Method),
@@ -346,6 +352,24 @@ func endpointHasNativeRBACGuard(endpoint securitymanifest.EndpointEntry) bool {
 		}
 	}
 	return false
+}
+
+// endpointCSRFGuardsMethod reports whether the endpoint's CSRF gate would reject
+// an anonymous, token-less request on its own — independent of any RBAC guard —
+// so an anonymous 403 probe could not attribute the denial to the guard.
+func endpointCSRFGuardsMethod(endpoint securitymanifest.EndpointEntry) bool {
+	return endpoint.CSRF && !auditMethodIsCSRFSafe(endpoint.Method)
+}
+
+// auditMethodIsCSRFSafe reports whether the HTTP method is exempt from CSRF
+// validation (a safe, non-state-changing method).
+func auditMethodIsCSRFSafe(method string) bool {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
+		return true
+	default:
+		return false
+	}
 }
 
 func auditCSRFActor(endpoint securitymanifest.EndpointEntry) string {

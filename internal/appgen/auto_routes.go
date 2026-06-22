@@ -211,6 +211,7 @@ func ssrRoutes(artifacts []buildgen.SSRArtifact) []SSRRoute {
 			Render:           artifact.Render,
 			Cache:            artifact.Cache,
 			ErrorPage:        artifact.ErrorPage,
+			LayoutErrorPages: layoutErrorPages(artifact.LayoutErrorPages),
 			Locale:           artifact.Locale,
 			DynamicParams:    append([]string(nil), artifact.DynamicParams...),
 			RouteParams:      append([]source.RouteParam(nil), artifact.RouteParams...),
@@ -227,4 +228,15 @@ func ssrRoutes(artifacts []buildgen.SSRArtifact) []SSRRoute {
 		})
 	}
 	return routes
+}
+
+func layoutErrorPages(values []buildgen.LayoutErrorPage) []LayoutErrorPage {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]LayoutErrorPage, 0, len(values))
+	for _, value := range values {
+		out = append(out, LayoutErrorPage{Layout: value.Layout, ErrorPage: value.ErrorPage})
+	}
+	return out
 }

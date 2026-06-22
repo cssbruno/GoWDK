@@ -342,15 +342,17 @@ type EmitParam struct {
 
 // Layout is the normalized IR for one layout source.
 type Layout struct {
-	Source      string
-	Package     string
-	ID          string
-	Layouts     []string
-	Uses        []Use
-	Blocks      Blocks
-	Span        source.SourceSpan
-	LayoutSpans []source.NamedSpan
-	PackageSpan source.SourceSpan
+	Source        string
+	Package       string
+	ID            string
+	Layouts       []string
+	ErrorPage     string
+	Uses          []Use
+	Blocks        Blocks
+	Span          source.SourceSpan
+	LayoutSpans   []source.NamedSpan
+	ErrorPageSpan source.SourceSpan
+	PackageSpan   source.SourceSpan
 }
 
 // GoRef points at an imported Go package symbol.

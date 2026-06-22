@@ -1421,6 +1421,25 @@ view {
 	}
 }
 
+func TestParseLayoutReadsErrorPage(t *testing.T) {
+	layout, err := ParseLayout("layouts/docs.layout.gwdk", []byte(`
+error "/errors/docs.html"
+
+view {
+  <slot />
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if layout.ErrorPage != "errors/docs.html" {
+		t.Fatalf("expected layout error page, got %q", layout.ErrorPage)
+	}
+	if layout.ErrorPageSpan.Start.Line != 2 {
+		t.Fatalf("unexpected error page span: %#v", layout.ErrorPageSpan)
+	}
+}
+
 func TestParseLayoutPreservesUseForUnsupportedScopeDiagnostic(t *testing.T) {
 	layout, err := ParseLayout("layouts/docs.layout.gwdk", []byte(`
 package layouts

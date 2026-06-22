@@ -1,0 +1,7 @@
+package marketing
+
+view {
+  <section>
+    <slot />
+  </section>
+}

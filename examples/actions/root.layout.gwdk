@@ -1,0 +1,7 @@
+package actions
+
+view {
+  <div>
+    <slot />
+  </div>
+}

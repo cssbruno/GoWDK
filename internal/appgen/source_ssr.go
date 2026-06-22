@@ -494,7 +494,8 @@ func ssrLoadErrorStmts() []ast.Stmt {
 				returnBool(true),
 			),
 		},
-		exprStmt(call(sel("gowdkruntime", "WriteErrorPage"), id("response"), id("request"), sel("http", "StatusInternalServerError"), handlerErrorMessageExpr(id("err"), sel("http", "StatusInternalServerError")))),
+		define([]ast.Expr{id("errorStatus")}, call(sel("gowdkresponse", "HandlerStatus"), id("err"), sel("http", "StatusInternalServerError"))),
+		exprStmt(call(sel("gowdkruntime", "WriteErrorPage"), id("response"), id("request"), id("errorStatus"), handlerErrorMessageExpr(id("err"), id("errorStatus")))),
 		returnBool(true),
 	}
 }
@@ -512,6 +513,9 @@ func ssrRouteContextStmts(route SSRRoute, includeParams bool) []ast.Stmt {
 	}
 	if route.ErrorPage != "" {
 		metadata = append(metadata, keyValue("ErrorPage", stringLit(route.ErrorPage)))
+	}
+	if len(route.LayoutErrorPages) > 0 {
+		metadata = append(metadata, keyValue("LayoutErrorPages", layoutErrorPageMetadataExpr(route.LayoutErrorPages)))
 	}
 	if route.Locale != "" {
 		metadata = append(metadata, keyValue("Locale", stringLit(route.Locale)))
@@ -654,6 +658,23 @@ func routeParamMetadataExpr(params []source.RouteParam) ast.Expr {
 	}
 	return &ast.CompositeLit{
 		Type: &ast.ArrayType{Elt: sel("gowdkruntime", "RouteParamMetadata")},
+		Elts: elts,
+	}
+}
+
+func layoutErrorPageMetadataExpr(errorPages []LayoutErrorPage) ast.Expr {
+	elts := make([]ast.Expr, 0, len(errorPages))
+	for _, errorPage := range errorPages {
+		elts = append(elts, &ast.CompositeLit{
+			Type: sel("gowdkruntime", "LayoutErrorPageMetadata"),
+			Elts: []ast.Expr{
+				keyValue("Layout", stringLit(errorPage.Layout)),
+				keyValue("ErrorPage", stringLit(errorPage.ErrorPage)),
+			},
+		})
+	}
+	return &ast.CompositeLit{
+		Type: &ast.ArrayType{Elt: sel("gowdkruntime", "LayoutErrorPageMetadata")},
 		Elts: elts,
 	}
 }

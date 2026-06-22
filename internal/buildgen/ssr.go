@@ -21,6 +21,7 @@ type SSRArtifact struct {
 	Render           gowdk.RenderMode
 	Cache            string
 	ErrorPage        string
+	LayoutErrorPages []LayoutErrorPage
 	Locale           string
 	DynamicParams    []string
 	RouteParams      []source.RouteParam
@@ -34,6 +35,11 @@ type SSRArtifact struct {
 	ListSpecs        []SSRListSpec
 	CondSpecs        []SSRCondSpec
 	QueryRegions     []SSRQueryRegion
+}
+
+type LayoutErrorPage struct {
+	Layout    string
+	ErrorPage string
 }
 
 type SSRReplacement = source.SSRReplacement
@@ -132,6 +138,7 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, route gowdk.LocalizedRou
 		Render:           render,
 		Cache:            page.CachePolicy(),
 		ErrorPage:        page.ErrorPage,
+		LayoutErrorPages: layoutErrorPagesForPage(page, layouts),
 		Locale:           route.Locale,
 		DynamicParams:    page.DynamicParams(),
 		RouteParams:      append([]source.RouteParam(nil), page.TypedRouteParams()...),
@@ -146,6 +153,44 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, route gowdk.LocalizedRou
 		CondSpecs:        regions.Conds,
 		QueryRegions:     queryRegions,
 	}, nil
+}
+
+func layoutErrorPagesForPage(page gwdkir.Page, layouts map[string]gwdkir.Layout) []LayoutErrorPage {
+	if len(page.Layouts) == 0 || len(layouts) == 0 {
+		return nil
+	}
+	var boundaries []LayoutErrorPage
+	seen := map[string]bool{}
+	for index := len(page.Layouts) - 1; index >= 0; index-- {
+		layout, ok := resolvePageLayout(page, layouts, page.Layouts[index])
+		if !ok {
+			continue
+		}
+		boundaries = appendLayoutErrorPages(boundaries, seen, layout, layouts)
+	}
+	return boundaries
+}
+
+func appendLayoutErrorPages(boundaries []LayoutErrorPage, seen map[string]bool, layout gwdkir.Layout, layouts map[string]gwdkir.Layout) []LayoutErrorPage {
+	key := layoutRegistryKey(layout.Package, layout.ID)
+	if seen[key] {
+		return boundaries
+	}
+	seen[key] = true
+	if layout.ErrorPage != "" {
+		boundaries = append(boundaries, LayoutErrorPage{
+			Layout:    layoutRegistryDisplayName(layout.Package, layout.ID),
+			ErrorPage: layout.ErrorPage,
+		})
+	}
+	for index := len(layout.Layouts) - 1; index >= 0; index-- {
+		parent, ok := resolveLayoutParent(layout, layouts, layout.Layouts[index])
+		if !ok {
+			continue
+		}
+		boundaries = appendLayoutErrorPages(boundaries, seen, parent, layouts)
+	}
+	return boundaries
 }
 
 // usedLoadReplacements keeps only the scalar load replacements whose placeholder

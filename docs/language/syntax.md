@@ -498,6 +498,26 @@ filters such as `g:if={contains(lower(item.Name), lower(Query))}` inside
 `float(value)` accept strings or numeric values and return the requested numeric
 type.
 
+Deterministic formatting and date/time built-ins round-trip identically in the
+Go evaluator and the browser runtime — they use plain IEEE-754 and integer
+arithmetic, never `Intl`/`Date`, so output never depends on the host locale or
+time zone:
+
+- `fixed(number, digits)` → `string`: format with exactly `digits` fractional
+  places, rounding ties away from zero (`fixed(3.14159, 2)` → `"3.14"`).
+- `round(number, digits)` → `float`: round to `digits` fractional places.
+- `percent(number, digits)` → `string`: like `fixed(number * 100, digits)` with a
+  trailing `%` (`percent(0.1234, 1)` → `"12.3%"`).
+- `formatTime(unixSeconds, layout)` → `string`: render a UTC timestamp (whole
+  seconds since the Unix epoch) using the `YYYY`, `MM`, `DD`, `HH`, `mm`, `ss`
+  tokens; any other character in `layout` is copied literally
+  (`formatTime(ts, "YYYY-MM-DD HH:mm:ss")`). `digits` must be `0`–`20`, and the
+  timestamp and `digits` must be whole numbers. Locale-aware month/day names are
+  deferred to coordinate with the i18n contract.
+
+Text-input selection and focus use DOM ref methods in client handlers:
+`Ref.Focus()`, `Ref.Blur()`, `Ref.Select()`, and `Ref.ScrollIntoView()`.
+
 Generated island JavaScript does not evaluate arbitrary JavaScript source from
 `client {}`. It interprets the compiler-owned expression subset above,
 including conditionals, switch/match expressions, scalar operators, field/index

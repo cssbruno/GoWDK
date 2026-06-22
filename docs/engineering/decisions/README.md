@@ -32,3 +32,10 @@ Recommended naming:
   query-owned elements as the first realtime reactivity source contract.
 - `0013-built-in-tracing-observability.md`: accepted dependency-free
   `runtime/trace` primitives before generated app auto-instrumentation.
+- `0014-addon-runtime-config-split.md`: accepted split between addon config
+  packages and request-time runtime helper packages.
+- `0015-generated-binary-lifecycle-services.md`: accepted generated binary
+  lifecycle service contracts.
+- `0016-pure-go-helpers-from-bounded-client.md`: accepted direction to call pure
+  Go helpers from the bounded client by compiling them to WASM (single-source
+  semantics, purity validation, JSON type bridging).

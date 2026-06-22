@@ -15,6 +15,10 @@ packages, and tooling contracts may change before 1.0.
 - The client expression runtime now receives its operator and builtin metadata
   from the Go compiler/runtime spec instead of hardcoded JavaScript tables,
   reducing Go/JS drift for generated islands.
+- Recorded ADR 0016: callable pure Go helpers from the bounded client compile to
+  WASM from their Go source (one source of truth per #384), gated by static
+  purity analysis and JSON type bridging — turning the bounded→WASM cliff into a
+  ladder. Direction only; implementation is phased.
 - Docs now use the current `server {}` / `go server {}` server-lane syntax
   outside changelog/migration/diagnostics contexts, the README addon table
   lists `observability` and `spa`, and the security-audit docs no longer tie the

@@ -23,7 +23,7 @@ gowdk inspect ir|tree|endpoint-graph|asset-graph|go-bindings [--config <file>] [
 gowdk generate stubs [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
 gowdk doctor [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...]
-gowdk audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--force] [--run] [--run-timeout=<duration>] [files...]
+gowdk audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--sarif[=<file>]] [--diff <previous-report>] [--schema[=report|security]] [--emit-tests[=<file>]] [--check-tests[=<file>]] [--force] [--run] [--run-timeout=<duration>] [files...]
 gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
@@ -65,7 +65,25 @@ gowdk lsp [--ssr]
   built-in security baseline against it, and reports findings. It exits non-zero
   when any error-severity finding exists, so it can gate CI.
   `--json` prints the posture manifest plus findings and a summary. Every finding
-  carries a diagnostic code; run `gowdk explain <code>` for details.
+  carries a diagnostic code; run `gowdk explain <code>` for details. Each finding
+  also carries a stable `fingerprint` derived from its code, target, policy, rule,
+  line-stripped source, and a normalized message prefix, so the same issue keeps
+  its identity across reformatting and line movement.
+  `--schema[=report|security]` prints the published, versioned JSON Schema for the
+  `gowdk audit --json` report (`report`, the default) or for `gowdk-security.json`
+  (`security`) and exits, so CI can fetch the exact contract the running tool
+  validates against. The schemas are embedded from `internal/auditschema/schema`.
+  `--sarif[=<file>]` emits SARIF 2.1.0 for GitHub code scanning. Bare `--sarif`
+  writes SARIF to stdout as the sole payload; `--sarif=<file>` writes SARIF to that
+  file while stdout stays the normal human or `--json` report. Each result carries
+  the finding fingerprint in `partialFingerprints` so code-scanning alerts track
+  across line movement, and waived findings are emitted as suppressed results so a
+  justified suppression stays visible rather than silently absent.
+  `--diff <previous-report>` (or `--diff=<file>`) compares the current findings
+  against a previous `--json` report by fingerprint and adds a `diff` section
+  (introduced, resolved, unchanged). In diff mode the exit gate is on *newly
+  introduced* error findings only, so CI can block regressions without first
+  burning down every pre-existing finding.
   `--emit-tests` writes a readable standalone `gowdk_audit_test.go` file (or the
   path from `--emit-tests=<file>`) that drives a `runtime/app` posture harness
   through `runtime/testkit`. Existing files are refreshed only when they carry
@@ -85,6 +103,25 @@ gowdk lsp [--ssr]
   and writes the
   posture alone to a non-served `.gowdk/reports/<output-name>/gowdk-security.json`
   path outside the selected output directory.
+
+  `gowdk audit` exit codes form a stable CI contract; gate on the specific code
+  rather than on "non-zero":
+
+  - `0` — Clean, or warning-only: no error-severity findings (and, in `--diff`
+    mode, no newly introduced error findings). Warnings never gate.
+  - `1` — Internal or tool failure: an unexpected error (build/generation
+    failure, I/O error).
+  - `2` — Invalid source or policy: the project could not be evaluated
+    (validation errors, an unreadable/invalid previous report, an unknown
+    `--schema` name).
+  - `3` — Error-severity findings: one or more static policy errors (or, in
+    `--diff` mode, newly introduced error findings).
+  - `4` — Runtime audit-test failure: a generated runtime audit test failed or
+    timed out (`--run`). Takes precedence over `3` when both are present, so CI
+    can tell a failed generated test from a static policy error.
+
+  The `--schema` and bare `--sarif` forms print their payload and exit `0` (or
+  `2` for an unknown schema) without evaluating the gate.
 - `--write`: supported by `fmt`; overwrites formatted files.
 - `--dry-run`: supported by `fix` and `clean`; for `fix` it prints files with
   available registered fixes without writing changes, and for `clean` it lists

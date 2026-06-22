@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gowdk.dev/schemas/security-manifest.v1.json",
+  "title": "GOWDK security manifest",
+  "description": "Versioned contract for gowdk-security.json: the declarative, machine-readable security posture of one built module. The manifest records what the generated app exposes; it never decides whether the posture is acceptable (that is policy, in the audit report).",
+  "type": "object",
+  "required": ["version", "generatedFrom", "cors", "frontend"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "generatedFrom": { "type": "string" },
+    "buildMode": { "type": "string" },
+    "routes": { "type": "array", "items": { "$ref": "#/$defs/route" } },
+    "endpoints": { "type": "array", "items": { "$ref": "#/$defs/endpoint" } },
+    "contracts": { "type": "array", "items": { "$ref": "#/$defs/contract" } },
+    "observability": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "cors": {
+      "type": "object",
+      "required": ["enabled", "allowsAnyOrigin", "allowCredentials"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "allowsAnyOrigin": { "type": "boolean" },
+        "allowedOrigins": { "type": "array", "items": { "type": "string" } },
+        "allowCredentials": { "type": "boolean" },
+        "maxAgeSeconds": { "type": "integer" },
+        "origin": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "frontend": {
+      "type": "object",
+      "properties": {
+        "unguardedRoutes": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "bundleSecrets": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "rawHtmlSinks": { "type": "array", "items": { "$ref": "#/$defs/rawHtmlSink" } },
+        "configuredHeaders": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": true
+    },
+    "obligations": { "type": "array", "items": { "$ref": "#/$defs/obligation" } },
+    "waivers": { "type": "array", "items": { "$ref": "#/$defs/waiver" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "evidenceState": {
+      "type": "string",
+      "enum": ["verified-static", "verified-runtime", "declared", "unverified-app-owned", "not-applicable", "waived"]
+    },
+    "route": {
+      "type": "object",
+      "required": ["pageId", "route", "kind", "public", "defaultDeny"],
+      "properties": {
+        "pageId": { "type": "string" },
+        "route": { "type": "string" },
+        "kind": { "type": "string" },
+        "method": { "type": "string" },
+        "render": { "type": "string" },
+        "guards": { "type": "array", "items": { "type": "string" } },
+        "guardEvidence": { "type": "array", "items": { "$ref": "#/$defs/guardEvidence" } },
+        "public": { "type": "boolean" },
+        "defaultDeny": { "type": "boolean" },
+        "source": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "endpoint": {
+      "type": "object",
+      "required": ["id", "kind", "csrf", "public", "defaultDeny"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "type": "string" },
+        "method": { "type": "string" },
+        "path": { "type": "string" },
+        "guards": { "type": "array", "items": { "type": "string" } },
+        "guardEvidence": { "type": "array", "items": { "$ref": "#/$defs/guardEvidence" } },
+        "csrf": { "type": "boolean" },
+        "bodyLimitBytes": { "type": "integer" },
+        "requestLimits": { "type": "object", "additionalProperties": true },
+        "public": { "type": "boolean" },
+        "defaultDeny": { "type": "boolean" },
+        "pageId": { "type": "string" },
+        "source": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "contract": {
+      "type": "object",
+      "required": ["name", "kind", "sourceAttribution"],
+      "properties": {
+        "name": { "type": "string" },
+        "kind": { "type": "string" },
+        "roles": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string" },
+        "declarationSource": { "type": "string" },
+        "exposureSource": { "type": "string" },
+        "sourceAttribution": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "guardEvidence": {
+      "type": "object",
+      "required": ["id", "kind", "bindingStatus", "owner", "evidence"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "type": "string" },
+        "bindingStatus": { "type": "string" },
+        "owner": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/evidenceState" },
+        "executionPhase": { "type": "string" },
+        "failureContract": { "type": "string" },
+        "runtimeTestFixture": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "rawHtmlSink": {
+      "type": "object",
+      "required": ["ownerKind", "ownerId", "field", "source", "ordinal", "fingerprint"],
+      "properties": {
+        "ownerKind": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "field": { "type": "string" },
+        "source": { "type": "string" },
+        "ordinal": { "type": "integer" },
+        "fingerprint": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "obligation": {
+      "type": "object",
+      "required": ["id", "category", "claim", "owner", "evidence"],
+      "properties": {
+        "id": { "type": "string" },
+        "category": { "type": "string" },
+        "claim": { "type": "string" },
+        "owner": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/evidenceState" },
+        "detail": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "waiver": {
+      "type": "object",
+      "required": ["code"],
+      "properties": {
+        "code": { "type": "string" },
+        "target": { "type": "string" },
+        "owner": { "type": "string" },
+        "justification": { "type": "string" },
+        "expires": { "type": "string" },
+        "ticket": { "type": "string" },
+        "policyDigest": { "type": "string" },
+        "postureDigest": { "type": "string" },
+        "policy": { "type": "string" },
+        "source": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

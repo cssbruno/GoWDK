@@ -76,6 +76,81 @@ and raw-HTML sinks, can emit readable standalone runtime tests with `gowdk audit
 --emit-tests`, can verify committed tests are current with `gowdk audit
 --check-tests`, and can run generated-app runtime tests with `gowdk audit --run`.
 
+## CI-Native Output: JSON Schema, SARIF, Fingerprints, And Diff
+
+`gowdk audit` is a complete CI reporting surface, not just a human report.
+
+- **Versioned JSON Schema.** `gowdk audit --schema` prints the published schema
+  for the `--json` report; `gowdk audit --schema=security` prints the schema for
+  `gowdk-security.json`. The schemas are embedded from
+  `internal/auditschema/schema` and carry a stable `$id`, so a pipeline can fetch
+  the exact contract the running tool validates against and pin against drift.
+- **Stable fingerprints.** Every finding carries a `fingerprint` derived from its
+  code, target, policy, rule, line-stripped source, and a normalized message
+  prefix. It is independent of line movement, so reformatting or relocating code
+  does not change a finding's identity. The fingerprint is what the SARIF and diff
+  surfaces use to track an issue across runs.
+- **SARIF for code scanning.** `gowdk audit --sarif=<file>` writes SARIF 2.1.0
+  suitable for `github/codeql-action/upload-sarif`. Each result keys
+  `partialFingerprints` on the finding fingerprint so GitHub tracks an alert
+  across line movement; each diagnostic code becomes a reusable rule with explain
+  text and CWE/OWASP tags; waived findings are emitted as `suppressions` so a
+  justified waiver stays visible in the security dashboard instead of vanishing.
+- **Introduced-finding diff.** `gowdk audit --diff <previous-report>` compares the
+  current findings against a previous `--json` report by fingerprint and reports
+  what was introduced, resolved, and unchanged. In diff mode the exit gate is on
+  *newly introduced* error findings only, so a team can block regressions without
+  first burning down every pre-existing finding.
+
+Exit codes are a stable contract (`0` clean/warning-only, `1` tool failure, `2`
+invalid source/policy, `3` error findings, `4` runtime test failure); see
+[the CLI reference](../reference/cli.md). A GitHub Actions job that uploads SARIF
+and gates only newly introduced error findings:
+
+```yaml
+name: security-audit
+on: [pull_request]
+
+permissions:
+  contents: read
+  security-events: write # required to upload SARIF
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      # Baseline: the audit report from the PR's merge base, so the diff gates
+      # only findings this PR introduces.
+      - name: Audit merge base
+        run: |
+          git worktree add ../base "$(git merge-base origin/${{ github.base_ref }} HEAD)"
+          (cd ../base && go run ./cmd/gowdk audit --json) > base-audit.json || true
+
+      # SARIF for code scanning (always uploaded), plus the gating diff run.
+      - name: Audit and emit SARIF
+        run: go run ./cmd/gowdk audit --json --sarif=audit.sarif > audit.json || true
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: audit.sarif
+
+      - name: Gate newly introduced error findings
+        run: go run ./cmd/gowdk audit --diff base-audit.json
+```
+
+The SARIF upload runs on `always()` so the security dashboard is populated even
+when the gate fails. The final step exits `3` only when the PR adds a new
+error-severity finding; pre-existing findings keep the build green.
+
 ## Generated Audit Tests And Staleness
 
 `gowdk audit --emit-tests[=<file>]` writes a committable standalone runtime test

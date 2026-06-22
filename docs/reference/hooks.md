@@ -183,7 +183,7 @@ contract):
   `fragment` endpoints, where it is a build error.
 - `guard public` marks intentional public access and cannot be combined with
   protected guard IDs.
-- Non-public page guards on build-time SPA/action page routes fail validation;
+- Non-public page guards on build-time SPA page routes fail validation;
   add `server {}` or `go server {}` with the SSR addon when the page itself is
   protected.
 - Guards run in declaration order.

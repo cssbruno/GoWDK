@@ -165,7 +165,11 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 				needsExecutableLoad = true
 				continue
 			}
-			config.Render = parseRenderConfig(field.Value)
+			render, err := parseRenderConfig(field.Value)
+			if err != nil {
+				return gowdk.Config{}, false, false, err
+			}
+			config.Render = render
 		case "I18N":
 			if needsConfigExpressionEvaluation(field.Value) {
 				needsExecutableLoad = true
@@ -352,19 +356,23 @@ func parseModuleConfig(expression ast.Expr) gowdk.ModuleConfig {
 	return module
 }
 
-func parseRenderConfig(expression ast.Expr) gowdk.RenderConfig {
+func parseRenderConfig(expression ast.Expr) (gowdk.RenderConfig, error) {
 	fields, ok := configLiteralFields(expression)
 	if !ok {
-		return gowdk.RenderConfig{}
+		return gowdk.RenderConfig{}, nil
 	}
 
 	var render gowdk.RenderConfig
 	for _, field := range fields {
 		if field.Name == "Default" {
-			render.Default = parseRenderMode(field.Value)
+			mode, err := parseRenderMode(field.Value)
+			if err != nil {
+				return gowdk.RenderConfig{}, err
+			}
+			render.Default = mode
 		}
 	}
-	return render
+	return render, nil
 }
 
 func parseI18NConfig(expression ast.Expr) gowdk.I18NConfig {
@@ -425,13 +433,13 @@ func parseLocaleConfig(expression ast.Expr) (gowdk.LocaleConfig, bool) {
 	return locale, true
 }
 
-func parseRenderMode(expression ast.Expr) gowdk.RenderMode {
+func parseRenderMode(expression ast.Expr) (gowdk.RenderMode, error) {
 	if value := parseString(expression); value != "" {
 		mode, err := gowdk.ParseRenderMode(value)
 		if err == nil {
-			return mode
+			return mode, nil
 		}
-		return ""
+		return "", err
 	}
 	switch typed := expression.(type) {
 	case *ast.SelectorExpr:
@@ -439,22 +447,20 @@ func parseRenderMode(expression ast.Expr) gowdk.RenderMode {
 	case *ast.Ident:
 		return renderModeByName(typed.Name)
 	default:
-		return ""
+		return "", fmt.Errorf("unsupported render mode expression")
 	}
 }
 
-func renderModeByName(name string) gowdk.RenderMode {
+func renderModeByName(name string) (gowdk.RenderMode, error) {
 	switch name {
 	case "SPA":
-		return gowdk.SPA
-	case "Action":
-		return gowdk.Action
+		return gowdk.SPA, nil
 	case "Hybrid":
-		return gowdk.Hybrid
+		return gowdk.Hybrid, nil
 	case "SSR":
-		return gowdk.SSR
+		return gowdk.SSR, nil
 	default:
-		return ""
+		return "", fmt.Errorf("unknown render mode %q", name)
 	}
 }
 

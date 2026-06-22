@@ -704,8 +704,6 @@ type RenderMode string
 const (
 	// SPA emits a non-SSR app shell and client-side route experience.
 	SPA RenderMode = "spa"
-	// Action emits a non-SSR app shell while allowing backend actions.
-	Action RenderMode = "action"
 	// Hybrid allows a route to combine app output and request-time behavior.
 	Hybrid RenderMode = "hybrid"
 	// SSR renders full pages at request time through the SSR addon.
@@ -716,7 +714,7 @@ const (
 func ParseRenderMode(value string) (RenderMode, error) {
 	mode := RenderMode(value)
 	switch mode {
-	case SPA, Action, Hybrid, SSR:
+	case SPA, Hybrid, SSR:
 		return mode, nil
 	default:
 		return "", fmt.Errorf("unknown render mode %q", value)
@@ -732,7 +730,7 @@ func (mode RenderMode) RequiresSSR() bool {
 // IsBuildTime reports whether this mode is always build-time. Hybrid defaults
 // to build-time unless explicit request-time capabilities are declared.
 func (mode RenderMode) IsBuildTime() bool {
-	return mode == SPA || mode == Action
+	return mode == SPA
 }
 
 // Feature names the capabilities that addons make available to the compiler.

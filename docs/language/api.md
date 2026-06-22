@@ -179,4 +179,4 @@ Future API behavior must define:
   `func(context.Context, *http.Request) (response.Response, error)`.
 - Per-route body/query/result contracts and route-param accessors.
 - Per-endpoint CORS policy syntax and richer content negotiation.
-- Interaction with SPA/action pages without full-page SSR.
+- Interaction with SPA pages that declare backend endpoints without full-page SSR.

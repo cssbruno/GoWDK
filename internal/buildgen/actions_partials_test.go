@@ -12,12 +12,12 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func TestBuildLowersGPostDirectiveForActionPage(t *testing.T) {
+func TestBuildLowersGPostDirectiveForSPAPage(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:     "signup",
 		Route:  "/signup",
-		Render: gowdk.Action,
+		Render: gowdk.SPA,
 		Guards: []string{"public"},
 		Blocks: gwdkir.Blocks{
 			View:     true,
@@ -48,7 +48,7 @@ func TestBuildSynthesizesActionInputAttrsFromBindingFields(t *testing.T) {
 	ir := gwdkir.Program{Pages: []gwdkir.Page{{
 		ID:     "signup",
 		Route:  "/signup",
-		Render: gowdk.Action,
+		Render: gowdk.SPA,
 		Guards: []string{"public"},
 		Blocks: gwdkir.Blocks{
 			View:     true,
@@ -94,7 +94,7 @@ func TestBuildProductionRequiresBoundBackendHandlers(t *testing.T) {
 		Package: "app",
 		Source:  filepath.Join(t.TempDir(), "signup.page.gwdk"),
 		Route:   "/signup",
-		Render:  gowdk.Action,
+		Render:  gowdk.SPA,
 		Guards:  []string{"public"},
 		Blocks: gwdkir.Blocks{
 			View:     true,
@@ -119,7 +119,7 @@ func TestBuildProductionAllowsExplicitMissingBackendStubs(t *testing.T) {
 		Package: "app",
 		Source:  filepath.Join(t.TempDir(), "signup.page.gwdk"),
 		Route:   "/signup",
-		Render:  gowdk.Action,
+		Render:  gowdk.SPA,
 		Guards:  []string{"public"},
 		Blocks: gwdkir.Blocks{
 			View:     true,
@@ -145,7 +145,7 @@ func TestBuildAllowsGPostWithLocalValueBinding(t *testing.T) {
 		Pages: []gwdkir.Page{{
 			ID:     "search",
 			Route:  "/search",
-			Render: gowdk.Action,
+			Render: gowdk.SPA,
 			Guards: []string{"public"},
 			Blocks: gwdkir.Blocks{
 				View:     true,

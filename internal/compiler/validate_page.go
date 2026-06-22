@@ -297,7 +297,7 @@ func requiresSSRFeature(mode gowdk.RenderMode, page gwdkir.Page) bool {
 
 func isBuildTimeRoute(mode gowdk.RenderMode, page gwdkir.Page) bool {
 	switch mode {
-	case gowdk.SPA, gowdk.Action:
+	case gowdk.SPA:
 		return true
 	default:
 		return false

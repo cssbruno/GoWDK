@@ -17,7 +17,7 @@ The parser records whether these top-level blocks are present:
   statement forms are rejected with a `parse_error` diagnostic; arbitrary
   build-time statements remain planned.
 - `server {}`: request-time data block. Presence and raw body text are recorded,
-  then rejected on SPA/action pages.
+  then rejected on SPA pages.
 - `go {}` and `go target {}`: optional inline Go authoring blocks.
   Presence, target, raw body text, and source span are recorded. Default
   `go {}` can provide build-data functions called by
@@ -68,7 +68,7 @@ api Health GET "/api/health"
 - `act` and `api` endpoint declarations describe request handlers that should
   work without full-page SSR. Normal Go handlers own behavior and return
   `runtime/response.Response`.
-- `view {}` renders markup for spa, action, partial, and SSR output.
+- `view {}` renders markup for SPA, partial, and SSR output.
 
 ## Style Blocks
 

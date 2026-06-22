@@ -58,7 +58,7 @@ must pass `--config <file>`.
 | Runtime race detector | `scripts/test-runtime-race.sh` | Shared-state runtime packages, lifecycle, contracts, SSE, rate limiting, trace, or testkit changes. |
 | VS Code extension syntax | `node --check editors/vscode/extension.js` | Editor extension changes and broad verification. |
 | VS Code extension behavior | `node --test editors/vscode/*.test.js` | Editor extension pure helper changes and broad verification. |
-| SPA/action examples | `go run ./cmd/gowdk check examples/pages/home.page.gwdk examples/actions/newsletter.page.gwdk` | Language/tooling changes. |
+| SPA and action endpoint examples | `go run ./cmd/gowdk check examples/pages/home.page.gwdk examples/actions/newsletter.page.gwdk` | Language/tooling changes. |
 | Init project smoke | `go build -o /tmp/gowdk-cli ./cmd/gowdk && rm -rf /tmp/gowdk-init && /tmp/gowdk-cli init /tmp/gowdk-init && (cd /tmp/gowdk-init && /tmp/gowdk-cli build)` | CLI scaffold changes. |
 | Init project tests | `go build -o /tmp/gowdk-cli ./cmd/gowdk && rm -rf /tmp/gowdk-init-tested && /tmp/gowdk-cli init --tests /tmp/gowdk-init-tested && (cd /tmp/gowdk-init-tested && /tmp/gowdk-cli test --count=1 --timeout=2m)` | CLI scaffold or `gowdk test` changes. |
 | SSR example | `go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk` | SSR validation or example changes. |

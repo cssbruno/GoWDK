@@ -470,7 +470,7 @@ func fragmentEndpointsJSON(fragments []gwdkir.FragmentEndpoint) []fragmentEndpoi
 
 func artifactsJSON(page gwdkir.Page) []artifactJSON {
 	switch page.RenderMode(gowdk.SPA) {
-	case gowdk.SPA, gowdk.Action:
+	case gowdk.SPA:
 	default:
 		return nil
 	}

@@ -7,6 +7,15 @@ packages, and tooling contracts may change before 1.0.
 
 ### Added
 
+- Bounded build-time iteration and transforms in `build {}` data: list and
+  object literals, `seq(start, end)` ranges, comprehensions
+  (`[expr for v in source if cond]`, with an optional index variable), list
+  reductions (`count`, `sum`, `join`, `first`, `last`, `take`, `reverse`), and
+  object/list field access (`v.field`, `list[i]`). Evaluation stays pure and
+  deterministic, serializes lists/objects to canonical JSON, and is bounded by an
+  element budget and nesting-depth limit that surface a diagnostic instead of
+  hanging the build. Go build functions may now also return slice and struct
+  fields. See `examples/build-iteration`.
 - Bounded `{#await fetchJSON[T](urlExpr)}` blocks in JS client islands for
   pending, resolved, and error placeholder UI.
 
@@ -15,10 +24,11 @@ packages, and tooling contracts may change before 1.0.
 - The client expression runtime now receives its operator and builtin metadata
   from the Go compiler/runtime spec instead of hardcoded JavaScript tables,
   reducing Go/JS drift for generated islands.
-- Recorded ADR 0016: callable pure Go helpers from the bounded client compile to
-  WASM from their Go source (one source of truth per #384), gated by static
-  purity analysis and JSON type bridging — turning the bounded→WASM cliff into a
-  ladder. Direction only; implementation is phased.
+- Added the client interactivity & communication model plan
+  (`docs/engineering/client-interactivity-model-plan.md`): the epic decomposition
+  that reduces the browser surface to ~5 orthogonal primitives, gated on
+  single-source semantics (#384) and sequencing scoped state (#517), callback
+  props (#518), and pure Go helpers (#519).
 - Docs now use the current `server {}` / `go server {}` server-lane syntax
   outside changelog/migration/diagnostics contexts, the README addon table
   lists `observability` and `spa`, and the security-audit docs no longer tie the

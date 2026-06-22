@@ -185,8 +185,17 @@ func backendProxySource(options Options) (source string, err error) {
 
 func backendProxyDecl(rateLimit bool, trace bool) *ast.FuncDecl {
 	stmts := []ast.Stmt{
+		define([]ast.Expr{id("routeMethod")}, selExpr(id("request"), "Method")),
 		&ast.IfStmt{
-			Cond: &ast.UnaryExpr{Op: token.NOT, X: call(id("isBackendRoute"), selExpr(id("request"), "Method"), selExpr(selExpr(id("request"), "URL"), "Path"))},
+			Cond: &ast.BinaryExpr{X: selExpr(id("request"), "Method"), Op: token.EQL, Y: sel("http", "MethodOptions")},
+			Body: block(&ast.IfStmt{
+				Init: define([]ast.Expr{id("requestedMethod")}, call(sel("strings", "ToUpper"), trimHeaderCall("Access-Control-Request-Method"))),
+				Cond: &ast.BinaryExpr{X: id("requestedMethod"), Op: token.NEQ, Y: stringLit("")},
+				Body: block(assign([]ast.Expr{id("routeMethod")}, id("requestedMethod"))),
+			}),
+		},
+		&ast.IfStmt{
+			Cond: &ast.UnaryExpr{Op: token.NOT, X: call(id("isBackendRoute"), id("routeMethod"), selExpr(selExpr(id("request"), "URL"), "Path"))},
 			Body: block(returnBool(false)),
 		},
 	}

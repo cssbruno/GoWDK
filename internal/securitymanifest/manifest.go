@@ -13,11 +13,14 @@
 package securitymanifest
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
@@ -40,11 +43,25 @@ const PublicGuardID = "public"
 type SecurityManifest struct {
 	Version       int                  `json:"version"`
 	GeneratedFrom string               `json:"generatedFrom"`
+	BuildMode     string               `json:"buildMode,omitempty"`
 	Routes        []RouteEntry         `json:"routes,omitempty"`
 	Endpoints     []EndpointEntry      `json:"endpoints,omitempty"`
 	Contracts     []ContractEntry      `json:"contracts,omitempty"`
 	Observability []ObservabilityEntry `json:"observability,omitempty"`
+	CORS          CORSPosture          `json:"cors"`
 	Frontend      FrontendSurface      `json:"frontend"`
+}
+
+// CORSPosture records the generated cross-origin policy for API and web contract
+// endpoints. The zero value means CORS is disabled and endpoints stay
+// same-origin.
+type CORSPosture struct {
+	Enabled          bool     `json:"enabled"`
+	AllowsAnyOrigin  bool     `json:"allowsAnyOrigin"`
+	AllowedOrigins   []string `json:"allowedOrigins,omitempty"`
+	AllowCredentials bool     `json:"allowCredentials"`
+	MaxAgeSeconds    int      `json:"maxAgeSeconds,omitempty"`
+	Origin           string   `json:"origin,omitempty"`
 }
 
 // RouteEntry is the posture of one page/file route.
@@ -64,18 +81,37 @@ type RouteEntry struct {
 // EndpointEntry is the posture of one backend action/api/fragment/contract
 // endpoint.
 type EndpointEntry struct {
-	ID             string          `json:"id"`
-	Kind           string          `json:"kind"`
-	Method         string          `json:"method,omitempty"`
-	Path           string          `json:"path,omitempty"`
-	Guards         []string        `json:"guards,omitempty"`
-	GuardEvidence  []GuardEvidence `json:"guardEvidence,omitempty"`
-	CSRF           bool            `json:"csrf"`
-	BodyLimitBytes int64           `json:"bodyLimitBytes,omitempty"`
-	Public         bool            `json:"public"`
-	DefaultDeny    bool            `json:"defaultDeny"`
-	PageID         string          `json:"pageId,omitempty"`
-	Source         string          `json:"source,omitempty"`
+	ID             string              `json:"id"`
+	Kind           string              `json:"kind"`
+	Method         string              `json:"method,omitempty"`
+	Path           string              `json:"path,omitempty"`
+	Guards         []string            `json:"guards,omitempty"`
+	GuardEvidence  []GuardEvidence     `json:"guardEvidence,omitempty"`
+	CSRF           bool                `json:"csrf"`
+	BodyLimitBytes int64               `json:"bodyLimitBytes,omitempty"`
+	RequestLimits  RequestLimitPosture `json:"requestLimits"`
+	Public         bool                `json:"public"`
+	DefaultDeny    bool                `json:"defaultDeny"`
+	PageID         string              `json:"pageId,omitempty"`
+	Source         string              `json:"source,omitempty"`
+}
+
+// RequestLimitPosture is the effective request-limit posture of one generated
+// endpoint. It expresses more than a single byte cap: it distinguishes the raw
+// body cap from decoded-object and multipart caps, records how compressed
+// bodies are bounded, and records whether the cap is installed before the body
+// is parsed (so a body limit precedes generated guards, CSRF token parsing, and
+// handler execution). BodyLimitBytes on the parent entry mirrors RawBodyBytes.
+type RequestLimitPosture struct {
+	EndpointKind           string `json:"endpointKind,omitempty"`
+	RawBodyBytes           int64  `json:"rawBodyBytes"`
+	DecodedObjectBytes     int64  `json:"decodedObjectBytes,omitempty"`
+	MultipartEnabled       bool   `json:"multipartEnabled"`
+	MultipartMaxBytes      int64  `json:"multipartMaxBytes,omitempty"`
+	CompressedBodyHandling string `json:"compressedBodyHandling,omitempty"`
+	InstalledBeforeParse   bool   `json:"installedBeforeParse"`
+	Phase                  string `json:"phase,omitempty"`
+	Origin                 string `json:"origin,omitempty"`
 }
 
 // ContractEntry is the posture of one command/query contract reference.
@@ -146,17 +182,27 @@ type BundleLeak struct {
 	Kind   string `json:"kind"`
 }
 
-// RawHTMLSink records one raw-HTML (g:unsafe-html) render site.
+// RawHTMLSink records one raw-HTML (g:unsafe-html) render site. Fingerprint is a
+// stable identity derived from the owner, source location, rendered
+// field/expression, and the sink's ordinal within its owner, so a policy
+// exception can target one exact sink and stop suppressing it when the source
+// moves or the expression changes.
 type RawHTMLSink struct {
-	OwnerKind string `json:"ownerKind"`
-	OwnerID   string `json:"ownerId"`
-	Field     string `json:"field"`
-	Source    string `json:"source"`
+	OwnerKind   string `json:"ownerKind"`
+	OwnerID     string `json:"ownerId"`
+	Field       string `json:"field"`
+	Source      string `json:"source"`
+	Ordinal     int    `json:"ordinal"`
+	Fingerprint string `json:"fingerprint"`
 }
 
 // ConfiguredHeader records one header configured for generated runtime output.
+// Value carries the normalized effective value so audit policy can distinguish a
+// weak configuration (for example Content-Security-Policy: *) from a meaningful
+// one. Secret-shaped values are redacted so the posture stays safe to publish.
 type ConfiguredHeader struct {
-	Name string `json:"name"`
+	Name  string `json:"name"`
+	Value string `json:"value,omitempty"`
 }
 
 // Build projects validated IR into a SecurityManifest. It reuses
@@ -167,6 +213,7 @@ func Build(config gowdk.Config, ir gwdkir.Program) SecurityManifest {
 	manifest := SecurityManifest{
 		Version:       SchemaVersion,
 		GeneratedFrom: "ir",
+		BuildMode:     buildMode(config),
 		Frontend:      FrontendSurface{ConfiguredHeaders: configuredHeaders(config)},
 	}
 
@@ -202,6 +249,7 @@ func Build(config gowdk.Config, ir gwdkir.Program) SecurityManifest {
 			GuardEvidence:  guardEvidence(config, endpoint.Guards),
 			CSRF:           endpoint.CSRF,
 			BodyLimitBytes: bodyLimitFor(config, endpoint.Kind),
+			RequestLimits:  requestLimitsFor(config, endpoint.Kind),
 			Public:         hasPublicGuard(endpoint.Guards),
 			DefaultDeny:    len(endpoint.Guards) == 0,
 			PageID:         endpoint.PageID,
@@ -222,6 +270,7 @@ func Build(config gowdk.Config, ir gwdkir.Program) SecurityManifest {
 	}
 
 	manifest.Observability = observabilityEntries(config, ir)
+	manifest.CORS = corsPosture(config, manifest.Endpoints)
 	manifest.Frontend.UnguardedRoutes = unguarded
 	manifest.Frontend.BundleSecrets = bundleLeaks(ir)
 	manifest.Frontend.RawHTMLSinks = rawHTMLSinks(ir)
@@ -416,23 +465,69 @@ func programSourcePaths(ir gwdkir.Program) []string {
 	return paths
 }
 
+func corsPosture(config gowdk.Config, endpoints []EndpointEntry) CORSPosture {
+	cors := config.Build.CORS
+	if !cors.Enabled || !hasCORSEndpoints(endpoints) {
+		return CORSPosture{}
+	}
+	posture := CORSPosture{
+		Enabled:          true,
+		AllowCredentials: cors.AllowCredentials,
+		MaxAgeSeconds:    cors.MaxAgeSeconds,
+		Origin:           "config:Build.CORS",
+	}
+	for _, origin := range cors.AllowedOrigins {
+		origin = strings.TrimSpace(origin)
+		if origin == "" {
+			continue
+		}
+		if origin == "*" {
+			posture.AllowsAnyOrigin = true
+			continue
+		}
+		posture.AllowedOrigins = append(posture.AllowedOrigins, origin)
+	}
+	return posture
+}
+
+func hasCORSEndpoints(endpoints []EndpointEntry) bool {
+	for _, endpoint := range endpoints {
+		switch endpoint.Kind {
+		case "api", "command", "query":
+			return true
+		}
+	}
+	return false
+}
+
+func buildMode(config gowdk.Config) string {
+	mode := strings.TrimSpace(string(config.Build.Mode))
+	if mode == "" {
+		return string(gowdk.Development)
+	}
+	return mode
+}
+
 func configuredHeaders(config gowdk.Config) []ConfiguredHeader {
 	if !config.Build.SecurityHeaders.Enabled || len(config.Build.SecurityHeaders.Headers) == 0 {
 		return []ConfiguredHeader{}
 	}
 	type candidate struct {
-		key  string
-		name string
+		key   string
+		name  string
+		value string
 	}
 	candidates := make([]candidate, 0, len(config.Build.SecurityHeaders.Headers))
-	for name := range config.Build.SecurityHeaders.Headers {
+	for name, value := range config.Build.SecurityHeaders.Headers {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
 		}
+		canonical := http.CanonicalHeaderKey(name)
 		candidates = append(candidates, candidate{
-			key:  strings.ToLower(name),
-			name: http.CanonicalHeaderKey(name),
+			key:   strings.ToLower(name),
+			name:  canonical,
+			value: normalizeHeaderValue(canonical, value),
 		})
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
@@ -448,9 +543,25 @@ func configuredHeaders(config gowdk.Config) []ConfiguredHeader {
 			continue
 		}
 		seen[candidate.key] = true
-		headers = append(headers, ConfiguredHeader{Name: candidate.name})
+		headers = append(headers, ConfiguredHeader{Name: candidate.name, Value: candidate.value})
 	}
 	return headers
+}
+
+// normalizeHeaderValue trims and collapses internal whitespace so weak and
+// strong configurations compare predictably, and redacts a value that scans as a
+// secret (including when the header name marks it as a credential) so the
+// published posture never leaks credentials carried in a header.
+func normalizeHeaderValue(name, value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	value = strings.Join(strings.Fields(value), " ")
+	if _, ok := securitytext.FirstSecretKind(name + ": " + value); ok {
+		return "[redacted]"
+	}
+	return value
 }
 
 func bundleLeaks(ir gwdkir.Program) []BundleLeak {
@@ -527,6 +638,7 @@ func rawHTMLSinks(ir gwdkir.Program) []RawHTMLSink {
 
 func rawHTMLSinksForNodes(nodes []viewmodel.Node, template gwdkir.Template) []RawHTMLSink {
 	var sinks []RawHTMLSink
+	ordinal := 0
 	var walk func([]viewmodel.Node)
 	walk = func(nodes []viewmodel.Node) {
 		for _, node := range nodes {
@@ -536,12 +648,19 @@ func rawHTMLSinksForNodes(nodes []viewmodel.Node, template gwdkir.Template) []Ra
 					if attr.Name != "g:unsafe-html" {
 						continue
 					}
+					ownerKind := string(template.OwnerKind)
+					ownerID := template.OwnerID
+					field := strings.TrimSpace(attr.Value)
+					source := sourceRef(template.Source, templateOffsetSpan(template, attr.Start))
 					sinks = append(sinks, RawHTMLSink{
-						OwnerKind: string(template.OwnerKind),
-						OwnerID:   template.OwnerID,
-						Field:     strings.TrimSpace(attr.Value),
-						Source:    sourceRef(template.Source, templateOffsetSpan(template, attr.Start)),
+						OwnerKind:   ownerKind,
+						OwnerID:     ownerID,
+						Field:       field,
+						Source:      source,
+						Ordinal:     ordinal,
+						Fingerprint: RawHTMLFingerprint(ownerKind, ownerID, field, source, ordinal),
 					})
+					ordinal++
 				}
 				walk(typed.Children)
 			case viewmodel.ComponentCall:
@@ -551,6 +670,17 @@ func rawHTMLSinksForNodes(nodes []viewmodel.Node, template gwdkir.Template) []Ra
 	}
 	walk(nodes)
 	return sinks
+}
+
+// RawHTMLFingerprint derives the stable identity of one raw-HTML sink. It is
+// exported so tooling and tests can compute the value a policy exception must
+// pin. The source location is part of the identity, so moving the sink (or
+// changing its expression) produces a new fingerprint and stops a stale
+// exception from suppressing a different sink.
+func RawHTMLFingerprint(ownerKind, ownerID, field, source string, ordinal int) string {
+	key := strings.Join([]string{ownerKind, ownerID, field, source, strconv.Itoa(ordinal)}, "\x00")
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:16])
 }
 
 func templateOffsetSpan(template gwdkir.Template, offset int) source.SourceSpan {
@@ -586,6 +716,40 @@ func bodyLimitFor(config gowdk.Config, kind compiler.EndpointKind) int64 {
 	default:
 		return config.Build.BodyLimits.ActionLimitBytes()
 	}
+}
+
+// requestLimitsFor projects the effective request-limit posture for one endpoint
+// kind. The generated runtime installs an http.MaxBytesReader on the raw body
+// before generated guards, CSRF parsing, or body parsing, so the raw cap bounds
+// compressed input too and is in force before app-owned request code can read the
+// body through the generated route lane.
+func requestLimitsFor(config gowdk.Config, kind compiler.EndpointKind) RequestLimitPosture {
+	raw := bodyLimitFor(config, kind)
+	return RequestLimitPosture{
+		EndpointKind:           string(kind),
+		RawBodyBytes:           raw,
+		DecodedObjectBytes:     0, // bounded transitively by the raw body cap
+		MultipartEnabled:       false,
+		MultipartMaxBytes:      0,
+		CompressedBodyHandling: "raw-bytes-bounded",
+		InstalledBeforeParse:   true,
+		Phase:                  "before-body-parse-and-csrf",
+		Origin:                 bodyLimitOrigin(config, kind),
+	}
+}
+
+func bodyLimitOrigin(config gowdk.Config, kind compiler.EndpointKind) string {
+	switch kind {
+	case compiler.EndpointAPI, compiler.EndpointQuery:
+		if config.Build.BodyLimits.APIBytes > 0 {
+			return "config:Build.BodyLimits.APIBytes"
+		}
+	default:
+		if config.Build.BodyLimits.ActionBytes > 0 {
+			return "config:Build.BodyLimits.ActionBytes"
+		}
+	}
+	return "default:gowdk.DefaultRequestBodyLimitBytes"
 }
 
 func sourceRef(file string, span source.SourceSpan) string {

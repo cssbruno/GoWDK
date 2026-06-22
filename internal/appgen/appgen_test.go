@@ -1933,6 +1933,9 @@ func TestGenerateSplitFrontendProxyMatchesAdapterRoutes(t *testing.T) {
 	source := string(payload)
 	for _, expected := range []string{
 		`Backend: backendProxy,`,
+		`routeMethod := request.Method`,
+		`requestedMethod := strings.ToUpper(strings.TrimSpace(request.Header.Get("Access-Control-Request-Method")))`,
+		`if !isBackendRoute(routeMethod, request.URL.Path) {`,
 		`func isBackendRoute(method string, requestPath string) bool`,
 		`method == http.MethodPost && requestPath == "/newsletter"`,
 		`method == "GET" && requestPath == "/api/health"`,
@@ -2501,9 +2504,9 @@ func TestGenerateRunsRateLimitAndGuardsBeforeContractExecution(t *testing.T) {
 		t.Fatalf("expected generated source to contain command contract endpoint context:\n%s", source)
 	}
 	assertSourceOrder(t, source[commandIndex:],
+		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
 		`if runRateLimit(response, request)`,
 		`if !runGuards(response, request, []string{"auth.required"})`,
-		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
 		`values := gowdkform.FromURLValues(request.PostForm)`,
 		`input, err := decodeContractPatientsCreatePatientInput(values)`,
 		`gowdkcontracts.CaptureCommandEventsForRole[patients.CreatePatient, patients.CreatePatientResult]`,
@@ -3109,13 +3112,13 @@ func TestGenerateUsesConfiguredBodyLimits(t *testing.T) {
 			APIBytes:    4096,
 		}}},
 		Actions: []ActionEndpoint{{
-			Guards:     []string{"public"},
+			Guards:     []string{"auth.required"},
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
 			Route:      "/newsletter",
 		}},
 		APIs: []APIEndpoint{{
-			Guards:  []string{"public"},
+			Guards:  []string{"auth.required"},
 			PageID:  "newsletter",
 			APIName: "Health",
 			Method:  http.MethodPost,
@@ -3146,6 +3149,19 @@ func TestGenerateUsesConfiguredBodyLimits(t *testing.T) {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
 		}
+	}
+	actionLimit := strings.Index(source, `request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`)
+	apiLimit := strings.Index(source, `request.Body = http.MaxBytesReader(response, request.Body, maxAPIBodyBytes)`)
+	firstGuard := strings.Index(source, `if !runGuards(response, request, []string{"auth.required"})`)
+	lastGuard := strings.LastIndex(source, `if !runGuards(response, request, []string{"auth.required"})`)
+	if actionLimit < 0 || apiLimit < 0 || firstGuard < 0 || lastGuard < 0 {
+		t.Fatalf("expected generated body limits and guards in source:\n%s", source)
+	}
+	if actionLimit > firstGuard {
+		t.Fatalf("action body limit must be installed before generated guards:\n%s", source)
+	}
+	if apiLimit > lastGuard {
+		t.Fatalf("API body limit must be installed before generated guards:\n%s", source)
 	}
 }
 

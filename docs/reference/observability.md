@@ -1,8 +1,12 @@
 # Observability
 
 `addons/observability` enables generated GOWDK Trace wiring for debug builds.
-It registers `FeatureObservability`; `runtime/trace` remains the dependency-free
-root runtime, and optional OTLP export lives in the nested
+The addon name stays `observability`, but the current implemented surface is
+GOWDK Trace plus local inspection primitives. It is not a hosted metrics, logs,
+or trace-analysis backend.
+
+It registers `FeatureObservability`; `runtime/trace` remains the
+dependency-free root runtime, and optional OTLP export lives in the nested
 `runtime/trace/otel` module.
 
 Enable it:
@@ -26,7 +30,8 @@ supplies an explicit `TraceAccess` function.
 
 Current generated instrumentation:
 
-- Backend request route spans extract incoming `traceparent`.
+- Backend request route spans extract incoming `traceparent` and valid
+  `tracestate`.
 - Generated SSR route and `server {}` spans record route IDs, render lane,
   source refs, response status, and load errors without storing raw request
   bodies or headers.
@@ -37,14 +42,26 @@ Current generated instrumentation:
 - `runtime/contracts.EventEnvelope` and file outbox records carry an optional
   `traceparent`; old records without it remain readable.
 - Generated browser runtime spans partial submits and SPA navigation, injects
-  `traceparent`, and posts frontend spans to the local collector.
+  trace context, and posts frontend spans to the local collector.
 - JS islands, WASM island loaders, and page-level client Go WASM loaders reuse
   `window.__gowdkTrace`.
 
 The generated local collector keeps a bounded in-memory ring of 1024 completed
-spans. Generated code records stable route/endpoint IDs and source metadata, and
-uses runtime redaction helpers for query strings, error messages, and app-owned
-trace events.
+spans. It requires JSON POST ingest, rejects cross-origin browser ingest, caps
+request/body/span/event/attribute/string sizes, limits POST ingest rate and SSE
+subscriber count, and exposes `dropped` plus `rejected` health counters in the
+JSON/viewer surface. Generated code records stable route/endpoint IDs and source
+metadata, and uses runtime redaction helpers for query strings, error messages,
+and app-owned trace events.
+
+## Mode Matrix
+
+| Mode | Generated spans | Local collector/viewer | Intended access |
+| --- | --- | --- | --- |
+| `gowdk dev` / local debug | Enabled when the addon is present and debug assets are on. | Mounted at `/_gowdk/traces`. | Localhost only by default. |
+| Preview/debug app builds | Enabled when `Build.DebugAssets()` is true. | Mounted only when the addon is present. | Keep behind `LocalTraceAccess` or an app-owned gate. |
+| Production builds | Disabled by default because debug assets are off. | Not mounted by generated code. | Use app-owned telemetry export and access policy. |
+| Direct `runtime/trace` use | App-controlled. | App-controlled. | The app must wrap public routes with auth, TLS, proxy, and rate-limit policy. |
 
 For app-owned Go handlers, record a user event on the active span:
 
@@ -67,3 +84,5 @@ tracer := trace.NewTracer(trace.WithSink(sink))
 Do not treat the local collector or viewer as a production observability
 backend. Production deployments should set sampling deliberately, keep viewer
 access gated or disabled, and send spans to app-owned telemetry infrastructure.
+Full slog correlation, expanded route metrics, durable storage, hosted analysis,
+and production access policy remain future observability work.

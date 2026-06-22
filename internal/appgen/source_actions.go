@@ -176,6 +176,7 @@ func actionCaseStmts(action BackendActionAdapter, csrf bool, rateLimit bool) []a
 	if action.ErrorPage != "" {
 		stmts = append(stmts, endpointPanicBoundaryStmt())
 	}
+	stmts = append(stmts, actionBodyLimitStmt())
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(action.Guards)...)
 	if action.Binding.Status != "" && action.Binding.Status != source.BackendBindingBound {
@@ -222,6 +223,10 @@ func contractParseFormStmts(csrf bool) []ast.Stmt {
 	return actionParseFormStmtsWithErrors(csrf, true, false)
 }
 
+func actionBodyLimitStmt() ast.Stmt {
+	return assign([]ast.Expr{selExpr(id("request"), "Body")}, call(sel("http", "MaxBytesReader"), id("response"), selExpr(id("request"), "Body"), id("maxActionBodyBytes")))
+}
+
 func actionParseFormStmtsWithErrors(csrf bool, jsonErrors bool, multipart bool) []ast.Stmt {
 	writeError := writeNoStoreErrorStmt
 	if jsonErrors {
@@ -232,7 +237,6 @@ func actionParseFormStmtsWithErrors(csrf bool, jsonErrors bool, multipart bool) 
 		parseCall = call(selExpr(id("request"), "ParseMultipartForm"), sel("gowdkform", "DefaultMultipartMemoryBytes"))
 	}
 	stmts := []ast.Stmt{
-		assign([]ast.Expr{selExpr(id("request"), "Body")}, call(sel("http", "MaxBytesReader"), id("response"), selExpr(id("request"), "Body"), id("maxActionBodyBytes"))),
 		&ast.IfStmt{
 			Init: define([]ast.Expr{id("err")}, parseCall),
 			Cond: notNil("err"),

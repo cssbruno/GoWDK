@@ -236,9 +236,51 @@ func parseAuditRule(line string, lineNumber int, rawLine string) (gwdkast.AuditR
 		return parseAuditDenyRule(tokens, lineNumber, rawLine)
 	case "allow":
 		return parseAuditAllowRule(tokens, lineNumber, rawLine)
+	case "except":
+		return parseAuditExceptRule(tokens, lineNumber, rawLine)
 	default:
 		return gwdkast.AuditRule{}, false, nil
 	}
+}
+
+// parseAuditExceptRule parses a fingerprinted raw-HTML exception:
+//
+//	except raw_html "<fingerprint>" owner "<owner>" justification "<text>" expires "<date>" sanitizer "<contract>"
+//
+// Required attributes are not enforced here: a syntactically valid but
+// incomplete exception is preserved so the audit engine can classify it as
+// malformed and report it rather than silently dropping it.
+func parseAuditExceptRule(tokens []syntax.Token, lineNumber int, rawLine string) (gwdkast.AuditRule, bool, error) {
+	if len(tokens) < 3 || tokens[1].Lexeme != "raw_html" || tokens[2].Kind != syntax.TokenString {
+		return gwdkast.AuditRule{}, true, fmt.Errorf("line %d: except must use except raw_html \"<fingerprint>\" owner \"...\" justification \"...\" expires \"...\" sanitizer \"...\"", lineNumber)
+	}
+	rule := gwdkast.AuditRule{
+		Kind:  "except_raw_html",
+		Value: decodeStringLiteral(tokens[2].Lexeme),
+		Attrs: map[string]string{},
+		Span:  sourceLineSpan(lineNumber, rawLine),
+	}
+	rest := tokens[3:]
+	for len(rest) > 0 {
+		if rest[0].Kind != syntax.TokenIdentifier {
+			return gwdkast.AuditRule{}, true, fmt.Errorf("line %d: except raw_html attribute name must be an identifier", lineNumber)
+		}
+		if len(rest) < 2 || rest[1].Kind != syntax.TokenString {
+			return gwdkast.AuditRule{}, true, fmt.Errorf("line %d: except raw_html attribute %q needs a string value", lineNumber, rest[0].Lexeme)
+		}
+		key := rest[0].Lexeme
+		if key == "trusted_type" {
+			key = "sanitizer"
+		}
+		switch key {
+		case "owner", "justification", "expires", "sanitizer":
+		default:
+			return gwdkast.AuditRule{}, true, fmt.Errorf("line %d: unsupported except raw_html attribute %q", lineNumber, rest[0].Lexeme)
+		}
+		rule.Attrs[key] = decodeStringLiteral(rest[1].Lexeme)
+		rest = rest[2:]
+	}
+	return rule, true, nil
 }
 
 func parseAuditRequireRule(tokens []syntax.Token, lineNumber int, rawLine string) (gwdkast.AuditRule, bool, error) {
@@ -367,7 +409,14 @@ func lowerAuditSyntax(path string, ast gwdkast.AuditFile) gwdkir.AuditSpec {
 			out.Applies = append(out.Applies, gwdkir.AuditApply{Selector: apply.Selector, Span: apply.Span})
 		}
 		for _, rule := range policy.Rules {
-			out.Rules = append(out.Rules, gwdkir.AuditRule{Kind: rule.Kind, Value: rule.Value, Code: rule.Code, Span: rule.Span})
+			var attrs map[string]string
+			if len(rule.Attrs) > 0 {
+				attrs = make(map[string]string, len(rule.Attrs))
+				for key, value := range rule.Attrs {
+					attrs[key] = value
+				}
+			}
+			out.Rules = append(out.Rules, gwdkir.AuditRule{Kind: rule.Kind, Value: rule.Value, Code: rule.Code, Attrs: attrs, Span: rule.Span})
 		}
 		spec.Policies = append(spec.Policies, out)
 	}

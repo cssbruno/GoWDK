@@ -265,6 +265,10 @@ view {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{
+		auditGeneratedMarker,
+		auditGeneratedMetadataPrefix,
+		"posture=sha256:",
+		"policy=sha256:",
 		"package app_test",
 		`gowdktestkit "github.com/cssbruno/gowdk/runtime/testkit"`,
 		`Root: fstest.MapFS{`,
@@ -275,6 +279,74 @@ view {
 		if !strings.Contains(string(payload), expected) {
 			t.Fatalf("expected emitted test to contain %q:\n%s", expected, payload)
 		}
+	}
+}
+
+func TestAuditCommandEmitTestsRefusesUserOwnedFile(t *testing.T) {
+	root := t.TempDir()
+	config := writeAuditCLIConfigWithSecurityHeaders(t, root)
+	writeCLITestModule(t, root, "example.com/gowdk-audit-emit-owned")
+	pagePath := filepath.Join(root, "home.page.gwdk")
+	writeCLIFile(t, pagePath, `package app
+
+page home
+route "/"
+
+view {
+  <main>Home</main>
+}
+`)
+	testPath := filepath.Join(root, "security_audit_test.go")
+	original := "package app_test\n\nfunc TestUserOwned(t *testing.T) {}\n"
+	writeCLIFile(t, testPath, original)
+
+	_, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"audit", "--config", config, "--emit-tests=" + testPath, pagePath})
+	})
+	if err == nil || !strings.Contains(err.Error(), "not a gowdk-generated audit test") || !strings.Contains(err.Error(), "--force") {
+		t.Fatalf("expected user-owned overwrite refusal, got %v", err)
+	}
+	payload, err := os.ReadFile(testPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(payload) != original {
+		t.Fatalf("user-owned file was overwritten:\n%s", payload)
+	}
+}
+
+func TestAuditCommandEmitTestsForceOverwritesUserOwnedFile(t *testing.T) {
+	root := t.TempDir()
+	config := writeAuditCLIConfigWithSecurityHeaders(t, root)
+	writeCLITestModule(t, root, "example.com/gowdk-audit-emit-force")
+	pagePath := filepath.Join(root, "home.page.gwdk")
+	writeCLIFile(t, pagePath, `package app
+
+page home
+route "/"
+
+view {
+  <main>Home</main>
+}
+`)
+	testPath := filepath.Join(root, "security_audit_test.go")
+	writeCLIFile(t, testPath, "package app_test\n\nfunc TestUserOwned(t *testing.T) {}\n")
+
+	_, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"audit", "--config", config, "--emit-tests=" + testPath, "--force", pagePath})
+	})
+	if err != nil {
+		t.Fatalf("expected forced audit emit-tests to succeed: %v\nstderr:\n%s", err, stderr)
+	}
+	payload, err := os.ReadFile(testPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), auditGeneratedMarker) || !strings.Contains(string(payload), "package app_test") {
+		t.Fatalf("expected forced generated audit test payload, got:\n%s", payload)
+	}
+	if strings.Contains(string(payload), "TestUserOwned") {
+		t.Fatalf("expected forced write to replace previous file:\n%s", payload)
 	}
 }
 
@@ -343,7 +415,7 @@ test admin {
 	}
 }
 
-func TestAuditCommandRunProvidesCustomGuardHooks(t *testing.T) {
+func TestAuditCommandRunReportsMissingCustomGuardFixtures(t *testing.T) {
 	root := t.TempDir()
 	config := writeAuditCLIConfigWithSSR(t, root)
 	writeCLITestModule(t, root, "example.com/gowdk-audit-run-custom-guard")
@@ -362,14 +434,18 @@ view {
 }
 `)
 
-	_, stderr, err := captureCLIOutput(t, func() error {
+	stdout, stderr, err := captureCLIOutput(t, func() error {
 		return run([]string{"audit", "--config", config, "--run", pagePath})
 	})
 	if err != nil {
-		t.Fatalf("expected generated app audit tests with custom guard to pass: %v\nstderr:\n%s", err, stderr)
+		t.Fatalf("expected missing custom guard fixtures to report as a finding, got error: %v\nstderr:\n%s", err, stderr)
 	}
-	if !strings.Contains(stderr, "audit generated app tests passed:") {
-		t.Fatalf("expected generated app audit test pass message, got %q", stderr)
+	output := stdout + "\n" + stderr
+	if strings.Contains(output, "audit generated app tests passed:") {
+		t.Fatalf("custom guard audit run must not claim runtime verification, got %q", output)
+	}
+	if !strings.Contains(output, "audit_guard_unverified") || !strings.Contains(output, "auth.required") || !strings.Contains(output, "explicit fixtures") {
+		t.Fatalf("expected unresolved custom guard finding, got %q", output)
 	}
 }
 

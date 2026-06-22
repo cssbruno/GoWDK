@@ -210,6 +210,68 @@ func TestWriteNoStoreFailure(t *testing.T) {
 	}
 }
 
+func TestWriteNoStoreFailureRedactsGuardRuntimeErrors(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	cases := []struct {
+		name    string
+		err     error
+		blocked []string
+	}{
+		{
+			name: "custom guard failure",
+			err: RunGuards(NewContext(request, nil), []string{"auth.required"}, Registry{
+				"auth.required": func(Context) error {
+					return errors.New("database denied tenant=acme password=hunter2")
+				},
+			}),
+			blocked: []string{"auth.required", "database", "tenant=acme", "hunter2"},
+		},
+		{
+			name:    "missing guard",
+			err:     RunGuards(NewContext(request, nil), []string{"billing.active"}, Registry{}),
+			blocked: []string{"billing.active", "not registered"},
+		},
+		{
+			name:    "native missing auth provider",
+			err:     RunGuardsWithAuth(NewContext(request, nil), []string{"role:admin"}, nil, nil),
+			blocked: []string{"role:admin", "requires an auth provider"},
+		},
+		{
+			name: "native unauthenticated",
+			err: RunGuardsWithAuth(NewContext(request, nil), []string{"role:admin"}, nil, gowdkauth.ProviderFunc(func(*http.Request) (*gowdkauth.Principal, error) {
+				return nil, nil
+			})),
+			blocked: []string{"role:admin", gowdkauth.ErrUnauthenticated.Error()},
+		},
+		{
+			name: "native forbidden",
+			err: RunGuardsWithAuth(NewContext(request, nil), []string{"permission:posts.write"}, nil, gowdkauth.ProviderFunc(func(*http.Request) (*gowdkauth.Principal, error) {
+				return &gowdkauth.Principal{}, nil
+			})),
+			blocked: []string{"permission:posts.write", gowdkauth.ErrForbidden.Error()},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.err == nil {
+				t.Fatal("expected guard failure")
+			}
+			recorder := httptest.NewRecorder()
+			WriteNoStoreFailure(recorder, tc.err)
+			body := recorder.Body.String()
+			if recorder.Code != http.StatusForbidden || recorder.Header().Get("Cache-Control") != "no-store" || !strings.Contains(body, "403 forbidden") {
+				t.Fatalf("unexpected generic response: status=%d headers=%v body=%q", recorder.Code, recorder.Header(), body)
+			}
+			for _, text := range tc.blocked {
+				if strings.Contains(body, text) {
+					t.Fatalf("guard failure body leaked %q: %q", text, body)
+				}
+			}
+		})
+	}
+}
+
 func waitForSpans(t *testing.T, ring *gowdktrace.RingSink, want int) []gowdktrace.Snapshot {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)

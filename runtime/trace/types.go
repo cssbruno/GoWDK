@@ -71,7 +71,10 @@ type SourceRef struct {
 	OwnerID   string `json:"ownerId,omitempty"`
 }
 
-// Attribute is an OpenTelemetry-compatible key/value attribute.
+// Attribute is an OpenTelemetry-compatible key/value attribute. Supported
+// values are string, bool, integer, float64, and homogeneous slices of those
+// scalar forms. Trace boundaries copy supported values and drop unsupported
+// pointer/map/object values so snapshots remain serialization-safe.
 type Attribute struct {
 	Key   string `json:"key"`
 	Value any    `json:"value,omitempty"`
@@ -103,13 +106,24 @@ type Snapshot struct {
 }
 
 // TraceContext is the trace identity stored in context.Context and encoded in
-// W3C traceparent headers.
+// W3C traceparent/tracestate headers.
 type TraceContext struct {
-	TraceID TraceID
-	SpanID  SpanID
-	Sampled bool
-	Remote  bool
+	TraceID    TraceID
+	SpanID     SpanID
+	Sampled    bool
+	Remote     bool
+	TraceState string
 }
+
+const (
+	// MaxTraceparentHeaderBytes is the maximum traceparent header size accepted
+	// by Extract and ParseTraceparent.
+	MaxTraceparentHeaderBytes = 256
+	// MaxTracestateHeaderBytes is the W3C tracestate list-member byte budget.
+	MaxTracestateHeaderBytes = 512
+)
+
+const maxTracestateMembers = 32
 
 type contextKey struct{}
 type tracerContextKey struct{}
@@ -179,6 +193,14 @@ func ContextWithTraceContext(ctx context.Context, traceContext TraceContext) con
 	if !traceContext.TraceID.Valid() || !traceContext.SpanID.Valid() {
 		return ctx
 	}
+	if traceContext.TraceState != "" {
+		traceState, err := parseTracestate(traceContext.TraceState)
+		if err != nil {
+			traceContext.TraceState = ""
+		} else {
+			traceContext.TraceState = traceState
+		}
+	}
 	return context.WithValue(ctx, contextKey{}, traceContext)
 }
 
@@ -211,9 +233,34 @@ func TracerFromContext(ctx context.Context) (*Tracer, bool) {
 
 // ParseTraceparent parses a W3C traceparent header.
 func ParseTraceparent(value string) (TraceContext, error) {
+	return ParseTraceContext(value, "")
+}
+
+// ParseTraceContext parses W3C traceparent and tracestate headers. Invalid
+// traceparent input rejects the context. Invalid tracestate input is dropped so
+// a usable trace identity is still preserved without propagating ambiguous
+// vendor state.
+func ParseTraceContext(traceparent string, tracestate string) (TraceContext, error) {
+	traceContext, err := parseTraceparent(traceparent)
+	if err != nil {
+		return TraceContext{}, err
+	}
+	if traceState, err := parseTracestate(tracestate); err == nil {
+		traceContext.TraceState = traceState
+	}
+	return traceContext, nil
+}
+
+func parseTraceparent(value string) (TraceContext, error) {
+	if len(value) > MaxTraceparentHeaderBytes {
+		return TraceContext{}, errors.New("traceparent exceeds byte limit")
+	}
 	parts := strings.Split(strings.TrimSpace(value), "-")
 	if len(parts) != 4 {
 		return TraceContext{}, errors.New("traceparent must have four dash-separated fields")
+	}
+	if !validLowerHex(parts[0], 2) {
+		return TraceContext{}, errors.New("traceparent version is invalid")
 	}
 	if parts[0] != "00" {
 		return TraceContext{}, fmt.Errorf("unsupported traceparent version %q", parts[0])
@@ -226,11 +273,109 @@ func ParseTraceparent(value string) (TraceContext, error) {
 	if !spanID.Valid() {
 		return TraceContext{}, errors.New("traceparent span id is invalid")
 	}
+	if !validLowerHex(parts[3], 2) {
+		return TraceContext{}, errors.New("traceparent flags are invalid")
+	}
 	flags, err := strconv.ParseUint(parts[3], 16, 8)
-	if err != nil || len(parts[3]) != 2 {
+	if err != nil {
 		return TraceContext{}, errors.New("traceparent flags are invalid")
 	}
 	return TraceContext{TraceID: traceID, SpanID: spanID, Sampled: flags&1 == 1, Remote: true}, nil
+}
+
+func parseTracestate(value string) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+	if len(value) > MaxTracestateHeaderBytes {
+		return "", errors.New("tracestate exceeds byte limit")
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	members := strings.Split(value, ",")
+	if len(members) > maxTracestateMembers {
+		return "", errors.New("tracestate has too many members")
+	}
+	seen := map[string]struct{}{}
+	normalized := make([]string, 0, len(members))
+	for _, raw := range members {
+		member := strings.TrimSpace(raw)
+		if member == "" {
+			return "", errors.New("tracestate member is empty")
+		}
+		key, memberValue, ok := strings.Cut(member, "=")
+		if !ok || key == "" {
+			return "", errors.New("tracestate member is invalid")
+		}
+		if key != strings.TrimSpace(key) || memberValue != strings.TrimSpace(memberValue) {
+			return "", errors.New("tracestate member whitespace is invalid")
+		}
+		if !validTracestateKey(key) || !validTracestateValue(memberValue) {
+			return "", errors.New("tracestate member is invalid")
+		}
+		if _, ok := seen[key]; ok {
+			return "", errors.New("tracestate member is duplicated")
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, key+"="+memberValue)
+	}
+	return strings.Join(normalized, ","), nil
+}
+
+func validTracestateKey(key string) bool {
+	if len(key) > 256 {
+		return false
+	}
+	left, right, hasTenant := strings.Cut(key, "@")
+	if hasTenant {
+		return validTracestateKeyPart(left, false, 241) && validTracestateKeyPart(right, true, 14)
+	}
+	return validTracestateKeyPart(left, true, 256)
+}
+
+func validTracestateKeyPart(value string, requireLetterStart bool, maxLength int) bool {
+	if value == "" || len(value) > maxLength {
+		return false
+	}
+	for index, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= '0' && r <= '9' && (!requireLetterStart || index > 0):
+		case index > 0 && (r == '_' || r == '-' || r == '*' || r == '/'):
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func validTracestateValue(value string) bool {
+	if len(value) > 256 {
+		return false
+	}
+	if strings.HasPrefix(value, " ") || strings.HasSuffix(value, " ") {
+		return false
+	}
+	for _, r := range value {
+		if r < 0x20 || r > 0x7e || r == ',' || r == '=' {
+			return false
+		}
+	}
+	return true
+}
+
+func validLowerHex(value string, length int) bool {
+	if len(value) != length {
+		return false
+	}
+	for _, r := range value {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // Traceparent encodes traceContext as a W3C traceparent header.
@@ -252,12 +397,12 @@ type Carrier interface {
 	Set(string, string)
 }
 
-// Extract reads a W3C traceparent header from carrier into ctx.
+// Extract reads W3C traceparent/tracestate headers from carrier into ctx.
 func Extract(ctx context.Context, carrier Carrier) context.Context {
 	if carrier == nil {
 		return ctx
 	}
-	traceContext, err := ParseTraceparent(carrier.Get("traceparent"))
+	traceContext, err := ParseTraceContext(carrier.Get("traceparent"), carrier.Get("tracestate"))
 	if err != nil {
 		return ctx
 	}
@@ -275,5 +420,8 @@ func Inject(ctx context.Context, carrier Carrier) {
 	}
 	if value := Traceparent(traceContext); value != "" {
 		carrier.Set("traceparent", value)
+	}
+	if traceState, err := parseTracestate(traceContext.TraceState); err == nil && traceState != "" {
+		carrier.Set("tracestate", traceState)
 	}
 }

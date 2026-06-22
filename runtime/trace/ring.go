@@ -5,17 +5,22 @@ import (
 	"sync"
 )
 
-const defaultRingLimit = 256
+const (
+	defaultRingLimit   = 256
+	maxRingStoredBytes = 1 << 20
+)
 
 // RingSink stores the most recent completed spans in memory. On overflow it
 // drops the oldest span and increments Dropped.
 type RingSink struct {
-	mu      sync.RWMutex
-	limit   int
-	next    int
-	filled  bool
-	dropped uint64
-	spans   []Snapshot
+	mu         sync.RWMutex
+	limit      int
+	start      int
+	count      int
+	dropped    uint64
+	totalBytes int
+	spans      []Snapshot
+	sizes      []int
 }
 
 // NewRingSink creates a bounded in-memory sink.
@@ -23,7 +28,7 @@ func NewRingSink(limit int) *RingSink {
 	if limit <= 0 {
 		limit = defaultRingLimit
 	}
-	return &RingSink{limit: limit, spans: make([]Snapshot, limit)}
+	return &RingSink{limit: limit, spans: make([]Snapshot, limit), sizes: make([]int, limit)}
 }
 
 // RecordSpan implements Sink. It never blocks on external I/O.
@@ -34,17 +39,32 @@ func (sink *RingSink) RecordSpan(ctx context.Context, span Snapshot) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	span = cloneSnapshot(span)
+	size := snapshotEncodedSize(span)
 	sink.mu.Lock()
 	defer sink.mu.Unlock()
-	if sink.filled {
+	if size > maxSnapshotEncodedBytes {
 		sink.dropped++
+		return nil
 	}
-	sink.spans[sink.next] = span
-	sink.next = (sink.next + 1) % sink.limit
-	if sink.next == 0 {
-		sink.filled = true
+	for sink.count > 0 && (sink.count == sink.limit || sink.totalBytes+size > maxRingStoredBytes) {
+		sink.dropOldestLocked()
 	}
+	index := (sink.start + sink.count) % sink.limit
+	sink.spans[index] = span
+	sink.sizes[index] = size
+	sink.totalBytes += size
+	sink.count++
 	return nil
+}
+
+func (sink *RingSink) dropOldestLocked() {
+	sink.totalBytes -= sink.sizes[sink.start]
+	sink.spans[sink.start] = Snapshot{}
+	sink.sizes[sink.start] = 0
+	sink.start = (sink.start + 1) % sink.limit
+	sink.count--
+	sink.dropped++
 }
 
 // Spans returns completed spans from oldest to newest.
@@ -54,13 +74,11 @@ func (sink *RingSink) Spans() []Snapshot {
 	}
 	sink.mu.RLock()
 	defer sink.mu.RUnlock()
-	var out []Snapshot
-	if !sink.filled {
-		out = append(out, sink.spans[:sink.next]...)
-		return out
+	out := make([]Snapshot, 0, sink.count)
+	for offset := 0; offset < sink.count; offset++ {
+		index := (sink.start + offset) % sink.limit
+		out = append(out, cloneSnapshot(sink.spans[index]))
 	}
-	out = append(out, sink.spans[sink.next:]...)
-	out = append(out, sink.spans[:sink.next]...)
 	return out
 }
 

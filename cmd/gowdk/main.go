@@ -10,7 +10,7 @@ import (
 	"github.com/cssbruno/gowdk"
 )
 
-const version = "0.9.0" // x-release-please-version
+const version = "0.10.0" // x-release-please-version
 
 var (
 	defaultSourceIncludes = []string{"**/*.gwdk"}

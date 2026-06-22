@@ -145,7 +145,10 @@ Replace `github.com/acme/hello-gowdk/ui` with your app module path.
 ## CLI at a Glance
 
 "Inspectable" is not just a slogan — the CLI exposes every stage of the
-pipeline. Run `gowdk` with no arguments for full flags.
+pipeline. Run `gowdk` with no arguments for the registered command list, and use
+[the CLI reference](docs/reference/cli.md) for the complete flag contract. The
+command registry is covered by `cmd/gowdk/main_commands_test.go`; this section
+is a short overview, not a second source of truth.
 
 ### Build and run
 
@@ -157,6 +160,7 @@ pipeline. Run `gowdk` with no arguments for full flags.
 | `gowdk dev` | Build, serve, rebuild on change, live-reload browsers, show an error overlay |
 | `gowdk preview` | Build and serve a local deploy preview |
 | `gowdk serve` | Serve already-generated build output |
+| `gowdk clean` | Remove configured generated outputs, with `--dry-run` and `--json` |
 
 ### Inspect and debug
 
@@ -168,7 +172,7 @@ pipeline. Run `gowdk` with no arguments for full flags.
 | `gowdk doctor` | Check local environment and project health |
 | `gowdk audit` | Derive security posture, evaluate baseline/declared policies, and optionally emit/run audit tests (`--json` for CI) |
 | `gowdk inspect ir` / `tree` / `endpoint-graph` / `asset-graph` / `go-bindings` | Print validated compiler IR, source-linked node tree, endpoint dispatch graph, asset graph, or Go binding report JSON |
-| `gowdk manifest` / `routes` / `sitemap` | Print validated manifest, route/endpoint metadata, or editor site-map JSON |
+| `gowdk manifest` / `routes` / `endpoints` / `sitemap` | Print validated manifest, route metadata, backend endpoint metadata, or editor site-map JSON |
 | `gowdk tokens` | Print raw language tokens for a file |
 | `gowdk fmt` | Format `.gwdk` sources (`--write`) |
 
@@ -179,6 +183,7 @@ pipeline. Run `gowdk` with no arguments for full flags.
 | `gowdk generate stubs` | Write conservative missing action/API Go handler stubs next to their owning source package |
 | `gowdk contracts` / `graph` / `trace` / `list` | Print contract registration metadata, the command/event graph, a single contract trace, or filtered lists of commands/queries/events/jobs |
 | `gowdk add <addon>` | Wire an optional addon into `gowdk.config.go` (`add --list` for addable built-ins, `add --list --registry` for metadata; `add seo` requires `--base-url`) |
+| `gowdk playground policy` / `export` / `run` | Print sandbox policy, archive a source project, or run a project through the explicit hosted-execution sandbox |
 | `gowdk lsp` | Start the language server over stdio |
 
 ## Design
@@ -219,7 +224,12 @@ How responsibility is split, and the opinions behind it:
 
 ## What Works Today
 
-This table describes the current demoable 0.x slice. Status levels:
+This table describes the current demoable 0.x slice. "Current Limit" separates
+GOWDK backlog from app-owned work by design; app-owned limits mean the compiler
+intentionally leaves domain policy, persistence, credentials, deployment, or
+business validation in ordinary Go/application infrastructure.
+
+Status levels:
 
 - **Works** — the listed path works end-to-end today.
 - **Works, contract unstable** — the listed path works end-to-end, but the
@@ -241,6 +251,7 @@ This table describes the current demoable 0.x slice. Status levels:
 | Components | Works, contract unstable | Components support imported contracts, slots, scoped CSS/assets, first local client behavior, and generated island assets. Page stores can opt into localStorage/sessionStorage persistence with `persist "local"`/`persist "session"`, including WASM island read/write/sync through the host loader. | Non-string props, richer slots/events, real `g:if`/`g:for`, lifecycle cleanup, and dependency diagnostics are planned. | [Components](docs/language/components.md) | [Components](examples/components/base/base-components.page.gwdk) |
 | WASM islands | Early | Component-level `wasm` and page-level `go client {}` emit Go `js/wasm` browser assets for supported fixtures; build-time validation checks browser-safe imports and ABI exports, browser tests cover mount/event/patch/emit/destroy/store participation, and `runtime/wasm` exposes the Go payload/result helper. | User-code runtime validation beyond the current patch/store contract remains planned. | [Components](docs/language/components.md) | [WASM example](examples/components/wasm/README.md) |
 | CSS/assets | Works, contract unstable | CSS processors, page CSS, scoped component CSS, component assets, asset manifests, content-hashed filenames, optional production obfuscation for compiler-owned JS, and optional Tailwind wrapper exist. | CSS processor contracts and optional dependency boundaries need hardening. | [CSS](docs/reference/css.md) | [CSS](examples/css/styled.page.gwdk) |
+| SEO | Works, contract unstable | The SEO addon emits `sitemap.xml` and `robots.txt`, validates supported `jsonld` page metadata, injects deterministic JSON-LD into generated HTML, and generated apps can serve `/sitemap.xml` by merging public build-time URLs with an optional dynamic sitemap provider. | Search console ownership, private/auth content policy, source-of-truth inventory queries, and request-time-only URL discovery stay app-owned; unsupported schema kinds remain GOWDK backlog. | [SEO](docs/reference/seo.md) | [SEO](examples/seo) |
 | One-binary output | Works, contract unstable | `gowdk build --app --bin` can generate and compile an embedded Go server for supported SPA/backend/SSR slices, `--docker` emits a minimal non-root Docker context beside the binary, and CI starts the embed example binary to verify health plus embedded page serving. | Runtime operations, richer Docker target config, and split/backend-only deploys are still expanding. | [Deployment](docs/reference/deployment.md) | [Embed](examples/embed/site.page.gwdk) |
 | Generated app WASM | Early | `gowdk build --app --wasm` compiles the generated app into a Go `js/wasm` deploy artifact, and CI verifies the emitted module header. | Host runtime/loader integration is deploy-platform owned; this is separate from component-level WASM islands. | [Deployment](docs/reference/deployment.md) | [Embed](examples/embed/site.page.gwdk) |
 | Contracts | Works, contract unstable | Runtime contracts support typed queries, commands, events, jobs, role filtering, local dispatch, file outbox, broker/fanout adapters, worker replay with dedup/backoff hooks, contract graph/trace/list commands, generated `g:command`/`g:query` web adapters, and explicit domain-event to query invalidation metadata. | Separate worker/cron binary generators and editor-first contract visualization remain planned platform tooling. | [Contracts](docs/reference/contracts.md) | [Runtime contracts](runtime/contracts) |

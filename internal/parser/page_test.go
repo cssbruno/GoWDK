@@ -347,6 +347,7 @@ robots "index,follow"
 noindex false
 preload "/assets/app.css" as "style"
 prefetch "/docs"
+jsonld Article
 
 view {
   <main>Home</main>
@@ -376,8 +377,12 @@ view {
 	if len(page.Metadata.Prefetch) != 1 || page.Metadata.Prefetch[0].Href != "/docs" || page.Metadata.Prefetch[0].As != "" {
 		t.Fatalf("unexpected prefetch metadata: %#v", page.Metadata.Prefetch)
 	}
+	if len(page.Metadata.Structured) != 1 || page.Metadata.Structured[0].Kind != "Article" {
+		t.Fatalf("unexpected structured metadata: %#v", page.Metadata.Structured)
+	}
 	if page.Spans.Title.Start.Line != 4 || page.Spans.Description.Start.Line != 5 || page.Spans.Canonical.Start.Line != 6 || page.Spans.Image.Start.Line != 7 ||
-		page.Spans.Robots.Start.Line != 8 || page.Spans.NoIndex.Start.Line != 9 || page.Spans.Preload[0].Span.Start.Line != 10 || page.Spans.Prefetch[0].Span.Start.Line != 11 {
+		page.Spans.Robots.Start.Line != 8 || page.Spans.NoIndex.Start.Line != 9 || page.Spans.Preload[0].Span.Start.Line != 10 || page.Spans.Prefetch[0].Span.Start.Line != 11 ||
+		page.Spans.Structured[0].Span.Start.Line != 12 {
 		t.Fatalf("unexpected metadata spans: %#v", page.Spans)
 	}
 }

@@ -11,6 +11,9 @@ type Options = gowdk.SEOOptions
 // URL describes one additional sitemap URL.
 type URL = gowdk.SEOURL
 
+// DynamicSitemap describes an optional request-time sitemap provider.
+type DynamicSitemap = gowdk.SEODynamicSitemap
+
 // Addon enables build-time SEO output. BaseURL is required when building.
 func Addon(options ...Options) gowdk.Addon {
 	var selected Options

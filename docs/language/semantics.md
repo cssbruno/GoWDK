@@ -32,12 +32,13 @@
   derives from the source filename by removing `.page.gwdk` or `.gwdk`.
   Explicit `page` keeps page identity stable across file renames.
 - `title`, `description`, `canonical`, `image`, `robots`, `noindex`,
-  `preload`, and `prefetch` record document head metadata used by generated
-  HTML output. If `title` is omitted, generated output falls back to the page
-  ID. `image` feeds generated Open Graph and Twitter image tags when social
-  head output is enabled by page or config metadata. `noindex` adds `noindex`
-  to the robots meta value and excludes otherwise public pages from generated
-  SEO sitemaps.
+  `jsonld`, `preload`, and `prefetch` record document head metadata used by
+  generated HTML output. If `title` is omitted, generated output falls back to
+  the page ID. `image` feeds generated Open Graph and Twitter image tags when
+  social head output is enabled by page or config metadata. `noindex` adds
+  `noindex` to the robots meta value and excludes otherwise public pages from
+  generated SEO sitemaps. `jsonld` declares supported structured-data kinds and
+  emits escaped `application/ld+json` script payloads for generated pages.
 - `layout` records ordered page layout references. Bare references resolve to
   same-package layout IDs or legacy package-less layouts. Cross-package layouts
   require `use alias "package"` and qualified refs such as `alias.root`.

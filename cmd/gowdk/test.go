@@ -328,13 +328,18 @@ func buildTestWorkdir(cli cliOptions, options testOptions, modules []string) (*t
 		}
 	}
 
+	paths, err := resolveExplicitTestPaths(options.Paths)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
 	fmt.Fprintf(os.Stderr, "gowdk test [build]: %s\n", work.Root)
 	request := buildRequest{
 		OutputDir:  work.OutputDir,
 		AppDir:     work.AppDir,
 		BinaryPath: work.BinaryPath,
 		Modules:    modules,
-		Paths:      append([]string(nil), options.Paths...),
+		Paths:      paths,
 	}
 	if err := runInWorkingDir(cli.ProjectRoot, func() error {
 		return runTestBuildOnce(cli, request, options.JSON)
@@ -343,6 +348,25 @@ func buildTestWorkdir(cli cliOptions, options testOptions, modules []string) (*t
 		return nil, nil, err
 	}
 	return work, cleanup, nil
+}
+
+func resolveExplicitTestPaths(paths []string) ([]string, error) {
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	resolved := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if filepath.IsAbs(path) {
+			resolved = append(resolved, filepath.Clean(path))
+			continue
+		}
+		resolved = append(resolved, filepath.Clean(filepath.Join(cwd, path)))
+	}
+	return resolved, nil
 }
 
 func runTestBuildOnce(cli cliOptions, request buildRequest, quietStdout bool) error {

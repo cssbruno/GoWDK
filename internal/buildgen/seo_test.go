@@ -42,6 +42,8 @@ func TestBuildEmitsSEOArtifactsWhenAddonEnabled(t *testing.T) {
 			LastMod:    "2026-06-14",
 			ChangeFreq: "daily",
 			Priority:   "0.8",
+		}, {
+			Loc: "/feed.xml?page=2#top",
 		}},
 	})}}
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{
@@ -72,6 +74,7 @@ func TestBuildEmitsSEOArtifactsWhenAddonEnabled(t *testing.T) {
 		`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`,
 		`<loc>https://example.com/docs/</loc>`,
 		`<loc>https://example.com/docs/blog/hello-gowdk</loc>`,
+		`<loc>https://example.com/docs/feed.xml</loc>`,
 		`<loc>https://example.com/docs/rss.xml</loc>`,
 		`<lastmod>2026-06-14</lastmod>`,
 		`<changefreq>daily</changefreq>`,
@@ -80,6 +83,9 @@ func TestBuildEmitsSEOArtifactsWhenAddonEnabled(t *testing.T) {
 		if !strings.Contains(sitemap, expected) {
 			t.Fatalf("expected sitemap to contain %q:\n%s", expected, sitemap)
 		}
+	}
+	if strings.Contains(sitemap, "%3F") || strings.Contains(sitemap, "page=2") {
+		t.Fatalf("root-relative extra URL query leaked into sitemap:\n%s", sitemap)
 	}
 
 	robots := readFile(t, result.RobotsPath)
@@ -228,6 +234,103 @@ func TestBuildExcludesNoIndexRoutesFromSEOSitemap(t *testing.T) {
 	}
 	if event.PageID != "draft" || event.Route != "/draft" || event.Data["reason"] != "noindex" || event.Data["mode"] != "spa" {
 		t.Fatalf("unexpected noindex SEO exclusion event: %#v", event)
+	}
+}
+
+func TestRuntimeSitemapPlanIncludesStaticPublicURLsAndDynamicHook(t *testing.T) {
+	config := gowdk.Config{Addons: []gowdk.Addon{
+		seo.Addon(seo.Options{
+			BaseURL: "https://example.com/docs",
+			ExtraURLs: []seo.URL{{
+				Loc:        "/rss.xml",
+				ChangeFreq: "daily",
+			}},
+			DynamicSitemap: gowdk.SEODynamicSitemap{
+				ImportPath:   "github.com/acme/site/seo",
+				Function:     "DynamicURLs",
+				MaxURLs:      50,
+				CacheSeconds: 300,
+			},
+		}),
+		ssr.Addon(),
+	}}
+	plan, err := RuntimeSitemapPlanFromIR(config, gwdkir.Program{Pages: []gwdkir.Page{
+		seoHomePage(),
+		{
+			ID:     "post",
+			Route:  "/blog/{slug}",
+			Guards: []string{"public"},
+			Blocks: gwdkir.Blocks{
+				Paths:     true,
+				PathsBody: `=> { slug: "hello" }`,
+				View:      true,
+				ViewBody:  `<main>Post</main>`,
+			},
+		},
+		{
+			ID:     "dashboard",
+			Route:  "/dashboard",
+			Render: gowdk.SSR,
+			Guards: []string{"public"},
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main>Dashboard</main>`,
+			},
+		},
+		{
+			ID:     "draft",
+			Route:  "/draft",
+			Guards: []string{"public"},
+			Metadata: gwdkir.PageMetadata{
+				NoIndex: true,
+			},
+			Blocks: gwdkir.Blocks{
+				View:     true,
+				ViewBody: `<main>Draft</main>`,
+			},
+		},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !plan.Enabled || plan.BaseURL != "https://example.com/docs" {
+		t.Fatalf("unexpected plan: %#v", plan)
+	}
+	if plan.Dynamic.ImportPath != "github.com/acme/site/seo" || plan.Dynamic.Function != "DynamicURLs" || plan.Dynamic.MaxURLs != 50 || plan.Dynamic.CacheSeconds != 300 {
+		t.Fatalf("unexpected dynamic hook: %#v", plan.Dynamic)
+	}
+	var locs []string
+	for _, url := range plan.StaticURLs {
+		locs = append(locs, url.Loc)
+	}
+	joined := strings.Join(locs, ",")
+	for _, expected := range []string{"/", "/blog/hello", "/rss.xml"} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("expected %q in static runtime sitemap URLs: %#v", expected, locs)
+		}
+	}
+	for _, excluded := range []string{"/dashboard", "/draft"} {
+		if strings.Contains(joined, excluded) {
+			t.Fatalf("did not expect %q in static runtime sitemap URLs: %#v", excluded, locs)
+		}
+	}
+}
+
+func TestRuntimeSitemapPlanRejectsPartialDynamicHook(t *testing.T) {
+	config := gowdk.Config{Addons: []gowdk.Addon{
+		seo.Addon(seo.Options{
+			BaseURL: "https://example.com",
+			DynamicSitemap: gowdk.SEODynamicSitemap{
+				Function: "DynamicURLs",
+			},
+		}),
+	}}
+	_, err := RuntimeSitemapPlanFromIR(config, gwdkir.Program{Pages: []gwdkir.Page{seoHomePage()}})
+	if err == nil {
+		t.Fatal("expected partial dynamic sitemap hook to fail")
+	}
+	if !strings.Contains(err.Error(), "DynamicSitemap.ImportPath") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

@@ -43,11 +43,16 @@ func resolveOptions(outputDir string, options Options) (Options, error) {
 	if err != nil {
 		return Options{}, err
 	}
+	sitemap, err := buildgen.RuntimeSitemapPlanFromIR(options.Config, ir)
+	if err != nil {
+		return Options{}, err
+	}
 
 	resolved.Actions = append(append([]ActionEndpoint(nil), options.Actions...), actions...)
 	resolved.APIs = append(append([]APIEndpoint(nil), options.APIs...), apis...)
 	resolved.Fragments = append(append([]FragmentEndpoint(nil), options.Fragments...), fragments...)
 	resolved.SSR = append(append([]SSRRoute(nil), options.SSR...), ssrRoutes(ssrArtifacts)...)
+	resolved.Sitemap = sitemap
 	normalizeTraceSources(&resolved, filepath.Dir(outputDir), &ir)
 	assignBackendAliases(&resolved)
 	return resolved, nil

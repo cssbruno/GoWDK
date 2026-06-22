@@ -16,6 +16,8 @@ Required pull-request lanes:
 - `VS Code extension`: extension version sync, Node syntax checks, and unit
   tests.
 - `Documentation links`: `scripts/check-docs-links.sh`.
+- `Documentation style`: `scripts/check-docs-style.sh` checks heading order and
+  language-tagged fenced code blocks. Long prose paragraphs are warnings.
 - `Removed source syntax`: `scripts/check-removed-syntax.sh` (runs in the
   `Documentation links` job) flags pre-v0.6.0 source forms that the script lists
   but that linger in docs as if still active. They are allowed only in changelog,
@@ -66,8 +68,16 @@ Run the same local checks before handoff when relevant:
 
   ```sh
   scripts/check-docs-links.sh
+  scripts/check-docs-style.sh
   scripts/check-removed-syntax.sh
+  scripts/check-doc-versions.sh
   scripts/check-example-reports.sh
+  ```
+
+- Docs-site production check:
+
+  ```sh
+  (cd docs-site && scripts/install-tailwind-linux.sh && scripts/build-production.sh && scripts/smoke-production.sh)
   ```
 
 - Fuzz, integration, and determinism checks:
@@ -192,11 +202,22 @@ set with `-exclude` and scope a run with `-root`:
 scripts/check-docs-links.sh -root docs -exclude .git,node_modules
 ```
 
-Markdown *style* linting is intentionally not part of this gate. The available
-formatters flagged mostly cosmetic line-wrap and list-indent differences across
-the existing docs — high churn, low signal — so the gate is limited to link and
-anchor correctness, which catches real breakage. Revisit if a style check earns
-its keep without mass reformatting.
+Markdown style checks live in `scripts/check-docs-style.sh`. That gate is kept
+small on purpose: missing fence languages and skipped heading levels fail;
+long paragraphs warn without blocking. The authoring rules live in
+`docs/engineering/documentation-style.md`.
+
+## Docs Site Build
+
+The docs site is tested through the same production path Render uses. The
+`docs-site` CI job installs the pinned Linux Tailwind standalone CLI, runs
+`docs-site/scripts/build-production.sh`, starts the compiled binary through
+`docs-site/scripts/smoke-production.sh`, then runs `go test ./...` and
+`go vet ./...` in the docs-site module.
+
+`docs-site/dist/site` is build output, not committed source. The source of
+truth is the repo Markdown, docs-site `.gwdk`/CSS/assets, and the in-tree
+compiler used by `build-production.sh`.
 
 ## Cache Maintenance
 

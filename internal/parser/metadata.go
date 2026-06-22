@@ -116,6 +116,13 @@ func applyMetadata(page *gwdkir.Page, name, rawValue string, lineNumber int, raw
 		}
 		page.Metadata.Prefetch = append(page.Metadata.Prefetch, resource)
 		page.Spans.Prefetch = append(page.Spans.Prefetch, source.NamedSpan{Name: resource.Href, Span: span})
+	case "jsonld":
+		kind, err := metadataText(name, value)
+		if err != nil {
+			return err
+		}
+		page.Metadata.Structured = append(page.Metadata.Structured, gwdkir.StructuredData{Kind: kind})
+		page.Spans.Structured = append(page.Spans.Structured, source.NamedSpan{Name: kind, Span: span})
 	case "guard":
 		if value == "" {
 			return fmt.Errorf("guard requires a value")

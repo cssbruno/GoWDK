@@ -1189,6 +1189,31 @@ func TestTestCommandRunsInitializedProjectAppStageWithJSON(t *testing.T) {
 	})
 }
 
+func TestResolveExplicitTestPathsUsesLaunchDirectory(t *testing.T) {
+	launchRoot := t.TempDir()
+	relative := filepath.Join("site", "pages", "home.page.gwdk")
+	absolute := filepath.Join(launchRoot, "site", "pages", "about.page.gwdk")
+
+	var paths []string
+	var launchCwd string
+	withWorkingDir(t, launchRoot, func() {
+		var err error
+		launchCwd, err = os.Getwd()
+		if err != nil {
+			t.Fatal(err)
+		}
+		paths, err = resolveExplicitTestPaths([]string{relative, absolute})
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	wantRelative := filepath.Join(launchCwd, relative)
+	if len(paths) != 2 || paths[0] != wantRelative || paths[1] != absolute {
+		t.Fatalf("unexpected resolved test paths: %#v", paths)
+	}
+}
+
 func TestTestCommandRejectsUpdateFlag(t *testing.T) {
 	_, err := parseTestOptions([]string{"--update"})
 	if err == nil || !strings.Contains(err.Error(), `unknown test flag "--update"`) {

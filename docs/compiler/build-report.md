@@ -82,6 +82,8 @@ Current report events include:
   build-time sitemap, with `data.reason` and render `mode`. Reasons include
   request-time rendering, missing dynamic `paths {}`, and guardless routes that
   the generated app denies by default.
+- `structured_data`: emitted for each page that declares supported `jsonld`
+  metadata. The event records the page, route, schema kind list, and count.
 
 ## CLI Debug Output
 

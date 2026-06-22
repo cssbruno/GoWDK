@@ -73,6 +73,7 @@ Implemented or partial metadata declarations:
 - `image "<url>"`
 - `robots "<policy>"`
 - `noindex [true|false]`
+- `jsonld <WebPage|Article>`
 - `preload "<href>" [as "<type>"]`
 - `prefetch "<href>" [as "<type>"]`
 - `layout <id>[, <id>...]`

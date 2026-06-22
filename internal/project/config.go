@@ -1270,6 +1270,12 @@ func parseSEOOptions(expression ast.Expr, imports map[string]string) (seo.Option
 				return seo.Options{}, false
 			}
 			options.ExtraURLs = values
+		case "DynamicSitemap":
+			value, ok := parseSEODynamicSitemap(field.Value, imports)
+			if !ok {
+				return seo.Options{}, false
+			}
+			options.DynamicSitemap = value
 		default:
 			return seo.Options{}, false
 		}
@@ -1352,6 +1358,58 @@ func isSEOURLType(expression ast.Expr, imports map[string]string) bool {
 	}
 	selector, ok := expression.(*ast.SelectorExpr)
 	if !ok || selector.Sel.Name != "URL" {
+		return false
+	}
+	packageName, ok := selector.X.(*ast.Ident)
+	return ok && imports[packageName.Name] == seo.ImportPath
+}
+
+func parseSEODynamicSitemap(expression ast.Expr, imports map[string]string) (gowdk.SEODynamicSitemap, bool) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok || !isSEODynamicSitemapType(literal.Type, imports) {
+		return gowdk.SEODynamicSitemap{}, false
+	}
+	fields, ok := strictConfigLiteralFields(expression)
+	if !ok {
+		return gowdk.SEODynamicSitemap{}, false
+	}
+	var dynamic gowdk.SEODynamicSitemap
+	for _, field := range fields {
+		switch field.Name {
+		case "ImportPath":
+			value, ok := parseLiteralString(field.Value)
+			if !ok {
+				return gowdk.SEODynamicSitemap{}, false
+			}
+			dynamic.ImportPath = value
+		case "Function":
+			value, ok := parseLiteralString(field.Value)
+			if !ok {
+				return gowdk.SEODynamicSitemap{}, false
+			}
+			dynamic.Function = value
+		case "MaxURLs":
+			value, ok := parseLiteralInt(field.Value)
+			if !ok {
+				return gowdk.SEODynamicSitemap{}, false
+			}
+			dynamic.MaxURLs = value
+		case "CacheSeconds":
+			value, ok := parseLiteralInt(field.Value)
+			if !ok {
+				return gowdk.SEODynamicSitemap{}, false
+			}
+			dynamic.CacheSeconds = value
+		default:
+			return gowdk.SEODynamicSitemap{}, false
+		}
+	}
+	return dynamic, true
+}
+
+func isSEODynamicSitemapType(expression ast.Expr, imports map[string]string) bool {
+	selector, ok := expression.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "DynamicSitemap" {
 		return false
 	}
 	packageName, ok := selector.X.(*ast.Ident)
@@ -1513,7 +1571,22 @@ func parseLiteralBool(expression ast.Expr) (bool, bool) {
 // outside the platform int range so a malformed config value cannot wrap into a
 // small or negative length on 32-bit platforms.
 func parseInt(expression ast.Expr) int {
-	value := parseInt64(expression)
+	value, ok := parseLiteralInt64(expression)
+	if !ok {
+		return 0
+	}
+	return clampInt(value)
+}
+
+func parseLiteralInt(expression ast.Expr) (int, bool) {
+	value, ok := parseLiteralInt64(expression)
+	if !ok {
+		return 0, false
+	}
+	return clampInt(value), true
+}
+
+func clampInt(value int64) int {
 	switch {
 	case value > math.MaxInt:
 		return math.MaxInt
@@ -1525,28 +1598,39 @@ func parseInt(expression ast.Expr) int {
 }
 
 func parseInt64(expression ast.Expr) int64 {
+	value, ok := parseLiteralInt64(expression)
+	if !ok {
+		return 0
+	}
+	return value
+}
+
+func parseLiteralInt64(expression ast.Expr) (int64, bool) {
 	switch typed := expression.(type) {
 	case *ast.BasicLit:
 		if typed.Kind != token.INT {
-			return 0
+			return 0, false
 		}
 		value, err := strconv.ParseInt(typed.Value, 0, 64)
 		if err != nil {
-			return 0
+			return 0, false
 		}
-		return value
+		return value, true
 	case *ast.UnaryExpr:
-		value := parseInt64(typed.X)
+		value, ok := parseLiteralInt64(typed.X)
+		if !ok {
+			return 0, false
+		}
 		switch typed.Op {
 		case token.ADD:
-			return value
+			return value, true
 		case token.SUB:
-			return -value
+			return -value, true
 		default:
-			return 0
+			return 0, false
 		}
 	default:
-		return 0
+		return 0, false
 	}
 }
 

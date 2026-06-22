@@ -3,6 +3,9 @@ package seoexample
 page seo.home
 route "/seo"
 guard public
+title "SEO example"
+description "Build-time sitemap, robots, and structured data output."
+jsonld WebPage
 
 view {
   <main>

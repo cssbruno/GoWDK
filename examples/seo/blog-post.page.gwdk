@@ -3,15 +3,22 @@ package seoexample
 page seo.blog
 route "/seo/blog/{slug}"
 guard public
+title "SEO dynamic route"
+description "Dynamic SPA paths can include Article structured data."
+jsonld Article
 
 paths {
   => { slug: "hello-gowdk" }
   => { slug: "compile-first" }
 }
 
+build {
+  => { headline: "SEO dynamic route", author: "GOWDK", datePublished: "2026-06-22" }
+}
+
 view {
   <main>
-    <h1>SEO dynamic route</h1>
+    <h1>{headline}</h1>
     <p>Dynamic SPA paths are included in sitemap.xml.</p>
   </main>
 }

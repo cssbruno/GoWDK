@@ -953,6 +953,12 @@ var Config = gowdk.Config{
 			ExtraURLs: []seoaddon.URL{
 				{Loc: "/rss.xml", LastMod: "2026-06-14", ChangeFreq: "daily", Priority: "0.8"},
 			},
+			DynamicSitemap: seoaddon.DynamicSitemap{
+				ImportPath: "example.com/site/sitemap",
+				Function: "DynamicURLs",
+				MaxURLs: 25,
+				CacheSeconds: 60,
+			},
 		}),
 	},
 }
@@ -977,6 +983,10 @@ var Config = gowdk.Config{
 	}
 	if len(options.ExtraURLs) != 1 || options.ExtraURLs[0].Loc != "/rss.xml" || options.ExtraURLs[0].Priority != "0.8" {
 		t.Fatalf("unexpected SEO extra URLs: %#v", options.ExtraURLs)
+	}
+	if options.DynamicSitemap.ImportPath != "example.com/site/sitemap" || options.DynamicSitemap.Function != "DynamicURLs" ||
+		options.DynamicSitemap.MaxURLs != 25 || options.DynamicSitemap.CacheSeconds != 60 {
+		t.Fatalf("unexpected dynamic sitemap options: %#v", options.DynamicSitemap)
 	}
 }
 
@@ -1028,6 +1038,61 @@ var Config = gowdk.Config{
 	options := provider.SEOOptions()
 	if options.BaseURL != "https://dynamic.example.com/docs" || len(options.Disallow) != 1 || options.Disallow[0] != "/admin" {
 		t.Fatalf("unexpected executable SEO options: %#v", options)
+	}
+}
+
+func TestLoadConfigFileFallsBackForDynamicSitemapIntegerOptions(t *testing.T) {
+	root := t.TempDir()
+	repoRoot := repositoryRoot(t)
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/site
+
+go 1.22
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+repoRoot+`
+`)
+	path := filepath.Join(root, DefaultConfigFile)
+	writeTestFile(t, path, `package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	seoaddon "github.com/cssbruno/gowdk/addons/seo"
+)
+
+const sitemapLimit = 25
+
+func sitemapCacheSeconds() int {
+	return 60
+}
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		seoaddon.Addon(seoaddon.Options{
+			BaseURL: "https://example.com/docs",
+			DynamicSitemap: seoaddon.DynamicSitemap{
+				ImportPath: "example.com/site/sitemap",
+				Function: "DynamicURLs",
+				MaxURLs: sitemapLimit,
+				CacheSeconds: sitemapCacheSeconds(),
+			},
+		}),
+	},
+}
+`)
+	tidyTestModule(t, root)
+
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, ok := config.Addons[0].(gowdk.SEOProvider)
+	if !ok {
+		t.Fatalf("expected SEOProvider, got %T", config.Addons[0])
+	}
+	dynamic := provider.SEOOptions().DynamicSitemap
+	if dynamic.MaxURLs != 25 || dynamic.CacheSeconds != 60 {
+		t.Fatalf("expected executable fallback to preserve dynamic sitemap integers, got %#v", dynamic)
 	}
 }
 

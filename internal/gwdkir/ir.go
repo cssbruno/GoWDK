@@ -127,6 +127,11 @@ type PageMetadata struct {
 	NoIndex     bool
 	Preload     []HeadResource
 	Prefetch    []HeadResource
+	Structured  []StructuredData
+}
+
+type StructuredData struct {
+	Kind string
 }
 
 type HeadResource struct {
@@ -197,6 +202,7 @@ type PageSpans struct {
 	NoIndex     source.SourceSpan
 	Preload     []source.NamedSpan
 	Prefetch    []source.NamedSpan
+	Structured  []source.NamedSpan
 	Layouts     []source.NamedSpan
 	Guard       []source.NamedSpan
 	CSS         []source.NamedSpan

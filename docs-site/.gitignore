@@ -1,8 +1,5 @@
-# Generated site output. `dist/site` is committed so Render's default Go build
-# can run the docs-site server without a custom build command.
+# Generated site output. Production and CI rebuild `dist/site` from source.
 dist/*
-!dist/site/
-!dist/site/**
 .gowdk/
 gowdk_cache/
 
@@ -18,3 +15,4 @@ app
 /gowdk-page
 /syncdocs
 tools/tailwindcss
+tools/gowdk

@@ -16,6 +16,7 @@ var MetadataKeywords = []string{
 	"noindex",
 	"preload",
 	"prefetch",
+	"jsonld",
 	"layout",
 	"cache",
 	"revalidate",

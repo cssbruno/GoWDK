@@ -89,6 +89,7 @@ var integrationCoverage = map[string]string{
 	"image":      "../compiler/validate_test.go",
 	"robots":     "../parser/page_test.go",
 	"noindex":    "../parser/page_test.go",
+	"jsonld":     "../parser/page_test.go",
 	"preload":    "../parser/page_test.go",
 	"prefetch":   "../parser/page_test.go",
 	"layout":     "../compiler/validate_test.go",

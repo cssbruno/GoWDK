@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	runtimeseo "github.com/cssbruno/gowdk/runtime/seo"
 )
 
 // Config describes how a GOWDK application should be discovered, compiled,
@@ -778,11 +780,20 @@ type AuthSessionProvider interface {
 
 // SEOURL describes one additional URL that an SEO addon can add to the
 // generated sitemap. Loc may be absolute or root-relative.
-type SEOURL struct {
-	Loc        string
-	LastMod    string
-	ChangeFreq string
-	Priority   string
+type SEOURL = runtimeseo.URL
+
+// SEODynamicSitemap configures an app-owned request-time sitemap provider for
+// generated binaries. ImportPath and Function name a Go function with the
+// signature:
+//
+//	func(context.Context) ([]seo.URL, error)
+//
+// The generated handler combines those URLs with build-time public URLs.
+type SEODynamicSitemap struct {
+	ImportPath   string
+	Function     string
+	MaxURLs      int
+	CacheSeconds int
 }
 
 // SEOOptions configures build-time sitemap.xml and robots.txt emission.
@@ -791,6 +802,7 @@ type SEOOptions struct {
 	Disallow         []string
 	ExtraURLs        []SEOURL
 	ExtraURLProvider func() []SEOURL `json:"-"`
+	DynamicSitemap   SEODynamicSitemap
 }
 
 // SEOProvider is implemented by addons that can supply build-time SEO output

@@ -107,6 +107,10 @@ func runtimeImportMap(options Options) map[string]string {
 	if generatedObservabilityEnabled(options) {
 		imports["gowdktrace"] = "github.com/cssbruno/gowdk/runtime/trace"
 	}
+	if generatedDynamicSitemapEnabled(options) {
+		imports["gowdkseo"] = "github.com/cssbruno/gowdk/runtime/seo"
+		imports["gowdkseositemap"] = strings.TrimSpace(options.Sitemap.Dynamic.ImportPath)
+	}
 	if generatedRealtimeStreamUsesRouteMatching(options) {
 		imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
 		imports["neturl"] = "net/url"
@@ -457,6 +461,9 @@ func newServeMuxDecl(options Options, embedded bool) ast.Decl {
 		)
 	}
 	stmts = append(stmts, define([]ast.Expr{id("mux")}, call(sel("http", "NewServeMux"))))
+	if embedded && generatedDynamicSitemapEnabled(options) {
+		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), stringLit("/sitemap.xml"), dynamicSitemapHandlerExpr(options))))
+	}
 	if generatedRealtimeEnabled(options) {
 		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), id("RealtimeEventsPath"), call(id("realtimeEventsHandler")))))
 	}
@@ -479,6 +486,55 @@ func newServeMuxDecl(options Options, embedded bool) ast.Decl {
 		{Type: &ast.StarExpr{X: sel("http", "ServeMux")}},
 		{Type: id("error")},
 	}, stmts)
+}
+
+func generatedDynamicSitemapEnabled(options Options) bool {
+	if !options.Sitemap.Enabled {
+		return false
+	}
+	return strings.TrimSpace(options.Sitemap.Dynamic.ImportPath) != "" && strings.TrimSpace(options.Sitemap.Dynamic.Function) != ""
+}
+
+func dynamicSitemapHandlerExpr(options Options) ast.Expr {
+	dynamic := options.Sitemap.Dynamic
+	fields := []ast.Expr{
+		keyValue("BaseURL", stringLit(options.Sitemap.BaseURL)),
+		keyValue("StaticURLs", sitemapURLsExpr(options.Sitemap.StaticURLs)),
+	}
+	if dynamic.MaxURLs > 0 {
+		fields = append(fields, keyValue("MaxDynamicURLs", intLit(dynamic.MaxURLs)))
+	}
+	if dynamic.CacheSeconds > 0 {
+		fields = append(fields, keyValue("CacheSeconds", intLit(dynamic.CacheSeconds)))
+	}
+	return call(sel("gowdkseo", "Handler"), &ast.CompositeLit{
+		Type: sel("gowdkseo", "HandlerOptions"),
+		Elts: fields,
+	}, sel("gowdkseositemap", strings.TrimSpace(dynamic.Function)))
+}
+
+func sitemapURLsExpr(urls []gowdk.SEOURL) ast.Expr {
+	elts := make([]ast.Expr, 0, len(urls))
+	for _, candidate := range urls {
+		fields := []ast.Expr{keyValue("Loc", stringLit(candidate.Loc))}
+		if strings.TrimSpace(candidate.LastMod) != "" {
+			fields = append(fields, keyValue("LastMod", stringLit(candidate.LastMod)))
+		}
+		if strings.TrimSpace(candidate.ChangeFreq) != "" {
+			fields = append(fields, keyValue("ChangeFreq", stringLit(candidate.ChangeFreq)))
+		}
+		if strings.TrimSpace(candidate.Priority) != "" {
+			fields = append(fields, keyValue("Priority", stringLit(candidate.Priority)))
+		}
+		elts = append(elts, &ast.CompositeLit{
+			Type: sel("gowdkseo", "URL"),
+			Elts: fields,
+		})
+	}
+	return &ast.CompositeLit{
+		Type: &ast.ArrayType{Elt: sel("gowdkseo", "URL")},
+		Elts: elts,
+	}
 }
 
 func needsBackendRouter(options Options, embedded bool) bool {

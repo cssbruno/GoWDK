@@ -18,6 +18,10 @@ sidebar, "on this page" TOC, breadcrumbs, prev/next, ⌘K search, copy buttons,
 callouts) lives in the reusable `DocsPage`/`DocsSidebar`/`Callout` components, so
 every generated page is modular and consistent.
 
+`dist/site/` is also generated output. It is rebuilt by CI and Render from the
+markdown, `.gwdk`, CSS, assets, and in-tree compiler; do not commit generated
+HTML or hashed assets from that directory.
+
 ## Prerequisites
 
 - Go 1.26.4+.
@@ -72,18 +76,13 @@ Watches the `.gwdk` sources and `app.css` and rebuilds on change. Open
 ## Build Site Output
 
 ```sh
-go run ./cmd/syncdocs
-rm -rf dist/site
 (cd .. && go build -o docs-site/tools/gowdk ./cmd/gowdk)
-./tools/gowdk build
-mkdir -p dist/site/assets
-cp -R assets/. dist/site/assets/
-cp assets/favicon.ico dist/site/favicon.ico
+scripts/build-production.sh
 ```
 
-Always run `cmd/syncdocs` before the GOWDK build so the published docs match the
-selected GOWDK source. `rm -rf dist/site` is required because the generated tree
-mirrors the repo structure and stale routes must not linger.
+Always run the production script before starting the site binary. It runs
+`cmd/syncdocs`, clears `dist/site`, builds with the in-tree CLI, copies static
+assets, and compiles the Go server. CI and Render use the same script.
 
 `./tools/gowdk build` compiles the `.gwdk` sources
 to static HTML, emits each page's `<head>` from its `title`, `description`, and
@@ -126,8 +125,7 @@ To preview website changes locally before opening a PR:
 ./tools/gowdk dev --addr 127.0.0.1:8091
 # or a production-faithful preview that serves the exact built output through
 # the site's own Go binary (the same one that ships to production):
-go run ./cmd/syncdocs
-rm -rf dist/site && ./tools/gowdk build
+scripts/build-production.sh
 GOWDK_ADDR=127.0.0.1:8091 go run .
 ```
 
@@ -156,6 +154,12 @@ project.
 - `app.css`: Tailwind v4 input and the site's visual system.
 - `cmd/syncdocs/`: generator that builds the docs pages and sidebar from the
   main repo's `docs/` markdown (uses `goldmark`). See "Sync docs".
+- `scripts/build-production.sh`: production-faithful build used by CI and
+  Render.
+- `scripts/smoke-production.sh`: local smoke check for the generated site
+  served through the production binary.
+- `scripts/install-tailwind-linux.sh`: pinned Tailwind standalone CLI install
+  for Linux CI/Render environments.
 - `src/pages/index.page.gwdk`: the documentation home served at `/`.
 - `src/pages/docs/**.page.gwdk`: the documentation pages — **generated**; do not
   hand-edit.

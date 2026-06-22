@@ -159,6 +159,42 @@ The addon module may import other GitHub/private/local modules. The project
 `go.mod` remains the source of truth for resolving those imports, including
 `require`, `replace`, `GOPRIVATE`, and module proxy configuration.
 
+## SEO Addon Options
+
+`addons/seo` is opt-in. `BaseURL` is required because generated sitemap URLs
+need deploy-owned origin policy. `ExtraURLs` adds build-time known URLs, and
+`DynamicSitemap` lets generated apps serve request-time sitemap URLs from an
+app-owned Go provider:
+
+```go
+package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/seo"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		seo.Addon(seo.Options{
+			BaseURL: "https://example.com",
+			ExtraURLs: []seo.URL{
+				{Loc: "/rss.xml"},
+			},
+			DynamicSitemap: seo.DynamicSitemap{
+				ImportPath:   "github.com/acme/site/sitemap",
+				Function:     "DynamicURLs",
+				MaxURLs:      500,
+				CacheSeconds: 300,
+			},
+		}),
+	},
+}
+```
+
+See [SEO Addon](seo.md) for `jsonld` page metadata, static sitemap rules, and
+the dynamic provider signature.
+
 ## Localization
 
 `I18N` declares locale-prefixed page output. When `Locales` is empty, route

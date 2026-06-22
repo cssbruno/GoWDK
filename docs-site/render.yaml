@@ -7,23 +7,17 @@ services:
     # before compiling the Go server binary.
     buildCommand: |
       set -euo pipefail
-      mkdir -p tools
-      tailwind_version="v4.3.1"
-      tailwind_sha256="2526d063ba03b71f9a3ea7d5cee14f0aec147f117f222d5adc97b1d736d45999"
-      curl -fsSL -o tools/tailwindcss \
-        "https://github.com/tailwindlabs/tailwindcss/releases/download/${tailwind_version}/tailwindcss-linux-x64"
-      echo "${tailwind_sha256}  tools/tailwindcss" | sha256sum -c -
-      chmod +x tools/tailwindcss
-      (cd .. && go build -o docs-site/tools/gowdk ./cmd/gowdk)
-      go run ./cmd/syncdocs
-      rm -rf dist/site
-      ./tools/gowdk build
-      mkdir -p dist/site/assets
-      cp -R assets/. dist/site/assets/
-      cp assets/favicon.ico dist/site/favicon.ico
-      go build -tags netgo -ldflags '-s -w' -o app .
+      scripts/install-tailwind-linux.sh
+      scripts/build-production.sh
     startCommand: ./app
     buildFilter:
       paths:
         - docs-site/**
         - docs/**
+        - addons/**
+        - cmd/**
+        - internal/**
+        - runtime/**
+        - gowdk.go
+        - go.mod
+        - go.sum

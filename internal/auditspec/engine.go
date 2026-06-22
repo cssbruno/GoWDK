@@ -23,7 +23,15 @@ var endpointKindForSelector = map[string]string{
 // Evaluate matches policies against the posture manifest and returns findings.
 // It first reports policy-resolution problems (cycles, unknown extends), then
 // the per-target rule violations. Findings are returned in a stable order.
+// Declared waivers are applied without digest pinning; use EvaluateWithWaivers to
+// validate waivers against the current policy and posture digests.
 func Evaluate(manifest securitymanifest.SecurityManifest, policies []Policy) []Finding {
+	return EvaluateWithWaivers(manifest, policies, WaiverContext{})
+}
+
+// EvaluateWithWaivers is Evaluate with the current policy and posture digests so
+// declared waivers that pin a digest can be validated against drift.
+func EvaluateWithWaivers(manifest securitymanifest.SecurityManifest, policies []Policy, waiverCtx WaiverContext) []Finding {
 	policies, codeFindings := validatePolicyRuleCodes(policies)
 	resolved, resolutionFindings := resolve(policies)
 	findings := append([]Finding(nil), codeFindings...)
@@ -90,8 +98,16 @@ func Evaluate(manifest securitymanifest.SecurityManifest, policies []Policy) []F
 		findings = append(findings, evalFrontend(fctx, policy)...)
 	}
 
+	for _, policy := range resolved {
+		if policyHasWaiver(policy) {
+			matchedAnything[policy.Name] = true
+		}
+	}
 	findings = append(findings, unmatchedSelectorFindings(resolved, matchedAnything)...)
-	return EnrichFindings(dedupeFindings(findings))
+	findings = dedupeFindings(findings)
+	findings, waiverFindings := applyWaivers(findings, collectWaivers(resolved), waiverCtx)
+	findings = append(findings, waiverFindings...)
+	return EnrichFindings(findings)
 }
 
 // dedupeFindings drops findings that are identical except for the policy that
@@ -113,25 +129,44 @@ func dedupeFindings(findings []Finding) []Finding {
 }
 
 // resolve expands extends so each policy carries its full rule set, and reports
-// cycles, unknown parents, duplicate names, and unknown selectors.
+// cycles, unknown parents, duplicate names, baseline overrides, and unknown
+// selectors. A declared policy that reuses a built-in baseline policy name is
+// rejected (policy_baseline_override) and dropped so the baseline can only be
+// tightened or explicitly waived, never silently weakened.
 func resolve(policies []Policy) ([]Policy, []Finding) {
 	var findings []Finding
 	byName := map[string]Policy{}
-	for _, policy := range policies {
-		if _, exists := byName[policy.Name]; exists {
-			findings = append(findings, Finding{
-				Code:     "policy_duplicate_name",
-				Severity: severityFor("policy_duplicate_name"),
-				Policy:   policy.Name,
-				Source:   policy.Source,
-				Message:  fmt.Sprintf("policy %q is declared more than once", policy.Name),
-			})
+	firstIndex := map[string]int{}
+	for index, policy := range policies {
+		if existing, exists := byName[policy.Name]; exists {
+			if existing.Builtin && !policy.Builtin {
+				findings = append(findings, Finding{
+					Code:        "policy_baseline_override",
+					Severity:    severityFor("policy_baseline_override"),
+					Policy:      policy.Name,
+					Source:      policy.Source,
+					Message:     fmt.Sprintf("declared policy %q reuses built-in baseline policy name; baseline policies cannot be replaced", policy.Name),
+					Remediation: fmt.Sprintf("Rename the policy and use extends %q to tighten the baseline, or add an explicit waive for a specific finding.", policy.Name),
+				})
+			} else {
+				findings = append(findings, Finding{
+					Code:     "policy_duplicate_name",
+					Severity: severityFor("policy_duplicate_name"),
+					Policy:   policy.Name,
+					Source:   policy.Source,
+					Message:  fmt.Sprintf("policy %q is declared more than once", policy.Name),
+				})
+			}
 			continue
 		}
 		byName[policy.Name] = policy
+		firstIndex[policy.Name] = index
 	}
 
-	for _, policy := range policies {
+	for index, policy := range policies {
+		if firstIndex[policy.Name] != index {
+			continue
+		}
 		for _, selector := range policy.Selectors {
 			if selector.Kind == SelectorUnknown {
 				findings = append(findings, Finding{
@@ -146,7 +181,10 @@ func resolve(policies []Policy) ([]Policy, []Finding) {
 	}
 
 	resolved := make([]Policy, 0, len(policies))
-	for _, policy := range policies {
+	for index, policy := range policies {
+		if firstIndex[policy.Name] != index {
+			continue
+		}
 		rules, ok := flattenRules(policy.Name, byName, map[string]bool{}, &findings)
 		if !ok {
 			continue

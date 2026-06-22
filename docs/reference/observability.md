@@ -77,10 +77,54 @@ For app-owned Go handlers, record a user event on the active span:
 app.Trace(ctx, "loaded patient", map[string]any{"patientID": id})
 ```
 
-Export to OTLP from an app that opts into the nested module:
+## Production-safe sampling
+
+`runtime/trace` ships dependency-free sampling primitives; the app owns the
+policy. For a deterministic fraction of *whole* traces, wrap a `RatioSampler` in
+a `ParentBasedSampler` so a downstream service honors the upstream decision
+instead of splitting a trace:
 
 ```go
-sink, err := otel.NewSink(ctx, otel.WithEndpoint("localhost:4318"), otel.WithInsecure())
+sampler := trace.ParentBasedSampler(trace.RatioSampler(0.1))
+tracer := trace.NewTracer(trace.WithSampler(sampler))
+```
+
+`RuleSampler` is the route/endpoint override hook: silence health checks and
+noisy endpoints, force high-value endpoints on, and sample the rest with a base
+sampler. The first matching rule wins.
+
+```go
+sampler := trace.RuleSampler(
+	trace.ParentBasedSampler(trace.RatioSampler(0.1)),
+	trace.DropSpansNamed("GET /_gowdk/health"),
+	trace.KeepSpansNamed("POST /checkout"),
+	trace.SamplerRule{Match: trace.MatchSpanNamePrefix("GET /_gowdk/"), Keep: false},
+)
+```
+
+`AlwaysOn`, `AlwaysOff`, `RatioSampler`, `ParentBasedSampler`, `RuleSampler`, and
+the matchers are also re-exported from `addons/observability`.
+
+## OTLP export
+
+Export to OTLP from an app that opts into the nested `runtime/trace/otel`
+module. The bridge exposes the production knobs a real OTLP deployment needs:
+
+```go
+sink, err := otel.NewSink(ctx,
+	otel.WithEndpoint("collector:4318"),
+	otel.WithGzip(),                       // request compression
+	otel.WithTLSClientConfig(tlsConfig),   // custom CA / client cert / server name
+	otel.WithHeaders(map[string]string{"authorization": token}),
+	otel.WithServiceName("checkout"),
+	otel.WithServiceVersion("1.4.2"),
+	otel.WithEnvironment("production"),
+	otel.WithResourceAttributes(map[string]string{"team": "payments"}),
+	otel.WithMaxQueueSize(4096),           // bounded queue: overflow is dropped, not unbounded memory
+	otel.WithMaxExportBatchSize(512),
+	otel.WithBatchTimeout(5*time.Second),
+	otel.WithRetry(otel.RetryConfig{Enabled: true, InitialInterval: time.Second, MaxInterval: 10 * time.Second, MaxElapsedTime: time.Minute}),
+)
 if err != nil {
 	return err
 }
@@ -88,6 +132,28 @@ defer sink.Shutdown(ctx)
 
 tracer := trace.NewTracer(trace.WithSink(sink))
 ```
+
+- For local collectors use `otel.WithInsecure()` instead of TLS.
+- `sink.ForceFlush(ctx)` drains buffered spans at a checkpoint (signal, pre-deploy)
+  without shutting the provider down; `sink.Shutdown(ctx)` flushes and stops a
+  GOWDK-owned provider.
+- Drop/failure counters: the in-process ring exposes `Collector.Dropped()`, the
+  OTLP path exposes `otel.ExporterFailureCount()` (export batches that failed
+  after retries) and `otel.UnsupportedAttributeCount()` (attribute values outside
+  the OTel value model).
+- The bounded queue defines overflow behavior: when full, the batch processor
+  drops new spans rather than growing memory without bound.
+
+### GOWDK-owned vs app-owned
+
+GOWDK owns stable primitives: the samplers, the snapshot model, the OTLP HTTP
+bridge, and a GOWDK-configured provider via `otel.NewSink`. When an app needs
+full control of the OpenTelemetry lifecycle, resources, or a different exporter,
+it supplies its own provider with `otel.NewSinkWithProvider(provider)` (pass
+`otel.WithProviderShutdown()` to hand lifecycle to the sink, and
+`otel.WithNativeIdentity()` when the provider uses `otel.SnapshotIDGenerator`).
+Sampling policy and telemetry-backend selection are always app-owned; GOWDK never
+picks a sampling ratio or an exporter endpoint for you.
 
 Do not treat the local collector or viewer as a production observability
 backend. Production deployments should set sampling deliberately, keep viewer

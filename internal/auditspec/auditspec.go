@@ -77,6 +77,12 @@ const (
 	RuleRequireVerifiedGuards RuleKind = "require_verified_guards"
 	// RuleCheckObservability reports unsafe generated trace endpoint posture.
 	RuleCheckObservability RuleKind = "check_observability"
+	// RuleWaive suppresses one finding (by diagnostic code and target) when the
+	// waiver carries an owner, justification, and unexpired expiry, and any pinned
+	// policy/posture digest still matches. A waived finding is recorded with its
+	// suppression metadata instead of blocking, so a suppression is always an
+	// explicit, attributable, expiring decision rather than a silent override.
+	RuleWaive RuleKind = "waive"
 )
 
 // Selector targets a set of routes, endpoints, or the frontend surface.
@@ -137,17 +143,25 @@ type Suppression struct {
 	DigestScope   string `json:"digestScope,omitempty"`
 }
 
-// Summary counts findings by severity.
+// Summary counts findings by severity. Waived findings (suppressed by an
+// explicit waiver) are counted only under Waived so a justified, unexpired
+// suppression does not block, while the suppression stays recorded in the report.
 type Summary struct {
 	Errors   int `json:"errors"`
 	Warnings int `json:"warnings"`
 	Info     int `json:"info"`
+	Waived   int `json:"waived"`
 }
 
-// Summarize counts findings by their registry severity.
+// Summarize counts findings by their registry severity, excluding waived
+// findings from the error/warning/info counts.
 func Summarize(findings []Finding) Summary {
 	var summary Summary
 	for _, finding := range findings {
+		if finding.Suppression != nil {
+			summary.Waived++
+			continue
+		}
 		switch finding.Severity {
 		case diagnostics.SeverityError:
 			summary.Errors++

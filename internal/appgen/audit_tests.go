@@ -307,6 +307,21 @@ func auditEndpointScenarios(manifest securitymanifest.SecurityManifest) []auditS
 			})
 			continue
 		}
+		// A native role/permission guard fails closed with 403 for an anonymous
+		// caller (GuardEvidence FailureContract fail-closed-403), so an explicit
+		// anonymous probe exercises the deny path against the generated app. This
+		// holds regardless of method: an anonymous POST is rejected by the guard or
+		// the CSRF gate, both 403. auth.required is excluded because it may redirect
+		// instead of returning 403.
+		if endpointHasNativeRBACGuard(endpoint) {
+			scenarios = append(scenarios, auditScenario{
+				Name:       endpoint.Kind + " anonymous denied " + endpoint.ID,
+				Method:     strings.ToUpper(endpoint.Method),
+				Path:       requestPath,
+				Actor:      "anonymous",
+				WantStatus: http.StatusForbidden,
+			})
+		}
 		if endpoint.CSRF && strings.EqualFold(endpoint.Method, http.MethodPost) {
 			scenarios = append(scenarios, auditScenario{
 				Name:             endpoint.Kind + " csrf rejection " + endpoint.ID,
@@ -319,6 +334,18 @@ func auditEndpointScenarios(manifest securitymanifest.SecurityManifest) []auditS
 		}
 	}
 	return scenarios
+}
+
+// endpointHasNativeRBACGuard reports whether the endpoint is gated by a native
+// role/permission guard that fails closed with 403, so an anonymous probe has a
+// well-defined denied outcome.
+func endpointHasNativeRBACGuard(endpoint securitymanifest.EndpointEntry) bool {
+	for _, evidence := range endpoint.GuardEvidence {
+		if evidence.Kind == "native-rbac" {
+			return true
+		}
+	}
+	return false
 }
 
 func auditCSRFActor(endpoint securitymanifest.EndpointEntry) string {

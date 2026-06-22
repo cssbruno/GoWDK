@@ -107,12 +107,14 @@ func (tracer *Tracer) Start(ctx context.Context, name string, options ...StartOp
 		return ctx, nil
 	}
 	samplingContext := SamplingContext{
-		TraceID:      traceID,
-		ParentSpanID: parent.SpanID,
-		Name:         name,
-		Surface:      cfg.surface,
-		Lane:         cfg.lane,
-		Attributes:   cloneAttributes(cfg.attributes),
+		TraceID:       traceID,
+		ParentSpanID:  parent.SpanID,
+		HasParent:     hasParent,
+		ParentSampled: hasParent && parent.Sampled,
+		Name:          name,
+		Surface:       cfg.surface,
+		Lane:          cfg.lane,
+		Attributes:    cloneAttributes(cfg.attributes),
 	}
 	if cfg.tracer.sampler != nil && !cfg.tracer.sampler.Sample(samplingContext) {
 		return ctx, nil
@@ -198,14 +200,19 @@ func WithStartTime(start time.Time) StartOption {
 	}
 }
 
-// SamplingContext is passed to samplers before a span is allocated.
+// SamplingContext is passed to samplers before a span is allocated. HasParent
+// and ParentSampled describe the propagated parent decision so a parent-based
+// sampler can keep a trace whole: every span in a sampled trace is kept, and
+// every span in an unsampled trace is dropped.
 type SamplingContext struct {
-	TraceID      TraceID
-	ParentSpanID SpanID
-	Name         string
-	Surface      Surface
-	Lane         Lane
-	Attributes   []Attribute
+	TraceID       TraceID
+	ParentSpanID  SpanID
+	HasParent     bool
+	ParentSampled bool
+	Name          string
+	Surface       Surface
+	Lane          Lane
+	Attributes    []Attribute
 }
 
 // Sampler decides whether a span should be recorded.

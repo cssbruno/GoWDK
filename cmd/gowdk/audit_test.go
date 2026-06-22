@@ -513,6 +513,239 @@ var Config = gowdk.Config{
 	return path
 }
 
+func TestAuditCommandReportsEvidenceClassification(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, filepath.Join(root, "signup.page.gwdk"), `package app
+
+page signup
+route "/signup"
+
+act Submit POST "/submit"
+
+view {
+  <main>Sign up</main>
+}
+`)
+
+	stdout, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"audit", "--json", "--config", config, filepath.Join(root, "signup.page.gwdk")})
+	})
+	if err != nil {
+		t.Fatalf("expected audit to succeed for a CSRF-protected action: %v", err)
+	}
+
+	var report auditReport
+	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+		t.Fatalf("expected JSON audit output, got %q: %v", stdout, err)
+	}
+
+	if report.Posture.Obligations == 0 {
+		t.Fatalf("expected posture obligations to be reported, got %#v", report.Posture)
+	}
+	if report.Posture.UnverifiedAppOwned == 0 {
+		t.Fatalf("expected app-owned obligations to be surfaced honestly, got %#v", report.Posture)
+	}
+
+	appOwned := map[string]string{}
+	for _, obligation := range report.Manifest.Obligations {
+		appOwned[obligation.ID] = string(obligation.Evidence)
+	}
+	for _, id := range []string{"auth.authentication", "session.management", "authz.resource", "authz.domain"} {
+		if appOwned[id] != "unverified-app-owned" {
+			t.Fatalf("expected %q to be unverified-app-owned, got %q (obligations=%#v)", id, appOwned[id], report.Manifest.Obligations)
+		}
+	}
+	if appOwned["request.body-limit"] != "verified-static" || appOwned["request.csrf"] != "verified-static" {
+		t.Fatalf("expected request obligations verified-static, got %#v", report.Manifest.Obligations)
+	}
+
+	for _, route := range report.Manifest.Routes {
+		for _, guard := range route.GuardEvidence {
+			if guard.Evidence == "" {
+				t.Fatalf("route guard evidence missing classification: %#v", guard)
+			}
+		}
+	}
+}
+
+func TestAuditCommandRecordsExplicitWaiver(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		CSRF: gowdk.CSRFConfig{Disabled: true},
+	},
+}
+`)
+	pagePath := filepath.Join(root, "signup.page.gwdk")
+	writeCLIFile(t, pagePath, `package app
+
+page signup
+route "/signup"
+
+act Submit POST "/submit"
+
+view {
+  <main>Sign up</main>
+}
+`)
+	auditPath := filepath.Join(root, "waivers.audit.gwdk")
+	writeCLIFile(t, auditPath, `package app
+
+policy waivers {
+  waive audit_action_missing_csrf target "action:Submit" owner "team-x" justification "legacy endpoint, migrating Q3" expires "2099-01-01" ticket "SEC-9"
+}
+`)
+
+	stdout, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"audit", "--json", "--config", config, pagePath, auditPath})
+	})
+	if err != nil {
+		t.Fatalf("expected the waived finding not to fail the audit: %v", err)
+	}
+
+	var report auditReport
+	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+		t.Fatalf("expected JSON audit output, got %q: %v", stdout, err)
+	}
+	if report.Summary.Errors != 0 || report.Summary.Waived != 1 {
+		t.Fatalf("expected the waiver to suppress the error, got %#v", report.Summary)
+	}
+	if len(report.Waivers) != 1 || report.Waivers[0].Code != "audit_action_missing_csrf" || report.Waivers[0].Owner != "team-x" || report.Waivers[0].Ticket != "SEC-9" {
+		t.Fatalf("expected an applied-waiver record in the report, got %#v", report.Waivers)
+	}
+	if len(report.Manifest.Waivers) != 1 || report.Manifest.Waivers[0].Ticket != "SEC-9" {
+		t.Fatalf("expected gowdk-security.json to record the declared waiver, got %#v", report.Manifest.Waivers)
+	}
+}
+
+func TestAuditCommandRejectsBaselineOverride(t *testing.T) {
+	root := t.TempDir()
+	config := writeMinimalCLIConfig(t, root)
+	pagePath := filepath.Join(root, "home.page.gwdk")
+	writeCLIFile(t, pagePath, `package app
+
+page home
+route "/"
+
+view {
+  <main>Home</main>
+}
+`)
+	auditPath := filepath.Join(root, "override.audit.gwdk")
+	writeCLIFile(t, auditPath, `package app
+
+policy baseline.actions {
+  match "act:*"
+  require header "X-Whatever"
+}
+`)
+
+	stdout, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"audit", "--json", "--config", config, pagePath, auditPath})
+	})
+	if err == nil {
+		t.Fatal("expected a same-name baseline override to fail the audit")
+	}
+	var report auditReport
+	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+		t.Fatalf("expected JSON audit output, got %q: %v", stdout, err)
+	}
+	found := false
+	for _, finding := range report.Findings {
+		if finding.Code == "policy_baseline_override" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected policy_baseline_override finding, got %#v", report.Findings)
+	}
+}
+
+func TestAuditCommandCheckTestsDetectsStaleAndFreshState(t *testing.T) {
+	root := t.TempDir()
+	config := writeAuditCLIConfigWithSecurityHeaders(t, root)
+	writeCLITestModule(t, root, "example.com/gowdk-audit-check")
+	writeCLIFile(t, filepath.Join(root, "model.go"), `package app
+
+type Model struct{}
+`)
+	pagePath := filepath.Join(root, "home.page.gwdk")
+	writeCLIFile(t, pagePath, `package app
+
+page home
+route "/"
+
+view {
+  <main>Home</main>
+}
+`)
+	testPath := filepath.Join(root, "security_audit_test.go")
+
+	// Missing checked-in test is reported as stale.
+	stdout, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"audit", "--json", "--config", config, "--check-tests=" + testPath, pagePath})
+	})
+	if err == nil {
+		t.Fatal("expected --check-tests to fail when no generated test is committed")
+	}
+	if !auditReportHasCode(t, stdout, "audit_test_stale") {
+		t.Fatalf("expected audit_test_stale for a missing test, got %s", stdout)
+	}
+
+	// Emit and commit the test, then a fresh check passes.
+	if _, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"audit", "--config", config, "--emit-tests=" + testPath, pagePath})
+	}); err != nil {
+		t.Fatalf("emit-tests: %v", err)
+	}
+	if _, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"audit", "--config", config, "--check-tests=" + testPath, pagePath})
+	}); err != nil {
+		t.Fatalf("expected a freshly emitted test to pass --check-tests: %v", err)
+	}
+
+	// Changing the posture (a new route) makes the committed test stale.
+	aboutPath := filepath.Join(root, "about.page.gwdk")
+	writeCLIFile(t, aboutPath, `package app
+
+page about
+route "/about"
+
+view {
+  <main>About</main>
+}
+`)
+	stdout, _, err = captureCLIOutput(t, func() error {
+		return run([]string{"audit", "--json", "--config", config, "--check-tests=" + testPath, pagePath, aboutPath})
+	})
+	if err == nil {
+		t.Fatal("expected --check-tests to fail after the posture changed")
+	}
+	if !auditReportHasCode(t, stdout, "audit_test_stale") {
+		t.Fatalf("expected audit_test_stale after posture change, got %s", stdout)
+	}
+}
+
+func auditReportHasCode(t *testing.T, stdout, code string) bool {
+	t.Helper()
+	var report auditReport
+	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+		t.Fatalf("expected JSON audit output, got %q: %v", stdout, err)
+	}
+	for _, finding := range report.Findings {
+		if finding.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
 func writeAuditCLIConfigWithSSR(t *testing.T, root string) string {
 	t.Helper()
 	path := filepath.Join(root, "gowdk.config.go")

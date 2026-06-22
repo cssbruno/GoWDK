@@ -10,7 +10,7 @@ import (
 	"github.com/cssbruno/gowdk"
 )
 
-const version = "0.7.0"
+const version = "0.7.0" // x-release-please-version
 
 var (
 	defaultSourceIncludes = []string{"**/*.gwdk"}
@@ -258,14 +258,19 @@ type cliOptions struct {
 	JSON                bool
 	Debug               bool
 	AllowMissingBackend bool
-	AllowInsecure       bool
-	ObfuscateAssets     bool
-	WarningsAsErrors    bool
-	EnvFilePath         string
-	EnvFileLoaded       bool
-	EnvFileExplicit     bool
-	EnvFileApplied      []string
-	EnvFileSkipped      []string
+	// AllowInsecure downgrades every production security error to a warning. It is
+	// the blanket bypass; prefer the scoped AllowInsecureCodes form.
+	AllowInsecure bool
+	// AllowInsecureCodes scopes the bypass to specific diagnostic codes
+	// (--allow-insecure=CODE1,CODE2). Findings outside the set still block.
+	AllowInsecureCodes map[string]bool
+	ObfuscateAssets    bool
+	WarningsAsErrors   bool
+	EnvFilePath        string
+	EnvFileLoaded      bool
+	EnvFileExplicit    bool
+	EnvFileApplied     []string
+	EnvFileSkipped     []string
 }
 
 func appendModuleNames(moduleNames []string, value string) []string {

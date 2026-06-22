@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
@@ -24,9 +25,37 @@ type buildSecurityAuditError struct {
 
 func (err buildSecurityAuditError) Error() string {
 	return fmt.Sprintf(
-		"build blocked by %d security error finding(s); fix them (run 'gowdk audit' for the full report) or pass --allow-insecure to build anyway",
+		"build blocked by %d security error finding(s); fix them (run 'gowdk audit' for the full report), add an explicit waiver, or scope a bypass with --allow-insecure=<code,...> (or --allow-insecure for all) to ship anyway",
 		err.errors,
 	)
+}
+
+// parseAllowInsecureCodes parses a comma-separated --allow-insecure=CODE1,CODE2
+// list into a bypass set. An empty list is rejected so the scoped form always
+// names at least one code; use the bare --allow-insecure for a blanket bypass.
+func parseAllowInsecureCodes(value string) (map[string]bool, error) {
+	codes := map[string]bool{}
+	for _, raw := range strings.Split(value, ",") {
+		code := strings.TrimSpace(raw)
+		if code == "" {
+			continue
+		}
+		codes[code] = true
+	}
+	if len(codes) == 0 {
+		return nil, fmt.Errorf("--allow-insecure=<code,...> needs at least one diagnostic code; use --allow-insecure (no value) to bypass all findings")
+	}
+	return codes, nil
+}
+
+// buildErrorIsBypassed reports whether a production build may downgrade an
+// error-severity finding to a warning: either the blanket --allow-insecure is
+// set, or the finding's code is in the scoped --allow-insecure=CODE,... set.
+func buildErrorIsBypassed(options cliOptions, code string) bool {
+	if options.AllowInsecure {
+		return true
+	}
+	return options.AllowInsecureCodes[code]
 }
 
 // enforceBuildSecurityAudit derives the security posture from the validated IR
@@ -42,7 +71,12 @@ func (err buildSecurityAuditError) Error() string {
 func enforceBuildSecurityAudit(options cliOptions, ir gwdkir.Program) error {
 	manifest := securitymanifest.Build(options.Config, ir)
 	declared := auditspec.PoliciesFromIR(ir.AuditSpecs)
-	findings := auditspec.Evaluate(manifest, auditspec.ComposeBaseline(declared))
+	policies := auditspec.ComposeBaseline(declared)
+	waiverCtx := auditspec.WaiverContext{
+		PolicyDigest:  auditPolicyDigest(policies),
+		PostureDigest: auditPostureDigest(manifest),
+	}
+	findings := auditspec.EvaluateWithWaivers(manifest, policies, waiverCtx)
 	auditspec.SortFindings(findings)
 	return enforceBuildSecurityFindings(options, findings)
 }
@@ -55,21 +89,65 @@ func enforceFinalBuildArtifactSecurityAudit(options cliOptions, result buildgen.
 
 func enforceBuildSecurityFindings(options cliOptions, findings []auditspec.Finding) error {
 	summary := auditspec.Summarize(findings)
+	if summary.Waived > 0 {
+		recordBuildSecurityWaivers(findings)
+	}
 	if summary.Errors == 0 {
 		return nil
 	}
 
 	printBuildSecurityFindings(findings)
-	if options.Config.Build.Mode == gowdk.Production && !options.AllowInsecure {
-		return buildSecurityAuditError{errors: summary.Errors}
+
+	bypassedCodes, blocking := partitionBuildErrorBypass(options, findings)
+	if len(bypassedCodes) > 0 {
+		fmt.Fprintf(os.Stderr, "security bypass: %d error finding(s) downgraded by --allow-insecure (codes: %s); this is recorded provenance, not a fix\n",
+			summary.Errors-blocking, strings.Join(bypassedCodes, ", "))
 	}
 
-	reason := "this build is not in production mode"
-	if options.AllowInsecure {
-		reason = "--allow-insecure was set"
+	if options.Config.Build.Mode == gowdk.Production {
+		if blocking > 0 {
+			return buildSecurityAuditError{errors: blocking}
+		}
+		return nil
 	}
-	fmt.Fprintf(os.Stderr, "warning: %d security error finding(s) did not block the build because %s; run 'gowdk audit' to gate them in CI\n", summary.Errors, reason)
+
+	if blocking > 0 {
+		fmt.Fprintf(os.Stderr, "warning: %d security error finding(s) did not block the build because this build is not in production mode; run 'gowdk audit' to gate them in CI\n", blocking)
+	}
 	return nil
+}
+
+// partitionBuildErrorBypass splits the non-waived error findings into the
+// distinct codes a bypass downgrades and the count that still blocks.
+func partitionBuildErrorBypass(options cliOptions, findings []auditspec.Finding) (bypassedCodes []string, blocking int) {
+	seen := map[string]bool{}
+	for _, finding := range findings {
+		if finding.Severity != diagnostics.SeverityError || finding.Suppression != nil {
+			continue
+		}
+		if buildErrorIsBypassed(options, finding.Code) {
+			if !seen[finding.Code] {
+				seen[finding.Code] = true
+				bypassedCodes = append(bypassedCodes, finding.Code)
+			}
+			continue
+		}
+		blocking++
+	}
+	sort.Strings(bypassedCodes)
+	return bypassedCodes, blocking
+}
+
+// recordBuildSecurityWaivers prints the explicit waivers applied during a build
+// so a suppressed finding is always visible provenance in the build log.
+func recordBuildSecurityWaivers(findings []auditspec.Finding) {
+	for _, finding := range findings {
+		if finding.Suppression == nil {
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "security waiver: %s on %s waived by %s until %s (%s)\n",
+			finding.Code, finding.Target, finding.Suppression.Owner, finding.Suppression.Expires, finding.Suppression.Justification)
+	}
 }
 
 func finalBuildArtifactSecurityFindings(result buildgen.Result) []auditspec.Finding {

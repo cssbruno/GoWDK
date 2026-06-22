@@ -638,6 +638,12 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 			plan.Options.Config.Build.AllowMissingBackend = true
 		case arg == "--allow-insecure":
 			plan.Options.AllowInsecure = true
+		case strings.HasPrefix(arg, "--allow-insecure="):
+			codes, err := parseAllowInsecureCodes(strings.TrimPrefix(arg, "--allow-insecure="))
+			if err != nil {
+				return buildOptions{}, err
+			}
+			plan.Options.AllowInsecureCodes = codes
 		case arg == "--obfuscate-assets":
 			plan.Options.ObfuscateAssets = true
 			plan.Options.Config.Build.ObfuscateAssets = true

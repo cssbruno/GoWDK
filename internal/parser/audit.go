@@ -238,9 +238,52 @@ func parseAuditRule(line string, lineNumber int, rawLine string) (gwdkast.AuditR
 		return parseAuditAllowRule(tokens, lineNumber, rawLine)
 	case "except":
 		return parseAuditExceptRule(tokens, lineNumber, rawLine)
+	case "waive":
+		return parseAuditWaiveRule(tokens, lineNumber, rawLine)
 	default:
 		return gwdkast.AuditRule{}, false, nil
 	}
+}
+
+// parseAuditWaiveRule parses an explicit finding waiver:
+//
+//	waive <code> target "<target>" owner "<owner>" justification "<text>" expires "<date>" [ticket "<ref>"] [policy_digest "<digest>"] [posture_digest "<digest>"]
+//
+// Required attributes are not enforced here: a syntactically valid but
+// incomplete waiver is preserved so the audit engine can classify it as
+// malformed and report it rather than silently dropping it.
+func parseAuditWaiveRule(tokens []syntax.Token, lineNumber int, rawLine string) (gwdkast.AuditRule, bool, error) {
+	if len(tokens) < 2 {
+		return gwdkast.AuditRule{}, true, fmt.Errorf("line %d: waive must use waive <code> target \"...\" owner \"...\" justification \"...\" expires \"...\" [ticket \"...\"]", lineNumber)
+	}
+	code, ok := auditValue(tokens[1])
+	if !ok {
+		return gwdkast.AuditRule{}, true, fmt.Errorf("line %d: waive code must be an identifier or string", lineNumber)
+	}
+	rule := gwdkast.AuditRule{
+		Kind:  "waive",
+		Value: code,
+		Attrs: map[string]string{},
+		Span:  sourceLineSpan(lineNumber, rawLine),
+	}
+	rest := tokens[2:]
+	for len(rest) > 0 {
+		if rest[0].Kind != syntax.TokenIdentifier {
+			return gwdkast.AuditRule{}, true, fmt.Errorf("line %d: waive attribute name must be an identifier", lineNumber)
+		}
+		if len(rest) < 2 || rest[1].Kind != syntax.TokenString {
+			return gwdkast.AuditRule{}, true, fmt.Errorf("line %d: waive attribute %q needs a string value", lineNumber, rest[0].Lexeme)
+		}
+		key := rest[0].Lexeme
+		switch key {
+		case "target", "owner", "justification", "expires", "ticket", "policy_digest", "posture_digest":
+		default:
+			return gwdkast.AuditRule{}, true, fmt.Errorf("line %d: unsupported waive attribute %q", lineNumber, rest[0].Lexeme)
+		}
+		rule.Attrs[key] = decodeStringLiteral(rest[1].Lexeme)
+		rest = rest[2:]
+	}
+	return rule, true, nil
 }
 
 // parseAuditExceptRule parses a fingerprinted raw-HTML exception:

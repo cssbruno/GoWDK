@@ -40,7 +40,7 @@ func TestRenderConfigDefaultMode(t *testing.T) {
 	if got := (gowdk.RenderConfig{}).DefaultMode(); got != gowdk.SPA {
 		t.Fatalf("expected spa default, got %q", got)
 	}
-	if got := (gowdk.RenderConfig{Default: gowdk.Action}).DefaultMode(); got != gowdk.Action {
+	if got := (gowdk.RenderConfig{Default: gowdk.SSR}).DefaultMode(); got != gowdk.SSR {
 		t.Fatalf("expected configured default, got %q", got)
 	}
 }
@@ -144,7 +144,6 @@ func TestParseRenderModeAndModePredicates(t *testing.T) {
 		buildTime   bool
 	}{
 		{"spa", gowdk.SPA, false, true},
-		{"action", gowdk.Action, false, true},
 		{"hybrid", gowdk.Hybrid, false, false},
 		{"ssr", gowdk.SSR, true, false},
 	}
@@ -168,5 +167,9 @@ func TestParseRenderModeAndModePredicates(t *testing.T) {
 	_, err := gowdk.ParseRenderMode("server")
 	if err == nil || !strings.Contains(err.Error(), `unknown render mode "server"`) {
 		t.Fatalf("expected unknown mode error, got %v", err)
+	}
+	_, err = gowdk.ParseRenderMode("action")
+	if err == nil || !strings.Contains(err.Error(), `unknown render mode "action"`) {
+		t.Fatalf("expected removed action mode error, got %v", err)
 	}
 }

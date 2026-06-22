@@ -341,12 +341,15 @@ view {
 }
 `)
 
-	payload, diagnostics := ManifestJSON(gowdk.Config{Render: gowdk.RenderConfig{Default: gowdk.Action}}, []string{path})
+	payload, diagnostics := ManifestJSON(gowdk.Config{
+		Render: gowdk.RenderConfig{Default: gowdk.SSR},
+		Addons: []gowdk.Addon{ssr.Addon()},
+	}, []string{path})
 	if diagnostics.HasErrors() {
 		t.Fatal(diagnostics)
 	}
-	if !strings.Contains(string(payload), `"render": "action"`) {
-		t.Fatalf("expected action render mode in manifest JSON: %s", payload)
+	if !strings.Contains(string(payload), `"render": "ssr"`) {
+		t.Fatalf("expected ssr render mode in manifest JSON: %s", payload)
 	}
 }
 

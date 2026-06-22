@@ -39,7 +39,7 @@ Current JSON shape:
       "source": "examples/actions/signup.page.gwdk",
       "kind": "page",
       "route": "/signup",
-      "render": "action",
+      "render": "spa",
       "artifacts": [
         {"kind": "html", "path": "signup/index.html"}
       ],
@@ -137,8 +137,8 @@ Fields:
 - `cssClasses`: optional sorted class names directly visible in literal `class`
   attributes.
 - `styleAttributes`: optional sorted literal inline `style` attribute values.
-- `artifacts`: optional generated artifact path metadata. SPA and action
-  pages list the generated HTML path pattern relative to the build output
+- `artifacts`: optional generated artifact path metadata. SPA pages list the
+  generated HTML path pattern relative to the build output
   directory, such as `index.html`, `newsletter/index.html`, or
   `blog/{slug}/index.html`. SSR-only pages omit app-shell HTML artifacts.
 - `components`: component declarations known to the manifest.

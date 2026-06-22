@@ -348,7 +348,9 @@ artifacts from another module selection cannot be copied into the next binary.
 
 ## Render
 
-`RenderConfig.Default` controls the default render mode. When omitted, default mode is `spa`.
+`RenderConfig.Default` controls the default render mode. When omitted, default
+mode is `spa`. Supported render modes are `spa`, `hybrid`, and `ssr`; actions
+are endpoint declarations, not render modes.
 
 ## Env
 

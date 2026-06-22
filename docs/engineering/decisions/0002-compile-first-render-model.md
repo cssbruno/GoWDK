@@ -15,7 +15,6 @@ Core GOWDK renders at build time by default. SSR is an optional addon and a per-
 Render modes:
 
 - `spa`: build-time HTML.
-- `action`: SPA page plus backend actions/API behavior.
 - `hybrid`: SPA by default with selected request-time behavior.
 - `ssr`: request-time full-page rendering through the SSR addon.
 
@@ -34,7 +33,7 @@ Compiler rules:
 - Dynamic SPA routes require `paths {}`; action endpoints inherit generated
   concrete page paths.
 - `server {}` and `go server {}` require `ssr.Addon()`.
-- `server {}` is rejected on SPA/action pages.
+- `server {}` is rejected on SPA pages.
 - Actions can exist without SSR.
 - Partial updates are server fragments, not full-page SSR.
 

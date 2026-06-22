@@ -50,7 +50,7 @@ are joined onto it. If `BaseURL` includes a path such as
 
 `sitemap.xml` includes build-time-enumerable page routes:
 
-- public static SPA/action pages;
+- public static SPA pages;
 - public dynamic SPA routes expanded from literal `paths {}` declarations;
 - optional `ExtraURLs`, which may be absolute URLs or root-relative paths.
 

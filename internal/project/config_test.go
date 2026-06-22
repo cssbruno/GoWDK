@@ -134,7 +134,7 @@ var Config = gowdk.Config{
 		},
 	},
 	Render: gowdk.RenderConfig{
-		Default: gowdk.Action,
+		Default: gowdk.SSR,
 	},
 	I18N: gowdk.I18NConfig{
 		DefaultLocale: "en",
@@ -253,7 +253,7 @@ var Config = gowdk.Config{
 	if config.Build.Targets[1].Name != "public-admin" || len(config.Build.Targets[1].Modules) != 2 || config.Build.Targets[1].Modules[0] != "public" || config.Build.Targets[1].Modules[1] != "admin" {
 		t.Fatalf("unexpected combined build target: %#v", config.Build.Targets[1])
 	}
-	if config.Render.Default != gowdk.Action {
+	if config.Render.Default != gowdk.SSR {
 		t.Fatalf("unexpected render default: %q", config.Render.Default)
 	}
 	if config.I18N.DefaultLocale != "en" || len(config.I18N.Locales) != 2 || config.I18N.Locales[1].Code != "pt-BR" || config.I18N.Locales[1].PathPrefix != "/br" {
@@ -616,6 +616,35 @@ var Config = gowdk.Config{
 	}
 	if !strings.Contains(err.Error(), `unsupported Config field "Experimental"`) {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfigFileRejectsRemovedActionRenderMode(t *testing.T) {
+	for _, defaultMode := range []string{`"action"`, `gowdk.Action`} {
+		t.Run(defaultMode, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, DefaultConfigFile)
+			if err := os.WriteFile(path, []byte(`package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Render: gowdk.RenderConfig{
+		Default: `+defaultMode+`,
+	},
+}
+`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			_, err := LoadConfigFile(path)
+			if err == nil {
+				t.Fatal("expected removed action render mode error")
+			}
+			if !strings.Contains(err.Error(), `unknown render mode "action"`) && !strings.Contains(err.Error(), `unknown render mode "Action"`) {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 

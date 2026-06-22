@@ -27,7 +27,7 @@ const (
 
 func renderPage(config gowdk.Config, page gwdkir.Page, route string, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, data map[string]string, locale string, realtimeEventTypeNames map[string]string, queryTypeNames map[string]string, policy renderModePolicy) (string, ssrRegions, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
-	if policy == renderModeSPA && mode != gowdk.SPA && mode != gowdk.Action {
+	if policy == renderModeSPA && mode != gowdk.SPA {
 		return "", ssrRegions{}, fmt.Errorf("%s: SPA build cannot emit request-time %s pages yet", page.ID, mode)
 	}
 	if policy == renderModeRequestTime && mode != gowdk.SSR && mode != gowdk.Hybrid {
@@ -466,7 +466,7 @@ func viewHasInvalidatedQuery(source string, nodes []view.Node, queryTypeNames ma
 
 func pageUsesSPANavigationRuntime(config gowdk.Config, page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component) (bool, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
-	if mode != gowdk.SPA && mode != gowdk.Action {
+	if mode != gowdk.SPA {
 		return false, nil
 	}
 	if viewHasInternalLink(viewSource, viewNodes) {

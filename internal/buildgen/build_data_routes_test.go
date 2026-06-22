@@ -987,7 +987,7 @@ func TestBuildExpandsTypedDynamicSPAPathsAndInheritedActionRoutes(t *testing.T) 
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:     "patients.show",
 		Route:  "/patients/{id:int}",
-		Render: gowdk.Action,
+		Render: gowdk.SPA,
 		Guards: []string{"public"},
 		Blocks: gwdkir.Blocks{
 			Paths:     true,
@@ -1028,7 +1028,7 @@ func TestBuildLocalizesInheritedActionRoutes(t *testing.T) {
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:     "contact",
 		Route:  "/contact",
-		Render: gowdk.Action,
+		Render: gowdk.SPA,
 		Guards: []string{"public"},
 		Blocks: gwdkir.Blocks{
 			View:     true,

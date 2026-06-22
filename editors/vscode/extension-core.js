@@ -1746,7 +1746,7 @@ function semanticTokens(source) {
     collectPatternTokens(tokens, line, text, /\b(package|import|use|paths|build|load|act|api|fragment|view|script|go|style|props|state|exports|client|emits)\b/g, 'keyword');
     collectPatternTokens(tokens, line, text, /\b(async|fn|computed|on|mount|destroy|effect|when|ref|let|return|await|if|else|in|emit)\b/g, 'keyword');
     collectPatternTokens(tokens, line, text, /\b(GET|POST|PUT|PATCH|DELETE)\b/g, 'enumMember');
-    collectPatternTokens(tokens, line, text, /\b(spa|action|hybrid|ssr)\b/g, 'enumMember');
+    collectPatternTokens(tokens, line, text, /\b(spa|hybrid|ssr)\b/g, 'enumMember');
     collectPatternTokens(tokens, line, text, /\b(string|int|float|bool)\b/g, 'enumMember');
     collectPatternTokens(tokens, line, text, /\bg:(post|target|swap|ref|if|else-if|else|for|key|bind:(?:value|checked)|island)\b/g, 'property');
     collectPatternTokens(tokens, line, text, /\bg:on:[A-Za-z][A-Za-z0-9_-]*(?:\.(?:prevent|stop|once|capture|debounce\([^)]+\)|throttle\([^)]+\)))*/g, 'property');

@@ -1,8 +1,8 @@
 # Partials
 
 Partial updates use server fragments, not full-page SSR. The generated slice
-supports action-driven fragment responses for SPA/action pages and standalone
-concrete or dynamic fragment routes.
+supports action-driven fragment responses for SPA pages and standalone concrete
+or dynamic fragment routes.
 
 Current support:
 

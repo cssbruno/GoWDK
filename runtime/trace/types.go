@@ -71,7 +71,10 @@ type SourceRef struct {
 	OwnerID   string `json:"ownerId,omitempty"`
 }
 
-// Attribute is an OpenTelemetry-compatible key/value attribute.
+// Attribute is an OpenTelemetry-compatible key/value attribute. Supported
+// values are string, bool, integer, float64, and homogeneous slices of those
+// scalar forms. Trace boundaries copy supported values and drop unsupported
+// pointer/map/object values so snapshots remain serialization-safe.
 type Attribute struct {
 	Key   string `json:"key"`
 	Value any    `json:"value,omitempty"`

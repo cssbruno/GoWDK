@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -87,6 +88,34 @@ func TestRingSinkDropsOldest(t *testing.T) {
 	spans := ring.Spans()
 	if len(spans) != 2 || spans[0].Name != "two" || spans[1].Name != "three" {
 		t.Fatalf("expected oldest span to drop, got %#v", spans)
+	}
+}
+
+func TestRingSinkDropsOldestWhenByteBudgetExceeded(t *testing.T) {
+	ring := trace.NewRingSink(100)
+	attrs := make([]trace.Attribute, 20)
+	for index := range attrs {
+		attrs[index] = trace.Attribute{
+			Key:   fmt.Sprintf("attr.%02d", index),
+			Value: strings.Repeat("x", 1800),
+		}
+	}
+	for index := range 50 {
+		if err := ring.RecordSpan(context.Background(), trace.Snapshot{
+			TraceID:    trace.NewTraceID(),
+			SpanID:     trace.NewSpanID(),
+			Name:       fmt.Sprintf("span-%02d", index),
+			Attributes: attrs,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	spans := ring.Spans()
+	if ring.Dropped() == 0 || len(spans) >= 50 {
+		t.Fatalf("expected byte budget to drop oldest spans, dropped=%d spans=%d", ring.Dropped(), len(spans))
+	}
+	if spans[0].Name == "span-00" || spans[len(spans)-1].Name != "span-49" {
+		t.Fatalf("expected newest byte-bounded window, got first=%q last=%q", spans[0].Name, spans[len(spans)-1].Name)
 	}
 }
 
@@ -231,6 +260,129 @@ func TestCollectorHandlerServesJSONAndSSE(t *testing.T) {
 	}
 }
 
+func TestCollectorAcceptsValidSingleAndBatchPayloads(t *testing.T) {
+	collector := trace.NewCollector(4)
+	handler := collector.Handler()
+
+	singlePayload, err := json.Marshal(validSnapshot("single"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(singlePayload)))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("single POST status = %d body=%q, want 204", response.Code, response.Body.String())
+	}
+
+	batchPayload, err := json.Marshal([]trace.Snapshot{validSnapshot("batch-one"), validSnapshot("batch-two")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(batchPayload)))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("batch POST status = %d body=%q, want 204", response.Code, response.Body.String())
+	}
+	if got := collector.Spans(); len(got) != 3 {
+		t.Fatalf("collector stored %d spans, want 3: %#v", len(got), got)
+	}
+}
+
+func TestCollectorRejectsInvalidBatchWithoutPartialRecord(t *testing.T) {
+	tests := []struct {
+		name  string
+		spans []trace.Snapshot
+	}{
+		{name: "invalid first", spans: []trace.Snapshot{invalidSnapshot("bad"), validSnapshot("ok")}},
+		{name: "invalid middle", spans: []trace.Snapshot{validSnapshot("ok-1"), invalidSnapshot("bad"), validSnapshot("ok-2")}},
+		{name: "invalid last", spans: []trace.Snapshot{validSnapshot("ok"), invalidSnapshot("bad")}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			collector := trace.NewCollector(4)
+			payload, err := json.Marshal(tt.spans)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response := httptest.NewRecorder()
+			collector.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(payload)))
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("POST status = %d body=%q, want 400", response.Code, response.Body.String())
+			}
+			if got := collector.Spans(); len(got) != 0 {
+				t.Fatalf("invalid batch partially recorded spans: %#v", got)
+			}
+		})
+	}
+}
+
+func TestCollectorRejectsAmbiguousOrOversizedPayloads(t *testing.T) {
+	tests := []struct {
+		name   string
+		body   string
+		status int
+	}{
+		{name: "oversized body", body: strings.Repeat("x", 1<<20+1), status: http.StatusRequestEntityTooLarge},
+		{name: "trailing json", body: snapshotJSON(t, validSnapshot("single")) + `{}`, status: http.StatusBadRequest},
+		{name: "empty batch", body: `[]`, status: http.StatusBadRequest},
+		{name: "unknown field", body: `{"traceId":"` + string(trace.NewTraceID()) + `","spanId":"` + string(trace.NewSpanID()) + `","unknown":true}`, status: http.StatusBadRequest},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			collector := trace.NewCollector(4)
+			response := httptest.NewRecorder()
+			collector.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body)))
+			if response.Code != tt.status {
+				t.Fatalf("POST status = %d body=%q, want %d", response.Code, response.Body.String(), tt.status)
+			}
+			if got := collector.Spans(); len(got) != 0 {
+				t.Fatalf("rejected payload recorded spans: %#v", got)
+			}
+		})
+	}
+}
+
+func TestSpanSnapshotsAndRingResultsDeepCopyAttributes(t *testing.T) {
+	ring := trace.NewRingSink(2)
+	tracer := trace.NewTracer(trace.WithSink(ring))
+	tags := []string{"original"}
+	eventTags := []string{"event-original"}
+	_, span := tracer.Start(context.Background(), "immutable",
+		trace.WithAttributes(map[string]any{
+			"tags":        tags,
+			"unsupported": map[string]string{"kept": "no"},
+		}),
+	)
+	span.Event("info", "loaded", map[string]any{"event_tags": eventTags})
+	tags[0] = "caller-mutated"
+	eventTags[0] = "event-caller-mutated"
+
+	snapshot := span.Snapshot()
+	if got := stringAttributeSlice(t, snapshot.Attributes, "tags"); got[0] != "original" {
+		t.Fatalf("snapshot retained caller-owned attribute slice: %#v", got)
+	}
+	if hasAttribute(snapshot.Attributes, "unsupported") {
+		t.Fatalf("snapshot retained unsupported map attribute: %#v", snapshot.Attributes)
+	}
+	if got := stringAttributeSlice(t, snapshot.Events[0].Attributes, "event_tags"); got[0] != "event-original" {
+		t.Fatalf("snapshot retained caller-owned event attribute slice: %#v", got)
+	}
+
+	stringAttributeSlice(t, snapshot.Attributes, "tags")[0] = "snapshot-mutated"
+	if got := stringAttributeSlice(t, span.Snapshot().Attributes, "tags"); got[0] != "original" {
+		t.Fatalf("span snapshot reused returned attribute slice: %#v", got)
+	}
+
+	if err := ring.RecordSpan(context.Background(), span.Snapshot()); err != nil {
+		t.Fatal(err)
+	}
+	spans := ring.Spans()
+	stringAttributeSlice(t, spans[0].Events[0].Attributes, "event_tags")[0] = "ring-result-mutated"
+	if got := stringAttributeSlice(t, ring.Spans()[0].Events[0].Attributes, "event_tags"); got[0] != "event-original" {
+		t.Fatalf("ring reused returned event attribute slice: %#v", got)
+	}
+}
+
 func TestExporterSinkReceivesOTLPShape(t *testing.T) {
 	exporter := &recordingExporter{}
 	span := trace.Snapshot{
@@ -297,6 +449,60 @@ func (denySampler) Sample(trace.SamplingContext) bool {
 
 type recordingExporter struct {
 	spans []trace.OTLPSpan
+}
+
+func validSnapshot(name string) trace.Snapshot {
+	return trace.Snapshot{
+		TraceID:   trace.NewTraceID(),
+		SpanID:    trace.NewSpanID(),
+		Name:      name,
+		StartTime: time.Unix(1, 0).UTC(),
+		EndTime:   time.Unix(2, 0).UTC(),
+		Attributes: []trace.Attribute{{
+			Key:   "component",
+			Value: "test",
+		}},
+	}
+}
+
+func invalidSnapshot(name string) trace.Snapshot {
+	span := validSnapshot(name)
+	span.TraceID = "not-valid"
+	return span
+}
+
+func snapshotJSON(t *testing.T, span trace.Snapshot) string {
+	t.Helper()
+	payload, err := json.Marshal(span)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(payload)
+}
+
+func stringAttributeSlice(t *testing.T, attrs []trace.Attribute, key string) []string {
+	t.Helper()
+	for _, attr := range attrs {
+		if attr.Key != key {
+			continue
+		}
+		values, ok := attr.Value.([]string)
+		if !ok {
+			t.Fatalf("attribute %q = %#v, want []string", key, attr.Value)
+		}
+		return values
+	}
+	t.Fatalf("attribute %q not found in %#v", key, attrs)
+	return nil
+}
+
+func hasAttribute(attrs []trace.Attribute, key string) bool {
+	for _, attr := range attrs {
+		if attr.Key == key {
+			return true
+		}
+	}
+	return false
 }
 
 type blockingSink struct {

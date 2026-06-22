@@ -104,7 +104,7 @@ func (tracer *Tracer) Start(ctx context.Context, name string, options ...StartOp
 		Name:         name,
 		Surface:      cfg.surface,
 		Lane:         cfg.lane,
-		Attributes:   append([]Attribute(nil), cfg.attributes...),
+		Attributes:   cloneAttributes(cfg.attributes),
 	}
 	if cfg.tracer.sampler != nil && !cfg.tracer.sampler.Sample(samplingContext) {
 		return ctx, nil
@@ -118,7 +118,7 @@ func (tracer *Tracer) Start(ctx context.Context, name string, options ...StartOp
 		surface:    cfg.surface,
 		lane:       cfg.lane,
 		source:     cfg.source,
-		attributes: append([]Attribute(nil), cfg.attributes...),
+		attributes: cloneAttributes(cfg.attributes),
 		status:     Status{Code: StatusUnset},
 		start:      cfg.start,
 	}

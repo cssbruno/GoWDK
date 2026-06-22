@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gowdk.dev/schemas/audit-report.v1.json",
+  "title": "GOWDK audit report",
+  "description": "Versioned contract for `gowdk audit --json`. The report pairs the derived security posture (manifest) with the findings from evaluating the built-in baseline and declared policies against it.",
+  "type": "object",
+  "required": ["version", "schema", "tool", "status", "summary", "findings", "manifest"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Report schema major version. A breaking change increments this."
+    },
+    "schema": {
+      "type": "string",
+      "const": "gowdk.audit.report.v1",
+      "description": "Stable schema identifier matching this file's $id name."
+    },
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "policyDigest": {
+      "type": "string",
+      "description": "sha256 digest of the resolved policy set (baseline plus declared tightening), independent of declared waivers."
+    },
+    "postureDigest": {
+      "type": "string",
+      "description": "sha256 digest of the derived security posture, independent of declared waivers."
+    },
+    "buildMode": { "type": "string" },
+    "target": {
+      "type": "object",
+      "properties": {
+        "buildMode": { "type": "string" }
+      }
+    },
+    "history": {
+      "type": "object",
+      "properties": {
+        "mode": { "type": "string" }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ok", "warning", "fail"],
+      "description": "fail when any error finding exists, warning when only warnings exist, ok otherwise."
+    },
+    "summary": {
+      "type": "object",
+      "required": ["routes", "endpoints", "contracts", "errors", "warnings", "info", "waived"],
+      "properties": {
+        "routes": { "type": "integer", "minimum": 0 },
+        "endpoints": { "type": "integer", "minimum": 0 },
+        "contracts": { "type": "integer", "minimum": 0 },
+        "errors": { "type": "integer", "minimum": 0 },
+        "warnings": { "type": "integer", "minimum": 0 },
+        "info": { "type": "integer", "minimum": 0 },
+        "waived": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "posture": {
+      "type": "object",
+      "properties": {
+        "obligations": { "type": "integer", "minimum": 0 },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 },
+          "description": "Count of obligations per evidence state (verified-static, verified-runtime, declared, unverified-app-owned, not-applicable, waived)."
+        },
+        "unverifiedAppOwned": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "waivers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/waiverRecord" }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "diff": { "$ref": "#/$defs/diff" },
+    "manifest": {
+      "type": "object",
+      "description": "The derived security posture. See security-manifest.v1.json.",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "severity": {
+      "type": "string",
+      "enum": ["error", "warning", "info"]
+    },
+    "finding": {
+      "type": "object",
+      "required": ["code", "severity", "message"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Diagnostic code. Stable rule identifier shared with `gowdk explain`."
+        },
+        "severity": { "$ref": "#/$defs/severity" },
+        "codeSource": { "type": "string" },
+        "fingerprint": {
+          "type": "string",
+          "description": "Stable finding identity independent of line movement: a hash of code, target, policy, rule, line-stripped source, and a normalized message prefix."
+        },
+        "target": { "type": "string" },
+        "policy": { "type": "string" },
+        "rule": { "type": "string" },
+        "confidence": { "type": "string" },
+        "evidence": { "type": "string" },
+        "cwe": { "type": "array", "items": { "type": "string" } },
+        "owasp": { "type": "array", "items": { "type": "string" } },
+        "suppression": { "$ref": "#/$defs/suppression" },
+        "message": { "type": "string" },
+        "source": { "type": "string" },
+        "remediation": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "suppression": {
+      "type": "object",
+      "properties": {
+        "owner": { "type": "string" },
+        "justification": { "type": "string" },
+        "expires": { "type": "string" },
+        "ticket": { "type": "string" },
+        "digestScope": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "waiverRecord": {
+      "type": "object",
+      "required": ["code"],
+      "properties": {
+        "code": { "type": "string" },
+        "target": { "type": "string" },
+        "owner": { "type": "string" },
+        "justification": { "type": "string" },
+        "expires": { "type": "string" },
+        "ticket": { "type": "string" },
+        "digestScope": { "type": "string" },
+        "source": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "diff": {
+      "type": "object",
+      "description": "Present only with `gowdk audit --diff <previous-report>`. Classifies the current findings against a previous report by stable fingerprint.",
+      "required": ["baseline", "introduced", "resolved", "unchanged"],
+      "properties": {
+        "baseline": {
+          "type": "string",
+          "description": "Identifier of the previous report (its postureDigest, or the path when no digest was present)."
+        },
+        "introduced": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/finding" },
+          "description": "Findings present now but absent from the previous report, matched by fingerprint."
+        },
+        "resolved": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/diffFindingRef" },
+          "description": "Findings present in the previous report but absent now."
+        },
+        "unchanged": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of findings present in both reports."
+        },
+        "introducedErrors": { "type": "integer", "minimum": 0 },
+        "introducedWarnings": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "diffFindingRef": {
+      "type": "object",
+      "required": ["code", "fingerprint"],
+      "properties": {
+        "code": { "type": "string" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "fingerprint": { "type": "string" },
+        "target": { "type": "string" },
+        "source": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

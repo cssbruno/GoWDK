@@ -7,6 +7,17 @@ packages, and tooling contracts may change before 1.0.
 
 ### Added
 
+- CI-native audit output: JSON Schema, SARIF, fingerprints, and diff mode (#558).
+  `gowdk audit` now publishes versioned JSON Schemas via `--schema[=report|security]`
+  (embedded in `internal/auditschema`), emits SARIF 2.1.0 for GitHub code scanning
+  via `--sarif[=<file>]` (results keyed on a stable finding `fingerprint`, waived
+  findings emitted as suppressions), and compares against a previous report with
+  `--diff <previous-report>` to gate only newly introduced error findings. Findings
+  carry a line-movement-independent `fingerprint`, and the command exposes a
+  documented exit-code contract (`0` clean/warning-only, `1` tool failure, `2`
+  invalid source/policy, `3` error findings, `4` runtime test failure). See
+  `docs/reference/cli.md` and `docs/engineering/security.md` for a GitHub Actions
+  example that uploads SARIF and gates introduced findings.
 - Production-safe trace sampling and OTLP export primitives (#554). `runtime/trace`
   gains `ParentBasedSampler` (keeps a trace whole across services) and
   `RuleSampler` with name/lane/surface matchers (silence health checks, force

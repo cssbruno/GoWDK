@@ -89,6 +89,42 @@ func TestParseAuditExceptRawHTMLRule(t *testing.T) {
 	}
 }
 
+func TestParseAuditWaiveRule(t *testing.T) {
+	file, err := ParseAuditSyntax([]byte(`policy waivers {
+  waive audit_action_missing_csrf target "action:Submit" owner "team-x" justification "legacy endpoint, migrating Q3" expires "2027-01-01" ticket "SEC-9" policy_digest "sha256:aaa" posture_digest "sha256:bbb"
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(file.Policies) != 1 || len(file.Policies[0].Rules) != 1 {
+		t.Fatalf("unexpected policies: %#v", file.Policies)
+	}
+	rule := file.Policies[0].Rules[0]
+	if rule.Kind != "waive" || rule.Value != "audit_action_missing_csrf" {
+		t.Fatalf("unexpected waive rule: %#v", rule)
+	}
+	if rule.Attrs["target"] != "action:Submit" || rule.Attrs["owner"] != "team-x" {
+		t.Fatalf("unexpected waiver attrs: %#v", rule.Attrs)
+	}
+	if rule.Attrs["expires"] != "2027-01-01" || rule.Attrs["ticket"] != "SEC-9" {
+		t.Fatalf("unexpected waiver expiry/ticket: %#v", rule.Attrs)
+	}
+	if rule.Attrs["policy_digest"] != "sha256:aaa" || rule.Attrs["posture_digest"] != "sha256:bbb" {
+		t.Fatalf("unexpected waiver digest pins: %#v", rule.Attrs)
+	}
+}
+
+func TestParseAuditWaiveRejectsUnknownAttribute(t *testing.T) {
+	_, err := ParseAuditSyntax([]byte(`policy waivers {
+  waive audit_action_missing_csrf bogus "x"
+}
+`))
+	if err == nil || !strings.Contains(err.Error(), "unsupported waive attribute") {
+		t.Fatalf("expected unknown-attribute error, got %v", err)
+	}
+}
+
 func TestParseAuditExceptRawHTMLRejectsUnknownAttribute(t *testing.T) {
 	_, err := ParseAuditSyntax([]byte(`policy waivers {
   match "frontend"

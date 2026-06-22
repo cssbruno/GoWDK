@@ -5,7 +5,10 @@ package otel
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
+	"sort"
 	"sync/atomic"
+	"time"
 
 	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 	"go.opentelemetry.io/otel/attribute"
@@ -48,10 +51,33 @@ const (
 // Option configures the OTLP HTTP bridge.
 type Option func(*config)
 
+// RetryConfig bounds the exporter's transport-level retry/backoff for transient
+// OTLP failures. It mirrors the OpenTelemetry exporter retry contract so an app
+// that owns its own provider can reason about the same knobs.
+type RetryConfig struct {
+	Enabled         bool
+	InitialInterval time.Duration
+	MaxInterval     time.Duration
+	MaxElapsedTime  time.Duration
+}
+
 type config struct {
-	endpoint string
-	insecure bool
-	headers  map[string]string
+	endpoint    string
+	insecure    bool
+	gzip        bool
+	headers     map[string]string
+	tlsConfig   *tls.Config
+	timeout     time.Duration
+	retry       *RetryConfig
+	serviceName string
+	serviceVer  string
+	environment string
+	resourceKVs map[string]string
+
+	maxQueueSize       int
+	maxExportBatchSize int
+	batchTimeout       time.Duration
+	exportTimeout      time.Duration
 }
 
 // WithEndpoint sets the OTLP HTTP endpoint, for example "localhost:4318".
@@ -68,6 +94,39 @@ func WithInsecure() Option {
 	}
 }
 
+// WithTLSClientConfig sets the TLS client configuration (custom CA bundle,
+// client certificate, or server name) for OTLP over HTTPS, beyond the
+// insecure/default-TLS choice.
+func WithTLSClientConfig(tlsConfig *tls.Config) Option {
+	return func(config *config) {
+		config.tlsConfig = tlsConfig
+	}
+}
+
+// WithGzip enables gzip request compression for OTLP HTTP.
+func WithGzip() Option {
+	return func(config *config) {
+		config.gzip = true
+	}
+}
+
+// WithTimeout sets the per-export request timeout.
+func WithTimeout(timeout time.Duration) Option {
+	return func(config *config) {
+		if timeout > 0 {
+			config.timeout = timeout
+		}
+	}
+}
+
+// WithRetry sets bounded transport retry/backoff for transient OTLP failures.
+func WithRetry(retry RetryConfig) Option {
+	return func(config *config) {
+		value := retry
+		config.retry = &value
+	}
+}
+
 // WithHeaders adds static OTLP HTTP headers.
 func WithHeaders(headers map[string]string) Option {
 	return func(config *config) {
@@ -81,6 +140,83 @@ func WithHeaders(headers map[string]string) Option {
 	}
 }
 
+// WithServiceName sets the service.name resource attribute. When unset the
+// default GOWDK service name is used.
+func WithServiceName(name string) Option {
+	return func(config *config) {
+		config.serviceName = name
+	}
+}
+
+// WithServiceVersion sets the service.version resource attribute.
+func WithServiceVersion(version string) Option {
+	return func(config *config) {
+		config.serviceVer = version
+	}
+}
+
+// WithEnvironment sets the deployment.environment resource attribute (for
+// example "production" or "staging").
+func WithEnvironment(environment string) Option {
+	return func(config *config) {
+		config.environment = environment
+	}
+}
+
+// WithResourceAttributes adds arbitrary resource attributes to every exported
+// span's resource, for common OTLP deployment metadata.
+func WithResourceAttributes(attrs map[string]string) Option {
+	return func(config *config) {
+		if len(attrs) == 0 {
+			return
+		}
+		if config.resourceKVs == nil {
+			config.resourceKVs = map[string]string{}
+		}
+		for key, value := range attrs {
+			config.resourceKVs[key] = value
+		}
+	}
+}
+
+// WithMaxQueueSize bounds the in-memory span queue. When the queue is full,
+// further spans are dropped by the batch processor rather than growing memory
+// without bound. Pair with ForceFlush/Shutdown to drain on graceful exit.
+func WithMaxQueueSize(size int) Option {
+	return func(config *config) {
+		if size > 0 {
+			config.maxQueueSize = size
+		}
+	}
+}
+
+// WithMaxExportBatchSize bounds the number of spans sent per export request.
+func WithMaxExportBatchSize(size int) Option {
+	return func(config *config) {
+		if size > 0 {
+			config.maxExportBatchSize = size
+		}
+	}
+}
+
+// WithBatchTimeout sets the maximum delay before a non-full batch is exported.
+func WithBatchTimeout(timeout time.Duration) Option {
+	return func(config *config) {
+		if timeout > 0 {
+			config.batchTimeout = timeout
+		}
+	}
+}
+
+// WithExportTimeout sets the deadline for exporting one batch.
+func WithExportTimeout(timeout time.Duration) Option {
+	return func(config *config) {
+		if timeout > 0 {
+			config.exportTimeout = timeout
+		}
+	}
+}
+
 // unsupportedAttributes counts attribute values that could not be represented
 // in OpenTelemetry's closed value model and were dropped.
 var unsupportedAttributes atomic.Uint64
@@ -90,6 +226,35 @@ var unsupportedAttributes atomic.Uint64
 // keys are also recorded on the span or event via AttrGOWDKDroppedAttributes.
 func UnsupportedAttributeCount() uint64 {
 	return unsupportedAttributes.Load()
+}
+
+// exporterFailures counts OTLP export attempts that failed after the exporter's
+// own retry/backoff was exhausted, for a GOWDK-owned provider.
+var exporterFailures atomic.Uint64
+
+// ExporterFailureCount reports how many OTLP export batches failed to send from
+// a GOWDK-owned provider (NewSink). It surfaces export loss that would otherwise
+// be visible only through the global OpenTelemetry error handler.
+func ExporterFailureCount() uint64 {
+	return exporterFailures.Load()
+}
+
+// countingExporter wraps an OTLP span exporter and counts batches that fail to
+// export after retries, so export loss is observable via ExporterFailureCount.
+type countingExporter struct {
+	inner sdktrace.SpanExporter
+}
+
+func (exporter countingExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
+	if err := exporter.inner.ExportSpans(ctx, spans); err != nil {
+		exporterFailures.Add(1)
+		return err
+	}
+	return nil
+}
+
+func (exporter countingExporter) Shutdown(ctx context.Context) error {
+	return exporter.inner.Shutdown(ctx)
 }
 
 // Sink records GOWDK spans through an OpenTelemetry TracerProvider.
@@ -146,29 +311,72 @@ func NewSink(ctx context.Context, options ...Option) (*Sink, error) {
 			option(&cfg)
 		}
 	}
-	exporterOptions := []otlptracehttp.Option{}
-	if cfg.endpoint != "" {
-		exporterOptions = append(exporterOptions, otlptracehttp.WithEndpoint(cfg.endpoint))
-	}
-	if cfg.insecure {
-		exporterOptions = append(exporterOptions, otlptracehttp.WithInsecure())
-	}
-	if len(cfg.headers) > 0 {
-		exporterOptions = append(exporterOptions, otlptracehttp.WithHeaders(cfg.headers))
-	}
-	exporter, err := otlptracehttp.New(ctx, exporterOptions...)
+	exporter, err := otlptracehttp.New(ctx, exporterOptionsFor(cfg)...)
 	if err != nil {
 		return nil, err
 	}
 	provider := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exporter),
+		sdktrace.WithBatcher(countingExporter{inner: exporter}, batchOptionsFor(cfg)...),
 		sdktrace.WithIDGenerator(SnapshotIDGenerator{}),
-		sdktrace.WithResource(defaultResource()),
+		sdktrace.WithResource(buildResource(cfg)),
 	)
 	sink := newSink(provider)
 	sink.ownsProvider = true
 	sink.preservesIdentity = true
 	return sink, nil
+}
+
+// exporterOptionsFor builds the OTLP HTTP exporter options from the bridge
+// config: endpoint, TLS (insecure or a custom client config), headers,
+// compression, per-request timeout, and bounded retry/backoff.
+func exporterOptionsFor(cfg config) []otlptracehttp.Option {
+	options := []otlptracehttp.Option{}
+	if cfg.endpoint != "" {
+		options = append(options, otlptracehttp.WithEndpoint(cfg.endpoint))
+	}
+	if cfg.insecure {
+		options = append(options, otlptracehttp.WithInsecure())
+	}
+	if cfg.tlsConfig != nil {
+		options = append(options, otlptracehttp.WithTLSClientConfig(cfg.tlsConfig))
+	}
+	if len(cfg.headers) > 0 {
+		options = append(options, otlptracehttp.WithHeaders(cfg.headers))
+	}
+	if cfg.gzip {
+		options = append(options, otlptracehttp.WithCompression(otlptracehttp.GzipCompression))
+	}
+	if cfg.timeout > 0 {
+		options = append(options, otlptracehttp.WithTimeout(cfg.timeout))
+	}
+	if cfg.retry != nil {
+		options = append(options, otlptracehttp.WithRetry(otlptracehttp.RetryConfig{
+			Enabled:         cfg.retry.Enabled,
+			InitialInterval: cfg.retry.InitialInterval,
+			MaxInterval:     cfg.retry.MaxInterval,
+			MaxElapsedTime:  cfg.retry.MaxElapsedTime,
+		}))
+	}
+	return options
+}
+
+// batchOptionsFor builds the bounded batch-processor options: queue cap, batch
+// size, batch delay, and per-export deadline.
+func batchOptionsFor(cfg config) []sdktrace.BatchSpanProcessorOption {
+	options := []sdktrace.BatchSpanProcessorOption{}
+	if cfg.maxQueueSize > 0 {
+		options = append(options, sdktrace.WithMaxQueueSize(cfg.maxQueueSize))
+	}
+	if cfg.maxExportBatchSize > 0 {
+		options = append(options, sdktrace.WithMaxExportBatchSize(cfg.maxExportBatchSize))
+	}
+	if cfg.batchTimeout > 0 {
+		options = append(options, sdktrace.WithBatchTimeout(cfg.batchTimeout))
+	}
+	if cfg.exportTimeout > 0 {
+		options = append(options, sdktrace.WithExportTimeout(cfg.exportTimeout))
+	}
+	return options
 }
 
 // NewSinkWithProvider creates a sink backed by an existing, app-owned provider.
@@ -220,6 +428,37 @@ func defaultResource() *resource.Resource {
 	return merged
 }
 
+// buildResource assembles the GOWDK-owned provider's resource from the config:
+// service name (defaulting to the GOWDK service name), optional service version
+// and deployment environment, and any custom resource attributes. Keys are
+// applied in a stable order so the resource is deterministic.
+func buildResource(cfg config) *resource.Resource {
+	name := cfg.serviceName
+	if name == "" {
+		name = defaultServiceName
+	}
+	attrs := []attribute.KeyValue{semconv.ServiceName(name)}
+	if cfg.serviceVer != "" {
+		attrs = append(attrs, semconv.ServiceVersion(cfg.serviceVer))
+	}
+	if cfg.environment != "" {
+		attrs = append(attrs, attribute.String("deployment.environment", cfg.environment))
+	}
+	keys := make([]string, 0, len(cfg.resourceKVs))
+	for key := range cfg.resourceKVs {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		attrs = append(attrs, attribute.String(key, cfg.resourceKVs[key]))
+	}
+	merged, err := resource.Merge(resource.Default(), resource.NewSchemaless(attrs...))
+	if err != nil {
+		return resource.NewSchemaless(attrs...)
+	}
+	return merged
+}
+
 // Shutdown flushes and closes the underlying TracerProvider, but only when the
 // sink owns it. A borrowed (app-owned) provider is left running so the
 // application controls its lifecycle.
@@ -228,6 +467,17 @@ func (sink *Sink) Shutdown(ctx context.Context) error {
 		return nil
 	}
 	return sink.provider.Shutdown(ctx)
+}
+
+// ForceFlush drains any spans buffered in the batch processor without shutting
+// the provider down, so callers can flush at a checkpoint (before a deploy, on a
+// signal, after a critical request) and keep tracing. Unlike Shutdown it is safe
+// on a borrowed provider: flushing pending spans does not stop it.
+func (sink *Sink) ForceFlush(ctx context.Context) error {
+	if sink == nil || sink.provider == nil {
+		return nil
+	}
+	return sink.provider.ForceFlush(ctx)
 }
 
 // RecordSpan implements gowdktrace.Sink.

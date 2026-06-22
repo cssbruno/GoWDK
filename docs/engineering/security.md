@@ -67,13 +67,142 @@ details.
 
 `gowdk build` evaluates the same static baseline before writing output and scans
 the final emitted artifact files for bundled secrets after generation.
-Production builds fail on error-severity findings unless `--allow-insecure` is
-set; non-production builds print a prominent warning summary without blocking
-local iteration. `gowdk audit` remains the explicit report and CI surface: it
-prints the full human/JSON report, reads declared `*.audit.gwdk` policies,
-checks frontend risks such as bundle secrets and raw-HTML sinks, can emit
-readable standalone runtime tests with `gowdk audit --emit-tests`, and can run
-generated-app runtime tests with `gowdk audit --run`.
+Production builds fail on error-severity findings unless they are explicitly
+waived or scoped-bypassed (see below); non-production builds print a prominent
+warning summary without blocking local iteration. `gowdk audit` remains the
+explicit report and CI surface: it prints the full human/JSON report, reads
+declared `*.audit.gwdk` policies, checks frontend risks such as bundle secrets
+and raw-HTML sinks, can emit readable standalone runtime tests with `gowdk audit
+--emit-tests`, can verify committed tests are current with `gowdk audit
+--check-tests`, and can run generated-app runtime tests with `gowdk audit --run`.
+
+## Generated Audit Tests And Staleness
+
+`gowdk audit --emit-tests[=<file>]` writes a committable standalone runtime test
+and embeds an identity header: the posture schema version, the compiler/tool
+version, and the policy and posture digests. The intended workflow is:
+
+1. **Emit** the test: `gowdk audit --emit-tests=security_audit_test.go`.
+2. **Commit** it alongside the code it covers.
+3. **Check** it in CI: `gowdk audit --check-tests=security_audit_test.go`. This
+   recomputes the identity and fails with `audit_test_stale` when the committed
+   test is missing, is not a generated test, carries no identity, or no longer
+   matches the current schema, compiler, policy, or posture.
+4. **Regenerate** with `--emit-tests` whenever a route, guard, policy, schema, or
+   compiler change makes the check fail, then commit the result.
+
+The digest updates automatically: any change to the posture manifest or the
+composed policies changes the posture or policy digest, and any change to the
+generator output changes the source digest, so the check catches drift without a
+manual version bump. Declared waivers are excluded from the policy/posture
+digests (they are recorded separately), so adding a waiver does not by itself
+mark the tests stale.
+
+The standalone test is kept honest about what it can prove statically (routes,
+default-deny, method denial, configured headers). Endpoint and auth scenarios —
+anonymous-denied probes against native role/permission guards, missing/invalid
+CSRF, and role/permission actors — run against a real generated app under `gowdk
+audit --run`. Expired-session and per-resource (object-level) denial depend on
+app-owned identity/session/authorization logic, so they are steered to
+app-supplied generated-app fixtures rather than asserted by the standalone test.
+
+## Monotonic Baseline, Waivers, And Scoped Bypasses
+
+The built-in baseline is monotonic: a declared `*.audit.gwdk` policy can tighten
+it but never silently weaken it.
+
+- **Extend, do not replace.** A declared policy that reuses a built-in baseline
+  policy name (for example `baseline.actions`) is rejected with
+  `policy_baseline_override` and its rules are not applied — the built-in stays
+  in force. To add stricter rules, give the policy a new name and
+  `extends "baseline.<name>"`.
+- **Waive one finding explicitly.** To suppress a specific finding, add a
+  `waive` rule. A waiver must carry a diagnostic code, a target, an owner, a
+  justification, and an expiry date; a ticket and policy/posture digest pins are
+  optional:
+
+  ```text
+  policy waivers {
+    waive audit_action_missing_csrf target "action:Submit" \
+      owner "team-x" justification "legacy endpoint, migrating Q3" \
+      expires "2026-12-31" ticket "SEC-123" posture_digest "sha256:..."
+  }
+  ```
+
+  A valid, unexpired waiver records its suppression on the finding (evidence
+  `waived`) and excludes it from the error count, so the build proceeds. A
+  malformed, expired, unmatched, or digest-mismatched waiver does **not**
+  suppress — it is reported (`audit_waiver_malformed`, `audit_waiver_expired`,
+  `audit_waiver_unmatched`, `audit_waiver_digest_mismatch`) and the underlying
+  finding stays active. Posture/policy digest pins invalidate a waiver when the
+  app's surface or enforcement rules drift, so a suppression cannot silently
+  outlive what it was reviewed against. A waiver can never suppress a
+  policy-resolution finding (a malformed policy or baseline override).
+
+- **Scope a build bypass.** `gowdk build --allow-insecure=CODE1,CODE2` downgrades
+  only those diagnostic codes for one build; any other error still blocks. The
+  bare `--allow-insecure` (no value) downgrades every production error and is the
+  blanket escape hatch. Both forms print the bypassed codes as provenance.
+
+Every suppression is recorded: declared waivers appear in `gowdk-security.json`
+(`waivers`), applied waivers and counts appear in the `gowdk audit` JSON
+(`waivers`, `summary.waived`) and human output, and build bypasses are logged to
+the build output. Prefer a scoped, attributable, expiring waiver over a blanket
+bypass.
+
+### Migration: same-name policy overrides
+
+Before this change, a declared policy with the same name as a built-in baseline
+policy replaced it, which could silently weaken a production gate. That is no
+longer allowed. If you previously relied on a same-name override:
+
+- To **tighten** the baseline, rename the policy and add
+  `extends "baseline.<name>"`.
+- To **suppress one finding** the baseline raises, add an explicit `waive` with
+  an owner, justification, and expiry.
+- A same-name policy now produces `policy_baseline_override` until migrated.
+
+## Evidence Classification
+
+Every posture obligation and audit finding carries an evidence state so a human
+or CI can tell a proven fact from an app-owned obligation GOWDK cannot verify.
+The states are stable strings shared by `gowdk-security.json` and the audit
+report:
+
+- `verified-static`: the compiler proves it from generated output or IR (CSRF
+  wiring, raw-body limit installation, native role/permission/auth guard
+  resolution, configured response headers, raw-HTML sink inventory).
+- `verified-runtime`: a generated runtime test exercised it (`gowdk audit --run`).
+- `declared`: the project declared the control but GOWDK has not verified it.
+- `unverified-app-owned`: GOWDK generates the call site but the application owns
+  the decision logic, so correctness cannot be proven statically.
+- `not-applicable`: the surface needs no such control (an intentionally public
+  target, or a read-only endpoint with no CSRF obligation).
+- `waived`: a finding suppressed by an explicit, justified waiver.
+
+The `obligations` array in `gowdk-security.json` (and the audit report's
+`posture` summary) lists the module's security obligations with these states.
+Authentication, session rotation/storage, per-tenant/per-resource
+authorization, and domain authorization are always reported as
+`unverified-app-owned` because GOWDK wires the call sites but does not own that
+logic — it never implies static proof for app-owned controls. Guards are
+classified inline through each entry's `guardEvidence`.
+
+**Effect on reports and CI.** `unverified-app-owned` obligations do not block a
+build or `gowdk audit` exit code by themselves: GOWDK cannot prove or disprove
+them, so failing on them would be dishonest noise. They are surfaced prominently
+(count plus per-obligation list) so teams gate on them deliberately. The
+per-guard `audit_guard_unverified` warning remains the enforcement signal for
+app-owned guards on non-public surfaces, and CI can read
+`manifest.obligations[].evidence` to enforce a stricter project policy (for
+example, requiring `verified-runtime` evidence for a sensitive guard).
+
+**Recording app-owned evidence.** To raise an app-owned obligation above
+`unverified-app-owned` without GOWDK owning auth/session/resource logic, supply
+generated-app fixtures and run them through `gowdk audit --run`: a passing
+runtime scenario records `verified-runtime` evidence for that behavior. Custom
+guards need an app-supplied generated-app guard fixture; otherwise `gowdk audit
+--run` reports the missing fixture instead of claiming verification.
 
 ## Security Review Triggers
 

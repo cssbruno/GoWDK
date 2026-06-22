@@ -50,3 +50,29 @@ func AlwaysOff() gowdktrace.Sampler {
 func RatioSampler(ratio float64) gowdktrace.Sampler {
 	return gowdktrace.RatioSampler(ratio)
 }
+
+// SamplerRule overrides the sampling decision for matching spans.
+type SamplerRule = gowdktrace.SamplerRule
+
+// ParentBasedSampler keeps a trace whole: it honors a propagated parent
+// decision and samples roots with root. It is the production-safe default for
+// distributed tracing.
+func ParentBasedSampler(root gowdktrace.Sampler) gowdktrace.Sampler {
+	return gowdktrace.ParentBasedSampler(root)
+}
+
+// RuleSampler applies per-span override rules (silence health checks, force
+// high-value endpoints on) before falling back to base.
+func RuleSampler(base gowdktrace.Sampler, rules ...gowdktrace.SamplerRule) gowdktrace.Sampler {
+	return gowdktrace.RuleSampler(base, rules...)
+}
+
+// DropSpansNamed builds a rule that always drops spans with the exact name.
+func DropSpansNamed(name string) gowdktrace.SamplerRule {
+	return gowdktrace.DropSpansNamed(name)
+}
+
+// KeepSpansNamed builds a rule that always keeps spans with the exact name.
+func KeepSpansNamed(name string) gowdktrace.SamplerRule {
+	return gowdktrace.KeepSpansNamed(name)
+}

@@ -43,22 +43,17 @@ func PoliciesFromIR(specs []gwdkir.AuditSpec) []Policy {
 }
 
 // ComposeBaseline returns the built-in baseline with declared policies appended.
-// A declared policy with the same name as a built-in baseline policy replaces
-// that built-in policy so projects can intentionally override a baseline slice.
+//
+// Built-in baseline policies are monotonic: a declared policy can extend or
+// tighten the baseline (with `extends`) or suppress a specific finding (with an
+// explicit `waive`), but it can no longer silently replace a baseline policy by
+// reusing its name. A same-name declared policy is kept here and reported by
+// resolve as policy_baseline_override; its rules are not applied, so the baseline
+// can never be weakened by omission. This keeps the fail-closed production story
+// honest: removing a built-in error requires an attributable, expiring waiver.
 func ComposeBaseline(declared []Policy) []Policy {
 	out := Baseline()
-	byName := map[string]int{}
-	for index, policy := range out {
-		byName[policy.Name] = index
-	}
-	for _, policy := range declared {
-		if index, ok := byName[policy.Name]; ok && out[index].Builtin {
-			out[index] = policy
-			continue
-		}
-		out = append(out, policy)
-	}
-	return out
+	return append(out, declared...)
 }
 
 func sourceRef(file string, span source.SourceSpan) string {

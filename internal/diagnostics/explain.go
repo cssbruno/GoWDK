@@ -415,11 +415,53 @@ guard public
 			"Fix the handler, the guard configuration, or the test expectation as appropriate.",
 		},
 	},
+	"audit_test_stale": {
+		Details: "gowdk audit --check-tests compares the identity embedded in a checked-in generated audit test (posture schema version, compiler version, policy digest, and posture digest) against the current project. One of them no longer matches, so the committed test no longer reflects the current security posture.",
+		NextSteps: []string{
+			"Run gowdk audit --emit-tests to regenerate the test, then commit the result.",
+			"Review what changed (routes, guards, CSRF, policies, or the compiler version) before trusting the old test.",
+		},
+	},
 	"audit_test_timeout": {
 		Details: "gowdk audit --run executes the generated app's audit tests under a strict deadline (default 2m). The run exceeded that deadline and was terminated, so the audit could not confirm the runtime posture.",
 		NextSteps: []string{
 			"Inspect the generated app for a hanging handler, guard, or test before trusting the posture.",
 			"Raise the deadline for a legitimately slow suite with gowdk audit --run --run-timeout=<duration>.",
+		},
+	},
+	"audit_waiver_malformed": {
+		Details: "A waiver must carry a diagnostic code, a target, an owner, a justification, and an expiry date (YYYY-MM-DD). One or more required fields is missing or the expiry is not a valid date, so the waiver does not suppress its finding.",
+		NextSteps: []string{
+			"Add the missing fields: waive <code> target \"...\" owner \"...\" justification \"...\" expires \"YYYY-MM-DD\".",
+			"Optionally pin a ticket and the policy/posture digest to bind the waiver to a specific build.",
+		},
+	},
+	"audit_waiver_expired": {
+		Details: "A waiver has passed its expiry date, so it no longer suppresses its finding and the underlying issue is reported again. Waivers expire on purpose so a suppression is revisited rather than left forever.",
+		NextSteps: []string{
+			"Re-validate the finding and renew the waiver with a future expiry if it is still justified.",
+			"Fix the underlying issue and remove the waiver.",
+		},
+	},
+	"audit_waiver_unmatched": {
+		Details: "A waiver matches no current finding. Either the finding it suppressed is gone (good — remove the waiver) or the code/target no longer matches because the posture moved.",
+		NextSteps: []string{
+			"Run gowdk audit to print current finding codes and targets, then update the waiver target/code.",
+			"Remove the stale waiver if the finding it covered no longer exists.",
+		},
+	},
+	"audit_waiver_digest_mismatch": {
+		Details: "A waiver pins a policy or posture digest that no longer matches the current build, so the build it was validated against has drifted. The waiver no longer suppresses its finding until it is re-validated.",
+		NextSteps: []string{
+			"Re-validate the finding against the current policy and posture, then update the pinned digest.",
+			"Remove the pin to let the waiver apply across builds until it expires.",
+		},
+	},
+	"policy_baseline_override": {
+		Details: "A declared audit policy reuses a built-in baseline policy name. Baseline policies are monotonic: they can be tightened with extends or have a specific finding waived, but they can no longer be replaced by name, because a silent replacement could weaken a production gate.",
+		NextSteps: []string{
+			"Rename the policy and use extends \"baseline.<name>\" to add stricter rules on top of the baseline.",
+			"To suppress one specific finding, add an explicit waive <code> target \"...\" with owner, justification, and expiry.",
 		},
 	},
 	"policy_duplicate_name": {

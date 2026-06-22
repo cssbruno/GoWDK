@@ -6927,6 +6927,78 @@ view {
 	}
 }
 
+func TestBuildCommandScopedAllowInsecureBypassesOnlyNamedCodes(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "newsletter.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		Mode: gowdk.Production,
+		CSRF: gowdk.CSRFConfig{Disabled: true},
+	},
+}
+`)
+	writeCLIFile(t, page, `package app
+
+page newsletter
+route "/newsletter"
+
+act Subscribe POST "/newsletter"
+
+view {
+  <form g:post={Subscribe}>
+    <input name="email" aria-label="Email" required />
+    <button type="submit">Subscribe</button>
+  </form>
+}
+`)
+
+	// Scoping the bypass to an unrelated code must leave the real finding blocking.
+	err := run([]string{"build", "--config", config, "--allow-missing-backend", "--allow-insecure=audit_api_missing_csrf", "--out", outputDir, page})
+	if err == nil {
+		t.Fatal("expected a scoped bypass of an unrelated code to still block the build")
+	}
+	if !strings.Contains(err.Error(), "build blocked by") {
+		t.Fatalf("unexpected build audit error: %v", err)
+	}
+
+	// Scoping the bypass to the actual finding code lets the build proceed and
+	// records the bypass as provenance.
+	_, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"build", "--config", config, "--allow-missing-backend", "--allow-insecure=audit_action_missing_csrf", "--out", outputDir, page})
+	})
+	if err != nil {
+		t.Fatalf("expected the scoped bypass of the real finding code to allow the build: %v", err)
+	}
+	if !strings.Contains(stderr, "security bypass") || !strings.Contains(stderr, "audit_action_missing_csrf") {
+		t.Fatalf("expected bypass provenance in stderr, got:\n%s", stderr)
+	}
+}
+
+func TestBuildCommandRejectsEmptyScopedAllowInsecure(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "home.page.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+page home
+route "/"
+
+view {
+  <main>Home</main>
+}
+`)
+	err := run([]string{"build", "--config", config, "--allow-insecure=", "--out", filepath.Join(root, "dist"), page})
+	if err == nil || !strings.Contains(err.Error(), "needs at least one diagnostic code") {
+		t.Fatalf("expected empty scoped bypass to be rejected, got %v", err)
+	}
+}
+
 func TestBuildCommandProductionScansFinalArtifactsForSecrets(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "home.page.gwdk")

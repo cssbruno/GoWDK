@@ -50,6 +50,26 @@ type SecurityManifest struct {
 	Observability []ObservabilityEntry `json:"observability,omitempty"`
 	CORS          CORSPosture          `json:"cors"`
 	Frontend      FrontendSurface      `json:"frontend"`
+	Obligations   []ObligationEntry    `json:"obligations,omitempty"`
+	Waivers       []WaiverDeclaration  `json:"waivers,omitempty"`
+}
+
+// WaiverDeclaration records one declared `waive` rule from a *.audit.gwdk file,
+// independent of whether it currently suppresses a finding. Recording the
+// declared waivers in gowdk-security.json keeps every suppression decision
+// visible in the build's security metadata; gowdk audit decides which ones are
+// valid, expired, or stale.
+type WaiverDeclaration struct {
+	Code          string `json:"code"`
+	Target        string `json:"target,omitempty"`
+	Owner         string `json:"owner,omitempty"`
+	Justification string `json:"justification,omitempty"`
+	Expires       string `json:"expires,omitempty"`
+	Ticket        string `json:"ticket,omitempty"`
+	PolicyDigest  string `json:"policyDigest,omitempty"`
+	PostureDigest string `json:"postureDigest,omitempty"`
+	Policy        string `json:"policy,omitempty"`
+	Source        string `json:"source,omitempty"`
 }
 
 // CORSPosture records the generated cross-origin policy for API and web contract
@@ -129,13 +149,14 @@ type ContractEntry struct {
 // App-owned guards are intentionally classified as unverified unless an
 // application-supplied fixture exercises them outside the synthetic audit hook.
 type GuardEvidence struct {
-	ID                 string `json:"id"`
-	Kind               string `json:"kind"`
-	BindingStatus      string `json:"bindingStatus"`
-	Owner              string `json:"owner"`
-	ExecutionPhase     string `json:"executionPhase"`
-	FailureContract    string `json:"failureContract"`
-	RuntimeTestFixture string `json:"runtimeTestFixture,omitempty"`
+	ID                 string        `json:"id"`
+	Kind               string        `json:"kind"`
+	BindingStatus      string        `json:"bindingStatus"`
+	Owner              string        `json:"owner"`
+	Evidence           EvidenceState `json:"evidence"`
+	ExecutionPhase     string        `json:"executionPhase"`
+	FailureContract    string        `json:"failureContract"`
+	RuntimeTestFixture string        `json:"runtimeTestFixture,omitempty"`
 }
 
 // ObservabilityEntry records one generated trace endpoint or export surface.
@@ -283,7 +304,37 @@ func Build(config gowdk.Config, ir gwdkir.Program) SecurityManifest {
 	if manifest.Frontend.RawHTMLSinks == nil {
 		manifest.Frontend.RawHTMLSinks = []RawHTMLSink{}
 	}
+	manifest.Obligations = obligations(config, manifest)
+	manifest.Waivers = declaredWaivers(ir)
 	return manifest
+}
+
+// declaredWaivers projects the declared `waive` rules from the audit specs into
+// the manifest so gowdk-security.json records every suppression decision.
+func declaredWaivers(ir gwdkir.Program) []WaiverDeclaration {
+	var out []WaiverDeclaration
+	for _, spec := range ir.AuditSpecs {
+		for _, policy := range spec.Policies {
+			for _, rule := range policy.Rules {
+				if rule.Kind != "waive" {
+					continue
+				}
+				out = append(out, WaiverDeclaration{
+					Code:          strings.TrimSpace(rule.Value),
+					Target:        strings.TrimSpace(rule.Attrs["target"]),
+					Owner:         strings.TrimSpace(rule.Attrs["owner"]),
+					Justification: strings.TrimSpace(rule.Attrs["justification"]),
+					Expires:       strings.TrimSpace(rule.Attrs["expires"]),
+					Ticket:        strings.TrimSpace(rule.Attrs["ticket"]),
+					PolicyDigest:  strings.TrimSpace(rule.Attrs["policy_digest"]),
+					PostureDigest: strings.TrimSpace(rule.Attrs["posture_digest"]),
+					Policy:        policy.Name,
+					Source:        sourceRef(spec.Source, rule.Span),
+				})
+			}
+		}
+	}
+	return out
 }
 
 func hasPublicGuard(guards []string) bool {
@@ -318,6 +369,7 @@ func guardEvidenceFor(config gowdk.Config, guard string) GuardEvidence {
 			Kind:               "public",
 			BindingStatus:      "not-applicable",
 			Owner:              "gowdk-native",
+			Evidence:           guardEvidenceState("public"),
 			ExecutionPhase:     "none",
 			FailureContract:    "allows-request",
 			RuntimeTestFixture: "not-required",
@@ -328,6 +380,7 @@ func guardEvidenceFor(config gowdk.Config, guard string) GuardEvidence {
 			Kind:               "native-rbac",
 			BindingStatus:      "resolved-native",
 			Owner:              "gowdk-native",
+			Evidence:           guardEvidenceState("native-rbac"),
 			ExecutionPhase:     "before-body-decode",
 			FailureContract:    "fail-closed-403",
 			RuntimeTestFixture: "native-rbac-fixture",
@@ -338,6 +391,7 @@ func guardEvidenceFor(config gowdk.Config, guard string) GuardEvidence {
 			Kind:               "auth-required",
 			BindingStatus:      "resolved-addon",
 			Owner:              "gowdk-native",
+			Evidence:           guardEvidenceState("auth-required"),
 			ExecutionPhase:     "before-body-decode",
 			FailureContract:    "fail-closed-403-or-redirect",
 			RuntimeTestFixture: "auth-addon-fixture",
@@ -348,6 +402,7 @@ func guardEvidenceFor(config gowdk.Config, guard string) GuardEvidence {
 			Kind:               "custom",
 			BindingStatus:      "unverified-app-owned",
 			Owner:              "app-owned",
+			Evidence:           guardEvidenceState("custom"),
 			ExecutionPhase:     "before-body-decode",
 			FailureContract:    "app-owned",
 			RuntimeTestFixture: "unverified-app-owned",

@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/securitymanifest"
 )
 
 // EnrichFindings fills stable triage metadata on findings without changing the
@@ -17,7 +19,7 @@ func EnrichFindings(findings []Finding) []Finding {
 			findings[index].Confidence = confidenceFor(findings[index].Code)
 		}
 		if findings[index].Evidence == "" {
-			findings[index].Evidence = evidenceFor(findings[index].Code)
+			findings[index].Evidence = evidenceStateFor(findings[index])
 		}
 		if findings[index].CWE == nil {
 			findings[index].CWE = cweFor(findings[index].Code)
@@ -81,18 +83,22 @@ func confidenceFor(code string) string {
 	}
 }
 
-func evidenceFor(code string) string {
-	switch {
-	case strings.HasPrefix(code, "policy_"):
-		return "policy-resolution"
-	case code == "audit_test_failed":
-		return "runtime-test"
-	case code == "audit_guard_unverified":
-		return "inferred-static"
-	case strings.HasPrefix(code, "audit_observability_"):
-		return "static-observability-posture"
+// evidenceStateFor classifies the proof strength behind one finding using the
+// shared evidence taxonomy (see securitymanifest.EvidenceState). A finding
+// carrying a waiver is waived; runtime-test findings are verified-runtime;
+// app-owned guard findings are unverified-app-owned; everything else is proven
+// statically from the posture manifest.
+func evidenceStateFor(finding Finding) string {
+	if finding.Suppression != nil {
+		return string(securitymanifest.EvidenceWaived)
+	}
+	switch finding.Code {
+	case "audit_test_failed", "audit_test_timeout":
+		return string(securitymanifest.EvidenceVerifiedRuntime)
+	case "audit_guard_unverified":
+		return string(securitymanifest.EvidenceUnverifiedAppOwned)
 	default:
-		return "static-posture"
+		return string(securitymanifest.EvidenceVerifiedStatic)
 	}
 }
 

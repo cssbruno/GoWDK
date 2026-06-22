@@ -7,6 +7,45 @@ packages, and tooling contracts may change before 1.0.
 
 ### Added
 
+- Production-safe trace sampling and OTLP export primitives (#554). `runtime/trace`
+  gains `ParentBasedSampler` (keeps a trace whole across services) and
+  `RuleSampler` with name/lane/surface matchers (silence health checks, force
+  high-value endpoints on), re-exported from `addons/observability`. The
+  `runtime/trace/otel` bridge adds `ForceFlush`, bounded queue/batch
+  configuration, retry/backoff, gzip compression, custom TLS client config, and
+  service/version/environment/custom resource attributes, plus an
+  `ExporterFailureCount` counter. See `docs/reference/observability.md`.
+- Stale-audit-test detection (#557). Emitted standalone audit tests
+  (`gowdk audit --emit-tests`) now embed an identity header — posture schema
+  version, compiler/tool version, and policy and posture digests — and a new
+  `gowdk audit --check-tests[=<file>]` CI mode fails with `audit_test_stale` when
+  a committed test is missing, untracked, or no longer matches the current
+  schema, compiler, policy, or posture. Generated-app fixtures now also probe
+  anonymous-denied access against native role/permission guards; expired-session
+  and per-resource denial stay steered to app-owned runtime fixtures. See
+  `docs/engineering/security.md`.
+- Explicit, expiring security waivers and scoped build bypasses (#555). A new
+  `waive <code> target "..." owner "..." justification "..." expires "..."`
+  rule in `*.audit.gwdk` suppresses one finding only when it is attributable and
+  unexpired; optional `ticket`, `policy_digest`, and `posture_digest` pins
+  invalidate a waiver on drift. Malformed/expired/unmatched/digest-mismatched
+  waivers are reported (`audit_waiver_*`) instead of silently suppressing.
+  `gowdk build --allow-insecure=CODE1,CODE2` scopes a build bypass to specific
+  codes (bare `--allow-insecure` still bypasses all). Declared waivers are
+  recorded in `gowdk-security.json` (`waivers`); applied waivers and a
+  `summary.waived` count appear in the `gowdk audit` JSON and human output, and
+  bypasses are logged as build provenance.
+- Evidence classification for the security posture and audit findings (#556).
+  `gowdk-security.json` and the `gowdk audit` report now carry a shared evidence
+  state — `verified-static`, `verified-runtime`, `declared`,
+  `unverified-app-owned`, `not-applicable`, or `waived` — on each guard
+  (`guardEvidence[].evidence`), a new `obligations` posture array, and every
+  finding. Authentication, session rotation/storage, tenant/resource
+  authorization, and domain authorization are reported honestly as
+  `unverified-app-owned` instead of implying static proof. The audit report adds
+  a `posture` summary, the human output prints obligation counts and per-finding
+  evidence, and `docs/engineering/security.md` documents the model and how a
+  project records app-owned evidence.
 - Bounded build-time iteration and transforms in `build {}` data: list and
   object literals, `seq(start, end)` ranges, comprehensions
   (`[expr for v in source if cond]`, with an optional index variable), list
@@ -21,6 +60,13 @@ packages, and tooling contracts may change before 1.0.
 
 ### Changed
 
+- **Breaking:** the built-in audit baseline is now monotonic (#555). A declared
+  `*.audit.gwdk` policy that reuses a built-in baseline policy name no longer
+  replaces it (which could silently weaken a production gate); the built-in stays
+  in force and the override is reported as `policy_baseline_override`. Migrate by
+  renaming the policy and using `extends "baseline.<name>"` to tighten, or add an
+  explicit `waive` to suppress a specific finding. See
+  `docs/engineering/security.md`.
 - The client expression runtime now receives its operator and builtin metadata
   from the Go compiler/runtime spec instead of hardcoded JavaScript tables,
   reducing Go/JS drift for generated islands.

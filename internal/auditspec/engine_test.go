@@ -158,7 +158,7 @@ func TestBaselineFlagsUnverifiedGuardEvidence(t *testing.T) {
 	if got["audit_guard_unverified"] != 1 {
 		t.Fatalf("expected unverified guard finding, got %#v", got)
 	}
-	if findings[0].Target != "route:/admin#guard:auth.required" || findings[0].Evidence != "inferred-static" || findings[0].Fingerprint == "" {
+	if findings[0].Target != "route:/admin#guard:auth.required" || findings[0].Evidence != "unverified-app-owned" || findings[0].Fingerprint == "" {
 		t.Fatalf("expected targeted guard metadata, got %#v", findings[0])
 	}
 }
@@ -219,7 +219,7 @@ func TestBaselineFlagsUnsafeObservabilityPosture(t *testing.T) {
 		}
 	}
 	for _, finding := range findings {
-		if finding.Fingerprint == "" || finding.Confidence == "" || finding.Evidence != "static-observability-posture" {
+		if finding.Fingerprint == "" || finding.Confidence == "" || finding.Evidence != "verified-static" {
 			t.Fatalf("observability finding missing triage metadata: %#v", finding)
 		}
 	}
@@ -713,25 +713,41 @@ func TestRawHTMLExceptionMalformedRequiresEvidence(t *testing.T) {
 	}
 }
 
-func TestComposeBaselineLetsDeclaredPolicyOverrideBuiltin(t *testing.T) {
-	policies := ComposeBaseline([]Policy{{
-		Name:      "baseline.frontend",
-		Selectors: []Selector{{Raw: "frontend", Kind: SelectorFrontend}},
-		Rules:     []Rule{{Kind: RuleRequireHeader, Value: "Content-Security-Policy", Code: "audit_headers_missing"}},
-	}})
-	for _, policy := range policies {
-		if policy.Name != "baseline.frontend" {
-			continue
-		}
-		if policy.Builtin {
-			t.Fatalf("declared override should replace builtin baseline.frontend: %#v", policy)
-		}
-		if len(policy.Rules) != 1 || policy.Rules[0].Kind != RuleRequireHeader {
-			t.Fatalf("unexpected overridden frontend policy: %#v", policy)
-		}
-		return
+func TestComposeBaselineKeepsBuiltinAndRejectsSameNameOverride(t *testing.T) {
+	// A declared policy that reuses a built-in baseline name must not silently
+	// replace it: the built-in is retained intact and the override is reported.
+	manifest := securitymanifest.SecurityManifest{
+		Endpoints: []securitymanifest.EndpointEntry{
+			{ID: "Submit", Kind: "action", Method: "POST", Path: "/submit", CSRF: false, DefaultDeny: true},
+		},
 	}
-	t.Fatalf("baseline.frontend missing from composed policies: %#v", policies)
+	declared := []Policy{{
+		Name:      "baseline.actions",
+		Source:    "weaken.audit.gwdk",
+		Selectors: []Selector{{Raw: "act:*", Kind: SelectorEndpoint}},
+		// An attacker-style "override" that drops the CSRF/guard requirements.
+		Rules: []Rule{{Kind: RuleRequireHeader, Value: "X-Whatever", Code: "audit_headers_missing"}},
+	}}
+	composed := ComposeBaseline(declared)
+
+	var builtin *Policy
+	for index := range composed {
+		if composed[index].Name == "baseline.actions" && composed[index].Builtin {
+			builtin = &composed[index]
+		}
+	}
+	if builtin == nil {
+		t.Fatalf("built-in baseline.actions must remain after composition: %#v", composed)
+	}
+
+	got := codes(Evaluate(manifest, composed))
+	if got["policy_baseline_override"] != 1 {
+		t.Fatalf("expected a policy_baseline_override finding, got %#v", got)
+	}
+	// The built-in CSRF/guard requirement must still fire — not be weakened away.
+	if got["audit_action_missing_csrf"] == 0 && got["audit_guardless_endpoint_page"] == 0 {
+		t.Fatalf("baseline must stay in force despite the same-name override: %#v", got)
+	}
 }
 
 func TestSeverityComesFromRegistry(t *testing.T) {

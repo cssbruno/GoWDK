@@ -37,10 +37,11 @@ Or use the install script:
 curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh | sh
 ```
 
-Pin the current CLI release:
+Pin a specific CLI release (replace `<version>` with a tag from the
+[releases page](https://github.com/cssbruno/GoWDK/releases)):
 
 ```sh
-GOWDK_VERSION=v0.7.0 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
+GOWDK_VERSION=<version> GOWDK_INSTALL_DIR="$HOME/.local/bin" \
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
 ```
 

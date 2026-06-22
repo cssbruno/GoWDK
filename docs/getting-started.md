@@ -18,10 +18,12 @@ curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install
 gowdk version
 ```
 
-Pin the current CLI release or install into a user-writable directory:
+Pin a specific CLI release (replace `<version>` with a tag from the
+[releases page](https://github.com/cssbruno/GoWDK/releases)) or install into a
+user-writable directory:
 
 ```sh
-GOWDK_VERSION=v0.7.0 GOWDK_INSTALL_DIR="$HOME/.local/bin" \
+GOWDK_VERSION=<version> GOWDK_INSTALL_DIR="$HOME/.local/bin" \
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
 ```
 
@@ -96,9 +98,8 @@ Direct artifact names:
 Manual Linux install:
 
 ```sh
-version=v0.7.0
-curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/gowdk-linux-amd64"
-curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/checksums.txt"
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/latest/download/gowdk-linux-amd64"
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/latest/download/checksums.txt"
 grep ' gowdk-linux-amd64$' checksums.txt | sha256sum -c -
 chmod 0755 gowdk-linux-amd64
 mkdir -p "$HOME/.local/bin"
@@ -109,9 +110,8 @@ gowdk version
 Manual macOS Intel install:
 
 ```sh
-version=v0.7.0
-curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/gowdk-darwin-amd64"
-curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/checksums.txt"
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/latest/download/gowdk-darwin-amd64"
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/latest/download/checksums.txt"
 expected="$(awk '$2 == "gowdk-darwin-amd64" { print $1 }' checksums.txt)"
 actual="$(shasum -a 256 gowdk-darwin-amd64 | awk '{ print $1 }')"
 test "$expected" = "$actual"
@@ -124,9 +124,8 @@ gowdk version
 Manual macOS ARM install:
 
 ```sh
-version=v0.7.0
-curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/gowdk-darwin-arm64"
-curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/$version/checksums.txt"
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/latest/download/gowdk-darwin-arm64"
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/latest/download/checksums.txt"
 expected="$(awk '$2 == "gowdk-darwin-arm64" { print $1 }' checksums.txt)"
 actual="$(shasum -a 256 gowdk-darwin-arm64 | awk '{ print $1 }')"
 test "$expected" = "$actual"
@@ -139,9 +138,8 @@ gowdk version
 Manual Windows install from PowerShell:
 
 ```powershell
-$version = "v0.7.0"
-Invoke-WebRequest "https://github.com/cssbruno/GoWDK/releases/download/$version/gowdk-windows-amd64.exe" -OutFile "gowdk.exe"
-Invoke-WebRequest "https://github.com/cssbruno/GoWDK/releases/download/$version/checksums.txt" -OutFile "checksums.txt"
+Invoke-WebRequest "https://github.com/cssbruno/GoWDK/releases/latest/download/gowdk-windows-amd64.exe" -OutFile "gowdk.exe"
+Invoke-WebRequest "https://github.com/cssbruno/GoWDK/releases/latest/download/checksums.txt" -OutFile "checksums.txt"
 $expected = (Select-String -Path checksums.txt -Pattern "gowdk-windows-amd64.exe").Line.Split(" ")[0]
 $actual = (Get-FileHash .\gowdk.exe -Algorithm SHA256).Hash.ToLower()
 if ($expected -ne $actual) { throw "checksum mismatch" }
@@ -155,10 +153,11 @@ gh attestation verify ./gowdk-linux-amd64 -R cssbruno/GOWDK
 ```
 
 Install the VS Code extension package from a release when a `.vsix` is
-published:
+published (the filename carries the release version, e.g.
+`gowdk-vscode-0.8.0.vsix`):
 
 ```sh
-code --install-extension gowdk-vscode-0.7.0.vsix
+code --install-extension ./gowdk-vscode-*.vsix
 ```
 
 ## Build From Source

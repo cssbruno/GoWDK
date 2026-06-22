@@ -125,13 +125,13 @@ the same change or open a narrower issue naming the unstable file/report.
 After publishing a tag, verify the current machine's release artifact locally:
 
 ```sh
-scripts/smoke-release-artifact.sh v0.7.0
+scripts/smoke-release-artifact.sh vX.Y.Z
 ```
 
 Pass an explicit asset name to test a non-native artifact:
 
 ```sh
-scripts/smoke-release-artifact.sh v0.7.0 gowdk-linux-amd64
+scripts/smoke-release-artifact.sh vX.Y.Z gowdk-linux-amd64
 ```
 
 Use `GOWDK_RELEASE_REPO=owner/repo` for forks. The GitHub-only matrix version

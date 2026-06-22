@@ -15,6 +15,10 @@ import (
 const (
 	buildIterationBudget = 50000
 	buildValueMaxDepth   = 64
+	// buildSeqBound caps seq() operands at the IEEE-754 safe-integer range so the
+	// end-start length cannot overflow int before the budget check, and so seq
+	// values round-trip through JSON exactly.
+	buildSeqBound = 1 << 53
 )
 
 // buildEnv is the evaluation environment for one build {} block. data holds the
@@ -327,11 +331,12 @@ func indexTopLevelWord(source string, word string) int {
 
 // exprScanner tracks bracket depth and string-literal state so the top-level
 // scanners ignore separators nested inside parentheses, brackets, braces, or
-// string literals.
+// string literals (both interpreted "..." and raw `...` Go strings).
 type exprScanner struct {
-	depth    int
-	inString bool
-	escaped  bool
+	depth       int
+	inString    bool
+	escaped     bool
+	inRawString bool
 }
 
 func newExprScanner() *exprScanner {
@@ -343,6 +348,12 @@ func newExprScanner() *exprScanner {
 func (s *exprScanner) step(char byte) bool {
 	if s.escaped {
 		s.escaped = false
+		return false
+	}
+	if s.inRawString {
+		if char == '`' {
+			s.inRawString = false
+		}
 		return false
 	}
 	if s.inString {
@@ -357,6 +368,9 @@ func (s *exprScanner) step(char byte) bool {
 	switch char {
 	case '"':
 		s.inString = true
+		return false
+	case '`':
+		s.inRawString = true
 		return false
 	case '(', '[', '{':
 		s.depth++

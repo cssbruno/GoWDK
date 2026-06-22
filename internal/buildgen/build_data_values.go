@@ -78,7 +78,7 @@ func (v buildValue) jsonText() string {
 		encoded, _ := json.Marshal(v.text)
 		return string(encoded)
 	case buildValueNumber:
-		return v.text
+		return canonicalJSONNumber(v.text, v.number)
 	case buildValueBool:
 		return v.text
 	case buildValueNil:
@@ -99,6 +99,66 @@ func (v buildValue) jsonText() string {
 	default:
 		return "null"
 	}
+}
+
+// canonicalJSONNumber returns a JSON-valid spelling of a number value. A scalar's
+// text is the author's literal form, which can be valid Go but invalid JSON (for
+// example the octal-style `01`). When the literal is already canonical JSON it is
+// preserved verbatim so wide integer literals keep full precision; otherwise it
+// is reformatted from the parsed float.
+func canonicalJSONNumber(text string, number float64) string {
+	if isCanonicalJSONNumber(text) {
+		return text
+	}
+	return strconv.FormatFloat(number, 'f', -1, 64)
+}
+
+// isCanonicalJSONNumber reports whether text is a JSON number literal: an
+// optional minus, an integer part with no redundant leading zero, and optional
+// fraction and exponent.
+func isCanonicalJSONNumber(text string) bool {
+	if text == "" {
+		return false
+	}
+	index := 0
+	if text[index] == '-' {
+		index++
+	}
+	intStart := index
+	for index < len(text) && text[index] >= '0' && text[index] <= '9' {
+		index++
+	}
+	intLen := index - intStart
+	if intLen == 0 {
+		return false
+	}
+	if intLen > 1 && text[intStart] == '0' {
+		return false
+	}
+	if index < len(text) && text[index] == '.' {
+		index++
+		fracStart := index
+		for index < len(text) && text[index] >= '0' && text[index] <= '9' {
+			index++
+		}
+		if index == fracStart {
+			return false
+		}
+	}
+	if index < len(text) && (text[index] == 'e' || text[index] == 'E') {
+		index++
+		if index < len(text) && (text[index] == '+' || text[index] == '-') {
+			index++
+		}
+		expStart := index
+		for index < len(text) && text[index] >= '0' && text[index] <= '9' {
+			index++
+		}
+		if index == expStart {
+			return false
+		}
+	}
+	return index == len(text)
 }
 
 func buildValueStrings(data map[string]buildValue) map[string]string {
@@ -162,6 +222,9 @@ func buildFieldValueFromString(name string, exprStr string, env *buildEnv) (stri
 }
 
 func buildEvalAST(expr ast.Expr, env *buildEnv) (buildValue, error) {
+	if env.depth > buildValueMaxDepth {
+		return buildValue{}, fmt.Errorf("build expression nested too deeply (limit %d)", buildValueMaxDepth)
+	}
 	switch typed := expr.(type) {
 	case *ast.BasicLit:
 		switch typed.Kind {
@@ -207,25 +270,25 @@ func buildEvalAST(expr ast.Expr, env *buildEnv) (buildValue, error) {
 			return value, nil
 		}
 	case *ast.SelectorExpr:
-		return buildSelectorValue(typed, env)
+		return buildSelectorValue(typed, env.deeper())
 	case *ast.IndexExpr:
-		return buildIndexValue(typed, env)
+		return buildIndexValue(typed, env.deeper())
 	case *ast.CallExpr:
-		return buildCallValue(typed, env)
+		return buildCallValue(typed, env.deeper())
 	case *ast.ParenExpr:
-		return buildEvalAST(typed.X, env)
+		return buildEvalAST(typed.X, env.deeper())
 	case *ast.UnaryExpr:
-		value, err := buildEvalAST(typed.X, env)
+		value, err := buildEvalAST(typed.X, env.deeper())
 		if err != nil {
 			return buildValue{}, err
 		}
 		return buildUnaryValue(typed.Op, value)
 	case *ast.BinaryExpr:
-		left, err := buildEvalAST(typed.X, env)
+		left, err := buildEvalAST(typed.X, env.deeper())
 		if err != nil {
 			return buildValue{}, err
 		}
-		right, err := buildEvalAST(typed.Y, env)
+		right, err := buildEvalAST(typed.Y, env.deeper())
 		if err != nil {
 			return buildValue{}, err
 		}
@@ -349,6 +412,11 @@ func buildSeqCall(call *ast.CallExpr, env *buildEnv) (buildValue, error) {
 	if end < start {
 		return buildValue{}, fmt.Errorf("seq end %d must be >= start %d", end, start)
 	}
+	// Bound the operands so end-start cannot overflow int before the budget check;
+	// a valid seq produces at most the per-block budget anyway.
+	if start < -buildSeqBound || start > buildSeqBound || end < -buildSeqBound || end > buildSeqBound {
+		return buildValue{}, fmt.Errorf("seq bounds must be within [-%d, %d]", buildSeqBound, buildSeqBound)
+	}
 	if err := env.consume(end - start); err != nil {
 		return buildValue{}, err
 	}
@@ -449,12 +517,18 @@ func buildTakeCall(call *ast.CallExpr, env *buildEnv) (buildValue, error) {
 	if limit > len(list.items) {
 		limit = len(list.items)
 	}
+	if err := env.consume(limit); err != nil {
+		return buildValue{}, err
+	}
 	return buildListValue(append([]buildValue(nil), list.items[:limit]...)), nil
 }
 
 func buildReverseCall(call *ast.CallExpr, env *buildEnv) (buildValue, error) {
 	list, err := buildSingleListArg("reverse", call, env)
 	if err != nil {
+		return buildValue{}, err
+	}
+	if err := env.consume(len(list.items)); err != nil {
 		return buildValue{}, err
 	}
 	reversed := make([]buildValue, len(list.items))

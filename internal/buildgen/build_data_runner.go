@@ -534,8 +534,13 @@ func isBuildDataSignatureMismatch(err error) bool {
 }
 
 func parseBuildFunctionOutput(output []byte) (map[string]string, error) {
+	// UseNumber keeps numbers as their exact source text (json.Number) instead of
+	// float64, so large integer IDs inside returned slices/structs are not
+	// silently rounded when re-serialized below.
+	decoder := json.NewDecoder(bytes.NewReader(output))
+	decoder.UseNumber()
 	var raw map[string]any
-	if err := json.Unmarshal(output, &raw); err != nil {
+	if err := decoder.Decode(&raw); err != nil {
 		return nil, fmt.Errorf("decode build data output: %w", err)
 	}
 	if len(raw) == 0 {
@@ -569,6 +574,8 @@ func buildFieldOutputString(value any) (string, bool) {
 			return "", false
 		}
 		return typed, true
+	case json.Number:
+		return typed.String(), true
 	case float64:
 		return strconv.FormatFloat(typed, 'f', -1, 64), true
 	case bool:

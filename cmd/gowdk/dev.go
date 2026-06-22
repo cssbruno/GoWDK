@@ -576,31 +576,27 @@ func parseDevOptions(args []string) (devOptions, error) {
 	}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
+		if value, next, ok, missing := consumeValueFlag(args, i, "--addr", true); ok {
+			if missing {
+				return devOptions{}, errors.New(devUsage())
+			}
+			options.Addr = value
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--interval", true); ok {
+			if missing {
+				return devOptions{}, errors.New(devUsage())
+			}
+			interval, err := parseDevInterval(value)
+			if err != nil {
+				return devOptions{}, err
+			}
+			options.Interval = interval
+			i = next
+			continue
+		}
 		switch {
-		case arg == "--addr":
-			i++
-			if i >= len(args) {
-				return devOptions{}, errors.New(devUsage())
-			}
-			options.Addr = args[i]
-		case strings.HasPrefix(arg, "--addr="):
-			options.Addr = strings.TrimPrefix(arg, "--addr=")
-		case arg == "--interval":
-			i++
-			if i >= len(args) {
-				return devOptions{}, errors.New(devUsage())
-			}
-			interval, err := parseDevInterval(args[i])
-			if err != nil {
-				return devOptions{}, err
-			}
-			options.Interval = interval
-		case strings.HasPrefix(arg, "--interval="):
-			interval, err := parseDevInterval(strings.TrimPrefix(arg, "--interval="))
-			if err != nil {
-				return devOptions{}, err
-			}
-			options.Interval = interval
 		default:
 			options.BuildArgs = append(options.BuildArgs, arg)
 		}

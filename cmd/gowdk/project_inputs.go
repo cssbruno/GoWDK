@@ -91,37 +91,38 @@ func discoverProjectFiles(config gowdk.Config, moduleNames []string, root string
 }
 
 func discoverConfiguredFiles(config gowdk.Config, outputDir string, moduleNames []string, root string) ([]string, error) {
-	if strings.TrimSpace(root) == "" {
-		var err error
-		root, err = os.Getwd()
-		if err != nil {
-			return nil, err
-		}
-	}
-	modules, err := buildModules(config.Modules, moduleNames)
+	inputs, err := configuredDiscoveryInputs(config, outputDir, moduleNames, root)
 	if err != nil {
 		return nil, err
 	}
-
-	includes := buildSourceIncludes(config, modules, len(moduleNames) > 0)
-	excludes := buildSourceExcludes(config, modules)
-	if pattern := outputExcludePattern(root, outputDir); pattern != "" {
-		excludes = append(excludes, pattern)
-	}
-	return discover.Files(root, includes, excludes)
+	return discover.Files(inputs.root, inputs.includes, inputs.excludes)
 }
 
 func discoverConfiguredFilesAndDirs(config gowdk.Config, outputDir string, moduleNames []string, root string) ([]string, []string, error) {
+	inputs, err := configuredDiscoveryInputs(config, outputDir, moduleNames, root)
+	if err != nil {
+		return nil, nil, err
+	}
+	return discover.FilesAndDirs(inputs.root, inputs.includes, inputs.excludes)
+}
+
+type discoveryInputs struct {
+	root     string
+	includes []string
+	excludes []string
+}
+
+func configuredDiscoveryInputs(config gowdk.Config, outputDir string, moduleNames []string, root string) (discoveryInputs, error) {
 	if strings.TrimSpace(root) == "" {
 		var err error
 		root, err = os.Getwd()
 		if err != nil {
-			return nil, nil, err
+			return discoveryInputs{}, err
 		}
 	}
 	modules, err := buildModules(config.Modules, moduleNames)
 	if err != nil {
-		return nil, nil, err
+		return discoveryInputs{}, err
 	}
 
 	includes := buildSourceIncludes(config, modules, len(moduleNames) > 0)
@@ -129,7 +130,7 @@ func discoverConfiguredFilesAndDirs(config gowdk.Config, outputDir string, modul
 	if pattern := outputExcludePattern(root, outputDir); pattern != "" {
 		excludes = append(excludes, pattern)
 	}
-	return discover.FilesAndDirs(root, includes, excludes)
+	return discoveryInputs{root: root, includes: includes, excludes: excludes}, nil
 }
 
 func loadCommandInputs(args []string, command string, allowJSON bool) (cliOptions, []string, error) {
@@ -262,6 +263,31 @@ func parseProjectOptions(args []string, command string, allowJSON bool) (cliOpti
 	usage := projectCommandUsage(command, allowJSON)
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
+		if value, next, ok, missing := consumeValueFlag(args, i, "--config", true); ok {
+			if missing {
+				return options, "", nil, nil, errors.New(usage)
+			}
+			configPath = value
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--env-file", true); ok {
+			if missing {
+				return options, "", nil, nil, errors.New(usage)
+			}
+			envFilePath = value
+			options.EnvFilePath = envFilePath
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--module", true); ok {
+			if missing {
+				return options, "", nil, nil, errors.New(usage)
+			}
+			moduleNames = appendModuleNames(moduleNames, value)
+			i = next
+			continue
+		}
 		switch {
 		case arg == "-h" || arg == "--help":
 			return options, "", nil, nil, errors.New(usage)
@@ -276,32 +302,6 @@ func parseProjectOptions(args []string, command string, allowJSON bool) (cliOpti
 				return options, "", nil, nil, fmt.Errorf("unknown %s flag %q", command, arg)
 			}
 			options.WarningsAsErrors = true
-		case arg == "--config":
-			i++
-			if i >= len(args) {
-				return options, "", nil, nil, errors.New(usage)
-			}
-			configPath = args[i]
-		case strings.HasPrefix(arg, "--config="):
-			configPath = strings.TrimPrefix(arg, "--config=")
-		case arg == "--env-file":
-			i++
-			if i >= len(args) {
-				return options, "", nil, nil, errors.New(usage)
-			}
-			envFilePath = args[i]
-			options.EnvFilePath = envFilePath
-		case strings.HasPrefix(arg, "--env-file="):
-			envFilePath = strings.TrimPrefix(arg, "--env-file=")
-			options.EnvFilePath = envFilePath
-		case arg == "--module":
-			i++
-			if i >= len(args) {
-				return options, "", nil, nil, errors.New(usage)
-			}
-			moduleNames = appendModuleNames(moduleNames, args[i])
-		case strings.HasPrefix(arg, "--module="):
-			moduleNames = appendModuleNames(moduleNames, strings.TrimPrefix(arg, "--module="))
 		case strings.HasPrefix(arg, "-"):
 			return options, "", nil, nil, fmt.Errorf("unknown %s flag %q", command, arg)
 		default:

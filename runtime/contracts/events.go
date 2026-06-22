@@ -279,7 +279,6 @@ func registerEvent[E any](registry *Registry, category EventCategory, handler Ev
 	registry.ensureMapsLocked()
 	key := eventKey{category: category, event: typeName[E]()}
 	registry.events[key] = append(registry.events[key], eventEntry{
-		event:    key.event,
 		dispatch: eventDispatcher(handler),
 		roles:    copyRoles(roles),
 	})

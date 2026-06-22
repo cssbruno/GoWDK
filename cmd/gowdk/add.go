@@ -137,6 +137,22 @@ func addAddon(args []string) error {
 	jsonOutput := false
 	for index := 0; index < len(args); index++ {
 		arg := args[index]
+		if value, next, ok, missing := consumeValueFlag(args, index, "--config", true); ok {
+			if missing {
+				return fmt.Errorf("%s\n--config requires a value", addUsage)
+			}
+			configPath = value
+			index = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, index, "--base-url", true); ok {
+			if missing || value == "" {
+				return fmt.Errorf("%s\n--base-url requires a value", addUsage)
+			}
+			options.SEOBaseURL = value
+			index = next
+			continue
+		}
 		switch {
 		case arg == "--list":
 			list = true
@@ -144,25 +160,6 @@ func addAddon(args []string) error {
 			registryList = true
 		case arg == "--json":
 			jsonOutput = true
-		case arg == "--config":
-			if index+1 >= len(args) {
-				return fmt.Errorf("%s\n--config requires a value", addUsage)
-			}
-			index++
-			configPath = args[index]
-		case strings.HasPrefix(arg, "--config="):
-			configPath = strings.TrimPrefix(arg, "--config=")
-		case arg == "--base-url":
-			if index+1 >= len(args) {
-				return fmt.Errorf("%s\n--base-url requires a value", addUsage)
-			}
-			index++
-			options.SEOBaseURL = args[index]
-		case strings.HasPrefix(arg, "--base-url="):
-			options.SEOBaseURL = strings.TrimPrefix(arg, "--base-url=")
-			if options.SEOBaseURL == "" {
-				return fmt.Errorf("%s\n--base-url requires a value", addUsage)
-			}
 		case strings.HasPrefix(arg, "-"):
 			return fmt.Errorf("unknown add flag %q", arg)
 		default:

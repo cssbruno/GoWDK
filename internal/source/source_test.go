@@ -103,6 +103,35 @@ func TestValidateBackendRoutePattern(t *testing.T) {
 	}
 }
 
+func TestValidateBackendRouteSharedPreflight(t *testing.T) {
+	invalid := []string{
+		"",
+		"patients",
+		"//example.com/pay",
+		`/\example.com/pay`,
+		"/patients?filter=active",
+		"/patients#form",
+		"/patients\nadmin",
+		"/patients\\admin",
+		"/patients/../admin",
+		"/patients//active",
+		"/patients/./active",
+		"/patients/",
+		" /patients",
+	}
+	validators := map[string]func(string) error{
+		"path":    ValidateBackendRoutePath,
+		"pattern": ValidateBackendRoutePattern,
+	}
+	for _, path := range invalid {
+		for name, validate := range validators {
+			if err := validate(path); err == nil {
+				t.Fatalf("%s validator accepted shared-invalid path %q", name, path)
+			}
+		}
+	}
+}
+
 func TestPositionAtAndOffsetOf(t *testing.T) {
 	// Multi-line, multi-byte (the euro sign is 3 bytes) so rune columns and byte
 	// offsets diverge.

@@ -113,30 +113,37 @@ type routeInfoJSON struct {
 	Message string `json:"message"`
 }
 
+type routeEndpointFieldsJSON struct {
+	EndpointSource string
+	Directive      string
+	Source         string
+	SourceSpan     *sourceSpanJSON
+	Package        string
+	PackagePath    string
+	PackageName    string
+	Symbol         string
+	Method         string
+	Route          string
+	Cache          string
+	DynamicParams  []string
+	RouteParams    []routeParamJSON
+	Guards         []string
+	CSRF           bool
+	PageID         string
+	Handler        string
+	BindingStatus  string
+}
+
 func routeMetadataJSON(metadata compiler.RouteMetadata) routeMetadataReport {
 	routes := make([]routeBindingJSON, 0, len(metadata.Routes)+len(metadata.Endpoints))
 	for _, binding := range metadata.Routes {
-		routes = append(routes, routeBindingJSON{
-			Kind:          binding.Kind,
-			Method:        binding.Method,
-			Route:         binding.Route,
-			PageID:        binding.PageID,
-			Package:       binding.Package,
-			Render:        string(binding.Render),
-			Cache:         binding.Cache,
-			DynamicParams: append([]string(nil), binding.DynamicParams...),
-			RouteParams:   routeParamsJSON(binding.RouteParams),
-			Layouts:       append([]string(nil), binding.Layouts...),
-			Guards:        append([]string(nil), binding.Guards...),
-			Source:        binding.Source,
-			SourceSpan:    endpointSourceSpanJSON(binding.SourceSpan),
-			Handler:       binding.Handler,
-		})
+		route := routeBindingFromFields(binding.Kind, routeFieldsJSON(binding))
+		route.Render = string(binding.Render)
+		route.Layouts = append([]string(nil), binding.Layouts...)
+		routes = append(routes, route)
 	}
-	endpoints := endpointsJSON(metadata.Endpoints)
-	for _, endpoint := range endpoints {
-		routes = append(routes, endpointRouteJSON(endpoint))
-	}
+	endpoints, endpointRoutes := endpointReportsJSON(metadata.Endpoints)
+	routes = append(routes, endpointRoutes...)
 	info := make([]routeInfoJSON, 0, len(metadata.Info))
 	for _, item := range metadata.Info {
 		info = append(info, routeInfoJSON{
@@ -155,38 +162,26 @@ func routeMetadataJSON(metadata compiler.RouteMetadata) routeMetadataReport {
 }
 
 func endpointMetadataJSON(metadata compiler.RouteMetadata) endpointMetadataReport {
+	endpoints, _ := endpointReportsJSON(metadata.Endpoints)
 	return endpointMetadataReport{
 		Version:   1,
-		Endpoints: endpointsJSON(metadata.Endpoints),
+		Endpoints: endpoints,
 	}
 }
 
 func endpointsJSON(bindings []compiler.EndpointBinding) []endpointBindingJSON {
+	endpoints, _ := endpointReportsJSON(bindings)
+	return endpoints
+}
+
+func endpointReportsJSON(bindings []compiler.EndpointBinding) ([]endpointBindingJSON, []routeBindingJSON) {
 	endpoints := make([]endpointBindingJSON, 0, len(bindings))
+	routes := make([]routeBindingJSON, 0, len(bindings))
 	for _, binding := range bindings {
-		item := endpointBindingJSON{
-			Kind:           binding.Kind,
-			EndpointSource: binding.EndpointSource,
-			Directive:      endpointDirective(binding.Kind),
-			Source:         binding.Source,
-			SourceSpan:     endpointSourceSpanJSON(binding.SourceSpan),
-			Package:        binding.Package,
-			PackagePath:    binding.PackagePath,
-			PackageName:    binding.PackageName,
-			Symbol:         binding.Symbol,
-			Method:         binding.Method,
-			Route:          binding.Route,
-			Cache:          binding.Cache,
-			DynamicParams:  append([]string(nil), binding.DynamicParams...),
-			RouteParams:    routeParamsJSON(binding.RouteParams),
-			Guards:         append([]string(nil), binding.Guards...),
-			CSRF:           binding.CSRF,
-			PageID:         binding.PageID,
-			Handler:        binding.Handler,
-			BindingStatus:  string(binding.BindingStatus),
-			Signature:      string(binding.BindingSignature),
-			InputType:      binding.BindingInputType,
-		}
+		fields := endpointFieldsJSON(binding)
+		item := endpointBindingFromFields(binding.Kind, fields)
+		item.Signature = string(binding.BindingSignature)
+		item.InputType = binding.BindingInputType
 		if binding.BindingStatus != "" {
 			item.BackendBinding = &backendBindingJSON{
 				Status:       string(binding.BindingStatus),
@@ -214,31 +209,95 @@ func endpointsJSON(bindings []compiler.EndpointBinding) []endpointBindingJSON {
 			}
 		}
 		endpoints = append(endpoints, item)
+		routes = append(routes, routeBindingFromFields(compiler.RouteKind(binding.Kind), fields))
 	}
-	return endpoints
+	return endpoints, routes
 }
 
-func endpointRouteJSON(endpoint endpointBindingJSON) routeBindingJSON {
+func routeFieldsJSON(binding compiler.RouteBinding) routeEndpointFieldsJSON {
+	return routeEndpointFieldsJSON{
+		Method:        binding.Method,
+		Route:         binding.Route,
+		PageID:        binding.PageID,
+		Package:       binding.Package,
+		Cache:         binding.Cache,
+		DynamicParams: append([]string(nil), binding.DynamicParams...),
+		RouteParams:   routeParamsJSON(binding.RouteParams),
+		Guards:        append([]string(nil), binding.Guards...),
+		Source:        binding.Source,
+		SourceSpan:    endpointSourceSpanJSON(binding.SourceSpan),
+		Handler:       binding.Handler,
+	}
+}
+
+func endpointFieldsJSON(binding compiler.EndpointBinding) routeEndpointFieldsJSON {
+	return routeEndpointFieldsJSON{
+		EndpointSource: binding.EndpointSource,
+		Directive:      endpointDirective(binding.Kind),
+		Source:         binding.Source,
+		SourceSpan:     endpointSourceSpanJSON(binding.SourceSpan),
+		Package:        binding.Package,
+		PackagePath:    binding.PackagePath,
+		PackageName:    binding.PackageName,
+		Symbol:         binding.Symbol,
+		Method:         binding.Method,
+		Route:          binding.Route,
+		Cache:          binding.Cache,
+		DynamicParams:  append([]string(nil), binding.DynamicParams...),
+		RouteParams:    routeParamsJSON(binding.RouteParams),
+		Guards:         append([]string(nil), binding.Guards...),
+		CSRF:           binding.CSRF,
+		PageID:         binding.PageID,
+		Handler:        binding.Handler,
+		BindingStatus:  string(binding.BindingStatus),
+	}
+}
+
+func routeBindingFromFields(kind compiler.RouteKind, fields routeEndpointFieldsJSON) routeBindingJSON {
 	return routeBindingJSON{
-		Kind:           compiler.RouteKind(endpoint.Kind),
-		EndpointSource: endpoint.EndpointSource,
-		Directive:      endpoint.Directive,
-		Method:         endpoint.Method,
-		Route:          endpoint.Route,
-		PageID:         endpoint.PageID,
-		Package:        endpoint.Package,
-		PackagePath:    endpoint.PackagePath,
-		PackageName:    endpoint.PackageName,
-		Symbol:         endpoint.Symbol,
-		Cache:          endpoint.Cache,
-		DynamicParams:  append([]string(nil), endpoint.DynamicParams...),
-		RouteParams:    append([]routeParamJSON(nil), endpoint.RouteParams...),
-		Guards:         append([]string(nil), endpoint.Guards...),
-		CSRF:           endpoint.CSRF,
-		Source:         endpoint.Source,
-		SourceSpan:     endpoint.SourceSpan,
-		Handler:        endpoint.Handler,
-		BindingStatus:  endpoint.BindingStatus,
+		Kind:           kind,
+		EndpointSource: fields.EndpointSource,
+		Directive:      fields.Directive,
+		Method:         fields.Method,
+		Route:          fields.Route,
+		PageID:         fields.PageID,
+		Package:        fields.Package,
+		PackagePath:    fields.PackagePath,
+		PackageName:    fields.PackageName,
+		Symbol:         fields.Symbol,
+		Cache:          fields.Cache,
+		DynamicParams:  append([]string(nil), fields.DynamicParams...),
+		RouteParams:    append([]routeParamJSON(nil), fields.RouteParams...),
+		Guards:         append([]string(nil), fields.Guards...),
+		CSRF:           fields.CSRF,
+		Source:         fields.Source,
+		SourceSpan:     fields.SourceSpan,
+		Handler:        fields.Handler,
+		BindingStatus:  fields.BindingStatus,
+	}
+}
+
+func endpointBindingFromFields(kind compiler.EndpointKind, fields routeEndpointFieldsJSON) endpointBindingJSON {
+	return endpointBindingJSON{
+		Kind:           kind,
+		EndpointSource: fields.EndpointSource,
+		Directive:      fields.Directive,
+		Source:         fields.Source,
+		SourceSpan:     fields.SourceSpan,
+		Package:        fields.Package,
+		PackagePath:    fields.PackagePath,
+		PackageName:    fields.PackageName,
+		Symbol:         fields.Symbol,
+		Method:         fields.Method,
+		Route:          fields.Route,
+		Cache:          fields.Cache,
+		DynamicParams:  append([]string(nil), fields.DynamicParams...),
+		RouteParams:    append([]routeParamJSON(nil), fields.RouteParams...),
+		Guards:         append([]string(nil), fields.Guards...),
+		CSRF:           fields.CSRF,
+		PageID:         fields.PageID,
+		Handler:        fields.Handler,
+		BindingStatus:  fields.BindingStatus,
 	}
 }
 

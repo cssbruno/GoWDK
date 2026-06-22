@@ -68,7 +68,6 @@ type buildOptions struct {
 	DockerBase        string
 	DeployRecipes     []string
 	ConfigPath        string
-	EnvFilePath       string
 	TargetNames       []string
 	ModuleNames       []string
 	Paths             []string
@@ -108,11 +107,31 @@ func (plan buildOptions) request() buildRequest {
 }
 
 func (plan buildOptions) hasAdHocArgs() bool {
-	return hasAdHocBuildArgs(plan.OutputDir, plan.AppDir, plan.BinaryPath, plan.WASMPath, plan.BackendAppDir, plan.BackendBinaryPath, plan.Docker, plan.DockerBase, plan.DeployRecipes, plan.ModuleNames, plan.Paths)
+	return plan.request().hasAdHocArgs()
 }
 
 func (plan buildOptions) shouldBuildConfiguredTargets() bool {
-	return shouldBuildConfiguredTargets(plan.Options.Config, plan.TargetNames, plan.OutputDir, plan.AppDir, plan.BinaryPath, plan.WASMPath, plan.BackendAppDir, plan.BackendBinaryPath, plan.Docker, plan.DockerBase, plan.DeployRecipes, plan.ModuleNames, plan.Paths)
+	if len(plan.TargetNames) > 0 {
+		return true
+	}
+	if len(plan.Options.Config.Build.Targets) == 0 {
+		return false
+	}
+	return !plan.request().hasAdHocArgs()
+}
+
+func (request buildRequest) hasAdHocArgs() bool {
+	return strings.TrimSpace(request.OutputDir) != "" ||
+		strings.TrimSpace(request.AppDir) != "" ||
+		strings.TrimSpace(request.BinaryPath) != "" ||
+		strings.TrimSpace(request.WASMPath) != "" ||
+		strings.TrimSpace(request.BackendAppDir) != "" ||
+		strings.TrimSpace(request.BackendBinaryPath) != "" ||
+		request.Docker ||
+		strings.TrimSpace(request.DockerBase) != "" ||
+		len(request.DeployRecipes) > 0 ||
+		len(request.Modules) > 0 ||
+		len(request.Paths) > 0
 }
 
 func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRecorder) error {
@@ -439,40 +458,6 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	return nil
 }
 
-func shouldBuildConfiguredTargets(config gowdk.Config, targetNames []string, outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath string, docker bool, dockerBase string, deployRecipes []string, moduleNames, paths []string) bool {
-	if len(targetNames) > 0 {
-		return true
-	}
-	if len(config.Build.Targets) == 0 {
-		return false
-	}
-	return strings.TrimSpace(outputDir) == "" &&
-		strings.TrimSpace(appDir) == "" &&
-		strings.TrimSpace(binaryPath) == "" &&
-		strings.TrimSpace(wasmPath) == "" &&
-		strings.TrimSpace(backendAppDir) == "" &&
-		strings.TrimSpace(backendBinaryPath) == "" &&
-		!docker &&
-		strings.TrimSpace(dockerBase) == "" &&
-		len(deployRecipes) == 0 &&
-		len(moduleNames) == 0 &&
-		len(paths) == 0
-}
-
-func hasAdHocBuildArgs(outputDir, appDir, binaryPath, wasmPath, backendAppDir, backendBinaryPath string, docker bool, dockerBase string, deployRecipes, moduleNames, paths []string) bool {
-	return strings.TrimSpace(outputDir) != "" ||
-		strings.TrimSpace(appDir) != "" ||
-		strings.TrimSpace(binaryPath) != "" ||
-		strings.TrimSpace(wasmPath) != "" ||
-		strings.TrimSpace(backendAppDir) != "" ||
-		strings.TrimSpace(backendBinaryPath) != "" ||
-		docker ||
-		strings.TrimSpace(dockerBase) != "" ||
-		len(deployRecipes) > 0 ||
-		len(moduleNames) > 0 ||
-		len(paths) > 0
-}
-
 func buildConfiguredTargets(plan buildOptions, timings *buildTimingRecorder) error {
 	targets, err := selectBuildTargets(plan.Options.Config.Build.Targets, plan.TargetNames)
 	if err != nil {
@@ -502,6 +487,42 @@ func buildConfiguredTargets(plan buildOptions, timings *buildTimingRecorder) err
 }
 
 func selectBuildTargets(targets []gowdk.BuildTargetConfig, targetNames []string) ([]gowdk.BuildTargetConfig, error) {
+	selected, err := resolveConfiguredBuildTargets(targets, targetNames)
+	if err != nil {
+		return nil, err
+	}
+	normalized := make([]gowdk.BuildTargetConfig, 0, len(selected))
+	for _, target := range selected {
+		target.Modules = cleanNames(target.Modules)
+		recipes, err := normalizeDeploymentRecipes(target.DeployRecipes)
+		if err != nil {
+			return nil, fmt.Errorf("build target %q: %w", target.Name, err)
+		}
+		target.DeployRecipes = recipes
+		if strings.TrimSpace(target.Output) == "" {
+			target.Output = defaultBuildTargetOutput(target.Name)
+		}
+		if strings.TrimSpace(target.Binary) != "" && strings.TrimSpace(target.App) == "" {
+			return nil, fmt.Errorf("build target %q binary requires app", target.Name)
+		}
+		if strings.TrimSpace(target.WASM) != "" && strings.TrimSpace(target.App) == "" {
+			return nil, fmt.Errorf("build target %q wasm requires app", target.Name)
+		}
+		if strings.TrimSpace(target.BackendBinary) != "" && strings.TrimSpace(target.BackendApp) == "" {
+			return nil, fmt.Errorf("build target %q backend binary requires backend app", target.Name)
+		}
+		target.Output = strings.TrimSpace(target.Output)
+		target.App = strings.TrimSpace(target.App)
+		target.Binary = strings.TrimSpace(target.Binary)
+		target.WASM = strings.TrimSpace(target.WASM)
+		target.BackendApp = strings.TrimSpace(target.BackendApp)
+		target.BackendBinary = strings.TrimSpace(target.BackendBinary)
+		normalized = append(normalized, target)
+	}
+	return normalized, nil
+}
+
+func resolveConfiguredBuildTargets(targets []gowdk.BuildTargetConfig, targetNames []string) ([]gowdk.BuildTargetConfig, error) {
 	byName := map[string]gowdk.BuildTargetConfig{}
 	var normalized []gowdk.BuildTargetConfig
 	for _, target := range targets {
@@ -513,34 +534,9 @@ func selectBuildTargets(targets []gowdk.BuildTargetConfig, targetNames []string)
 			return nil, fmt.Errorf("build target %q is configured more than once", name)
 		}
 		target.Name = name
-		target.Modules = cleanNames(target.Modules)
-		recipes, err := normalizeDeploymentRecipes(target.DeployRecipes)
-		if err != nil {
-			return nil, fmt.Errorf("build target %q: %w", name, err)
-		}
-		target.DeployRecipes = recipes
-		if strings.TrimSpace(target.Output) == "" {
-			target.Output = defaultBuildTargetOutput(name)
-		}
-		if strings.TrimSpace(target.Binary) != "" && strings.TrimSpace(target.App) == "" {
-			return nil, fmt.Errorf("build target %q binary requires app", name)
-		}
-		if strings.TrimSpace(target.WASM) != "" && strings.TrimSpace(target.App) == "" {
-			return nil, fmt.Errorf("build target %q wasm requires app", name)
-		}
-		if strings.TrimSpace(target.BackendBinary) != "" && strings.TrimSpace(target.BackendApp) == "" {
-			return nil, fmt.Errorf("build target %q backend binary requires backend app", name)
-		}
-		target.Output = strings.TrimSpace(target.Output)
-		target.App = strings.TrimSpace(target.App)
-		target.Binary = strings.TrimSpace(target.Binary)
-		target.WASM = strings.TrimSpace(target.WASM)
-		target.BackendApp = strings.TrimSpace(target.BackendApp)
-		target.BackendBinary = strings.TrimSpace(target.BackendBinary)
 		byName[name] = target
 		normalized = append(normalized, target)
 	}
-
 	if len(targetNames) == 0 {
 		return normalized, nil
 	}
@@ -619,6 +615,120 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 	var plan buildOptions
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
+		if value, next, ok, missing := consumeValueFlag(args, i, "--out", false); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.OutputDir = value
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--app", false); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.AppDir = value
+			if strings.TrimSpace(plan.AppDir) == "" {
+				return buildOptions{}, fmt.Errorf("generated app directory is required")
+			}
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--bin", false); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.BinaryPath = value
+			if strings.TrimSpace(plan.BinaryPath) == "" {
+				return buildOptions{}, fmt.Errorf("binary output path is required")
+			}
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--docker-base", true); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.DockerBase = value
+			if strings.TrimSpace(plan.DockerBase) == "" {
+				return buildOptions{}, fmt.Errorf("Docker base is required")
+			}
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--deploy-recipe", true); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.DeployRecipes = appendNames(plan.DeployRecipes, value)
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--wasm", false); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.WASMPath = value
+			if strings.TrimSpace(plan.WASMPath) == "" {
+				return buildOptions{}, fmt.Errorf("wasm output path is required")
+			}
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--backend-app", false); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.BackendAppDir = value
+			if strings.TrimSpace(plan.BackendAppDir) == "" {
+				return buildOptions{}, fmt.Errorf("generated backend app directory is required")
+			}
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--backend-bin", false); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.BackendBinaryPath = value
+			if strings.TrimSpace(plan.BackendBinaryPath) == "" {
+				return buildOptions{}, fmt.Errorf("backend binary output path is required")
+			}
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--config", false); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.ConfigPath = value
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--env-file", false); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.Options.EnvFilePath = value
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--target", false); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.TargetNames = appendNames(plan.TargetNames, value)
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--module", false); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.ModuleNames = appendNames(plan.ModuleNames, value)
+			i = next
+			continue
+		}
 		switch {
 		case arg == "--ssr":
 			plan.Options.Config.Addons = append(plan.Options.Config.Addons, ssr.Addon())
@@ -648,142 +758,8 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 			plan.Options.ObfuscateAssets = true
 			plan.Options.Config.Build.ObfuscateAssets = true
 			plan.Options.Config.Build.Mode = gowdk.Production
-		case arg == "--out":
-			i++
-			if i >= len(args) {
-				return buildOptions{}, fmt.Errorf(buildUsage)
-			}
-			plan.OutputDir = args[i]
-		case len(arg) > len("--out=") && arg[:len("--out=")] == "--out=":
-			plan.OutputDir = arg[len("--out="):]
-		case arg == "--app":
-			i++
-			if i >= len(args) {
-				return buildOptions{}, fmt.Errorf(buildUsage)
-			}
-			plan.AppDir = args[i]
-			if strings.TrimSpace(plan.AppDir) == "" {
-				return buildOptions{}, fmt.Errorf("generated app directory is required")
-			}
-		case len(arg) > len("--app=") && arg[:len("--app=")] == "--app=":
-			plan.AppDir = arg[len("--app="):]
-			if strings.TrimSpace(plan.AppDir) == "" {
-				return buildOptions{}, fmt.Errorf("generated app directory is required")
-			}
-		case arg == "--bin":
-			i++
-			if i >= len(args) {
-				return buildOptions{}, fmt.Errorf(buildUsage)
-			}
-			plan.BinaryPath = args[i]
-			if strings.TrimSpace(plan.BinaryPath) == "" {
-				return buildOptions{}, fmt.Errorf("binary output path is required")
-			}
-		case len(arg) > len("--bin=") && arg[:len("--bin=")] == "--bin=":
-			plan.BinaryPath = arg[len("--bin="):]
-			if strings.TrimSpace(plan.BinaryPath) == "" {
-				return buildOptions{}, fmt.Errorf("binary output path is required")
-			}
 		case arg == "--docker":
 			plan.Docker = true
-		case arg == "--docker-base":
-			i++
-			if i >= len(args) {
-				return buildOptions{}, fmt.Errorf(buildUsage)
-			}
-			plan.DockerBase = args[i]
-			if strings.TrimSpace(plan.DockerBase) == "" {
-				return buildOptions{}, fmt.Errorf("Docker base is required")
-			}
-		case strings.HasPrefix(arg, "--docker-base="):
-			plan.DockerBase = strings.TrimPrefix(arg, "--docker-base=")
-			if strings.TrimSpace(plan.DockerBase) == "" {
-				return buildOptions{}, fmt.Errorf("Docker base is required")
-			}
-		case arg == "--deploy-recipe":
-			i++
-			if i >= len(args) {
-				return buildOptions{}, fmt.Errorf(buildUsage)
-			}
-			plan.DeployRecipes = appendNames(plan.DeployRecipes, args[i])
-		case strings.HasPrefix(arg, "--deploy-recipe="):
-			plan.DeployRecipes = appendNames(plan.DeployRecipes, strings.TrimPrefix(arg, "--deploy-recipe="))
-		case arg == "--wasm":
-			i++
-			if i >= len(args) {
-				return buildOptions{}, fmt.Errorf(buildUsage)
-			}
-			plan.WASMPath = args[i]
-			if strings.TrimSpace(plan.WASMPath) == "" {
-				return buildOptions{}, fmt.Errorf("wasm output path is required")
-			}
-		case len(arg) > len("--wasm=") && arg[:len("--wasm=")] == "--wasm=":
-			plan.WASMPath = arg[len("--wasm="):]
-			if strings.TrimSpace(plan.WASMPath) == "" {
-				return buildOptions{}, fmt.Errorf("wasm output path is required")
-			}
-		case arg == "--backend-app":
-			i++
-			if i >= len(args) {
-				return buildOptions{}, fmt.Errorf(buildUsage)
-			}
-			plan.BackendAppDir = args[i]
-			if strings.TrimSpace(plan.BackendAppDir) == "" {
-				return buildOptions{}, fmt.Errorf("generated backend app directory is required")
-			}
-		case len(arg) > len("--backend-app=") && arg[:len("--backend-app=")] == "--backend-app=":
-			plan.BackendAppDir = arg[len("--backend-app="):]
-			if strings.TrimSpace(plan.BackendAppDir) == "" {
-				return buildOptions{}, fmt.Errorf("generated backend app directory is required")
-			}
-		case arg == "--backend-bin":
-			i++
-			if i >= len(args) {
-				return buildOptions{}, fmt.Errorf(buildUsage)
-			}
-			plan.BackendBinaryPath = args[i]
-			if strings.TrimSpace(plan.BackendBinaryPath) == "" {
-				return buildOptions{}, fmt.Errorf("backend binary output path is required")
-			}
-		case len(arg) > len("--backend-bin=") && arg[:len("--backend-bin=")] == "--backend-bin=":
-			plan.BackendBinaryPath = arg[len("--backend-bin="):]
-			if strings.TrimSpace(plan.BackendBinaryPath) == "" {
-				return buildOptions{}, fmt.Errorf("backend binary output path is required")
-			}
-		case arg == "--config":
-			i++
-			if i >= len(args) {
-				return buildOptions{}, fmt.Errorf(buildUsage)
-			}
-			plan.ConfigPath = args[i]
-		case len(arg) > len("--config=") && arg[:len("--config=")] == "--config=":
-			plan.ConfigPath = arg[len("--config="):]
-		case arg == "--env-file":
-			i++
-			if i >= len(args) {
-				return buildOptions{}, fmt.Errorf(buildUsage)
-			}
-			plan.EnvFilePath = args[i]
-			plan.Options.EnvFilePath = args[i]
-		case len(arg) > len("--env-file=") && arg[:len("--env-file=")] == "--env-file=":
-			plan.EnvFilePath = arg[len("--env-file="):]
-			plan.Options.EnvFilePath = plan.EnvFilePath
-		case arg == "--target":
-			i++
-			if i >= len(args) {
-				return buildOptions{}, fmt.Errorf(buildUsage)
-			}
-			plan.TargetNames = appendNames(plan.TargetNames, args[i])
-		case len(arg) > len("--target=") && arg[:len("--target=")] == "--target=":
-			plan.TargetNames = appendNames(plan.TargetNames, arg[len("--target="):])
-		case arg == "--module":
-			i++
-			if i >= len(args) {
-				return buildOptions{}, fmt.Errorf(buildUsage)
-			}
-			plan.ModuleNames = appendNames(plan.ModuleNames, args[i])
-		case len(arg) > len("--module=") && arg[:len("--module=")] == "--module=":
-			plan.ModuleNames = appendNames(plan.ModuleNames, arg[len("--module="):])
 		case len(arg) > 0 && arg[0] == '-':
 			return buildOptions{}, fmt.Errorf("unknown build flag %q", arg)
 		default:

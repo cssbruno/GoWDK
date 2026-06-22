@@ -65,6 +65,26 @@ Concretely:
 - This is implemented in phases (see Follow-Up) so the first slice is a small,
   reviewable delta on top of the existing WASM ABI rather than a new runtime.
 
+Two surface details this ADR commits to so implementers do not have to
+re-decide them:
+
+- **Qualified-call syntax.** The bounded client grammar currently only parses a
+  call whose callee is a bare identifier (a component-local helper). A
+  package-qualified helper call such as `ui.FilterRows(...)` requires extending
+  the call grammar to accept a qualified callee `alias.Name`, resolved through
+  the page/component's declared `import` alias to a Go package symbol — the same
+  alias resolution `build {}` already uses for imported build-data functions.
+  Until that grammar extension lands, the example above does not parse; defining
+  it is part of the implementing change.
+- **Package build isolation.** Go compiles every non-build-tag-excluded file in a
+  package for `GOOS=js`, so pointing a helper at a package that also holds
+  server-only files/imports would fail the WASM build even when the helper's own
+  call graph is pure. The helper module is therefore built from an extracted
+  dependency set — only the helper and its transitively pure dependencies — not by
+  compiling the whole sibling package; alternatively the author keeps helpers in a
+  browser-buildable package. The compiler owns the extraction so "an ordinary
+  sibling/imported function" stays usable for common app packages.
+
 ### 2. Purity enforcement is mandatory and static
 
 A function callable from the client must be **pure and deterministic**. The
@@ -76,14 +96,22 @@ diagnostics, any function that:
 - starts goroutines, uses channels, `sync`, or other concurrency;
 - uses non-determinism (`time.Now`, `math/rand`, map-iteration-order-dependent
   output, `unsafe`, pointers escaping into observable identity);
+- **mutates a bridged input.** A `computed` helper must not write through its
+  parameters (or values reachable from them); evaluating a derived value may not
+  change its inputs or depend on aliasing. So an in-place mutator like
+  `sort.Slice(rows, …)` on the `Rows` argument is rejected even though `sort` is
+  otherwise pure;
 - calls another function that is not itself pure.
 
-Allowed: parameters, locals, pure arithmetic/string/slice/struct/map value
-construction, and calls to other functions proven pure (including a curated pure
-standard-library allowlist — e.g. `strings`, `sort`, `math`, `strconv`). Purity
-is a transitive property checked over the reachable call graph; the result is
-cached per function. A helper that cannot be proven pure is a compile error that
-names the offending call site, not a silent downgrade.
+Allowed: parameters (read-only), locals, pure arithmetic/string/slice/struct/map
+value construction, and calls to other functions proven pure. The curated pure
+standard-library allowlist (`strings`, `math`, `strconv`, the non-mutating parts
+of `sort` such as `sort.SliceStable` on a locally-allocated copy, etc.) admits a
+package only for its non-mutating, deterministic surface — a package is not
+blanket-trusted, and its in-place mutators are allowed only on compiler-proven
+local copies. Purity is a transitive property checked over the reachable call
+graph; the result is cached per function. A helper that cannot be proven pure is
+a compile error that names the offending call site, not a silent downgrade.
 
 ### 3. Type bridging reuses the bounded-language value model
 
@@ -97,6 +125,19 @@ fields, and slices/maps of bridgeable values. The compiler:
 - generates the marshal/unmarshal glue at the ABI boundary from the resolved Go
   types (reusing the typed-result/struct-field machinery already used for SSR
   load results and contracts);
+- **exposes resolved result-field metadata with the computed value.** A
+  `computed Visible []Row` must publish `Visible[].Name` (and the rest of `Row`'s
+  bridgeable fields) into the client symbol table, not just the top-level array
+  type — otherwise `g:for`, `g:key`, and row interpolations over the helper
+  result would see unknown fields. The same struct-field resolution that backs
+  typed SSR load results provides this metadata;
+- **constrains wide integers.** `int64`/`uint64` values outside the IEEE-754
+  safe-integer range (±(2^53−1)) cannot survive the JSON/number bridge exactly,
+  which would let a correct Go/WASM helper return a value the bounded client
+  observes rounded — breaking single-source semantics. Bridgeable integers are
+  therefore range-checked (or must be encoded as strings) with a diagnostic when a
+  signature can carry out-of-range values. This matches the safe-integer bound the
+  formatting/date builtins already enforce;
 - rejects unbridgeable signatures (channels, funcs, interfaces without a
   bridgeable concrete contract, `unsafe.Pointer`) with a diagnostic.
 
@@ -154,9 +195,15 @@ No new value kinds are introduced; the bridge is the existing JSON contract.
 
 - Depends on **#384** (single-source client semantics) landing first, so the
   bounded shell has one IR/evaluator before helpers cross the boundary.
-- **Phase 1:** allow pure Go helper calls only inside components already declared
-  `wasm` (ADR 0004), with purity validation, type bridging, and generated glue.
-  Smallest reviewable delta; no lane change.
+- **Phase 1:** allow pure Go helper calls only inside components already in the
+  WASM lane, with purity validation, type bridging, and generated glue. Smallest
+  reviewable delta; no lane change. Note that ADR 0004's component-level `wasm`
+  declaration today points at a *hand-authored* browser Go package that owns the
+  `GOWDKMount/Handle/Destroy` exports. Helper support is a **distinct
+  generated-helper path**: the compiler still owns the reactive-shell exports and
+  links the pure helpers as ordinary called functions (not lifecycle exports), so
+  there is one lifecycle owner. Phase 1 therefore targets compiler-generated WASM
+  components, not the hand-authored-island export contract, which is unchanged.
 - **Phase 2:** auto-promote a bounded JS component to the WASM lane when it calls
   a helper, so authors do not manage the lane manually.
 - **Phase 3:** evaluate the JS-shell + WASM-helper-sidecar option if WASM shell

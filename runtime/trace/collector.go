@@ -8,15 +8,25 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"mime"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
 const (
-	maxCollectorBodyBytes  = 1 << 20
-	maxCollectorBatchSpans = 128
+	maxCollectorBodyBytes     = 1 << 20
+	maxCollectorBatchSpans    = 128
+	defaultCollectorSSELimit  = 32
+	defaultCollectorRateLimit = 120
+	maxCollectorRateClients   = 1024
 )
+
+const defaultCollectorRateWindow = time.Minute
 
 var errTracePayloadTooLarge = errors.New("trace payload exceeds byte limit")
 
@@ -38,7 +48,7 @@ main{display:grid;grid-template-columns:minmax(260px,360px) 1fr;min-height:calc(
 </style>
 </head>
 <body>
-<header><h1>GOWDK Trace</h1><div class="meta"><span id="count">0</span> spans · <span id="dropped">0</span> dropped</div></header>
+<header><h1>GOWDK Trace</h1><div class="meta"><span id="count">0</span> spans · <span id="dropped">0</span> dropped · <span id="rejected">0</span> rejected</div></header>
 <main><section id="list"><div class="empty">Waiting for spans...</div></section><section id="detail"><pre id="json">{}</pre></section></main>
 <script>
 (() => {
@@ -47,6 +57,7 @@ main{display:grid;grid-template-columns:minmax(260px,360px) 1fr;min-height:calc(
   const detail = document.getElementById("json");
   const count = document.getElementById("count");
   const dropped = document.getElementById("dropped");
+  const rejected = document.getElementById("rejected");
   const mount = window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname + "/";
   function render() {
     count.textContent = String(spans.length);
@@ -77,6 +88,7 @@ main{display:grid;grid-template-columns:minmax(260px,360px) 1fr;min-height:calc(
   }
   fetch(mount + "data").then((response) => response.json()).then((payload) => {
     dropped.textContent = String(payload.dropped || 0);
+    rejected.textContent = String(payload.rejected || 0);
     (payload.spans || []).forEach((span) => spans.push(span));
     render();
   }).catch(() => {});
@@ -93,17 +105,57 @@ main{display:grid;grid-template-columns:minmax(260px,360px) 1fr;min-height:calc(
 // Collector combines an in-memory ring sink with a small HTTP JSON/SSE
 // handler for local inspection.
 type Collector struct {
-	ring        *RingSink
-	mu          sync.Mutex
-	subscribers map[chan Snapshot]struct{}
+	ring             *RingSink
+	mu               sync.Mutex
+	subscribers      map[chan Snapshot]struct{}
+	sseLimit         int
+	ingestRateLimit  int
+	ingestRateWindow time.Duration
+	rateMu           sync.Mutex
+	rateWindows      map[string]collectorRateWindow
+	dropped          atomic.Uint64
+	rejected         atomic.Uint64
+}
+
+type collectorRateWindow struct {
+	reset time.Time
+	count int
+}
+
+// CollectorOption configures a Collector.
+type CollectorOption func(*Collector)
+
+// WithCollectorSSELimit sets the maximum number of concurrent SSE subscribers.
+// A non-positive limit disables the cap.
+func WithCollectorSSELimit(limit int) CollectorOption {
+	return func(collector *Collector) {
+		collector.sseLimit = limit
+	}
+}
+
+// WithCollectorIngestRate sets a fixed-window POST ingest rate per remote
+// address. A non-positive limit or window disables rate limiting.
+func WithCollectorIngestRate(limit int, window time.Duration) CollectorOption {
+	return func(collector *Collector) {
+		collector.ingestRateLimit = limit
+		collector.ingestRateWindow = window
+	}
 }
 
 // NewCollector creates a collector backed by a RingSink.
-func NewCollector(limit int) *Collector {
-	return &Collector{
-		ring:        NewRingSink(limit),
-		subscribers: map[chan Snapshot]struct{}{},
+func NewCollector(limit int, options ...CollectorOption) *Collector {
+	collector := &Collector{
+		ring:             NewRingSink(limit),
+		subscribers:      map[chan Snapshot]struct{}{},
+		sseLimit:         defaultCollectorSSELimit,
+		ingestRateLimit:  defaultCollectorRateLimit,
+		ingestRateWindow: defaultCollectorRateWindow,
+		rateWindows:      map[string]collectorRateWindow{},
 	}
+	for _, option := range options {
+		option(collector)
+	}
+	return collector
 }
 
 // RecordSpan implements Sink.
@@ -124,6 +176,7 @@ func (collector *Collector) RecordSpan(ctx context.Context, span Snapshot) error
 		select {
 		case subscriber <- span:
 		default:
+			collector.dropped.Add(1)
 		}
 	}
 	collector.mu.Unlock()
@@ -138,12 +191,20 @@ func (collector *Collector) Spans() []Snapshot {
 	return collector.ring.Spans()
 }
 
-// Dropped returns the ring overflow count.
+// Dropped returns the ring overflow and slow-subscriber drop count.
 func (collector *Collector) Dropped() uint64 {
 	if collector == nil {
 		return 0
 	}
-	return collector.ring.Dropped()
+	return collector.ring.Dropped() + collector.dropped.Load()
+}
+
+// Rejected returns the number of rejected ingest or stream requests.
+func (collector *Collector) Rejected() uint64 {
+	if collector == nil {
+		return 0
+	}
+	return collector.rejected.Load()
 }
 
 // Handler serves recent spans as JSON. Requests to /events or requests with an
@@ -157,20 +218,31 @@ func (collector *Collector) Handler() http.Handler {
 	}
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.Method == http.MethodPost {
+			if !requestHasJSONContentType(request) {
+				collector.rejectHTTP(response, "unsupported media type", http.StatusUnsupportedMediaType)
+				return
+			}
+			if !sameOriginRequest(request) {
+				collector.rejectHTTP(response, "forbidden", http.StatusForbidden)
+				return
+			}
+			if !collector.allowIngest(request) {
+				collector.rejectHTTP(response, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+				return
+			}
 			if err := collector.recordJSON(request.Context(), request); err != nil {
 				if errors.Is(err, errTracePayloadTooLarge) {
-					http.Error(response, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
+					collector.rejectHTTP(response, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
 					return
 				}
-				http.Error(response, err.Error(), http.StatusBadRequest)
+				collector.rejectHTTP(response, err.Error(), http.StatusBadRequest)
 				return
 			}
 			response.WriteHeader(http.StatusNoContent)
 			return
 		}
 		if request.Method != http.MethodGet {
-			response.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
-			http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
+			collector.methodNotAllowed(response, http.MethodGet+", "+http.MethodPost)
 			return
 		}
 		if request.URL.Path == "/events" || strings.Contains(request.Header.Get("Accept"), "text/event-stream") {
@@ -179,15 +251,16 @@ func (collector *Collector) Handler() http.Handler {
 		}
 		response.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(response).Encode(struct {
-			Spans   []Snapshot `json:"spans"`
-			Dropped uint64     `json:"dropped"`
-		}{Spans: collector.Spans(), Dropped: collector.Dropped()})
+			Spans    []Snapshot `json:"spans"`
+			Dropped  uint64     `json:"dropped"`
+			Rejected uint64     `json:"rejected"`
+		}{Spans: collector.Spans(), Dropped: collector.Dropped(), Rejected: collector.Rejected()})
 	})
 }
 
 // ViewerHandler serves a self-contained local trace viewer plus JSON and SSE
-// endpoints. It is intentionally unprotected; generated apps must mount it
-// behind an access gate when enabling it outside dev.
+// endpoints. Generated apps mount it behind an access gate when enabling it
+// outside dev; raw callers should do the same for internet-facing handlers.
 func (collector *Collector) ViewerHandler() http.Handler {
 	if collector == nil {
 		collector = NewCollector(defaultRingLimit)
@@ -197,21 +270,32 @@ func (collector *Collector) ViewerHandler() http.Handler {
 		switch strings.Trim(request.URL.Path, "/") {
 		case "":
 			if request.Method != http.MethodGet {
-				response.Header().Set("Allow", http.MethodGet)
-				http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
+				collector.methodNotAllowed(response, http.MethodGet)
 				return
 			}
 			response.Header().Set("Content-Type", "text/html; charset=utf-8")
 			_ = viewerTemplate.Execute(response, nil)
 		case "data":
+			if request.Method != http.MethodGet {
+				collector.methodNotAllowed(response, http.MethodGet)
+				return
+			}
 			cloned := request.Clone(request.Context())
 			cloned.URL.Path = "/"
 			api.ServeHTTP(response, cloned)
 		case "events":
+			if request.Method != http.MethodGet {
+				collector.methodNotAllowed(response, http.MethodGet)
+				return
+			}
 			cloned := request.Clone(request.Context())
 			cloned.URL.Path = "/events"
 			api.ServeHTTP(response, cloned)
 		case "browser":
+			if request.Method != http.MethodPost {
+				collector.methodNotAllowed(response, http.MethodPost)
+				return
+			}
 			cloned := request.Clone(request.Context())
 			cloned.URL.Path = "/"
 			api.ServeHTTP(response, cloned)
@@ -219,6 +303,103 @@ func (collector *Collector) ViewerHandler() http.Handler {
 			http.NotFound(response, request)
 		}
 	})
+}
+
+func (collector *Collector) methodNotAllowed(response http.ResponseWriter, allow string) {
+	response.Header().Set("Allow", allow)
+	collector.rejectHTTP(response, "method not allowed", http.StatusMethodNotAllowed)
+}
+
+func (collector *Collector) rejectHTTP(response http.ResponseWriter, message string, status int) {
+	collector.rejected.Add(1)
+	http.Error(response, message, status)
+}
+
+func requestHasJSONContentType(request *http.Request) bool {
+	contentType := request.Header.Get("Content-Type")
+	if contentType == "" {
+		return false
+	}
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return false
+	}
+	mediaType = strings.ToLower(mediaType)
+	return mediaType == "application/json" || strings.HasSuffix(mediaType, "+json")
+}
+
+func sameOriginRequest(request *http.Request) bool {
+	origin := strings.TrimSpace(request.Header.Get("Origin"))
+	if origin == "" {
+		return true
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return false
+	}
+	return strings.EqualFold(parsed.Scheme, requestScheme(request)) && strings.EqualFold(parsed.Host, request.Host)
+}
+
+func requestScheme(request *http.Request) string {
+	if request.URL != nil && request.URL.Scheme != "" {
+		return request.URL.Scheme
+	}
+	if request.TLS != nil {
+		return "https"
+	}
+	return "http"
+}
+
+func (collector *Collector) allowIngest(request *http.Request) bool {
+	if collector.ingestRateLimit <= 0 || collector.ingestRateWindow <= 0 {
+		return true
+	}
+	key := collectorRateKey(request)
+	now := time.Now()
+	collector.rateMu.Lock()
+	defer collector.rateMu.Unlock()
+	if collector.rateWindows == nil {
+		collector.rateWindows = map[string]collectorRateWindow{}
+	}
+	window, ok := collector.rateWindows[key]
+	if !ok && len(collector.rateWindows) >= maxCollectorRateClients {
+		collector.pruneExpiredRateWindowsLocked(now)
+		if len(collector.rateWindows) >= maxCollectorRateClients {
+			return false
+		}
+	}
+	if !ok || !now.Before(window.reset) {
+		collector.rateWindows[key] = collectorRateWindow{reset: now.Add(collector.ingestRateWindow), count: 1}
+		return true
+	}
+	if window.count >= collector.ingestRateLimit {
+		return false
+	}
+	window.count++
+	collector.rateWindows[key] = window
+	return true
+}
+
+func (collector *Collector) pruneExpiredRateWindowsLocked(now time.Time) {
+	for key, window := range collector.rateWindows {
+		if !now.Before(window.reset) {
+			delete(collector.rateWindows, key)
+		}
+	}
+}
+
+func collectorRateKey(request *http.Request) string {
+	if request == nil {
+		return "unknown"
+	}
+	host, _, err := net.SplitHostPort(request.RemoteAddr)
+	if err == nil && host != "" {
+		return host
+	}
+	if request.RemoteAddr != "" {
+		return request.RemoteAddr
+	}
+	return "unknown"
 }
 
 func (collector *Collector) recordJSON(ctx context.Context, request *http.Request) error {
@@ -283,13 +464,18 @@ func (collector *Collector) serveSSE(response http.ResponseWriter, request *http
 		http.Error(response, "streaming unsupported", http.StatusInternalServerError)
 		return
 	}
+	events := make(chan Snapshot, 16)
+	collector.mu.Lock()
+	if collector.sseLimit > 0 && len(collector.subscribers) >= collector.sseLimit {
+		collector.mu.Unlock()
+		collector.rejectHTTP(response, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+		return
+	}
+	collector.subscribers[events] = struct{}{}
+	collector.mu.Unlock()
 	response.Header().Set("Content-Type", "text/event-stream")
 	response.Header().Set("Cache-Control", "no-cache")
 	response.Header().Set("Connection", "keep-alive")
-	events := make(chan Snapshot, 16)
-	collector.mu.Lock()
-	collector.subscribers[events] = struct{}{}
-	collector.mu.Unlock()
 	defer func() {
 		collector.mu.Lock()
 		delete(collector.subscribers, events)

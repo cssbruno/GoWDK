@@ -28,6 +28,7 @@ type Span struct {
 	traceID      TraceID
 	spanID       SpanID
 	parentSpanID SpanID
+	traceState   string
 	name         string
 	surface      Surface
 	lane         Lane
@@ -173,7 +174,7 @@ func (span *Span) TraceContext() TraceContext {
 	}
 	span.mu.Lock()
 	defer span.mu.Unlock()
-	return TraceContext{TraceID: span.traceID, SpanID: span.spanID, Sampled: true}
+	return TraceContext{TraceID: span.traceID, SpanID: span.spanID, Sampled: true, TraceState: span.traceState}
 }
 
 func (span *Span) tracerRef() *Tracer {

@@ -88,8 +88,10 @@ func (tracer *Tracer) Start(ctx context.Context, name string, options ...StartOp
 		generator = defaultIDGenerator
 	}
 	traceID := parent.TraceID
+	traceState := parent.TraceState
 	if !traceID.Valid() {
 		traceID = generator.NewTraceID()
+		traceState = ""
 	}
 	spanID := generator.NewSpanID()
 	if !traceID.Valid() || !spanID.Valid() {
@@ -114,6 +116,7 @@ func (tracer *Tracer) Start(ctx context.Context, name string, options ...StartOp
 		tracer:     cfg.tracer,
 		traceID:    traceID,
 		spanID:     spanID,
+		traceState: traceState,
 		name:       name,
 		surface:    cfg.surface,
 		lane:       cfg.lane,
@@ -126,7 +129,7 @@ func (tracer *Tracer) Start(ctx context.Context, name string, options ...StartOp
 		span.parentSpanID = parent.SpanID
 	}
 	ctx = context.WithValue(ctx, spanContextKey{}, span)
-	ctx = ContextWithTraceContext(ctx, TraceContext{TraceID: traceID, SpanID: spanID, Sampled: true})
+	ctx = ContextWithTraceContext(ctx, TraceContext{TraceID: traceID, SpanID: spanID, Sampled: true, TraceState: traceState})
 	return ctx, span
 }
 

@@ -151,11 +151,12 @@ level, the current baseline already includes:
   command/query contract web endpoints, and frontend audit surfaces, with
   declared `*.audit.gwdk` policies, generated runtime audit tests,
   registry-backed findings, and CI-friendly JSON output.
-- dependency-free `runtime/trace` primitives for W3C trace IDs,
-  `traceparent` propagation, context spans, sinks, sampling, local JSON/SSE
-  trace collection, browser span ingest, a self-contained viewer, debug-gated
-  generated app instrumentation through `addons/observability`, contract/event
-  propagation, and nested-module OTLP export.
+- dependency-free `runtime/trace` primitives for W3C trace IDs, bounded
+  `traceparent`/`tracestate` propagation, context spans, sinks, sampling, local
+  JSON/SSE trace collection, hardened browser span ingest, a self-contained
+  viewer, debug-gated generated app instrumentation through
+  `addons/observability`, contract/event propagation, and nested-module OTLP
+  export.
 
 Do not roadmap those completed slices as future work. Future work should
 stabilize their contracts, remove generation debt, and fill the missing
@@ -195,7 +196,7 @@ are stable.
 | 18 | CSS, assets, and packaging | External addon loading is hardened, richer page-aware CSS processor contracts are stable, and Tailwind/CSS deployment docs stay explicit that external tooling is user-installed. Implemented CSS asset hashing, component CSS scope/hash metadata, component non-CSS asset emission, and binary cache policy remain stable. Module selection remains artifact packaging, not runtime module orchestration. |
 | 19 | Framework adapters | GOWDK Runtime remains `net/http` first. Optional Chi, Echo, Gin, and Fiber adapters wrap the same generated `http.Handler`; Chi/Echo/Gin can mount routes from generated OpenAPI metadata, and generated code stays framework-neutral by default. |
 | 20 | Dev and tooling | `gowdk dev` can run generated app/runtime flows for backend routes and SSR, skip unchanged rebuilds, cache watched input state, show SPA/static and generated-app rebuild failures with diagnostic codes, source ranges, last-good build time, and changed files, show generic generated-app runtime 5xx failures without request details through the dev-only proxy bridge, and hot-swap changed JS island component roots when the current page has matching island boundaries. Generated app runtime mode now uses the proxy for browser overlay delivery and live reload after generated-app restarts. State-preserving/broader component HMR, richer LSP completions, and editor navigation remain tracked in [#424](https://github.com/cssbruno/GoWDK/issues/424). |
-| 21 | Observability | Partial. Generated apps can opt into GOWDK trace spans across route, guard, handler, SSR, action, API, fragment, contract, job, island, nav, and user lanes while keeping the root runtime dependency-free. `runtime/trace`, `addons/observability`, a local viewer, contract/event propagation, browser propagation, WASM island bridge reuse, and nested-module OTLP HTTP export are implemented. Durable trace storage, hosted analysis, and production sampling/access policy remain app-owned hardening work. |
+| 21 | Observability | Partial. Generated apps can opt into GOWDK trace spans across route, guard, handler, SSR, action, API, fragment, contract, job, island, nav, and user lanes while keeping the root runtime dependency-free. `runtime/trace`, `addons/observability`, a hardened local viewer/collector, contract/event propagation, browser propagation, WASM island bridge reuse, and nested-module OTLP HTTP export are implemented. Durable trace storage, hosted analysis, full metrics/log correlation, and production sampling/access policy remain app-owned or future work. |
 | 22 | Documentation sync | README, requirements, architecture, deployment, roadmap, and examples stay synchronized with implemented behavior and commands. |
 
 ## Candidate Release Order

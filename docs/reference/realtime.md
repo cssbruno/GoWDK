@@ -277,6 +277,10 @@ Each presentation event is written as one text JSON `contracts.EventEnvelope`.
 - In-process SSE and WebSocket hubs only know about clients connected to the
   same process. Multi-instance deployments should pair fanout with a broker,
   outbox, or external pub/sub path when all clients must see the same event.
+- Generated realtime streams are guard-checked and subscription/type filtered,
+  but the current presentation fanout is not scoped by user, session, tenant, or
+  audience. Do not put user-specific payloads on the shared fanout unless the
+  application owns an additional filtering layer.
 - SSE responses set `X-Accel-Buffering: no`; reverse proxies may still need
   explicit buffering and timeout settings for long-lived streams.
 - WebSocket deployments should set origin checks and proxy upgrade headers.

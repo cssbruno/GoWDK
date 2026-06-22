@@ -3,6 +3,8 @@
 package observability
 
 import (
+	"time"
+
 	"github.com/cssbruno/gowdk"
 	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 )
@@ -21,9 +23,22 @@ func Addon() gowdk.Addon {
 	return gowdk.NewAddon("observability", gowdk.FeatureObservability)
 }
 
+// CollectorOption configures a Collector.
+type CollectorOption = gowdktrace.CollectorOption
+
 // NewCollector creates a bounded in-memory trace collector.
-func NewCollector(limit int) *Collector {
-	return gowdktrace.NewCollector(limit)
+func NewCollector(limit int, options ...CollectorOption) *Collector {
+	return gowdktrace.NewCollector(limit, options...)
+}
+
+// WithCollectorSSELimit configures the collector's concurrent SSE stream cap.
+func WithCollectorSSELimit(limit int) CollectorOption {
+	return gowdktrace.WithCollectorSSELimit(limit)
+}
+
+// WithCollectorIngestRate configures the collector's per-client POST rate.
+func WithCollectorIngestRate(limit int, window time.Duration) CollectorOption {
+	return gowdktrace.WithCollectorIngestRate(limit, window)
 }
 
 // NewTracer creates a dependency-free tracer.

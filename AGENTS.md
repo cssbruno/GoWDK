@@ -8,7 +8,7 @@ This repository is GOWDK, a portable Go web compiler. WDK has no canonical
 expansion; no one knows what it stands for, and the practical product shorthand
 is that GOWDK ships apps. The product direction is GOWDK Compiler plus GOWDK
 Runtime: full pages default to build-time output, backend endpoints are core
-request-time behavior, and `load {}` / `go ssr {}` select the integrated
+request-time behavior, and `server {}` / `go server {}` select the integrated
 non-default request-time page lane.
 
 Use this file as the always-on instruction file for any coding agent working in this repository (Codex, Claude Code, hosted agents, IDE assistants). Task-specific skills and reusable output templates live in `.agents/`.
@@ -79,11 +79,11 @@ For architectural decisions that are hard to reverse, add an ADR under `docs/eng
 
 - Full pages default to build-time SPA output.
 - SSR is an integrated non-default request-time page-rendering lane selected
-  with `load {}` or `go ssr {}`.
+  with `server {}` or `go server {}`.
 - SPA and action pages can use backend endpoints without full-page SSR.
 - `paths {}` runs at build time and declares dynamic SPA routes.
 - `build {}` runs at build time.
-- `load {}` runs at request time, selects request-time rendering, and requires
+- `server {}` runs at request time, selects request-time rendering, and requires
   the SSR addon.
 - `act Name POST "/path"` declares POST/action endpoints.
 - `api Name METHOD "/path"` declares API endpoints.
@@ -137,7 +137,7 @@ The next implementation steps should follow `docs/product/roadmap.md`:
    endpoints, SSR pages, and generated output.
 3. Unified endpoint metadata and generated adapter IR.
 4. CSRF-wired actions, fragments, guards, and production-safe backend docs.
-5. Request-time page rendering with `load {}`, guards, typed route params, and
+5. Request-time page rendering with `server {}`, guards, typed route params, and
    error handling.
 6. Hybrid/cache policy, static-first SPA navigation, richer components, islands,
    tooling, and documentation sync.

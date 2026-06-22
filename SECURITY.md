@@ -31,7 +31,7 @@ Security-sensitive surfaces include:
 - Action form decoding, validation, redirects, and CSRF.
 - API handlers.
 - Partial/server fragment responses.
-- SSR `load {}` behavior and guard execution.
+- SSR `server {}` behavior and guard execution.
 - Embedded asset selection and generated app serving.
 - VS Code extension command execution and workspace file handling.
 - WASM islands.

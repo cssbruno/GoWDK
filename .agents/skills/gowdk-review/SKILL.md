@@ -12,7 +12,7 @@ Findings first, summary second.
 What "correct" means in this repo — check the diff against these contracts:
 
 - Render model: build-time output is the default; request-time rendering only
-  via `load {}` / `go ssr {}` (ADR 0002). Dynamic SPA routes require
+  via `server {}` / `go server {}` (ADR 0002). Dynamic SPA routes require
   `paths {}` (ADR 0007). Single-binary deploy works with and without SSR.
 - Boundaries: generated code must not own user domain logic (ADR 0005);
   generators read only the IR, never source/AST directly (ADR 0006);

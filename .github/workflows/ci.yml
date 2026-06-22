@@ -111,6 +111,9 @@ jobs:
       - name: Check documentation links
         run: sh scripts/check-docs-links.sh
 
+      - name: Check for removed source syntax in docs
+        run: sh scripts/check-removed-syntax.sh
+
   docs-site:
     name: Docs site compile
     runs-on: ubuntu-latest

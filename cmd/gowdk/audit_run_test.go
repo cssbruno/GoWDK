@@ -48,6 +48,9 @@ func TestSleeps(t *testing.T) { time.Sleep(60 * time.Second) }
 	if !result.TimedOut {
 		t.Fatalf("expected timeout, got %#v", result)
 	}
+	if !strings.Contains(result.Output, "panic: test timed out") {
+		t.Fatalf("expected Go test timeout output, got %q", result.Output)
+	}
 }
 
 func TestRunAuditTestCommandReportsFailure(t *testing.T) {
@@ -127,6 +130,7 @@ func TestAuditTestEnvMinimizesAndSeeds(t *testing.T) {
 		"AWS_SECRET=shh",
 		"GOWDK_CUSTOM=keep",
 		"GOPROXY=https://proxy.example",
+		"GOFLAGS=-tags=enterprise -mod=vendor -ldflags=-X=secret",
 	}
 	env := envMap(auditTestEnv(base, map[string]string{"GOWDK_AUDIT_RUN": "1"}))
 
@@ -139,11 +143,18 @@ func TestAuditTestEnvMinimizesAndSeeds(t *testing.T) {
 	if _, leaked := env["AWS_SECRET"]; leaked {
 		t.Fatal("non-allowlisted secret should be dropped")
 	}
-	if env["GOPROXY"] != "off" || env["GOTOOLCHAIN"] != "local" {
-		t.Fatalf("download-disabling overrides missing: GOPROXY=%q GOTOOLCHAIN=%q", env["GOPROXY"], env["GOTOOLCHAIN"])
+	if env["GOPROXY"] != "off" || env["GOTOOLCHAIN"] != "local" || env["GOFLAGS"] != "-tags=enterprise -mod=mod" {
+		t.Fatalf("download-disabling overrides missing: GOPROXY=%q GOTOOLCHAIN=%q GOFLAGS=%q", env["GOPROXY"], env["GOTOOLCHAIN"], env["GOFLAGS"])
 	}
 	if env["GOWDK_AUDIT_RUN"] != "1" {
 		t.Fatal("explicit seed missing")
+	}
+}
+
+func TestAuditSafeGOFlagsPreservesSeparateTagsValue(t *testing.T) {
+	flags := auditSafeGOFlags([]string{"GOFLAGS=-tags enterprise,sqlite -trimpath"})
+	if got := strings.Join(flags, " "); got != "-tags enterprise,sqlite" {
+		t.Fatalf("safe GOFLAGS = %q, want -tags enterprise,sqlite", got)
 	}
 }
 

@@ -14,6 +14,12 @@ import (
 	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 )
 
+type invalidTraceIDGenerator struct{}
+
+func (invalidTraceIDGenerator) NewTraceID() gowdktrace.TraceID { return "" }
+
+func (invalidTraceIDGenerator) NewSpanID() gowdktrace.SpanID { return "" }
+
 func TestNewContextCarriesRequestContext(t *testing.T) {
 	request, err := http.NewRequestWithContext(context.WithValue(context.Background(), "trace", "abc"), http.MethodGet, "/dashboard", nil)
 	if err != nil {
@@ -81,6 +87,30 @@ func TestRunGuardsRecordsFailedGuardSpan(t *testing.T) {
 	}
 	if spans[0].Name != "guard auth.required" || spans[0].Lane != gowdktrace.LaneGuard || spans[0].Status.Code != gowdktrace.StatusError {
 		t.Fatalf("unexpected guard span: %#v", spans[0])
+	}
+}
+
+func TestRunGuardsContinuesWhenSpanDropped(t *testing.T) {
+	ring := gowdktrace.NewRingSink(1)
+	tracer := gowdktrace.NewTracer(gowdktrace.WithSink(ring), gowdktrace.WithIDGenerator(invalidTraceIDGenerator{}))
+	request := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	request = request.WithContext(gowdktrace.ContextWithTracer(request.Context(), tracer))
+	called := false
+
+	err := RunGuards(NewContext(request, nil), []string{"auth.required"}, Registry{
+		"auth.required": func(Context) error {
+			called = true
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected guard to pass after dropped span, got %v", err)
+	}
+	if !called {
+		t.Fatal("guard was not called")
+	}
+	if spans := ring.Spans(); len(spans) != 0 {
+		t.Fatalf("spans = %d, want 0 after ID generation failure", len(spans))
 	}
 }
 

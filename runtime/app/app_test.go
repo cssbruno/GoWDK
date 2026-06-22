@@ -24,6 +24,12 @@ import (
 	gowdktrace "github.com/cssbruno/gowdk/runtime/trace"
 )
 
+type invalidTraceIDGenerator struct{}
+
+func (invalidTraceIDGenerator) NewTraceID() gowdktrace.TraceID { return "" }
+
+func (invalidTraceIDGenerator) NewSpanID() gowdktrace.SpanID { return "" }
+
 func TestHandlerServesAppIndexAndIdentityHeaders(t *testing.T) {
 	handler := Handler{
 		Root: fstest.MapFS{
@@ -2135,6 +2141,28 @@ func TestTracedBackendRouteRecordsEndpointLanes(t *testing.T) {
 				t.Fatalf("route attr = %#v, want /patients", got)
 			}
 		})
+	}
+}
+
+func TestTracedBackendRouteContinuesWhenSpanDropped(t *testing.T) {
+	ring := gowdktrace.NewRingSink(1)
+	tracer := gowdktrace.NewTracer(gowdktrace.WithSink(ring), gowdktrace.WithIDGenerator(invalidTraceIDGenerator{}))
+	handler := traceBackendRoute("action", "/patients", gowdktrace.SourceRef{}, func(writer http.ResponseWriter, request *http.Request) bool {
+		writer.WriteHeader(http.StatusNoContent)
+		return true
+	})
+	request := httptest.NewRequest(http.MethodPost, "/patients", nil)
+	request = request.WithContext(gowdktrace.ContextWithTracer(request.Context(), tracer))
+	recorder := httptest.NewRecorder()
+
+	if !handler(recorder, request) {
+		t.Fatal("expected backend handler to run after dropped span")
+	}
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNoContent)
+	}
+	if spans := ring.Spans(); len(spans) != 0 {
+		t.Fatalf("spans = %d, want 0 after ID generation failure", len(spans))
 	}
 }
 

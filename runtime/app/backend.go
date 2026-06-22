@@ -261,9 +261,14 @@ func traceBackendRoute(kind, routePath string, source gowdktrace.SourceRef, hand
 		)
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				span.SetStatus(gowdktrace.StatusError, redactSecrets(strings.TrimSpace(fmt.Sprint(recovered))))
-				span.End()
+				if span != nil {
+					span.SetStatus(gowdktrace.StatusError, redactSecrets(strings.TrimSpace(fmt.Sprint(recovered))))
+					span.End()
+				}
 				panic(recovered)
+			}
+			if span == nil {
+				return
 			}
 			span.Set(gowdktrace.AttrHTTPResponseStatusCode, traceRecorder.status)
 			if traceRecorder.status >= 500 {

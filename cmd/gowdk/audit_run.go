@@ -21,6 +21,9 @@ const (
 	// auditRunTruncationMarker is printed after bounded output when the test
 	// process produced more than the limit, so truncation is explicit.
 	auditRunTruncationMarker = "... [gowdk audit] test output truncated at the configured limit ..."
+	// auditRunCommandGrace lets the generated test binary handle Go's own
+	// -timeout panic before the parent go command is killed by context.
+	auditRunCommandGrace = 5 * time.Second
 )
 
 // auditRunOptions configures the execution boundary for `gowdk audit --run`.
@@ -60,11 +63,11 @@ func runAuditTestCommand(ctx context.Context, dir string, options auditRunOption
 	if options.MaxOutputBytes <= 0 {
 		options.MaxOutputBytes = defaultAuditRunOutputLimit
 	}
-	runCtx, cancel := context.WithTimeout(ctx, options.Timeout)
+	runCtx, cancel := context.WithTimeout(ctx, options.Timeout+auditRunCommandGrace)
 	defer cancel()
 
 	output := &boundedBuffer{limit: options.MaxOutputBytes}
-	command := exec.CommandContext(runCtx, "go", "test", "-count=1", "./gowdkapp")
+	command := exec.CommandContext(runCtx, "go", "test", "-count=1", "-timeout="+options.Timeout.String(), "./gowdkapp")
 	command.Dir = dir
 	command.Env = auditTestEnv(os.Environ(), options.Seeds)
 	command.Stdout = output
@@ -72,12 +75,16 @@ func runAuditTestCommand(ctx context.Context, dir string, options auditRunOption
 
 	err := command.Run()
 	result := auditRunResult{Output: output.String(), Truncated: output.Truncated()}
-	if runCtx.Err() == context.DeadlineExceeded {
+	if runCtx.Err() == context.DeadlineExceeded || auditRunOutputTimedOut(result.Output) {
 		result.TimedOut = true
 		return result
 	}
 	result.ExitErr = err
 	return result
+}
+
+func auditRunOutputTimedOut(output string) bool {
+	return strings.Contains(output, "panic: test timed out")
 }
 
 // auditTestEnv builds a minimized environment for the audit test process. It
@@ -113,12 +120,43 @@ func auditTestEnv(base []string, seeds map[string]string) []string {
 		"GOSUMDB=off",
 		"GOTOOLCHAIN=local",
 		"GOWORK=off",
-		"GOFLAGS=-mod=mod",
+		"GOFLAGS="+auditRunGOFlags(base),
 	)
 	for key, value := range seeds {
 		env = append(env, key+"="+value)
 	}
 	return env
+}
+
+func auditRunGOFlags(base []string) string {
+	flags := auditSafeGOFlags(base)
+	flags = append(flags, "-mod=mod")
+	return strings.Join(flags, " ")
+}
+
+func auditSafeGOFlags(base []string) []string {
+	for _, entry := range base {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok || !strings.EqualFold(key, "GOFLAGS") {
+			continue
+		}
+		fields := strings.Fields(value)
+		flags := make([]string, 0, len(fields))
+		for index := 0; index < len(fields); index++ {
+			field := fields[index]
+			switch {
+			case field == "-tags" || field == "--tags":
+				if index+1 < len(fields) {
+					flags = append(flags, field, fields[index+1])
+					index++
+				}
+			case strings.HasPrefix(field, "-tags="), strings.HasPrefix(field, "--tags="):
+				flags = append(flags, field)
+			}
+		}
+		return flags
+	}
+	return nil
 }
 
 // boundedBuffer captures up to limit bytes of combined output and records

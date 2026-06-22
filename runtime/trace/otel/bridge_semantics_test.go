@@ -123,6 +123,7 @@ func TestRecordSpanKindByLane(t *testing.T) {
 	}{
 		{gowdktrace.LaneRoute, oteltrace.SpanKindServer},
 		{gowdktrace.LaneAPI, oteltrace.SpanKindServer},
+		{gowdktrace.LaneFragment, oteltrace.SpanKindServer},
 		{gowdktrace.LaneContract, oteltrace.SpanKindClient},
 		{gowdktrace.LaneJob, oteltrace.SpanKindInternal},
 		{gowdktrace.LaneNav, oteltrace.SpanKindInternal},

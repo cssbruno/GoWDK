@@ -285,7 +285,7 @@ func (sink *Sink) RecordSpan(ctx context.Context, span gowdktrace.Snapshot) erro
 func spanKind(span gowdktrace.Snapshot) oteltrace.SpanKind {
 	switch span.Lane {
 	case gowdktrace.LaneRoute, gowdktrace.LaneHandler, gowdktrace.LaneSSR,
-		gowdktrace.LaneAction, gowdktrace.LaneAPI:
+		gowdktrace.LaneAction, gowdktrace.LaneAPI, gowdktrace.LaneFragment:
 		return oteltrace.SpanKindServer
 	case gowdktrace.LaneContract:
 		return oteltrace.SpanKindClient

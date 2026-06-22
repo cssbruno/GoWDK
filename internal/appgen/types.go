@@ -2,6 +2,7 @@ package appgen
 
 import (
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/buildgen"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -27,6 +28,7 @@ type Options struct {
 	ProxyBackend bool
 	Config       gowdk.Config
 	IR           *gwdkir.Program
+	Sitemap      buildgen.RuntimeSitemapPlan
 }
 
 // OptionsFromIR returns the production generator options for compiler IR-driven

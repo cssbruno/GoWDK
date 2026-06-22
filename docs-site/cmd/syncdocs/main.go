@@ -13,12 +13,14 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"html"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -44,7 +46,7 @@ var sections = []section{
 	}},
 	{Title: "Reference", Dir: "reference", Order: []string{
 		"README", "routing", "cli", "config", "css", "hooks", "addons",
-		"contracts", "errors", "diagnostics", "diagnostic-codes", "dev",
+		"contracts", "seo", "errors", "diagnostics", "diagnostic-codes", "dev",
 		"deployment", "testing", "framework-integrations", "manifest",
 	}},
 	{Title: "Compiler", Dir: "compiler", Order: []string{
@@ -54,7 +56,7 @@ var sections = []section{
 	{Title: "Engineering", Dir: "engineering", Order: []string{
 		"architecture", "security", "conventions", "naming-conventions",
 		"code-quality", "generated-code-policy", "dependency-policy",
-		"operations", "testing", "ci", "release",
+		"documentation-style", "operations", "testing", "ci", "release",
 	}},
 	{Title: "Decisions", Dir: "engineering/decisions", Order: []string{"README"}},
 	{Title: "Product", Dir: "product", Order: []string{
@@ -99,12 +101,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	routes := map[string]bool{}
 	for _, p := range pages {
-		routes[p.Route] = true
-	}
-	for _, p := range pages {
-		if err := writePage(docsRoot, p, routes); err != nil {
+		if err := writePage(docsRoot, p); err != nil {
 			fmt.Fprintln(os.Stderr, "syncdocs:", p.Rel, err)
 			os.Exit(1)
 		}
@@ -262,8 +260,9 @@ func frontMatter(markdown string) (title, lead string) {
 }
 
 var (
-	hrefRe   = regexp.MustCompile(`href="([^"]+)"`)
-	inlineRe = regexp.MustCompile("[`*_]")
+	hrefRe    = regexp.MustCompile(`href="([^"]+)"`)
+	inlineRe  = regexp.MustCompile("[`*_]")
+	commentRe = regexp.MustCompile(`(?s)<!--.*?-->`)
 	// GOWDK's view parser requires void elements to be self-closed; goldmark
 	// emits some (task-list <input>, <br>, <hr>, <img>) without the slash.
 	voidRe = regexp.MustCompile(`<(input|br|hr|img|col|area|base|embed|source|track|wbr)([^>]*?)\s*/?>`)
@@ -282,12 +281,16 @@ func labelTaskListCheckboxes(s string) string {
 		`<input disabled="" type="checkbox" aria-label="Incomplete task" />`)
 }
 
-func writePage(docsRoot string, p page, routes map[string]bool) error {
+func stripHTMLComments(s string) string {
+	return commentRe.ReplaceAllString(s, "")
+}
+
+func writePage(docsRoot string, p page) error {
 	payload, err := os.ReadFile(filepath.Join(docsRoot, filepath.FromSlash(p.Rel)))
 	if err != nil {
 		return err
 	}
-	body := stripFirstH1(string(payload))
+	body := stripFirstH1AndLead(string(payload))
 
 	var buf bytes.Buffer
 	if err := md.Convert([]byte(body), &buf); err != nil {
@@ -295,7 +298,9 @@ func writePage(docsRoot string, p page, routes map[string]bool) error {
 	}
 	article := selfCloseVoids(buf.String())
 	article = labelTaskListCheckboxes(article)
+	article = stripHTMLComments(article)
 	article = rewriteLinks(article, p.Rel)
+	article = highlightCodeBlocks(article)
 	article = escapeBraces(article)
 
 	var out strings.Builder
@@ -327,14 +332,249 @@ func writePage(docsRoot string, p page, routes map[string]bool) error {
 	return os.WriteFile(p.Output, []byte(out.String()), 0o644)
 }
 
-func stripFirstH1(markdown string) string {
+func stripFirstH1AndLead(markdown string) string {
 	lines := strings.Split(strings.ReplaceAll(markdown, "\r\n", "\n"), "\n")
 	for i, line := range lines {
 		if strings.HasPrefix(line, "# ") {
-			return strings.Join(lines[i+1:], "\n")
+			return strings.Join(stripLeadingLead(lines[i+1:]), "\n")
 		}
 	}
 	return markdown
+}
+
+func stripLeadingLead(lines []string) []string {
+	i := 0
+	for i < len(lines) && strings.TrimSpace(lines[i]) == "" {
+		i++
+	}
+	if i >= len(lines) || !startsPlainLeadParagraph(lines[i]) {
+		return lines
+	}
+	for i < len(lines) && strings.TrimSpace(lines[i]) != "" {
+		i++
+	}
+	for i < len(lines) && strings.TrimSpace(lines[i]) == "" {
+		i++
+	}
+	return lines[i:]
+}
+
+func startsPlainLeadParagraph(line string) bool {
+	t := strings.TrimSpace(line)
+	if t == "" {
+		return false
+	}
+	if strings.HasPrefix(t, "#") || strings.HasPrefix(t, "```") ||
+		strings.HasPrefix(t, "-") || strings.HasPrefix(t, "* ") ||
+		strings.HasPrefix(t, "1.") || strings.HasPrefix(t, "|") ||
+		strings.HasPrefix(t, ">") {
+		return false
+	}
+	return true
+}
+
+var codeBlockRe = regexp.MustCompile(`(?s)<pre><code(?: class="language-([^"]+)")?>(.*?)</code></pre>`)
+
+func highlightCodeBlocks(article string) string {
+	return codeBlockRe.ReplaceAllStringFunc(article, func(match string) string {
+		parts := codeBlockRe.FindStringSubmatch(match)
+		lang := normalizeLanguage(parts[1])
+		label := languageLabel(lang)
+		highlighted := highlightCode(parts[2], lang)
+		return `<figure class="code" data-language="` + html.EscapeString(lang) + `">` +
+			`<figcaption><span class="code-lang">` + html.EscapeString(label) + `</span></figcaption>` +
+			`<pre><code class="language-` + html.EscapeString(lang) + `">` + highlighted + `</code></pre>` +
+			`</figure>`
+	})
+}
+
+func normalizeLanguage(lang string) string {
+	lang = strings.ToLower(strings.TrimSpace(lang))
+	switch lang {
+	case "":
+		return "text"
+	case "bash", "shell", "console":
+		return "sh"
+	case "javascript":
+		return "js"
+	case "typescript":
+		return "ts"
+	default:
+		return lang
+	}
+}
+
+func languageLabel(lang string) string {
+	switch lang {
+	case "gwdk":
+		return "GOWDK"
+	case "go":
+		return "Go"
+	case "sh":
+		return "Shell"
+	case "js":
+		return "JavaScript"
+	case "ts":
+		return "TypeScript"
+	case "json":
+		return "JSON"
+	case "yaml", "yml":
+		return "YAML"
+	case "toml":
+		return "TOML"
+	case "text":
+		return "Text"
+	default:
+		return strings.ToUpper(lang[:1]) + lang[1:]
+	}
+}
+
+var keywordSets = map[string]map[string]bool{
+	"gwdk": words("act api build canonical client component css description emits fragment go guard import jsonld layout noindex page partial paths props route server state title use view wasm"),
+	"go":   words("any bool break case chan const continue default defer else error fallthrough for func go goto if import interface map nil package range return select struct switch type var"),
+	"sh":   words("case cd cp curl do done echo else esac export fi for if in mkdir rm set sh test then"),
+	"js":   words("const else false for function if let new null return true var while"),
+	"ts":   words("const else false for function if interface let new null return string true type var while"),
+}
+
+func words(s string) map[string]bool {
+	set := map[string]bool{}
+	for _, word := range strings.Fields(s) {
+		set[word] = true
+	}
+	return set
+}
+
+func highlightCode(codeHTML, lang string) string {
+	raw := html.UnescapeString(codeHTML)
+	keywords := keywordSets[lang]
+	var out strings.Builder
+	for i := 0; i < len(raw); {
+		if isBlockCommentStart(raw, i, lang) {
+			j := strings.Index(raw[i+2:], "*/")
+			if j < 0 {
+				out.WriteString(tokenSpan("comment", raw[i:]))
+				break
+			}
+			end := i + 2 + j + 2
+			out.WriteString(tokenSpan("comment", raw[i:end]))
+			i = end
+			continue
+		}
+		if isLineCommentStart(raw, i, lang) {
+			j := strings.IndexByte(raw[i:], '\n')
+			if j < 0 {
+				out.WriteString(tokenSpan("comment", raw[i:]))
+				break
+			}
+			out.WriteString(tokenSpan("comment", raw[i:i+j]))
+			out.WriteByte('\n')
+			i += j + 1
+			continue
+		}
+		if lang == "gwdk" && strings.HasPrefix(raw[i:], "g:") {
+			j := i + 2
+			for j < len(raw) && isIdentPart(raw[j]) {
+				j++
+			}
+			out.WriteString(tokenSpan("directive", raw[i:j]))
+			i = j
+			continue
+		}
+		if raw[i] == '"' || raw[i] == '\'' || raw[i] == '`' {
+			j := scanString(raw, i)
+			out.WriteString(tokenSpan("string", raw[i:j]))
+			i = j
+			continue
+		}
+		if isDigit(raw[i]) {
+			j := i + 1
+			for j < len(raw) && (isDigit(raw[j]) || raw[j] == '.' || raw[j] == '_') {
+				j++
+			}
+			out.WriteString(tokenSpan("number", raw[i:j]))
+			i = j
+			continue
+		}
+		if isIdentStart(raw[i]) {
+			j := i + 1
+			for j < len(raw) && isIdentPart(raw[j]) {
+				j++
+			}
+			word := raw[i:j]
+			if keywords[word] {
+				out.WriteString(tokenSpan("keyword", word))
+			} else {
+				out.WriteString(html.EscapeString(word))
+			}
+			i = j
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(raw[i:])
+		if r == utf8.RuneError && size == 0 {
+			break
+		}
+		out.WriteString(html.EscapeString(raw[i : i+size]))
+		i += size
+	}
+	return out.String()
+}
+
+func isBlockCommentStart(raw string, i int, lang string) bool {
+	return (lang == "go" || lang == "gwdk" || lang == "js" || lang == "ts") && strings.HasPrefix(raw[i:], "/*")
+}
+
+func isLineCommentStart(raw string, i int, lang string) bool {
+	if (lang == "go" || lang == "gwdk" || lang == "js" || lang == "ts") && strings.HasPrefix(raw[i:], "//") {
+		return true
+	}
+	if (lang == "sh" || lang == "yaml" || lang == "yml" || lang == "toml") && raw[i] == '#' {
+		start := strings.LastIndexByte(raw[:i], '\n') + 1
+		return strings.TrimSpace(raw[start:i]) == ""
+	}
+	return false
+}
+
+func scanString(raw string, start int) int {
+	quote := raw[start]
+	i := start + 1
+	escaped := false
+	for i < len(raw) {
+		if quote != '`' && raw[i] == '\n' {
+			return i
+		}
+		if escaped {
+			escaped = false
+			i++
+			continue
+		}
+		if quote != '`' && raw[i] == '\\' {
+			escaped = true
+			i++
+			continue
+		}
+		if raw[i] == quote {
+			return i + 1
+		}
+		i++
+	}
+	return i
+}
+
+func tokenSpan(class, text string) string {
+	return `<span class="tok tok-` + class + `">` + html.EscapeString(text) + `</span>`
+}
+
+func isIdentStart(b byte) bool {
+	return (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || b == '_'
+}
+
+func isIdentPart(b byte) bool {
+	return isIdentStart(b) || isDigit(b) || b == '-'
+}
+
+func isDigit(b byte) bool {
+	return b >= '0' && b <= '9'
 }
 
 // rewriteLinks turns relative ".md" links into site routes, resolved against

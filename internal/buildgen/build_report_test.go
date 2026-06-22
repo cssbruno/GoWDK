@@ -317,6 +317,64 @@ func TestBuildWritesPageMetadataToSPAHTMLHead(t *testing.T) {
 	)
 }
 
+func TestBuildWritesStructuredDataToSPAHTMLHead(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:     "post",
+		Route:  "/blog/launch",
+		Guards: []string{"public"},
+		Metadata: gwdkir.PageMetadata{
+			Title:       "Launch",
+			Description: "GOWDK launch notes",
+			Canonical:   "https://gowdk.com/blog/launch",
+			Image:       "https://gowdk.com/assets/launch.png",
+			Structured:  []gwdkir.StructuredData{{Kind: "Article"}},
+		},
+		Blocks: gwdkir.Blocks{
+			Build:     true,
+			BuildBody: `=> { headline: "Launch <GOWDK>", author: "Ada", datePublished: "2026-06-22" }`,
+			View:      true,
+			ViewBody:  `<main><h1>{headline}</h1></main>`,
+		},
+	}}}
+
+	result, err := Build(gowdk.Config{}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(filepath.Join(outputDir, "blog", "launch", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(payload)
+	for _, want := range []string{
+		`<script type="application/ld+json">`,
+		`"@context":"https://schema.org"`,
+		`"@type":"Article"`,
+		`"headline":"Launch \u003cGOWDK\u003e"`,
+		`"author":{"@type":"Person","name":"Ada"}`,
+		`"datePublished":"2026-06-22"`,
+		`"url":"https://gowdk.com/blog/launch"`,
+		`</script>`,
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("expected %q in output:\n%s", want, output)
+		}
+	}
+	assertHTMLOrder(t, output,
+		`<meta name="twitter:image" content="https://gowdk.com/assets/launch.png">`,
+		`<script type="application/ld+json">`,
+	)
+	event := findBuildReportEvent(result.Report, "seo", "structured_data")
+	if event == nil {
+		t.Fatalf("missing structured_data event in %#v", result.Report.Events)
+	}
+	if event.PageID != "post" || event.Route != "/blog/launch" ||
+		event.Data["kinds"] != "Article" || event.Data["count"] != "1" {
+		t.Fatalf("unexpected structured_data event: %#v", event)
+	}
+}
+
 func TestBuildMemoryReturnsSPAArtifactsWithoutWriting(t *testing.T) {
 	outputDir := filepath.Join(t.TempDir(), "dist")
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{

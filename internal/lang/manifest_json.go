@@ -88,6 +88,7 @@ type metadataJSON struct {
 	NoIndex     bool               `json:"noindex,omitempty"`
 	Preload     []headResourceJSON `json:"preload,omitempty"`
 	Prefetch    []headResourceJSON `json:"prefetch,omitempty"`
+	Structured  []string           `json:"jsonld,omitempty"`
 }
 
 type headResourceJSON struct {
@@ -264,7 +265,7 @@ func marshalManifestJSON(result CheckResult, defaultMode gowdk.RenderMode) ([]by
 
 func metadataJSONFor(metadata gwdkir.PageMetadata) *metadataJSON {
 	if metadata.Title == "" && metadata.Description == "" && metadata.Canonical == "" && metadata.Image == "" &&
-		metadata.Robots == "" && !metadata.NoIndex && len(metadata.Preload) == 0 && len(metadata.Prefetch) == 0 {
+		metadata.Robots == "" && !metadata.NoIndex && len(metadata.Preload) == 0 && len(metadata.Prefetch) == 0 && len(metadata.Structured) == 0 {
 		return nil
 	}
 	return &metadataJSON{
@@ -276,7 +277,19 @@ func metadataJSONFor(metadata gwdkir.PageMetadata) *metadataJSON {
 		NoIndex:     metadata.NoIndex,
 		Preload:     headResourcesJSON(metadata.Preload),
 		Prefetch:    headResourcesJSON(metadata.Prefetch),
+		Structured:  structuredDataJSON(metadata.Structured),
 	}
+}
+
+func structuredDataJSON(items []gwdkir.StructuredData) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		out = append(out, item.Kind)
+	}
+	return out
 }
 
 func headResourcesJSON(resources []gwdkir.HeadResource) []headResourceJSON {

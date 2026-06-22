@@ -128,6 +128,9 @@ jobs:
       - name: Check documentation links
         run: sh scripts/check-docs-links.sh
 
+      - name: Check documentation style
+        run: sh scripts/check-docs-style.sh
+
       - name: Check for removed source syntax in docs
         run: sh scripts/check-removed-syntax.sh
 
@@ -148,20 +151,15 @@ jobs:
           go-version: '1.26.4'
           cache: true
 
-      - name: Compile docs site against in-tree GOWDK
+      - name: Build and smoke docs site against in-tree GOWDK
         working-directory: docs-site
         run: |
           set -euxo pipefail
-          # The site embeds dist/site; a placeholder lets the main package
-          # compile without the full asset build (Render compiles the real site
-          # at deploy). This job only catches Go/generator drift against HEAD.
-          mkdir -p dist/site
-          printf '<!doctype html>\n' > dist/site/index.html
-          go build ./...
+          scripts/install-tailwind-linux.sh
+          scripts/build-production.sh
+          scripts/smoke-production.sh
+          go test ./...
           go vet ./...
-          # The docs generator must run against the repo's own docs/ tree.
-          go run ./cmd/syncdocs
-          test -f src/components/docs-sidebar.cmp.gwdk
 
   example-reports:
     name: Example reports

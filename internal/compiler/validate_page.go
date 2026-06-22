@@ -21,6 +21,7 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 	diagnostics = append(diagnostics, validateProtectedPageGuardRender(page, mode)...)
 	diagnostics = append(diagnostics, validatePageStores(page)...)
 	diagnostics = append(diagnostics, validatePageCachePolicy(page)...)
+	diagnostics = append(diagnostics, validatePageStructuredData(page)...)
 	diagnostics = append(diagnostics, validatePageContractClient(page, mode)...)
 	for _, action := range page.Blocks.Actions {
 		if !isExportedHandlerName(action.Name) {
@@ -202,6 +203,52 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 	diagnostics = append(diagnostics, validatePageCSS(page)...)
 
 	return normalizeValidationErrors(diagnostics)
+}
+
+func validatePageStructuredData(page gwdkir.Page) []ValidationError {
+	if len(page.Metadata.Structured) == 0 {
+		return nil
+	}
+	supported := map[string]bool{
+		"Article": true,
+		"WebPage": true,
+	}
+	seen := map[string]source.NamedSpan{}
+	var diagnostics []ValidationError
+	for index, item := range page.Metadata.Structured {
+		kind := strings.TrimSpace(item.Kind)
+		span := firstStructuredDataSpan(page, index)
+		if !supported[kind] {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:    "invalid_structured_data",
+				PageID:  page.ID,
+				Source:  page.Source,
+				Span:    span.Span,
+				Message: fmt.Sprintf("%s declares unsupported jsonld kind %q; supported kinds are Article and WebPage", page.ID, kind),
+			})
+			continue
+		}
+		if first, ok := seen[kind]; ok {
+			diagnostics = append(diagnostics, ValidationError{
+				Code:    "duplicate_structured_data",
+				PageID:  page.ID,
+				Source:  page.Source,
+				Span:    span.Span,
+				Related: []source.RelatedSpan{{Source: page.Source, Span: first.Span, Message: "first declaration"}},
+				Message: fmt.Sprintf("%s declares duplicate jsonld kind %q; keep one declaration per kind", page.ID, kind),
+			})
+			continue
+		}
+		seen[kind] = span
+	}
+	return diagnostics
+}
+
+func firstStructuredDataSpan(page gwdkir.Page, index int) source.NamedSpan {
+	if index >= 0 && index < len(page.Spans.Structured) {
+		return page.Spans.Structured[index]
+	}
+	return source.NamedSpan{Span: firstSpan(page.Spans.Page, page.Spans.Route)}
 }
 
 func validatePageGuards(page gwdkir.Page) []ValidationError {

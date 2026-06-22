@@ -16,6 +16,12 @@ var Config = gowdk.Config{
 			ExtraURLs: []seo.URL{
 				{Loc: "/rss.xml"},
 			},
+			DynamicSitemap: seo.DynamicSitemap{
+				ImportPath:   "github.com/cssbruno/gowdk/examples/seo",
+				Function:     "DynamicSitemapURLs",
+				MaxURLs:      25,
+				CacheSeconds: 300,
+			},
 		}),
 	},
 }

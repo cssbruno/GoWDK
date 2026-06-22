@@ -286,8 +286,8 @@ without making any minor version a production-readiness target.
   manifests, and rollback before any production-ready claim.
 - P2 ecosystem polish is owned by optional docs, examples, website pages, or
   CLI generators: playground onboarding/export, addon discovery, performance
-  profiling, migration guides, image guidance, SEO metadata beyond
-  sitemap/robots, and PWA/offline guidance must not add mandatory npm,
+  profiling, migration guides, image guidance, broader SEO metadata beyond
+  current JSON-LD/sitemap/robots, and PWA/offline guidance must not add mandatory npm,
   framework, hosted execution, or platform dependencies to the repository core.
 
 ## Non-Goals For Repository Core

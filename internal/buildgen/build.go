@@ -360,6 +360,7 @@ func prepareBuildPlan(kind string, startMessage string, outputDir string, config
 	})
 	reportAssetObfuscation(reporter, config.Build.ObfuscateAssets, planned.obfuscations)
 	reportSkippedPrerenderPages(reporter, config, ir)
+	reportStructuredData(reporter, ir)
 	return reporter, planned, nil
 }
 
@@ -573,6 +574,28 @@ func reportQueryInvalidations(reporter *buildReporter, invalidations []gwdkir.Qu
 	}
 }
 
+func reportStructuredData(reporter *buildReporter, ir gwdkir.Program) {
+	for _, page := range ir.Pages {
+		if len(page.Metadata.Structured) == 0 {
+			continue
+		}
+		var kinds []string
+		for _, structured := range page.Metadata.Structured {
+			if kind := strings.TrimSpace(structured.Kind); kind != "" {
+				kinds = append(kinds, kind)
+			}
+		}
+		reporter.info("seo", "structured_data", "structured data metadata planned", BuildEvent{
+			PageID: page.ID,
+			Route:  page.Route,
+			Data: map[string]string{
+				"kinds": strings.Join(kinds, ","),
+				"count": fmt.Sprint(len(kinds)),
+			},
+		})
+	}
+}
+
 func BuildIncremental(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string, changedPageSources []string) (Result, error) {
 	ir, bindings, err := compiler.AssembleProgram(config, sources)
 	if err != nil {
@@ -605,6 +628,7 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, backendBindi
 	reportBackendBindings(reporter, backendBindings)
 	reportContractReferences(reporter, ir.ContractRefs)
 	reportRealtimeSubscriptions(reporter, ir.RealtimeSubscriptions)
+	reportStructuredData(reporter, ir)
 	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
 		return Result{}, reporter.fail("bind", err)
 	}

@@ -164,17 +164,23 @@ js {
       // Copy buttons on every code block (generated <pre> and authored figures).
       var blocks = document.querySelectorAll(".prose pre, .prose figure.code");
       Array.prototype.forEach.call(blocks, function (block) {
+        if (block.tagName === "PRE" && block.closest("figure.code")) return;
         var pre = block.tagName === "PRE" ? block : block.querySelector("pre");
         if (!pre || block.querySelector(".code-copy")) return;
         var btn = el("button", "code-copy", "Copy");
         btn.type = "button";
+        btn.setAttribute("aria-label", "Copy code block");
         btn.addEventListener("click", function () {
           var code = pre.querySelector("code");
           var text = code ? code.textContent : pre.textContent;
           if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text).then(function () {
               btn.textContent = "Copied";
-              setTimeout(function () { btn.textContent = "Copy"; }, 1500);
+              btn.setAttribute("aria-label", "Code copied");
+              setTimeout(function () {
+                btn.textContent = "Copy";
+                btn.setAttribute("aria-label", "Copy code block");
+              }, 1500);
             });
           }
         });

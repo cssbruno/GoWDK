@@ -73,7 +73,7 @@ func renderPage(config gowdk.Config, page gwdkir.Page, route string, components 
 		return "", ssrRegions{}, fmt.Errorf("%s: %w", page.ID, err)
 	}
 	regions := ssrRegions{Lists: convertSSRListSpecs(lists), Conds: convertSSRCondSpecs(conds)}
-	return document(config, page, body, stylesheets, storeSeeds, scripts, locale), regions, nil
+	return document(config, page, route, body, stylesheets, storeSeeds, scripts, locale, data), regions, nil
 }
 
 // ssrRegions carries the server-rendered g:for lists and g:if conditionals
@@ -607,7 +607,7 @@ func storeSchemaHash(resolved gotypes.Struct, seedJSON string) string {
 	return strconv.FormatUint(uint64(digest.Sum32()), 16)
 }
 
-func document(config gowdk.Config, page gwdkir.Page, body string, stylesheets []gowdk.Stylesheet, storeSeeds []pageStoreSeed, scripts []gowdk.Script, locale string) string {
+func document(config gowdk.Config, page gwdkir.Page, route string, body string, stylesheets []gowdk.Stylesheet, storeSeeds []pageStoreSeed, scripts []gowdk.Script, locale string, data map[string]string) string {
 	title := page.ID
 	if page.Metadata.Title != "" {
 		title = page.Metadata.Title
@@ -672,6 +672,9 @@ func document(config gowdk.Config, page gwdkir.Page, body string, stylesheets []
 			head = append(head, "  <meta name=\"twitter:image\""+gowhtml.Attr("content", image)+">")
 		}
 	}
+	for _, payload := range structuredDataPayloads(page, route, title, image, data) {
+		head = append(head, "  <script type=\"application/ld+json\">"+escapeScriptJSON(payload)+"</script>")
+	}
 	for _, stylesheet := range nonEmptyStylesheets(stylesheets) {
 		head = append(head, "  <link rel=\"stylesheet\""+gowhtml.Attr("href", stylesheet.Href)+">")
 	}
@@ -718,6 +721,96 @@ func document(config gowdk.Config, page gwdkir.Page, body string, stylesheets []
 		body + "\n" +
 		"</body>\n" +
 		"</html>\n"
+}
+
+func structuredDataPayloads(page gwdkir.Page, route string, title string, image string, data map[string]string) []string {
+	if len(page.Metadata.Structured) == 0 {
+		return nil
+	}
+	payloads := make([]string, 0, len(page.Metadata.Structured))
+	for _, item := range page.Metadata.Structured {
+		payload, ok := structuredDataPayload(page, route, title, image, data, item.Kind)
+		if ok {
+			payloads = append(payloads, payload)
+		}
+	}
+	return payloads
+}
+
+func structuredDataPayload(page gwdkir.Page, route string, title string, image string, data map[string]string, kind string) (string, bool) {
+	node := map[string]any{
+		"@context": "https://schema.org",
+		"@type":    strings.TrimSpace(kind),
+	}
+	url := firstNonEmpty(page.Metadata.Canonical, route)
+	description := firstDataValue(data, "description", "summary")
+	if description == "" {
+		description = page.Metadata.Description
+	}
+	switch strings.TrimSpace(kind) {
+	case "WebPage":
+		node["name"] = firstDataValue(data, "name", "title")
+		if node["name"] == "" {
+			node["name"] = title
+		}
+		if description != "" {
+			node["description"] = description
+		}
+		if url != "" {
+			node["url"] = url
+		}
+		if image != "" {
+			node["image"] = image
+		}
+	case "Article":
+		node["headline"] = firstDataValue(data, "headline", "title")
+		if node["headline"] == "" {
+			node["headline"] = title
+		}
+		if description != "" {
+			node["description"] = description
+		}
+		if url != "" {
+			node["url"] = url
+		}
+		if image != "" {
+			node["image"] = image
+		}
+		if published := firstDataValue(data, "datePublished", "published", "date"); published != "" {
+			node["datePublished"] = published
+		}
+		if author := firstDataValue(data, "author", "authorName"); author != "" {
+			node["author"] = map[string]string{
+				"@type": "Person",
+				"name":  author,
+			}
+		}
+	default:
+		return "", false
+	}
+	payload, err := json.Marshal(node)
+	if err != nil {
+		return "", false
+	}
+	return string(payload), true
+}
+
+func firstDataValue(data map[string]string, keys ...string) string {
+	for _, key := range keys {
+		if value := strings.TrimSpace(data[key]); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func nonEmptyScripts(scripts []gowdk.Script) []gowdk.Script {

@@ -2,30 +2,68 @@
 
 This directory documents the current `.gwdk` language contract.
 
-The current implementation supports line-oriented page metadata, page-level Go
-imports for build-time data, GOWDK `use` declarations for page-level
-cross-package component calls, explicit component metadata, top-level block
-detection, the first typed action input/redirect/fragment-metadata subset, the
-first API method/route metadata subset, minimal literal `view {}` markup parsing,
-metadata capture for `go {}` inline Go authoring blocks,
-first-slice `g:post`, `g:target`, and `g:swap` lowering, literal dynamic SPA
-route expansion, literal build data, imported Go build data functions with
-optional `gowdk.BuildParams` route params, default `go {}` build-data functions, package
-type-checking for saved default `go {}` blocks, generated
-`gowdk_go/` packages for default `go {}` and `go server {}` blocks,
-same-page action/API/fragment handlers from default `go {}` blocks,
-page-level `go client {}` WASM mounts, `go server {}` load
-handlers, configured-addon
-`go addon.<name> {}` validation and generated app Go file emission through
-`gowdk.GoBlockConsumer`, route/build-data
-interpolation in views, Go-typed component props/state contracts, first-slice
-generated JavaScript islands for stateful components, component-level `wasm`
-island asset emission, formatting, diagnostics, manifest output, build output
-for simple SPA pages/components, generated partial fragment responses for
-embedded apps, and LSP/editor integration. It does not yet implement full typed
-action semantics, API request/response
-bodies, broad local client-side reactivity, or full semantic/type analysis
-outside the component contract and inline package-go-block slices.
+`.gwdk` files declare pages, components, layouts, metadata, routes, build-time
+data, request-time endpoints, and bounded client behavior. Normal Go packages
+own domain logic, persistence, auth, and production policy.
+
+## Minimal Page
+
+```gwdk
+package pages
+
+route "/"
+guard public
+
+build {
+  => { title: "GOWDK ships apps" }
+}
+
+view {
+  <main>
+    <h1>{title}</h1>
+  </main>
+}
+```
+
+## Implemented
+
+- Line-oriented page metadata, including `route`, `guard`, `title`,
+  `description`, `canonical`, `noindex`, and supported `jsonld` declarations.
+- Top-level page, component, layout, action, API, fragment, build, paths,
+  server, view, client, CSS, import, and use declarations for the supported
+  slices.
+- Build-time SPA output for simple pages and components.
+- Literal dynamic SPA route expansion through `paths {}`.
+- Literal build data and imported Go build-data functions, including optional
+  `gowdk.BuildParams`.
+- Default `go {}` and `go server {}` package emission under generated
+  `gowdk_go/` packages.
+- Same-page action, API, and fragment handlers from default `go {}` blocks.
+- Request-time page loading through `server {}` or `go server {}` when SSR is
+  enabled.
+- Route/build-data interpolation in views.
+- Go-typed component props and state contracts.
+- First-slice generated JavaScript islands, page-level `go client {}` WASM
+  mounts, and component-level `wasm` island assets.
+- Formatting, diagnostics, manifest output, build reports, and LSP/editor
+  integration.
+
+## Partial
+
+- Typed actions cover the first input, redirect, and fragment-metadata subset.
+- APIs cover the first method/route metadata and supported handler signatures.
+- View parsing accepts the current literal markup subset and selected
+  directives such as `g:post`, `g:target`, and `g:swap`.
+- Configured `go addon.<name> {}` blocks validate known addon consumers and can
+  emit generated app Go files through `gowdk.GoBlockConsumer`.
+
+## Not Yet Implemented
+
+- Full typed action semantics.
+- Full API request/response body modeling.
+- Broad local client-side reactivity.
+- Full semantic/type analysis outside component contracts and inline package Go
+  block slices.
 
 ## Current Files
 

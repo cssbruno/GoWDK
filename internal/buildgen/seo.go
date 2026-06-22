@@ -3,6 +3,8 @@ package buildgen
 import (
 	"encoding/xml"
 	"fmt"
+	"go/ast"
+	"go/token"
 	"net/url"
 	"path/filepath"
 	"sort"
@@ -11,6 +13,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
+	runtimeseo "github.com/cssbruno/gowdk/runtime/seo"
 )
 
 type seoPlan struct {
@@ -41,6 +44,13 @@ type seoExclusion struct {
 	Mode   string
 }
 
+type RuntimeSitemapPlan struct {
+	Enabled    bool
+	BaseURL    string
+	StaticURLs []runtimeseo.URL
+	Dynamic    gowdk.SEODynamicSitemap
+}
+
 func planSEOArtifacts(config gowdk.Config, ir gwdkir.Program, artifacts []Artifact) (seoPlan, error) {
 	options, enabled, err := seoOptionsFromConfig(config)
 	if err != nil || !enabled {
@@ -69,6 +79,73 @@ func planSEOArtifacts(config gowdk.Config, ir gwdkir.Program, artifacts []Artifa
 		URLs:       urls,
 		Exclusions: seoExclusions(config, ir, artifacts, publicPages),
 	}, nil
+}
+
+func RuntimeSitemapPlanFromIR(config gowdk.Config, ir gwdkir.Program) (RuntimeSitemapPlan, error) {
+	options, enabled, err := seoOptionsFromConfig(config)
+	if err != nil || !enabled {
+		return RuntimeSitemapPlan{}, err
+	}
+	if _, err := parseSEOBaseURL(options.BaseURL); err != nil {
+		return RuntimeSitemapPlan{}, err
+	}
+	dynamic := options.DynamicSitemap
+	if err := validateDynamicSitemap(dynamic); err != nil {
+		return RuntimeSitemapPlan{}, err
+	}
+	publicPages := publicSEOPageIDs(ir)
+	var urls []runtimeseo.URL
+	for _, page := range ir.Pages {
+		if !publicPages[page.ID] || isRequestTimePage(config, page) {
+			continue
+		}
+		outputs, err := pageOutputs(config, page)
+		if err != nil {
+			return RuntimeSitemapPlan{}, fmt.Errorf("%s: %w", page.ID, err)
+		}
+		for _, output := range outputs {
+			urls = append(urls, runtimeseo.URL{Loc: output.route})
+		}
+	}
+	for _, extra := range options.ExtraURLs {
+		urls = append(urls, runtimeseo.URL(extra))
+	}
+	return RuntimeSitemapPlan{
+		Enabled:    true,
+		BaseURL:    options.BaseURL,
+		StaticURLs: urls,
+		Dynamic:    dynamic,
+	}, nil
+}
+
+func validateDynamicSitemap(options gowdk.SEODynamicSitemap) error {
+	importPath := strings.TrimSpace(options.ImportPath)
+	function := strings.TrimSpace(options.Function)
+	if importPath == "" && function == "" {
+		return nil
+	}
+	if importPath == "" {
+		return fmt.Errorf("seo DynamicSitemap.ImportPath is required when Function is set")
+	}
+	if function == "" {
+		return fmt.Errorf("seo DynamicSitemap.Function is required when ImportPath is set")
+	}
+	if strings.ContainsAny(importPath, "\r\n") {
+		return fmt.Errorf("seo DynamicSitemap.ImportPath must stay on one line")
+	}
+	if strings.ContainsAny(function, "\r\n") || !token.IsIdentifier(function) {
+		return fmt.Errorf("seo DynamicSitemap.Function must be an exported function name")
+	}
+	if !ast.IsExported(function) {
+		return fmt.Errorf("seo DynamicSitemap.Function must be exported")
+	}
+	if options.MaxURLs < 0 {
+		return fmt.Errorf("seo DynamicSitemap.MaxURLs must be non-negative")
+	}
+	if options.CacheSeconds < 0 {
+		return fmt.Errorf("seo DynamicSitemap.CacheSeconds must be non-negative")
+	}
+	return nil
 }
 
 func seoOptionsFromConfig(config gowdk.Config) (gowdk.SEOOptions, bool, error) {

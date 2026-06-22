@@ -38,6 +38,7 @@ canonical "https://example.com/"
 image "https://example.com/social.png"
 robots "index,follow"
 noindex false
+jsonld WebPage
 preload "/assets/app.css" as "style"
 prefetch "/docs"
 layout root, marketing
@@ -63,6 +64,9 @@ Supported metadata declarations:
 - `robots "<policy>"`: optional robots meta content.
 - `noindex [true|false]`: optional shorthand for adding `noindex` to the
   robots meta content. A bare `noindex` line is treated as `true`.
+- `jsonld <WebPage|Article>`: optional structured-data schema declaration.
+  Supported kinds are validated, duplicates are rejected, and generated HTML
+  emits deterministic JSON-LD.
 - `preload "<href>" [as "<type>"]`: optional head preload link. Absolute
   URLs must be `http` or `https`; protocol-relative and active-content URLs
   are rejected.

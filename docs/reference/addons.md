@@ -467,10 +467,12 @@ an application policy automatically. When `ratelimit.Addon()` is enabled and a
 generated app has action, API, fragment, SSR, or split-backend proxy routes, the
 generated package exposes `RegisterRateLimiter(*ratelimit.Limiter)`.
 
-`addons/seo` emits `sitemap.xml` and `robots.txt` at build time. It requires
-`seo.Options.BaseURL`, includes public static and `paths {}`-expanded SPA
-routes, and records request-time or default-denied route exclusions in the build
-report. See [seo.md](seo.md).
+`addons/seo` emits `sitemap.xml` and `robots.txt` at build time, enables
+supported `jsonld` structured-data metadata, and can configure a generated app
+runtime `/sitemap.xml` provider. It requires `seo.Options.BaseURL`, includes
+public static and `paths {}`-expanded SPA routes, and records request-time,
+`noindex`, or default-denied route exclusions in the build report. See
+[seo.md](seo.md).
 
 ```go
 store := ratelimit.NewInMemoryStore(ratelimit.InMemoryOptions{})

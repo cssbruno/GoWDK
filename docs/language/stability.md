@@ -60,6 +60,7 @@ All metadata keywords are **Stable**. The canonical list is `lang.MetadataKeywor
 | `image` | Stable |
 | `robots` | Stable |
 | `noindex` | Stable |
+| `jsonld` | Partial |
 | `preload` | Stable |
 | `prefetch` | Stable |
 | `layout` | Stable |

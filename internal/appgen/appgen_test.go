@@ -19,6 +19,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	authaddon "github.com/cssbruno/gowdk/addons/auth"
+	"github.com/cssbruno/gowdk/addons/seo"
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
@@ -131,6 +132,56 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 			t.Fatalf("expected generated gowdkapp/app.go not to copy runtime helper %q:\n%s", copiedRuntime, packagePayload)
 		}
 	}
+}
+
+func TestGenerateWritesDynamicSitemapRoute(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "sitemap.xml"), "<urlset></urlset>")
+	writeTestFile(t, filepath.Join(outputDir, "gowdk-assets.json"), `{"version":1}`)
+
+	ir := gwdkir.Program{Pages: []gwdkir.Page{{
+		ID:     "home",
+		Route:  "/",
+		Guards: []string{"public"},
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+		},
+	}}}
+	config := gowdk.Config{Addons: []gowdk.Addon{seo.Addon(seo.Options{
+		BaseURL: "https://example.com",
+		DynamicSitemap: gowdk.SEODynamicSitemap{
+			ImportPath:   "github.com/acme/site/sitemap",
+			Function:     "DynamicURLs",
+			MaxURLs:      25,
+			CacheSeconds: 60,
+		},
+	})}}
+	result, err := GenerateWithOptions(outputDir, appDir, OptionsFromIR(config, &ir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, want := range []string{
+		`gowdkseo "github.com/cssbruno/gowdk/runtime/seo"`,
+		`gowdkseositemap "github.com/acme/site/sitemap"`,
+		`mux.Handle("/sitemap.xml", gowdkseo.Handler(gowdkseo.HandlerOptions{BaseURL: "https://example.com", StaticURLs: []gowdkseo.URL{gowdkseo.URL{Loc: "/"}}, MaxDynamicURLs: 25, CacheSeconds: 60}, gowdkseositemap.DynamicURLs))`,
+	} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("expected generated source to contain %q:\n%s", want, source)
+		}
+	}
+	assertSourceOrder(t, source,
+		`mux.Handle("/sitemap.xml", gowdkseo.Handler`,
+		`mux.Handle("/", gowdkruntime.ApplyMiddlewares`,
+	)
 }
 
 func TestGenerateWiresConfiguredLifecycleServices(t *testing.T) {

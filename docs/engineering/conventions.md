@@ -24,5 +24,7 @@ Keep top-level directories purposeful:
   quality, testing, and dependency discipline.
 - `docs/engineering/naming-conventions.md`: product name, full-name, file,
   artifact, runtime, and Go identifier naming rules.
+- `docs/engineering/documentation-style.md`: Markdown authoring rules and
+  docs-site rendering checks.
 - `docs/engineering/dependency-policy.md`: dependency selection and review
   policy.

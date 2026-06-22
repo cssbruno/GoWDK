@@ -953,6 +953,12 @@ var Config = gowdk.Config{
 			ExtraURLs: []seoaddon.URL{
 				{Loc: "/rss.xml", LastMod: "2026-06-14", ChangeFreq: "daily", Priority: "0.8"},
 			},
+			DynamicSitemap: seoaddon.DynamicSitemap{
+				ImportPath: "example.com/site/sitemap",
+				Function: "DynamicURLs",
+				MaxURLs: 25,
+				CacheSeconds: 60,
+			},
 		}),
 	},
 }
@@ -977,6 +983,10 @@ var Config = gowdk.Config{
 	}
 	if len(options.ExtraURLs) != 1 || options.ExtraURLs[0].Loc != "/rss.xml" || options.ExtraURLs[0].Priority != "0.8" {
 		t.Fatalf("unexpected SEO extra URLs: %#v", options.ExtraURLs)
+	}
+	if options.DynamicSitemap.ImportPath != "example.com/site/sitemap" || options.DynamicSitemap.Function != "DynamicURLs" ||
+		options.DynamicSitemap.MaxURLs != 25 || options.DynamicSitemap.CacheSeconds != 60 {
+		t.Fatalf("unexpected dynamic sitemap options: %#v", options.DynamicSitemap)
 	}
 }
 

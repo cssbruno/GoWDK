@@ -1270,6 +1270,12 @@ func parseSEOOptions(expression ast.Expr, imports map[string]string) (seo.Option
 				return seo.Options{}, false
 			}
 			options.ExtraURLs = values
+		case "DynamicSitemap":
+			value, ok := parseSEODynamicSitemap(field.Value, imports)
+			if !ok {
+				return seo.Options{}, false
+			}
+			options.DynamicSitemap = value
 		default:
 			return seo.Options{}, false
 		}
@@ -1352,6 +1358,50 @@ func isSEOURLType(expression ast.Expr, imports map[string]string) bool {
 	}
 	selector, ok := expression.(*ast.SelectorExpr)
 	if !ok || selector.Sel.Name != "URL" {
+		return false
+	}
+	packageName, ok := selector.X.(*ast.Ident)
+	return ok && imports[packageName.Name] == seo.ImportPath
+}
+
+func parseSEODynamicSitemap(expression ast.Expr, imports map[string]string) (gowdk.SEODynamicSitemap, bool) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok || !isSEODynamicSitemapType(literal.Type, imports) {
+		return gowdk.SEODynamicSitemap{}, false
+	}
+	fields, ok := strictConfigLiteralFields(expression)
+	if !ok {
+		return gowdk.SEODynamicSitemap{}, false
+	}
+	var dynamic gowdk.SEODynamicSitemap
+	for _, field := range fields {
+		switch field.Name {
+		case "ImportPath":
+			value, ok := parseLiteralString(field.Value)
+			if !ok {
+				return gowdk.SEODynamicSitemap{}, false
+			}
+			dynamic.ImportPath = value
+		case "Function":
+			value, ok := parseLiteralString(field.Value)
+			if !ok {
+				return gowdk.SEODynamicSitemap{}, false
+			}
+			dynamic.Function = value
+		case "MaxURLs":
+			dynamic.MaxURLs = parseInt(field.Value)
+		case "CacheSeconds":
+			dynamic.CacheSeconds = parseInt(field.Value)
+		default:
+			return gowdk.SEODynamicSitemap{}, false
+		}
+	}
+	return dynamic, true
+}
+
+func isSEODynamicSitemapType(expression ast.Expr, imports map[string]string) bool {
+	selector, ok := expression.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "DynamicSitemap" {
 		return false
 	}
 	packageName, ok := selector.X.(*ast.Ident)

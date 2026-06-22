@@ -5469,6 +5469,59 @@ func TestValidatePageRejectsDuplicateCSSSelection(t *testing.T) {
 	}
 }
 
+func TestValidatePageRejectsUnsupportedStructuredDataKind(t *testing.T) {
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(gwdkir.Page{
+		ID:     "home",
+		Route:  "/",
+		Guards: []string{"public"},
+		Metadata: gwdkir.PageMetadata{
+			Structured: []gwdkir.StructuredData{{Kind: "Recipe"}},
+		},
+		Spans: gwdkir.PageSpans{
+			Structured: []source.NamedSpan{{Name: "Recipe", Span: span(4, 1, 14)}},
+		},
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+		},
+	}))
+	diagnostic := firstDiagnostic(diagnostics, "invalid_structured_data")
+	if diagnostic == nil {
+		t.Fatalf("expected invalid structured-data diagnostic, got %#v", diagnostics)
+	}
+	if diagnostic.Span.Start.Line != 4 {
+		t.Fatalf("unexpected diagnostic span: %#v", diagnostic.Span)
+	}
+}
+
+func TestValidatePageRejectsDuplicateStructuredDataKind(t *testing.T) {
+	diagnostics := ValidatePage(gowdk.Config{}, irPage(gwdkir.Page{
+		ID:     "home",
+		Route:  "/",
+		Guards: []string{"public"},
+		Metadata: gwdkir.PageMetadata{
+			Structured: []gwdkir.StructuredData{{Kind: "Article"}, {Kind: "Article"}},
+		},
+		Spans: gwdkir.PageSpans{
+			Structured: []source.NamedSpan{
+				{Name: "Article", Span: span(4, 1, 15)},
+				{Name: "Article", Span: span(5, 1, 15)},
+			},
+		},
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main>Home</main>`,
+		},
+	}))
+	diagnostic := firstDiagnostic(diagnostics, "duplicate_structured_data")
+	if diagnostic == nil {
+		t.Fatalf("expected duplicate structured-data diagnostic, got %#v", diagnostics)
+	}
+	if diagnostic.Span.Start.Line != 5 || len(diagnostic.Related) != 1 || diagnostic.Related[0].Span.Start.Line != 4 {
+		t.Fatalf("unexpected duplicate diagnostic locations: %#v", diagnostic)
+	}
+}
+
 func hasDiagnosticCode(diagnostics []ValidationError, code string) bool {
 	for _, diagnostic := range diagnostics {
 		if diagnostic.Code == code {

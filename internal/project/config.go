@@ -1389,9 +1389,17 @@ func parseSEODynamicSitemap(expression ast.Expr, imports map[string]string) (gow
 			}
 			dynamic.Function = value
 		case "MaxURLs":
-			dynamic.MaxURLs = parseInt(field.Value)
+			value, ok := parseLiteralInt(field.Value)
+			if !ok {
+				return gowdk.SEODynamicSitemap{}, false
+			}
+			dynamic.MaxURLs = value
 		case "CacheSeconds":
-			dynamic.CacheSeconds = parseInt(field.Value)
+			value, ok := parseLiteralInt(field.Value)
+			if !ok {
+				return gowdk.SEODynamicSitemap{}, false
+			}
+			dynamic.CacheSeconds = value
 		default:
 			return gowdk.SEODynamicSitemap{}, false
 		}
@@ -1563,7 +1571,22 @@ func parseLiteralBool(expression ast.Expr) (bool, bool) {
 // outside the platform int range so a malformed config value cannot wrap into a
 // small or negative length on 32-bit platforms.
 func parseInt(expression ast.Expr) int {
-	value := parseInt64(expression)
+	value, ok := parseLiteralInt64(expression)
+	if !ok {
+		return 0
+	}
+	return clampInt(value)
+}
+
+func parseLiteralInt(expression ast.Expr) (int, bool) {
+	value, ok := parseLiteralInt64(expression)
+	if !ok {
+		return 0, false
+	}
+	return clampInt(value), true
+}
+
+func clampInt(value int64) int {
 	switch {
 	case value > math.MaxInt:
 		return math.MaxInt
@@ -1575,28 +1598,39 @@ func parseInt(expression ast.Expr) int {
 }
 
 func parseInt64(expression ast.Expr) int64 {
+	value, ok := parseLiteralInt64(expression)
+	if !ok {
+		return 0
+	}
+	return value
+}
+
+func parseLiteralInt64(expression ast.Expr) (int64, bool) {
 	switch typed := expression.(type) {
 	case *ast.BasicLit:
 		if typed.Kind != token.INT {
-			return 0
+			return 0, false
 		}
 		value, err := strconv.ParseInt(typed.Value, 0, 64)
 		if err != nil {
-			return 0
+			return 0, false
 		}
-		return value
+		return value, true
 	case *ast.UnaryExpr:
-		value := parseInt64(typed.X)
+		value, ok := parseLiteralInt64(typed.X)
+		if !ok {
+			return 0, false
+		}
 		switch typed.Op {
 		case token.ADD:
-			return value
+			return value, true
 		case token.SUB:
-			return -value
+			return -value, true
 		default:
-			return 0
+			return 0, false
 		}
 	default:
-		return 0
+		return 0, false
 	}
 }
 

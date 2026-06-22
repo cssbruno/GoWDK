@@ -20,6 +20,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	authaddon "github.com/cssbruno/gowdk/addons/auth"
 	"github.com/cssbruno/gowdk/addons/seo"
+	"github.com/cssbruno/gowdk/internal/buildgen"
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
@@ -5600,6 +5601,22 @@ func TestLifecycleServiceImportsParticipateInModuleDetection(t *testing.T) {
 	}
 	if !optionsUsesModuleImports(options, "example.com/site") {
 		t.Fatal("expected lifecycle service imports to mark example.com/site as used")
+	}
+}
+
+func TestDynamicSitemapImportsParticipateInModuleDetection(t *testing.T) {
+	options := Options{Sitemap: buildgen.RuntimeSitemapPlan{
+		Enabled: true,
+		Dynamic: gowdk.SEODynamicSitemap{
+			ImportPath: "example.com/site/sitemap",
+			Function:   "DynamicURLs",
+		},
+	}}
+	if !appHasLocalModuleImports(options) {
+		t.Fatal("expected dynamic sitemap provider imports to require app module wiring")
+	}
+	if !optionsUsesModuleImports(options, "example.com/site") {
+		t.Fatal("expected dynamic sitemap provider imports to mark example.com/site as used")
 	}
 }
 

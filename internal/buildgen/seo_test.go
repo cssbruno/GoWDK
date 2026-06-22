@@ -42,6 +42,8 @@ func TestBuildEmitsSEOArtifactsWhenAddonEnabled(t *testing.T) {
 			LastMod:    "2026-06-14",
 			ChangeFreq: "daily",
 			Priority:   "0.8",
+		}, {
+			Loc: "/feed.xml?page=2#top",
 		}},
 	})}}
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{
@@ -72,6 +74,7 @@ func TestBuildEmitsSEOArtifactsWhenAddonEnabled(t *testing.T) {
 		`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`,
 		`<loc>https://example.com/docs/</loc>`,
 		`<loc>https://example.com/docs/blog/hello-gowdk</loc>`,
+		`<loc>https://example.com/docs/feed.xml</loc>`,
 		`<loc>https://example.com/docs/rss.xml</loc>`,
 		`<lastmod>2026-06-14</lastmod>`,
 		`<changefreq>daily</changefreq>`,
@@ -80,6 +83,9 @@ func TestBuildEmitsSEOArtifactsWhenAddonEnabled(t *testing.T) {
 		if !strings.Contains(sitemap, expected) {
 			t.Fatalf("expected sitemap to contain %q:\n%s", expected, sitemap)
 		}
+	}
+	if strings.Contains(sitemap, "%3F") || strings.Contains(sitemap, "page=2") {
+		t.Fatalf("root-relative extra URL query leaked into sitemap:\n%s", sitemap)
 	}
 
 	robots := readFile(t, result.RobotsPath)

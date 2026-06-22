@@ -12,6 +12,7 @@ func TestSitemapNormalizesSortsAndDeduplicatesURLs(t *testing.T) {
 	payload, err := Sitemap("https://example.com/docs?ignored=1#top", []URL{
 		{Loc: "/b", LastMod: " 2026-06-01 "},
 		{Loc: "https://example.com/a?x=1#fragment", ChangeFreq: " daily "},
+		{Loc: "/products?page=2#top"},
 		{Loc: "/b"},
 	})
 	if err != nil {
@@ -22,8 +23,12 @@ func TestSitemapNormalizesSortsAndDeduplicatesURLs(t *testing.T) {
 	assertContains(t, text, `<changefreq>daily</changefreq>`)
 	assertContains(t, text, `<loc>https://example.com/docs/b</loc>`)
 	assertContains(t, text, `<lastmod>2026-06-01</lastmod>`)
-	if strings.Count(text, `<loc>`) != 2 {
-		t.Fatalf("expected two unique URLs, got:\n%s", text)
+	assertContains(t, text, `<loc>https://example.com/docs/products</loc>`)
+	if strings.Contains(text, `%3F`) || strings.Contains(text, `page=2`) {
+		t.Fatalf("root-relative URL query leaked into sitemap:\n%s", text)
+	}
+	if strings.Count(text, `<loc>`) != 3 {
+		t.Fatalf("expected three unique URLs, got:\n%s", text)
 	}
 }
 

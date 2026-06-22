@@ -258,7 +258,7 @@ func absoluteSEOURL(base *url.URL, route string) string {
 	resolved.RawPath = ""
 
 	basePath := strings.TrimRight(resolved.Path, "/")
-	routePath := "/" + strings.TrimLeft(route, "/")
+	routePath := "/" + strings.TrimLeft(rootRelativeSEOPath(route), "/")
 	if routePath == "/" {
 		if basePath == "" {
 			resolved.Path = "/"
@@ -269,6 +269,17 @@ func absoluteSEOURL(base *url.URL, route string) string {
 	}
 	resolved.Path = basePath + routePath
 	return resolved.String()
+}
+
+func rootRelativeSEOPath(route string) string {
+	parsed, err := url.Parse(route)
+	if err != nil || parsed.IsAbs() || parsed.Host != "" || !strings.HasPrefix(route, "/") {
+		return route
+	}
+	if parsed.Path == "" {
+		return "/"
+	}
+	return parsed.Path
 }
 
 func sitemapPayload(urls []sitemapURLEntry) ([]byte, error) {

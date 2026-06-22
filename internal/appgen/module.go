@@ -188,6 +188,9 @@ func appBackendImportPaths(options Options) map[string]bool {
 	for _, provider := range lifecycleServiceProviders(options) {
 		paths[provider.ImportPath] = true
 	}
+	if generatedDynamicSitemapEnabled(options) {
+		paths[strings.TrimSpace(options.Sitemap.Dynamic.ImportPath)] = true
+	}
 	return paths
 }
 

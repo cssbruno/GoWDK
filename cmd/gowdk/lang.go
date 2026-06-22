@@ -203,20 +203,8 @@ func endpointsJSONCommand(args []string) error {
 }
 
 func routeMetadataForCommand(args []string, command string) (compiler.RouteMetadata, error) {
-	options, paths, err := loadCommandInputs(args, command, false)
+	options, ir, err := commandProgram(args, command, false)
 	if err != nil {
-		return compiler.RouteMetadata{}, err
-	}
-	checked, diagnostics := lang.CheckFilesWithOptions(options.Config, paths, lang.CheckOptions{ProjectRoot: options.ProjectRoot})
-	for _, diagnostic := range diagnostics {
-		fmt.Fprintln(os.Stderr, diagnostic.String())
-	}
-	if diagnostics.HasErrors() {
-		return compiler.RouteMetadata{}, fmt.Errorf("%s failed", command)
-	}
-
-	ir := checked.IR
-	if err := linkIRContractReferences(&ir, options.ProjectRoot); err != nil {
 		return compiler.RouteMetadata{}, err
 	}
 	metadata := compiler.BuildRouteMetadataFromIR(options.Config, ir)

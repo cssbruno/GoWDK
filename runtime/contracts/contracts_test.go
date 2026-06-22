@@ -457,6 +457,49 @@ func TestExecuteCommandToPresentationFanoutReturnsSendError(t *testing.T) {
 	}
 }
 
+func TestExecuteCommandSinkWrappersRejectNilDestinations(t *testing.T) {
+	registry := NewRegistry()
+	tests := []struct {
+		name    string
+		run     func() (createPatientResult, error)
+		message string
+	}{
+		{
+			name: "outbox",
+			run: func() (createPatientResult, error) {
+				return ExecuteCommandToOutbox[createPatient, createPatientResult](context.Background(), registry, nil, createPatient{Name: "Ada"})
+			},
+			message: "command outbox cannot be nil",
+		},
+		{
+			name: "broker",
+			run: func() (createPatientResult, error) {
+				return ExecuteCommandToBroker[createPatient, createPatientResult](context.Background(), registry, nil, createPatient{Name: "Ada"})
+			},
+			message: "command event broker cannot be nil",
+		},
+		{
+			name: "presentation",
+			run: func() (createPatientResult, error) {
+				return ExecuteCommandToPresentationFanout[createPatient, createPatientResult](context.Background(), registry, nil, createPatient{Name: "Ada"})
+			},
+			message: "command presentation fanout cannot be nil",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := tt.run()
+			var contractErr Error
+			if !errors.As(err, &contractErr) {
+				t.Fatalf("error = %v, want contracts.Error", err)
+			}
+			if contractErr.Kind != ErrNilHandler || contractErr.Contract != typeName[createPatient]() || contractErr.Message != tt.message {
+				t.Fatalf("error = %#v, want nil handler for createPatient with message %q", contractErr, tt.message)
+			}
+		})
+	}
+}
+
 func TestSendPresentationEventsToFanoutSkipsNonPresentationBatches(t *testing.T) {
 	fanout := &recordingFanout{}
 
@@ -470,6 +513,37 @@ func TestSendPresentationEventsToFanoutSkipsNonPresentationBatches(t *testing.T)
 	}
 	if fanout.calls != 0 {
 		t.Fatalf("fanout.calls = %d, want 0", fanout.calls)
+	}
+}
+
+func TestExecuteCommandWithSinkUsesCompositeSink(t *testing.T) {
+	registry := NewRegistry()
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		return createPatientResult{ID: "patient-1"}, EmitDomain(ctx, patientCreated{ID: "patient-1"})
+	}, RoleWeb))
+	var calls []string
+	first := commandEventSinkFunc(func(ctx context.Context, registry *Registry, role Role, events []EventEnvelope) error {
+		calls = append(calls, "first:"+string(role)+":"+events[0].Type)
+		return nil
+	})
+	second := commandEventSinkFunc(func(ctx context.Context, registry *Registry, role Role, events []EventEnvelope) error {
+		calls = append(calls, "second:"+string(role)+":"+events[0].Type)
+		return nil
+	})
+
+	result, err := executeCommandWithSink[createPatient, createPatientResult](context.Background(), registry, CompositeCommandEventSink(first, second), createPatient{Name: "Ada"}, RoleWeb)
+	if err != nil {
+		t.Fatalf("execute command with composite sink: %v", err)
+	}
+	if result.ID != "patient-1" {
+		t.Fatalf("result.ID = %q, want patient-1", result.ID)
+	}
+	want := []string{
+		"first:web:" + typeName[patientCreated](),
+		"second:web:" + typeName[patientCreated](),
+	}
+	if !slices.Equal(calls, want) {
+		t.Fatalf("calls = %#v, want %#v", calls, want)
 	}
 }
 

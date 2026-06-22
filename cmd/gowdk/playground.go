@@ -308,35 +308,35 @@ func parsePlaygroundFileOptions(args []string) (playgroundFileOptions, error) {
 	options := playgroundFileOptions{Dir: "."}
 	for index := 0; index < len(args); index++ {
 		arg := args[index]
+		if value, next, ok, missing := consumeValueFlag(args, index, "--dir", true); ok {
+			if missing {
+				return playgroundFileOptions{}, fmt.Errorf(playgroundUsage)
+			}
+			options.Dir = value
+			index = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, index, "--out", true); ok {
+			if missing {
+				return playgroundFileOptions{}, fmt.Errorf(playgroundUsage)
+			}
+			options.Output = value
+			index = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, index, "--module-cache", true); ok {
+			if missing {
+				return playgroundFileOptions{}, fmt.Errorf(playgroundUsage)
+			}
+			options.ModuleCache = value
+			index = next
+			continue
+		}
 		switch {
-		case arg == "--dir":
-			index++
-			if index >= len(args) {
-				return playgroundFileOptions{}, fmt.Errorf(playgroundUsage)
-			}
-			options.Dir = args[index]
-		case strings.HasPrefix(arg, "--dir="):
-			options.Dir = strings.TrimPrefix(arg, "--dir=")
-		case arg == "--out":
-			index++
-			if index >= len(args) {
-				return playgroundFileOptions{}, fmt.Errorf(playgroundUsage)
-			}
-			options.Output = args[index]
-		case strings.HasPrefix(arg, "--out="):
-			options.Output = strings.TrimPrefix(arg, "--out=")
 		case arg == "--json":
 			options.JSON = true
 		case arg == "--allow-hosted-execution":
 			options.AllowExecution = true
-		case arg == "--module-cache":
-			index++
-			if index >= len(args) {
-				return playgroundFileOptions{}, fmt.Errorf(playgroundUsage)
-			}
-			options.ModuleCache = args[index]
-		case strings.HasPrefix(arg, "--module-cache="):
-			options.ModuleCache = strings.TrimPrefix(arg, "--module-cache=")
 		case arg == "--allow-shared-module-cache":
 			options.AllowSharedModuleCache = true
 		default:

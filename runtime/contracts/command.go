@@ -31,12 +31,16 @@ func ExecuteCommandForRole[C, R any](ctx context.Context, registry *Registry, ro
 }
 
 func executeCommand[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, error) {
+	return executeCommandWithSink[C, R](ctx, registry, nil, command, role)
+}
+
+func executeCommandWithSink[C, R any](ctx context.Context, registry *Registry, sink CommandEventSink, command C, role Role) (R, error) {
 	result, recorder, dispatchCtx, err := runCommand[C, R](ctx, registry, command, role)
 	if err != nil {
 		var zero R
 		return zero, err
 	}
-	if err := recorder.dispatchForRole(dispatchCtx, registry, role); err != nil {
+	if err := DispatchCommandEvents(dispatchCtx, sink, registry, role, recorder.envelopes(dispatchCtx)); err != nil {
 		var zero R
 		return zero, err
 	}
@@ -81,16 +85,7 @@ func executeCommandToOutbox[C, R any](ctx context.Context, registry *Registry, o
 	if outbox == nil {
 		return zero, Error{Kind: ErrNilHandler, Contract: typeName[C](), Message: "command outbox cannot be nil"}
 	}
-	result, events, err := captureCommandEvents[C, R](ctx, registry, command, role)
-	if err != nil {
-		return zero, err
-	}
-	if len(events) > 0 {
-		if err := outbox.StoreEvents(ctx, events); err != nil {
-			return zero, err
-		}
-	}
-	return result, nil
+	return executeCommandWithSink[C, R](ctx, registry, OutboxCommandEventSink(outbox), command, role)
 }
 
 // ExecuteCommandToBroker runs a command and publishes emitted events to broker
@@ -110,14 +105,7 @@ func executeCommandToBroker[C, R any](ctx context.Context, registry *Registry, b
 	if broker == nil {
 		return zero, Error{Kind: ErrNilHandler, Contract: typeName[C](), Message: "command event broker cannot be nil"}
 	}
-	result, events, err := captureCommandEvents[C, R](ctx, registry, command, role)
-	if err != nil {
-		return zero, err
-	}
-	if err := PublishEventsToBroker(ctx, broker, events); err != nil {
-		return zero, err
-	}
-	return result, nil
+	return executeCommandWithSink[C, R](ctx, registry, BrokerCommandEventSink(broker), command, role)
 }
 
 // ExecuteCommandToPresentationFanout runs a command and sends presentation
@@ -138,14 +126,7 @@ func executeCommandToPresentationFanout[C, R any](ctx context.Context, registry 
 	if fanout == nil {
 		return zero, Error{Kind: ErrNilHandler, Contract: typeName[C](), Message: "command presentation fanout cannot be nil"}
 	}
-	result, events, err := captureCommandEvents[C, R](ctx, registry, command, role)
-	if err != nil {
-		return zero, err
-	}
-	if err := SendPresentationEventsToFanout(ctx, fanout, events); err != nil {
-		return zero, err
-	}
-	return result, nil
+	return executeCommandWithSink[C, R](ctx, registry, PresentationFanoutCommandEventSink(fanout), command, role)
 }
 
 func runCommand[C, R any](ctx context.Context, registry *Registry, command C, role Role) (R, *eventRecorder, context.Context, error) {

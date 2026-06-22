@@ -135,6 +135,86 @@ func parseTestOptions(args []string) (testOptions, error) {
 	var options testOptions
 	for index := 0; index < len(args); index++ {
 		arg := args[index]
+		if value, next, ok, missing := consumeValueFlag(args, index, "--config", true); ok {
+			if missing {
+				return testOptions{}, fmt.Errorf(testUsage)
+			}
+			options.ConfigPath = value
+			index = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, index, "--env-file", true); ok {
+			if missing {
+				return testOptions{}, fmt.Errorf(testUsage)
+			}
+			options.EnvFilePath = value
+			index = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, index, "--module", true); ok {
+			if missing {
+				return testOptions{}, fmt.Errorf(testUsage)
+			}
+			options.ModuleNames = appendModuleNames(options.ModuleNames, value)
+			index = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, index, "--target", true); ok {
+			if missing {
+				return testOptions{}, fmt.Errorf(testUsage)
+			}
+			options.TargetNames = appendNames(options.TargetNames, value)
+			index = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, index, "--stage", true); ok {
+			if missing {
+				return testOptions{}, fmt.Errorf(testUsage)
+			}
+			options.Stages = appendTestStages(options.Stages, value)
+			index = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, index, "--run", true); ok {
+			if missing {
+				return testOptions{}, fmt.Errorf(testUsage)
+			}
+			options.RunPattern = value
+			index = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, index, "--timeout", true); ok {
+			if missing {
+				return testOptions{}, fmt.Errorf(testUsage)
+			}
+			timeout, err := normalizeTestTimeout(value)
+			if err != nil {
+				return testOptions{}, err
+			}
+			options.Timeout = timeout
+			index = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, index, "--count", true); ok {
+			if missing {
+				return testOptions{}, fmt.Errorf(testUsage)
+			}
+			count, err := normalizeTestCount(value)
+			if err != nil {
+				return testOptions{}, err
+			}
+			options.Count = count
+			index = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, index, "--browser-command", true); ok {
+			if missing {
+				return testOptions{}, fmt.Errorf(testUsage)
+			}
+			options.BrowserCommand = value
+			index = next
+			continue
+		}
 		switch {
 		case arg == "-h" || arg == "--help":
 			return testOptions{}, fmt.Errorf(testUsage)
@@ -146,94 +226,6 @@ func parseTestOptions(args []string) (testOptions, error) {
 			options.JSON = true
 		case arg == "--keep-workdir":
 			options.KeepWorkdir = true
-		case arg == "--config":
-			index++
-			if index >= len(args) {
-				return testOptions{}, fmt.Errorf(testUsage)
-			}
-			options.ConfigPath = args[index]
-		case strings.HasPrefix(arg, "--config="):
-			options.ConfigPath = strings.TrimPrefix(arg, "--config=")
-		case arg == "--env-file":
-			index++
-			if index >= len(args) {
-				return testOptions{}, fmt.Errorf(testUsage)
-			}
-			options.EnvFilePath = args[index]
-		case strings.HasPrefix(arg, "--env-file="):
-			options.EnvFilePath = strings.TrimPrefix(arg, "--env-file=")
-		case arg == "--module":
-			index++
-			if index >= len(args) {
-				return testOptions{}, fmt.Errorf(testUsage)
-			}
-			options.ModuleNames = appendModuleNames(options.ModuleNames, args[index])
-		case strings.HasPrefix(arg, "--module="):
-			options.ModuleNames = appendModuleNames(options.ModuleNames, strings.TrimPrefix(arg, "--module="))
-		case arg == "--target":
-			index++
-			if index >= len(args) {
-				return testOptions{}, fmt.Errorf(testUsage)
-			}
-			options.TargetNames = appendNames(options.TargetNames, args[index])
-		case strings.HasPrefix(arg, "--target="):
-			options.TargetNames = appendNames(options.TargetNames, strings.TrimPrefix(arg, "--target="))
-		case arg == "--stage":
-			index++
-			if index >= len(args) {
-				return testOptions{}, fmt.Errorf(testUsage)
-			}
-			options.Stages = appendTestStages(options.Stages, args[index])
-		case strings.HasPrefix(arg, "--stage="):
-			options.Stages = appendTestStages(options.Stages, strings.TrimPrefix(arg, "--stage="))
-		case arg == "--run":
-			index++
-			if index >= len(args) {
-				return testOptions{}, fmt.Errorf(testUsage)
-			}
-			options.RunPattern = args[index]
-		case strings.HasPrefix(arg, "--run="):
-			options.RunPattern = strings.TrimPrefix(arg, "--run=")
-		case arg == "--timeout":
-			index++
-			if index >= len(args) {
-				return testOptions{}, fmt.Errorf(testUsage)
-			}
-			timeout, err := normalizeTestTimeout(args[index])
-			if err != nil {
-				return testOptions{}, err
-			}
-			options.Timeout = timeout
-		case strings.HasPrefix(arg, "--timeout="):
-			timeout, err := normalizeTestTimeout(strings.TrimPrefix(arg, "--timeout="))
-			if err != nil {
-				return testOptions{}, err
-			}
-			options.Timeout = timeout
-		case arg == "--count":
-			index++
-			if index >= len(args) {
-				return testOptions{}, fmt.Errorf(testUsage)
-			}
-			count, err := normalizeTestCount(args[index])
-			if err != nil {
-				return testOptions{}, err
-			}
-			options.Count = count
-		case strings.HasPrefix(arg, "--count="):
-			count, err := normalizeTestCount(strings.TrimPrefix(arg, "--count="))
-			if err != nil {
-				return testOptions{}, err
-			}
-			options.Count = count
-		case arg == "--browser-command":
-			index++
-			if index >= len(args) {
-				return testOptions{}, fmt.Errorf(testUsage)
-			}
-			options.BrowserCommand = args[index]
-		case strings.HasPrefix(arg, "--browser-command="):
-			options.BrowserCommand = strings.TrimPrefix(arg, "--browser-command=")
 		case strings.HasPrefix(arg, "-"):
 			return testOptions{}, fmt.Errorf("unknown test flag %q", arg)
 		default:

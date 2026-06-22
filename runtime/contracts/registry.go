@@ -137,7 +137,6 @@ type eventKey struct {
 }
 
 type eventEntry struct {
-	event    string
 	dispatch func(context.Context, any) error
 	roles    []Role
 }

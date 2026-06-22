@@ -26,6 +26,72 @@ func assertBuildField(t *testing.T, data map[string]string, field, want string) 
 	}
 }
 
+func TestBuildDataReviewRegressions(t *testing.T) {
+	t.Run("raw string list elements", func(t *testing.T) {
+		data := evalBuildData(t, "=> { labels: [`a,b`, `c`] }", nil)
+		assertBuildField(t, data, "labels", `["a,b","c"]`)
+	})
+
+	t.Run("leading-zero integers serialize as canonical json", func(t *testing.T) {
+		data := evalBuildData(t, `=> { nums: [01, 02] }`, nil)
+		assertBuildField(t, data, "nums", "[1,2]")
+	})
+
+	t.Run("wide integer literals keep full precision", func(t *testing.T) {
+		data := evalBuildData(t, `=> { ids: [9007199254740993] }`, nil)
+		assertBuildField(t, data, "ids", "[9007199254740993]")
+	})
+
+	errorCases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "reverse charges the element budget",
+			body: `=> { xs: seq(0, 30000) }
+=> { ys: reverse(field("xs")) }`,
+			want: "exceeded the limit",
+		},
+		{
+			name: "take charges the element budget",
+			body: `=> { xs: seq(0, 30000) }
+=> { ys: take(field("xs"), 30000) }`,
+			want: "exceeded the limit",
+		},
+		{
+			name: "seq bounds cannot overflow",
+			body: `=> { x: seq(-9000000000000000000, 9000000000000000000) }`,
+			want: "seq bounds must be within",
+		},
+		{
+			name: "deeply nested expressions are bounded",
+			body: `=> { deep: ` + strings.Repeat("(", 70) + "1" + strings.Repeat(")", 70) + ` }`,
+			want: "nested too deeply",
+		},
+	}
+	for _, testCase := range errorCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := parseBuildData(testCase.body, nil, "", nil, nil, "")
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", testCase.want)
+			}
+			if !strings.Contains(err.Error(), testCase.want) {
+				t.Fatalf("error %q does not contain %q", err.Error(), testCase.want)
+			}
+		})
+	}
+}
+
+func TestBuildFunctionOutputPreservesWideIntegers(t *testing.T) {
+	data, err := parseBuildFunctionOutput([]byte(`{"big":9007199254740993,"ids":[9007199254740993,2]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertBuildField(t, data, "big", "9007199254740993")
+	assertBuildField(t, data, "ids", "[9007199254740993,2]")
+}
+
 func TestBuildDataComprehensionFilterAndReductions(t *testing.T) {
 	data := evalBuildData(t, `=> { nums: seq(1, 6) }
 => { evens: [n for n in field("nums") if n % 2 == 0] }

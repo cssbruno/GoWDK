@@ -1230,6 +1230,30 @@ func TestNilRegistryAPIsReturnStructuredErrors(t *testing.T) {
 	}
 }
 
+func TestNilAndZeroValueRegistryMetadataAccessorsAreSafe(t *testing.T) {
+	var nilRegistry *Registry
+	if got := nilRegistry.Contracts(); got != nil {
+		t.Fatalf("nil registry contracts = %#v, want nil", got)
+	}
+	if got := nilRegistry.ContractsForRole(RoleWeb); got != nil {
+		t.Fatalf("nil registry role contracts = %#v, want nil", got)
+	}
+	if got := nilRegistry.Invalidations(); got != nil {
+		t.Fatalf("nil registry invalidations = %#v, want nil", got)
+	}
+
+	zeroRegistry := &Registry{}
+	if got := zeroRegistry.Contracts(); len(got) != 0 {
+		t.Fatalf("zero-value registry contracts = %#v, want empty", got)
+	}
+	if got := zeroRegistry.ContractsForRole(RoleWeb); len(got) != 0 {
+		t.Fatalf("zero-value registry role contracts = %#v, want empty", got)
+	}
+	if got := zeroRegistry.Invalidations(); len(got) != 0 {
+		t.Fatalf("zero-value registry invalidations = %#v, want empty", got)
+	}
+}
+
 func TestZeroValueRegistryIsUsable(t *testing.T) {
 	registry := &Registry{}
 	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {

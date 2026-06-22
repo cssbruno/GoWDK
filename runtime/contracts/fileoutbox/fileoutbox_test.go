@@ -133,6 +133,36 @@ func TestAppendRecordsToPathFailedReplacementPreservesExistingRecords(t *testing
 	}
 }
 
+func TestAppendRecordsToPathDeduplicatesByRecordID(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "deadletter.jsonl")
+	store := New(filepath.Join(t.TempDir(), "outbox.jsonl"))
+	first := Record{
+		ID:       "record-1",
+		EventID:  "event-1",
+		Category: contracts.DomainEvent,
+		Type:     patientCreatedType,
+		Value:    json.RawMessage(`{"id":"patient-1"}`),
+	}
+	duplicate := first
+	duplicate.EventID = "event-duplicate"
+	duplicate.Value = json.RawMessage(`{"id":"patient-duplicate"}`)
+
+	if err := store.appendRecordsToPathLocked(path, []Record{first}); err != nil {
+		t.Fatalf("append initial record: %v", err)
+	}
+	if err := store.appendRecordsToPathLocked(path, []Record{duplicate}); err != nil {
+		t.Fatalf("append duplicate record: %v", err)
+	}
+
+	records, err := store.readRecordsFromPathLocked(path)
+	if err != nil {
+		t.Fatalf("read records: %v", err)
+	}
+	if len(records) != 1 || records[0].EventID != "event-1" {
+		t.Fatalf("duplicate dead-letter record should be ignored, got %#v", records)
+	}
+}
+
 func TestReceiveEventBatchDecodesAndAcksRecords(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "outbox.jsonl")
 	store := New(path, WithJSONTypeDecoder[patientCreated]())
@@ -564,6 +594,39 @@ func TestStoreEventsRejectsRecordLargerThanReaderLimit(t *testing.T) {
 	}
 	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
 		t.Fatalf("oversized event should not create outbox file, stat err=%v", statErr)
+	}
+}
+
+func TestStoreEventsRejectsOversizedRecordWithoutPoisoningLaterDelivery(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "outbox.jsonl")
+	store := New(path, WithJSONTypeDecoder[patientCreated]())
+
+	err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{{
+		Category: contracts.DomainEvent,
+		Type:     patientCreatedType,
+		Value:    strings.Repeat("x", maxJSONLineBytes),
+	}})
+	if err == nil || !strings.Contains(err.Error(), "file outbox record exceeds") {
+		t.Fatalf("store oversized event error = %v, want record-size error", err)
+	}
+	if err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{{
+		Category: contracts.DomainEvent,
+		Type:     patientCreatedType,
+		Value:    patientCreated{ID: "patient-1"},
+	}}); err != nil {
+		t.Fatalf("store later event: %v", err)
+	}
+
+	batch, err := store.ReceiveEventBatch(context.Background())
+	if err != nil {
+		t.Fatalf("receive batch after oversized attempt: %v", err)
+	}
+	if len(batch.Events) != 1 {
+		t.Fatalf("len(batch.Events) = %d, want 1", len(batch.Events))
+	}
+	value, ok := batch.Events[0].Value.(patientCreated)
+	if !ok || value.ID != "patient-1" {
+		t.Fatalf("delivered event value = %#v, want patientCreated patient-1", batch.Events[0].Value)
 	}
 }
 

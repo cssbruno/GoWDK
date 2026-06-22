@@ -1614,6 +1614,31 @@ func TestResponseWriterWrappersExposeOptionalCapabilities(t *testing.T) {
 	}
 }
 
+func TestResponseWriterWrappersDoNotInventOptionalCapabilities(t *testing.T) {
+	base := &basicResponseWriter{header: http.Header{}}
+	boundary := wrapBoundaryResponseWriter(&boundaryResponseWriter{ResponseWriter: base})
+	if _, ok := boundary.(http.Flusher); ok {
+		t.Fatal("boundary wrapper exposed http.Flusher without underlying support")
+	}
+	if _, ok := boundary.(http.Hijacker); ok {
+		t.Fatal("boundary wrapper exposed http.Hijacker without underlying support")
+	}
+	if _, ok := boundary.(http.Pusher); ok {
+		t.Fatal("boundary wrapper exposed http.Pusher without underlying support")
+	}
+
+	traceWriter := wrapTraceResponseWriter(&traceResponseWriter{ResponseWriter: base, status: http.StatusOK})
+	if _, ok := traceWriter.(http.Flusher); ok {
+		t.Fatal("trace wrapper exposed http.Flusher without underlying support")
+	}
+	if _, ok := traceWriter.(http.Hijacker); ok {
+		t.Fatal("trace wrapper exposed http.Hijacker without underlying support")
+	}
+	if _, ok := traceWriter.(http.Pusher); ok {
+		t.Fatal("trace wrapper exposed http.Pusher without underlying support")
+	}
+}
+
 func TestBoundaryLogsRecoveredPanicWithRedactedSecret(t *testing.T) {
 	previous := BoundaryLogger
 	t.Cleanup(func() { BoundaryLogger = previous })
@@ -2299,6 +2324,20 @@ func waitForSpans(t *testing.T, ring *gowdktrace.RingSink, want int) []gowdktrac
 }
 
 var errHijackedForTest = errors.New("hijacked for test")
+
+type basicResponseWriter struct {
+	header http.Header
+}
+
+func (writer *basicResponseWriter) Header() http.Header {
+	return writer.header
+}
+
+func (writer *basicResponseWriter) Write(payload []byte) (int, error) {
+	return len(payload), nil
+}
+
+func (writer *basicResponseWriter) WriteHeader(status int) {}
 
 type optionalCapabilityResponseWriter struct {
 	http.ResponseWriter

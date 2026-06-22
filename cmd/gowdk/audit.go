@@ -972,10 +972,14 @@ func auditPostureDigest(manifest securitymanifest.SecurityManifest) string {
 
 // auditPolicyDigest hashes the policy set a waiver pins. waive rules are stripped
 // so the digest reflects the enforcement rules (baseline plus declared
-// tightening) and stays stable when waivers are added or edited.
+// tightening) and stays stable when waivers are added or edited. A policy left
+// with no enforcement rules after stripping (a waiver-only `policy { waive ... }`
+// block, or an otherwise empty policy) is dropped entirely, so declaring a waiver
+// policy does not shift the digest and falsely mark digest-pinned waivers or
+// committed audit tests as stale.
 func auditPolicyDigest(policies []auditspec.Policy) string {
-	stripped := make([]auditspec.Policy, len(policies))
-	for index, policy := range policies {
+	stripped := make([]auditspec.Policy, 0, len(policies))
+	for _, policy := range policies {
 		var rules []auditspec.Rule
 		for _, rule := range policy.Rules {
 			if rule.Kind == auditspec.RuleWaive {
@@ -983,8 +987,11 @@ func auditPolicyDigest(policies []auditspec.Policy) string {
 			}
 			rules = append(rules, rule)
 		}
+		if len(rules) == 0 {
+			continue
+		}
 		policy.Rules = rules
-		stripped[index] = policy
+		stripped = append(stripped, policy)
 	}
 	return auditDigest(stripped)
 }

@@ -120,8 +120,10 @@ gowdk lsp [--ssr]
     timed out (`--run`). Takes precedence over `3` when both are present, so CI
     can tell a failed generated test from a static policy error.
 
-  The `--schema` and bare `--sarif` forms print their payload and exit `0` (or
-  `2` for an unknown schema) without evaluating the gate.
+  Only `--schema` bypasses the gate: it prints the schema and exits `0` (or `2`
+  for an unknown schema name). `--sarif` and `--sarif=<file>` emit SARIF and then
+  apply the normal audit exit codes above, so a SARIF run still exits `3` on
+  error findings.
 - `--write`: supported by `fmt`; overwrites formatted files.
 - `--dry-run`: supported by `fix` and `clean`; for `fix` it prints files with
   available registered fixes without writing changes, and for `clean` it lists

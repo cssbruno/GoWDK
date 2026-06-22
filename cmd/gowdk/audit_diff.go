@@ -59,12 +59,14 @@ func loadPreviousAuditReport(path string) (previousAuditReport, error) {
 }
 
 // computeAuditDiff compares current enriched findings against a previous set.
-// Waived (suppressed) findings are excluded from both the gateable introduced
-// and resolved sets so a justified suppression never reads as a regression or a
-// fix.
+// Introduced/resolved/unchanged classify by *presence* (a fingerprint exists at
+// all, whether active or waived), so toggling a waiver on a finding that is still
+// present reads as unchanged rather than as a fix or a regression. Only active
+// (non-suppressed) findings feed the gateable introduced counts, so a waived
+// finding never trips the introduced-error gate.
 func computeAuditDiff(baseline string, previous, current []auditspec.Finding) auditDiff {
-	previousSet := fingerprintSet(previous)
-	currentSet := fingerprintSet(current)
+	previousPresence := fingerprintPresenceSet(previous)
+	currentPresence := fingerprintPresenceSet(current)
 
 	diff := auditDiff{
 		Baseline:   baseline,
@@ -72,10 +74,20 @@ func computeAuditDiff(baseline string, previous, current []auditspec.Finding) au
 		Resolved:   []auditDiffFindingRef{},
 	}
 	for _, finding := range current {
-		if finding.Suppression != nil || finding.Fingerprint == "" {
+		if finding.Fingerprint == "" {
 			continue
 		}
-		if previousSet[finding.Fingerprint] {
+		present := previousPresence[finding.Fingerprint]
+		if finding.Suppression != nil {
+			// Waived now: it cannot gate. If the same finding existed before, it
+			// persists (unchanged); a brand-new pre-waived finding is just tracked
+			// as a waiver, not an introduced regression.
+			if present {
+				diff.Unchanged++
+			}
+			continue
+		}
+		if present {
 			diff.Unchanged++
 			continue
 		}
@@ -88,10 +100,13 @@ func computeAuditDiff(baseline string, previous, current []auditspec.Finding) au
 		}
 	}
 	for _, finding := range previous {
+		// A finding is resolved only if it was actively reported before and is no
+		// longer present at all now. A finding that merely became waived is still
+		// present (in currentPresence), so it is not counted as resolved.
 		if finding.Suppression != nil || finding.Fingerprint == "" {
 			continue
 		}
-		if !currentSet[finding.Fingerprint] {
+		if !currentPresence[finding.Fingerprint] {
 			diff.Resolved = append(diff.Resolved, auditDiffFindingRef{
 				Code:        finding.Code,
 				Severity:    finding.Severity,
@@ -104,10 +119,12 @@ func computeAuditDiff(baseline string, previous, current []auditspec.Finding) au
 	return diff
 }
 
-func fingerprintSet(findings []auditspec.Finding) map[string]bool {
+// fingerprintPresenceSet records every finding fingerprint, including waived
+// ones, so presence is independent of suppression state.
+func fingerprintPresenceSet(findings []auditspec.Finding) map[string]bool {
 	set := make(map[string]bool, len(findings))
 	for _, finding := range findings {
-		if finding.Suppression != nil || finding.Fingerprint == "" {
+		if finding.Fingerprint == "" {
 			continue
 		}
 		set[finding.Fingerprint] = true

@@ -68,6 +68,35 @@ func TestComputeAuditDiffIgnoresWaivedFindings(t *testing.T) {
 	}
 }
 
+func TestComputeAuditDiffTreatsNowWaivedFindingAsUnchangedNotResolved(t *testing.T) {
+	active := enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:10", "missing csrf", diagnostics.SeverityError)
+	// The same finding, still present, but waived in the current report.
+	waivedNow := enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:10", "missing csrf", diagnostics.SeverityError)
+	waivedNow.Suppression = &auditspec.Suppression{Owner: "sec"}
+
+	diff := computeAuditDiff("base", []auditspec.Finding{active}, []auditspec.Finding{waivedNow})
+	if len(diff.Resolved) != 0 {
+		t.Fatalf("a still-present but now-waived finding must not be reported resolved: %#v", diff.Resolved)
+	}
+	if diff.Unchanged != 1 {
+		t.Fatalf("a still-present finding (now waived) should be unchanged, got %d", diff.Unchanged)
+	}
+}
+
+func TestComputeAuditDiffTreatsUnwaivedFindingAsUnchangedNotIntroduced(t *testing.T) {
+	waivedBefore := enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:10", "missing csrf", diagnostics.SeverityError)
+	waivedBefore.Suppression = &auditspec.Suppression{Owner: "sec"}
+	activeNow := enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:10", "missing csrf", diagnostics.SeverityError)
+
+	diff := computeAuditDiff("base", []auditspec.Finding{waivedBefore}, []auditspec.Finding{activeNow})
+	if len(diff.Introduced) != 0 || diff.IntroducedErrors != 0 {
+		t.Fatalf("re-activating a previously waived finding must not read as newly introduced: %#v", diff.Introduced)
+	}
+	if diff.Unchanged != 1 {
+		t.Fatalf("a finding present in both reports should be unchanged, got %d", diff.Unchanged)
+	}
+}
+
 func TestLoadPreviousAuditReportReEnrichesFingerprints(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "prev.json")

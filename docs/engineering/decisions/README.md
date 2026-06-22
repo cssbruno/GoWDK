@@ -39,3 +39,6 @@ Recommended naming:
 - `0017-callback-props-and-scoped-cells.md`: accepted collapse of parent-child
   communication into callback props (actions) + scoped cells (state), with
   `bind:` as sugar, replacing `emit`/`exports`/`g:bind`.
+- `0016-pure-go-helpers-from-bounded-client.md`: accepted direction to call pure
+  Go helpers from the bounded client by compiling them to WASM (single-source
+  semantics, purity validation, JSON type bridging).

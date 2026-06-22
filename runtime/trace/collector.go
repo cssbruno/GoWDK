@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -11,6 +12,13 @@ import (
 	"strings"
 	"sync"
 )
+
+const (
+	maxCollectorBodyBytes  = 1 << 20
+	maxCollectorBatchSpans = 128
+)
+
+var errTracePayloadTooLarge = errors.New("trace payload exceeds byte limit")
 
 var viewerTemplate = template.Must(template.New("gowdk-trace-viewer").Parse(`<!doctype html>
 <html lang="en">
@@ -107,7 +115,7 @@ func (collector *Collector) RecordSpan(ctx context.Context, span Snapshot) error
 	// the same source-path policy as locally produced spans before they reach
 	// the JSON, SSE, or viewer surfaces. Locally produced spans are already
 	// normalized; re-applying the policy is idempotent.
-	span = normalizeSnapshotSource(span)
+	span = cloneSnapshot(span)
 	if err := collector.ring.RecordSpan(ctx, span); err != nil {
 		return err
 	}
@@ -150,6 +158,10 @@ func (collector *Collector) Handler() http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.Method == http.MethodPost {
 			if err := collector.recordJSON(request.Context(), request); err != nil {
+				if errors.Is(err, errTracePayloadTooLarge) {
+					http.Error(response, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
+					return
+				}
 				http.Error(response, err.Error(), http.StatusBadRequest)
 				return
 			}
@@ -211,27 +223,58 @@ func (collector *Collector) ViewerHandler() http.Handler {
 
 func (collector *Collector) recordJSON(ctx context.Context, request *http.Request) error {
 	defer request.Body.Close()
-	payload, err := io.ReadAll(io.LimitReader(request.Body, 1<<20))
+	payload, err := io.ReadAll(io.LimitReader(request.Body, maxCollectorBodyBytes+1))
 	if err != nil {
 		return err
 	}
-	var spans []Snapshot
-	if err := json.NewDecoder(bytes.NewReader(payload)).Decode(&spans); err == nil {
-		for _, span := range spans {
-			if err := collector.RecordSpan(ctx, span); err != nil {
-				return err
-			}
-		}
-		return nil
+	if len(payload) > maxCollectorBodyBytes {
+		return errTracePayloadTooLarge
 	}
-	var span Snapshot
-	if err := json.NewDecoder(bytes.NewReader(payload)).Decode(&span); err != nil {
+	spans, err := decodeSnapshotPayload(payload)
+	if err != nil {
 		return err
 	}
-	if !span.TraceID.Valid() || !span.SpanID.Valid() {
-		return fmt.Errorf("invalid trace payload")
+	for _, span := range spans {
+		if err := validateSnapshot(span); err != nil {
+			return err
+		}
 	}
-	return collector.RecordSpan(ctx, span)
+	for _, span := range spans {
+		if err := collector.RecordSpan(ctx, span); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func decodeSnapshotPayload(payload []byte) ([]Snapshot, error) {
+	var spans []Snapshot
+	if err := decodeStrict(payload, &spans); err == nil {
+		if len(spans) == 0 {
+			return nil, fmt.Errorf("empty trace batch")
+		}
+		if len(spans) > maxCollectorBatchSpans {
+			return nil, fmt.Errorf("trace batch exceeds %d spans", maxCollectorBatchSpans)
+		}
+		return spans, nil
+	}
+	var span Snapshot
+	if err := decodeStrict(payload, &span); err != nil {
+		return nil, err
+	}
+	return []Snapshot{span}, nil
+}
+
+func decodeStrict(payload []byte, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if decoder.Decode(&struct{}{}) != io.EOF {
+		return fmt.Errorf("trace payload contains trailing data")
+	}
+	return nil
 }
 
 func (collector *Collector) serveSSE(response http.ResponseWriter, request *http.Request) {

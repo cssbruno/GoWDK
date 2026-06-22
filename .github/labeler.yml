@@ -1,0 +1,123 @@
+# Auto-applies existing repo labels to PRs based on changed paths.
+# Format: actions/labeler@v5. Labels must already exist in the repo (they do).
+# Multiple labels may apply to one PR (e.g. a runtime/api change -> runtime + API).
+
+parser:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/parser/**'
+          - 'internal/gwdkast/**'
+          - 'internal/syntax/**'
+          - 'internal/viewparse/**'
+
+IR:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/gwdkir/**'
+
+compiler:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/compiler/**'
+          - 'internal/buildgen/**'
+          - 'internal/appgen/**'
+
+generated Go:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/goblockgen/**'
+          - 'internal/gotypes/**'
+
+diagnostics:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/diagnostics/**'
+          - 'internal/diagnosticfix/**'
+
+LSP:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/lsp/**'
+          - 'editors/**'
+
+client:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/clientrt/**'
+          - 'internal/clientlang/**'
+
+CSS:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/cssscope/**'
+
+runtime:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'runtime/**'
+
+API:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'runtime/api/**'
+
+actions:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'runtime/actions/**'
+          - 'runtime/form/**'
+
+fragments:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'runtime/partial/**'
+
+SSR:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'runtime/ssr/**'
+
+components:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'runtime/component/**'
+
+WASM:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'runtime/wasm/**'
+
+assets:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'runtime/asset/**'
+          - 'internal/safeasset/**'
+
+security:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'internal/auditspec/**'
+          - 'internal/securitymanifest/**'
+          - 'internal/securitytext/**'
+          - 'runtime/security/**'
+          - 'runtime/auth/**'
+          - 'runtime/guard/**'
+          - 'runtime/ratelimit/**'
+          - 'SECURITY.md'
+
+ops:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/**'
+          - 'scripts/**'
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**'
+          - 'docs-site/**'
+
+examples:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'examples/**'

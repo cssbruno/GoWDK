@@ -194,9 +194,9 @@ cd /tmp/gowdk-my-app
 
 `init --template site` writes a starter `gowdk.config.go`, one page, one
 component, and one CSS file. `init --template minimal` writes a smaller
-page/CSS starter. `init --tests` adds `tests/gowdk_smoke_test.go`, which skips
-unless `GOWDK_BIN` points at a built `gowdk` CLI. Existing files are not
-overwritten unless `--force` is passed.
+page/CSS starter. `init --tests` adds a starter `go.mod` and
+`tests/gowdk_smoke_test.go`, a non-skipping generated app smoke test run by
+`gowdk test`. Existing files are not overwritten unless `--force` is passed.
 
 The generated config discovers `src/**/*.gwdk`, discovers CSS from
 `styles/**/*.css`, declares a `site` build target, generates app source in
@@ -215,7 +215,7 @@ gowdk build
 Run the optional scaffolded smoke test:
 
 ```sh
-GOWDK_BIN="$(command -v gowdk)" go test ./tests
+gowdk test
 ```
 
 The build writes app-shell HTML and manifests under `.gowdk/output/site`, then

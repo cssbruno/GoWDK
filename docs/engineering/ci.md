@@ -10,6 +10,8 @@ Required pull-request lanes:
 - `Go tests (ubuntu-latest)`: root dependency check and all Go module tests.
 - `Go tests (macos-14)`: OS signal for Go tests on Darwin/arm64.
 - `Reachable vulnerabilities`: `scripts/vulncheck-go-modules.sh`.
+- `Runtime race detector`: `scripts/test-runtime-race.sh` on Linux for the
+  explicit shared-state runtime package list.
 - `CLI build`: `go build ./cmd/gowdk`.
 - `VS Code extension`: extension version sync, Node syntax checks, and unit
   tests.
@@ -75,6 +77,7 @@ Run the same local checks before handoff when relevant:
   GOWDK_FUZZTIME=30s scripts/test-parser-fuzz.sh
   scripts/test-generated-app-integration.sh
   scripts/test-generated-output-determinism.sh
+  scripts/test-runtime-race.sh
   ```
 
 - Example smoke checks:
@@ -116,6 +119,12 @@ multiplied by generated-binary work:
 - `scripts/test-generated-output-determinism.sh` builds the same page twice
   and diffs generated HTML, manifests, OpenAPI/AsyncAPI, build reports, and
   report CLI output after canonicalizing temp paths.
+- `scripts/test-runtime-race.sh` runs an explicit Linux-focused package list
+  under `go test -race -count=1`: `runtime/app`, `runtime/trace`,
+  `runtime/contracts`, `runtime/contracts/fileoutbox`,
+  `runtime/contracts/membroker`, `runtime/contracts/sse`, `runtime/ratelimit`,
+  and `runtime/testkit`. The script first verifies every selected package has
+  tests so the CI lane cannot silently become empty.
 
 If one of these reveals nondeterministic output, either fix the generator in
 the same change or open a narrower issue naming the unstable file/report.
@@ -145,6 +154,7 @@ Require these checks before merging to `main`:
 - `Go tests (ubuntu-latest)`
 - `Go tests (macos-14)`
 - `Reachable vulnerabilities`
+- `Runtime race detector`
 - `CLI build`
 - `VS Code extension`
 - `Documentation links`

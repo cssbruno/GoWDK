@@ -55,6 +55,23 @@ jobs:
       - name: Check reachable Go vulnerabilities
         run: scripts/vulncheck-go-modules.sh
 
+  runtime-race:
+    name: Runtime race detector
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: true
+
+      - name: Run focused runtime race tests
+        run: scripts/test-runtime-race.sh
+
   cli-build:
     name: CLI build
     runs-on: ubuntu-latest

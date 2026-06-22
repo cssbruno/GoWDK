@@ -57,27 +57,26 @@ func parsePreviewOptions(args []string) (previewOptions, error) {
 	options := previewOptions{Addr: "127.0.0.1:8080"}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		switch {
-		case arg == "--addr":
-			i++
-			if i >= len(args) {
+		if value, next, ok, missing := consumeValueFlag(args, i, "--addr", true); ok {
+			if missing {
 				return previewOptions{}, errors.New(previewUsage())
 			}
-			options.Addr = args[i]
-		case strings.HasPrefix(arg, "--addr="):
-			options.Addr = strings.TrimPrefix(arg, "--addr=")
+			options.Addr = value
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--out", true); ok {
+			if missing {
+				return previewOptions{}, errors.New(previewUsage())
+			}
+			options.OutputDir = value
+			options.BuildArgs = append(options.BuildArgs, "--out", value)
+			i = next
+			continue
+		}
+		switch {
 		case arg == "--hot":
 			options.Hot = true
-		case arg == "--out":
-			i++
-			if i >= len(args) {
-				return previewOptions{}, errors.New(previewUsage())
-			}
-			options.OutputDir = args[i]
-			options.BuildArgs = append(options.BuildArgs, "--out", args[i])
-		case strings.HasPrefix(arg, "--out="):
-			options.OutputDir = strings.TrimPrefix(arg, "--out=")
-			options.BuildArgs = append(options.BuildArgs, arg)
 		default:
 			options.BuildArgs = append(options.BuildArgs, arg)
 		}

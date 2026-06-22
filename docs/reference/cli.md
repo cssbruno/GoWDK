@@ -23,6 +23,7 @@ gowdk inspect ir|tree|endpoint-graph|asset-graph|go-bindings [--config <file>] [
 gowdk generate stubs [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
 gowdk doctor [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...]
+gowdk test [--config <file>] [--env-file <file>] [--module <name>] [--target <name>] [--stage <unit|app|binary|browser>] [--run <pattern>] [--timeout <duration>] [--count <n>] [--cover] [--json] [--keep-workdir] [--browser-command <command>] [--ssr] [files...]
 gowdk audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--sarif[=<file>]] [--diff <previous-report>] [--schema[=report|security]] [--emit-tests[=<file>]] [--check-tests[=<file>]] [--force] [--run] [--run-timeout=<duration>] [files...]
 gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
@@ -43,7 +44,9 @@ gowdk lsp [--ssr]
 
 - `--ssr`: enables SSR validation by adding the SSR addon to the in-memory config.
 - `--force`: supported by `init` and `audit --emit-tests`; overwrites starter files or a user-owned emitted audit test target.
-- `--tests`: supported by `init`; adds `tests/gowdk_smoke_test.go`, an optional generated app smoke test that runs only when `GOWDK_BIN` points at a built `gowdk` CLI.
+- `--tests`: supported by `init`; adds a starter `go.mod` and
+  `tests/gowdk_smoke_test.go`, a generated app smoke test intended to run
+  through `gowdk test`.
 - `--template`: supported by `init`; selects `site` or `minimal`. Defaults to `site`.
 - `--list`: supported by `add`; prints addable built-in addon names the command can wire.
 - `--registry`: supported by `add --list`; prints checked-in addon registry
@@ -52,7 +55,7 @@ gowdk lsp [--ssr]
 - `--base-url`: supported by `add seo`; writes the required
   `seo.Options.BaseURL` value. The value must be an absolute `http` or
   `https` URL.
-- `--json`: supported by `check`, `doctor`, `audit`, `explain`, `inspect`, `contracts`, `graph`, `trace`, `list`, `clean`, `playground policy`, and `playground export`; prints
+- `--json`: supported by `check`, `doctor`, `test`, `audit`, `explain`, `inspect`, `contracts`, `graph`, `trace`, `list`, `clean`, `playground policy`, and `playground export`; prints
   editor/tooling-friendly JSON. Contract JSON includes same-file handler
   signature diagnostics when available. `gowdk check --json` uses diagnostic
   schema version `1`. `gowdk inspect` emits JSON by default; `--json` is
@@ -103,7 +106,6 @@ gowdk lsp [--ssr]
   and writes the
   posture alone to a non-served `.gowdk/reports/<output-name>/gowdk-security.json`
   path outside the selected output directory.
-
   `gowdk audit` exit codes form a stable CI contract; gate on the specific code
   rather than on "non-zero":
 
@@ -124,18 +126,29 @@ gowdk lsp [--ssr]
   for an unknown schema name). `--sarif` and `--sarif=<file>` emit SARIF and then
   apply the normal audit exit codes above, so a SARIF run still exits `3` on
   error findings.
+- `gowdk test`: orchestrates ordinary `go test` runs for GOWDK apps. The
+  default `binary` stage builds generated output, generated app source, and a
+  generated binary in a temporary workdir, starts the binary on an ephemeral
+  loopback address, waits for `/_gowdk/health`, then runs `go test ./...`.
+  `unit` skips generated artifacts, `app` builds artifacts without starting the
+  binary, and `browser` starts the binary then runs the external
+  `--browser-command`. Test runs receive `GOWDK_TEST_STAGE`,
+  `GOWDK_TEST_WORKDIR`, `GOWDK_TEST_OUTPUT_DIR`, `GOWDK_TEST_APP_DIR`,
+  `GOWDK_TEST_BINARY`, and for binary/browser stages `GOWDK_TEST_BASE_URL`.
+  Browser runs also receive `GOWDK_TEST_ARTIFACT_DIR`.
+  `--keep-workdir` preserves the generated artifacts for inspection.
 - `--write`: supported by `fmt`; overwrites formatted files.
 - `--dry-run`: supported by `fix` and `clean`; for `fix` it prints files with
   available registered fixes without writing changes, and for `clean` it lists
   the build outputs that would be removed without deleting anything.
 - `--code`: supported by `fix`; limits rewrites to one diagnostic code that has
   a registered fix.
-- `--config`: supported by `add`, `check`, `doctor`, `audit`, `manifest`, `sitemap`,
+- `--config`: supported by `add`, `check`, `doctor`, `test`, `audit`, `manifest`, `sitemap`,
   `routes`, `endpoints`, `inspect`, `generate stubs`, and `build`; selects the
   config file. Compile commands load a literal config subset from the given
   path instead of the required default `gowdk.config.go`.
 - `--env-file`: supported by project-aware compile/report commands that load
-  `gowdk.config.go`, including `check`, `doctor`, `audit`, `manifest`,
+  `gowdk.config.go`, including `check`, `doctor`, `test`, `audit`, `manifest`,
   `sitemap`, `routes`, `endpoints`, `inspect`, `generate stubs`, and `build`;
   forwarded through `dev` and `preview` as a build flag. Values from the file
   are applied only when the process environment does not already define the
@@ -162,8 +175,8 @@ gowdk lsp [--ssr]
   that build, records transformed assets in `gowdk-assets.json`, and writes
   `asset_obfuscation` / `asset_obfuscated` build-report events. This is an
   optimization/hardening option, not a security boundary.
-- `--target`: supported by `build` and `clean`; may be repeated or comma-separated. For `build` it runs the selected `Build.Targets` entries; for `clean` it restricts removal to the selected targets' outputs.
-- `--module`: supported by `check`, `doctor`, `audit`, `manifest`, `sitemap`, `routes`,
+- `--target`: supported by `build`, `test`, and `clean`; may be repeated or comma-separated. For `build` it runs the selected `Build.Targets` entries; for `test` it selects the target module set while writing artifacts to a temporary workdir; for `clean` it restricts removal to the selected targets' outputs.
+- `--module`: supported by `check`, `doctor`, `test`, `audit`, `manifest`, `sitemap`, `routes`,
   `endpoints`, `inspect`, `generate stubs`, and `build`; may be repeated or
   comma-separated, and limits discovery to selected configured modules when no
   explicit file list is passed.
@@ -216,6 +229,9 @@ go run ./cmd/gowdk audit --emit-tests --run --config gowdk.config.go
 go run ./cmd/gowdk doctor
 go run ./cmd/gowdk doctor --json
 go run ./cmd/gowdk doctor --module frontend --ssr
+go run ./cmd/gowdk test --count=1 --timeout=2m
+go run ./cmd/gowdk test --stage app --run TestGeneratedArtifacts
+go run ./cmd/gowdk test --stage browser --browser-command "npx playwright test"
 go run ./cmd/gowdk manifest --module frontend --ssr
 go run ./cmd/gowdk sitemap --module frontend --ssr
 go run ./cmd/gowdk trace patients.CreatePatient
@@ -266,12 +282,13 @@ styles/global.css
 Passing `--tests` also writes:
 
 ```text
+go.mod
 tests/gowdk_smoke_test.go
 ```
 
-The smoke test skips by default. Set `GOWDK_BIN=/path/to/gowdk` to make it run
-`gowdk build` from the scaffolded project root and assert that `index.html` and
-`bin/site` were generated.
+The smoke test is non-skipping. Run it with `gowdk test`; the command builds
+temporary generated artifacts, starts the generated binary, and provides the
+`GOWDK_TEST_*` environment variables the test asserts.
 
 `add` rewrites `gowdk.config.go` through the Go AST and `go/format`. It knows
 the built-in addon packages listed in [addons.md](addons.md), inserts missing

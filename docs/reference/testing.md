@@ -11,12 +11,52 @@ Create a starter app with an optional generated smoke test:
 ```sh
 gowdk init --tests --template site my-app
 cd my-app
-GOWDK_BIN=/path/to/gowdk go test ./tests
+gowdk test
 ```
 
-`tests/gowdk_smoke_test.go` skips when `GOWDK_BIN` is unset. When set, it runs
-`gowdk build --out <tempdir>` from the project root and asserts that
-`index.html` exists.
+`tests/gowdk_smoke_test.go` is non-skipping. It expects `gowdk test` to provide
+generated app context and fails with an actionable message when run directly
+with plain `go test`. The scaffold asserts generated output manifests, the
+generated app source directory, the generated binary, `/_gowdk/health`, the
+home route, and an unknown-route 404.
+
+## `gowdk test`
+
+Use `gowdk test` as the default app-level test command:
+
+```sh
+gowdk test --count=1 --timeout=2m
+gowdk test --stage app --run TestGeneratedArtifacts
+gowdk test --stage browser --browser-command "npx playwright test"
+```
+
+Stages:
+
+- `unit`: runs `go test ./...` without building generated artifacts.
+- `app`: builds generated output, generated Go app source, and a binary in a
+  temporary workdir, then runs `go test ./...`.
+- `binary`: the default; builds artifacts, starts the generated binary on an
+  ephemeral loopback address, waits for `/_gowdk/health`, then runs
+  `go test ./...`.
+- `browser`: starts the generated binary and runs the external
+  `--browser-command`. GOWDK does not install or choose a browser runner.
+
+Supported selectors and Go test flags include `--config`, `--env-file`,
+`--module`, `--target`, `--ssr`, `--run`, `--timeout`, `--count`, `--cover`,
+and `--json`. Use `--keep-workdir` when a failed run needs artifact
+inspection.
+
+Tests can read:
+
+| Variable | Set In | Meaning |
+| --- | --- | --- |
+| `GOWDK_TEST_STAGE` | `app`, `binary`, `browser` | Current `gowdk test` stage. |
+| `GOWDK_TEST_WORKDIR` | `app`, `binary`, `browser` | Temporary root containing generated test artifacts. |
+| `GOWDK_TEST_OUTPUT_DIR` | `app`, `binary`, `browser` | Generated static output directory. |
+| `GOWDK_TEST_APP_DIR` | `app`, `binary`, `browser` | Generated Go app source directory. |
+| `GOWDK_TEST_BINARY` | `app`, `binary`, `browser` | Generated binary path. |
+| `GOWDK_TEST_BASE_URL` | `binary`, `browser` | Loopback base URL for the running generated app. |
+| `GOWDK_TEST_ARTIFACT_DIR` | `browser` | Directory for browser screenshots, traces, or reports. |
 
 ## Audit Tests
 
@@ -41,6 +81,18 @@ testkit.Run(t, handler, []testkit.Scenario{{
     Path:       "/api/search?q=go",
     WantStatus: http.StatusOK,
 }})
+```
+
+For multi-request tests, use the cookie-preserving client helpers:
+
+```go
+client := testkit.NewClient(t, handler)
+client.PostForm(t, "/login", url.Values{"email": []string{"ada@example.com"}}).
+    AssertStatus(t, http.StatusNoContent)
+
+dashboard := client.Get(t, "/dashboard")
+dashboard.AssertStatus(t, http.StatusOK)
+dashboard.AssertBodyContains(t, "session ok")
 ```
 
 Keep user domain logic in ordinary Go unit tests. Use generated-handler tests

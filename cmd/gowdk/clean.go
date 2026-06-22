@@ -36,35 +36,35 @@ func clean(args []string) error {
 	)
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
+		if value, next, ok, missing := consumeValueFlag(args, i, "--config", true); ok {
+			if missing {
+				return errors.New(cleanUsage)
+			}
+			configPath = value
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--target", true); ok {
+			if missing {
+				return errors.New(cleanUsage)
+			}
+			targetNames = appendNames(targetNames, value)
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--out", true); ok {
+			if missing {
+				return errors.New(cleanUsage)
+			}
+			outDir = value
+			i = next
+			continue
+		}
 		switch {
 		case arg == "--dry-run":
 			dryRun = true
 		case arg == "--json":
 			jsonOutput = true
-		case arg == "--config":
-			i++
-			if i >= len(args) {
-				return errors.New(cleanUsage)
-			}
-			configPath = args[i]
-		case strings.HasPrefix(arg, "--config="):
-			configPath = strings.TrimPrefix(arg, "--config=")
-		case arg == "--target":
-			i++
-			if i >= len(args) {
-				return errors.New(cleanUsage)
-			}
-			targetNames = appendNames(targetNames, args[i])
-		case strings.HasPrefix(arg, "--target="):
-			targetNames = appendNames(targetNames, strings.TrimPrefix(arg, "--target="))
-		case arg == "--out":
-			i++
-			if i >= len(args) {
-				return errors.New(cleanUsage)
-			}
-			outDir = args[i]
-		case strings.HasPrefix(arg, "--out="):
-			outDir = strings.TrimPrefix(arg, "--out=")
 		default:
 			return fmt.Errorf("unknown clean flag %q\n%s", arg, cleanUsage)
 		}
@@ -136,32 +136,21 @@ func cleanTargets(config gowdk.Config, targetNames []string, outDir string) ([]s
 		}
 	}
 
-	selected := cleanNames(targetNames)
-	if len(selected) == 0 {
+	selectedNames := cleanNames(targetNames)
+	if len(selectedNames) == 0 {
 		add(config.Build.Output)
 	}
-
-	wanted := map[string]bool{}
-	for _, name := range selected {
-		wanted[name] = true
+	selectedTargets, err := resolveConfiguredBuildTargets(config.Build.Targets, selectedNames)
+	if err != nil {
+		return nil, err
 	}
-	seen := map[string]bool{}
-	for _, target := range config.Build.Targets {
-		if len(wanted) > 0 && !wanted[target.Name] {
-			continue
-		}
-		seen[target.Name] = true
+	for _, target := range selectedTargets {
 		add(target.Output)
 		add(target.App)
 		add(target.Binary)
 		add(target.WASM)
 		add(target.BackendApp)
 		add(target.BackendBinary)
-	}
-	for _, name := range selected {
-		if !seen[name] {
-			return nil, fmt.Errorf("target %q is not configured", name)
-		}
 	}
 
 	add(outDir)

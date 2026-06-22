@@ -53,23 +53,23 @@ func parseServeOptions(args []string) (string, string, error) {
 	var dir string
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
+		if value, next, ok, missing := consumeValueFlag(args, i, "--dir", true); ok {
+			if missing {
+				return "", "", fmt.Errorf("usage: gowdk serve --dir <dir> [--addr <addr>]")
+			}
+			dir = value
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--addr", true); ok {
+			if missing {
+				return "", "", fmt.Errorf("usage: gowdk serve --dir <dir> [--addr <addr>]")
+			}
+			addr = value
+			i = next
+			continue
+		}
 		switch {
-		case arg == "--dir":
-			i++
-			if i >= len(args) {
-				return "", "", fmt.Errorf("usage: gowdk serve --dir <dir> [--addr <addr>]")
-			}
-			dir = args[i]
-		case strings.HasPrefix(arg, "--dir="):
-			dir = strings.TrimPrefix(arg, "--dir=")
-		case arg == "--addr":
-			i++
-			if i >= len(args) {
-				return "", "", fmt.Errorf("usage: gowdk serve --dir <dir> [--addr <addr>]")
-			}
-			addr = args[i]
-		case strings.HasPrefix(arg, "--addr="):
-			addr = strings.TrimPrefix(arg, "--addr=")
 		case strings.HasPrefix(arg, "-"):
 			return "", "", fmt.Errorf("unknown serve flag %q", arg)
 		default:

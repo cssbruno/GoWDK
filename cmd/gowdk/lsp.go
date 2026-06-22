@@ -30,17 +30,17 @@ func languageServerConfig(args []string) (gowdk.Config, error) {
 	var configPath string
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
+		if value, next, ok, missing := consumeValueFlag(args, i, "--config", true); ok {
+			if missing {
+				return gowdk.Config{}, errors.New(lspUsage)
+			}
+			configPath = value
+			i = next
+			continue
+		}
 		switch {
 		case arg == "--ssr":
 			options.Config.Addons = append(options.Config.Addons, ssr.Addon())
-		case arg == "--config":
-			i++
-			if i >= len(args) {
-				return gowdk.Config{}, errors.New(lspUsage)
-			}
-			configPath = args[i]
-		case strings.HasPrefix(arg, "--config="):
-			configPath = strings.TrimPrefix(arg, "--config=")
 		default:
 			return gowdk.Config{}, errors.New(lspUsage)
 		}

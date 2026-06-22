@@ -176,7 +176,7 @@ func TestHandlerMiddlewareCanShortCircuit(t *testing.T) {
 	}
 }
 
-func TestHandlerCachesMiddlewareChain(t *testing.T) {
+func TestHandlerAppliesMiddlewareChainConcurrently(t *testing.T) {
 	var constructed atomic.Int32
 	handler := Handler{
 		Root:     fstest.MapFS{},
@@ -198,7 +198,8 @@ func TestHandlerCachesMiddlewareChain(t *testing.T) {
 		},
 	}
 	var wait sync.WaitGroup
-	for range 20 {
+	const requests = 20
+	for range requests {
 		wait.Add(1)
 		go func() {
 			defer wait.Done()
@@ -211,8 +212,8 @@ func TestHandlerCachesMiddlewareChain(t *testing.T) {
 		}()
 	}
 	wait.Wait()
-	if constructed.Load() != 1 {
-		t.Fatalf("middleware should be constructed once, got %d", constructed.Load())
+	if constructed.Load() != requests {
+		t.Fatalf("middleware should be constructed once per request, got %d", constructed.Load())
 	}
 }
 

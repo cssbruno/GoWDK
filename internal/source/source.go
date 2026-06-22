@@ -214,32 +214,11 @@ func BackendRoutePath(value string) string {
 // ValidateBackendRoutePath rejects paths that would be unsafe or ambiguous when
 // registered as generated backend routes.
 func ValidateBackendRoutePath(value string) error {
-	if strings.TrimSpace(value) != value {
-		return fmt.Errorf("endpoint path %q must not contain surrounding whitespace", value)
+	if _, err := validateBackendRoutePreflight(value, "must be a concrete path without query, fragment, or params"); err != nil {
+		return err
 	}
-	if value == "" {
-		return fmt.Errorf("endpoint path must not be empty")
-	}
-	if value[0] != '/' {
-		return fmt.Errorf("endpoint path %q must be a local absolute path", value)
-	}
-	if len(value) > 1 && (value[1] == '/' || value[1] == '\\') {
-		return fmt.Errorf("endpoint path %q must not be protocol-relative", value)
-	}
-	if strings.Contains(value, "\\") {
-		return fmt.Errorf("endpoint path %q must not contain backslashes", value)
-	}
-	if strings.ContainsAny(value, "?#{}") {
+	if strings.ContainsAny(value, "{}") {
 		return fmt.Errorf("endpoint path %q must be a concrete path without query, fragment, or params", value)
-	}
-	for _, char := range value {
-		if char < 0x20 || char == 0x7f {
-			return fmt.Errorf("endpoint path %q must not contain control characters", value)
-		}
-	}
-	cleaned := BackendRoutePath(value)
-	if cleaned != value {
-		return fmt.Errorf("endpoint path %q must be a clean absolute path without dot segments, duplicate slashes, or trailing slash", value)
 	}
 	return nil
 }
@@ -247,32 +226,8 @@ func ValidateBackendRoutePath(value string) error {
 // ValidateBackendRoutePattern rejects unsafe generated route patterns while
 // allowing whole-segment route params such as /patients/{id:int}.
 func ValidateBackendRoutePattern(value string) error {
-	if strings.TrimSpace(value) != value {
-		return fmt.Errorf("endpoint path %q must not contain surrounding whitespace", value)
-	}
-	if value == "" {
-		return fmt.Errorf("endpoint path must not be empty")
-	}
-	if value[0] != '/' {
-		return fmt.Errorf("endpoint path %q must be a local absolute path", value)
-	}
-	if len(value) > 1 && (value[1] == '/' || value[1] == '\\') {
-		return fmt.Errorf("endpoint path %q must not be protocol-relative", value)
-	}
-	if strings.Contains(value, "\\") {
-		return fmt.Errorf("endpoint path %q must not contain backslashes", value)
-	}
-	if strings.ContainsAny(value, "?#") {
-		return fmt.Errorf("endpoint path %q must not contain query strings or fragments", value)
-	}
-	for _, char := range value {
-		if char < 0x20 || char == 0x7f {
-			return fmt.Errorf("endpoint path %q must not contain control characters", value)
-		}
-	}
-	cleaned := BackendRoutePath(value)
-	if cleaned != value {
-		return fmt.Errorf("endpoint path %q must be a clean absolute path without dot segments, duplicate slashes, or trailing slash", value)
+	if _, err := validateBackendRoutePreflight(value, "must not contain query strings or fragments"); err != nil {
+		return err
 	}
 	if value == "/" {
 		return nil
@@ -315,6 +270,37 @@ func ValidateBackendRoutePattern(value string) error {
 		seen[param.name] = true
 	}
 	return nil
+}
+
+func validateBackendRoutePreflight(value, queryFragmentRule string) (string, error) {
+	if strings.TrimSpace(value) != value {
+		return "", fmt.Errorf("endpoint path %q must not contain surrounding whitespace", value)
+	}
+	if value == "" {
+		return "", fmt.Errorf("endpoint path must not be empty")
+	}
+	if value[0] != '/' {
+		return "", fmt.Errorf("endpoint path %q must be a local absolute path", value)
+	}
+	if len(value) > 1 && (value[1] == '/' || value[1] == '\\') {
+		return "", fmt.Errorf("endpoint path %q must not be protocol-relative", value)
+	}
+	if strings.Contains(value, "\\") {
+		return "", fmt.Errorf("endpoint path %q must not contain backslashes", value)
+	}
+	if strings.ContainsAny(value, "?#") {
+		return "", fmt.Errorf("endpoint path %q %s", value, queryFragmentRule)
+	}
+	for _, char := range value {
+		if char < 0x20 || char == 0x7f {
+			return "", fmt.Errorf("endpoint path %q must not contain control characters", value)
+		}
+	}
+	cleaned := BackendRoutePath(value)
+	if cleaned != value {
+		return "", fmt.Errorf("endpoint path %q must be a clean absolute path without dot segments, duplicate slashes, or trailing slash", value)
+	}
+	return cleaned, nil
 }
 
 type backendRouteParam struct {
@@ -421,37 +407,6 @@ type BackendResultField struct {
 	Path     string
 	Selector string
 	Type     string
-}
-
-// BackendInputFieldTypeSupported reports whether goType is a form-decoder type
-// supported by compiler validation and generated action decoders.
-func BackendInputFieldTypeSupported(goType string) bool {
-	_, ok := LookupBackendInputFieldType(goType)
-	return ok
-}
-
-// BackendInputFieldSignedInteger reports whether goType uses the signed integer
-// form decoder.
-func BackendInputFieldSignedInteger(goType string) bool {
-	fieldType, ok := LookupBackendInputFieldType(goType)
-	return ok && fieldType.Kind == BackendInputFieldKindSignedInt
-}
-
-// BackendInputFieldUnsignedInteger reports whether goType uses the unsigned
-// integer form decoder.
-func BackendInputFieldUnsignedInteger(goType string) bool {
-	fieldType, ok := LookupBackendInputFieldType(goType)
-	return ok && fieldType.Kind == BackendInputFieldKindUnsignedInt
-}
-
-// BackendInputFieldIntegerBitSize returns the explicit bit size passed to form
-// integer decoders. Zero means the platform-sized int or uint type.
-func BackendInputFieldIntegerBitSize(goType string) int {
-	fieldType, ok := LookupBackendInputFieldType(goType)
-	if !ok {
-		return 0
-	}
-	return fieldType.BitSize
 }
 
 // BackendBinding describes the Go handler selected for a backend block (a page

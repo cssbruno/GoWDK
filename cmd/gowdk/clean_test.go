@@ -13,7 +13,7 @@ func TestCleanTargetsCollectsConfiguredOutputs(t *testing.T) {
 		Build: gowdk.BuildConfig{
 			Output: "gowdk_cache",
 			Targets: []gowdk.BuildTargetConfig{
-				{Name: "site", Output: ".gowdk/output/site", App: ".gowdk/app/site", Binary: "bin/site", WASM: "bin/site.wasm"},
+				{Name: "site", Output: ".gowdk/output/site", App: ".gowdk/app/site", Binary: "bin/site", WASM: "bin/site.wasm", BackendApp: ".gowdk/backend/site", BackendBinary: "bin/site-backend"},
 			},
 		},
 	}
@@ -21,7 +21,7 @@ func TestCleanTargetsCollectsConfiguredOutputs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"gowdk_cache", ".gowdk/output/site", ".gowdk/app/site", "bin/site", "bin/site.wasm"} {
+	for _, want := range []string{"gowdk_cache", ".gowdk/output/site", ".gowdk/app/site", "bin/site", "bin/site.wasm", ".gowdk/backend/site", "bin/site-backend"} {
 		if !contains(targets, want) {
 			t.Fatalf("expected %q in targets %v", want, targets)
 		}
@@ -47,6 +47,24 @@ func TestCleanTargetsFiltersByTargetName(t *testing.T) {
 	}
 	if !contains(targets, "out/admin") {
 		t.Fatalf("expected the admin output, got %v", targets)
+	}
+}
+
+func TestCleanTargetsUsesNormalizedTargetNames(t *testing.T) {
+	config := gowdk.Config{Build: gowdk.BuildConfig{Targets: []gowdk.BuildTargetConfig{{Name: " admin ", Output: "out/admin"}}}}
+	targets, err := cleanTargets(config, []string{"admin"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(targets) != 1 || targets[0] != "out/admin" {
+		t.Fatalf("targets = %#v, want admin output", targets)
+	}
+}
+
+func TestCleanTargetsRejectsDuplicateTargetNames(t *testing.T) {
+	config := gowdk.Config{Build: gowdk.BuildConfig{Targets: []gowdk.BuildTargetConfig{{Name: "site"}, {Name: " site "}}}}
+	if _, err := cleanTargets(config, nil, ""); err == nil {
+		t.Fatal("expected an error for duplicate target names")
 	}
 }
 

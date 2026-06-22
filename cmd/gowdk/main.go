@@ -58,65 +58,11 @@ func run(args []string) error {
 		}
 	}
 
-	switch args[0] {
-	case "version":
-		return printVersion(args[1:])
-	case "init":
-		return initProject(args[1:])
-	case "add":
-		return addAddon(args[1:])
-	case "tokens":
-		return tokens(args[1:])
-	case "fmt":
-		return format(args[1:])
-	case "check":
-		return check(args[1:])
-	case "fix":
-		return fixCommand(args[1:])
-	case "manifest":
-		return manifestJSON(args[1:])
-	case "sitemap":
-		return siteMapJSON(args[1:])
-	case "routes":
-		return routesJSON(args[1:])
-	case "endpoints":
-		return endpointsJSONCommand(args[1:])
-	case "inspect":
-		return inspect(args[1:])
-	case "generate":
-		return generate(args[1:])
-	case "explain":
-		return explainDiagnostic(args[1:])
-	case "doctor":
-		return doctor(args[1:])
-	case "audit":
-		return audit(args[1:])
-	case "contracts":
-		return contractsReport(args[1:])
-	case "graph":
-		return contractGraph(args[1:])
-	case "trace":
-		return contractTrace(args[1:])
-	case "list":
-		return listContracts(args[1:])
-	case "build":
-		return build(args[1:])
-	case "clean":
-		return clean(args[1:])
-	case "dev":
-		return dev(args[1:])
-	case "preview":
-		return preview(args[1:])
-	case "playground":
-		return playgroundCommand(args[1:])
-	case "serve":
-		return serve(args[1:])
-	case "lsp":
-		return languageServer(args[1:])
-	default:
-		usage()
-		return fmt.Errorf("unknown command %q", args[0])
+	if command, ok := topLevelCommand(args[0]); ok {
+		return command.Handler(args[1:])
 	}
+	usage()
+	return fmt.Errorf("unknown command %q", args[0])
 }
 
 func commandHelpRequested(args []string) bool {
@@ -152,64 +98,61 @@ func nestedCommandUsage(args []string) (string, bool) {
 }
 
 func commandUsage(command string) (string, bool) {
-	switch command {
-	case "version":
-		return "usage: gowdk version [--json]", true
-	case "init":
-		return initUsage, true
-	case "add":
-		return addUsage, true
-	case "tokens":
-		return "usage: gowdk tokens <file.gwdk>", true
-	case "fmt":
-		return "usage: gowdk fmt [--write] [--check] <files>", true
-	case "check":
-		return projectCommandUsage("check", true), true
-	case "fix":
-		return fixUsage, true
-	case "manifest":
-		return projectCommandUsage("manifest", false), true
-	case "sitemap":
-		return projectCommandUsage("sitemap", false), true
-	case "routes":
-		return projectCommandUsage("routes", false), true
-	case "endpoints":
-		return projectCommandUsage("endpoints", false), true
-	case "inspect":
-		return inspectUsage, true
-	case "generate":
-		return generateUsage, true
-	case "explain":
-		return "usage: gowdk explain [--json] <diagnostic-code>", true
-	case "doctor":
-		return doctorUsage, true
-	case "audit":
-		return auditUsage, true
-	case "contracts":
-		return "usage: gowdk contracts [--json] [dir]", true
-	case "graph":
-		return "usage: gowdk graph [--json] [dir]", true
-	case "trace":
-		return "usage: gowdk trace <contract> [--json] [dir]", true
-	case "list":
-		return "usage: gowdk list commands|queries|events|jobs [--json] [dir]", true
-	case "build":
-		return buildUsage, true
-	case "clean":
-		return cleanUsage, true
-	case "dev":
-		return devUsage(), true
-	case "preview":
-		return previewUsage(), true
-	case "playground":
-		return playgroundUsage, true
-	case "serve":
-		return "usage: gowdk serve --dir <dir> [--addr <addr>]", true
-	case "lsp":
-		return lspUsage, true
-	default:
-		return "", false
+	if descriptor, ok := topLevelCommand(command); ok {
+		return descriptor.Usage(), true
 	}
+	return "", false
+}
+
+type topLevelCommandDescriptor struct {
+	Name       string
+	Handler    func([]string) error
+	Usage      func() string
+	ListSuffix string
+}
+
+func staticCommandUsage(value string) func() string {
+	return func() string { return value }
+}
+
+var topLevelCommands = []topLevelCommandDescriptor{
+	{Name: "version", Handler: printVersion, Usage: staticCommandUsage("usage: gowdk version [--json]"), ListSuffix: " [--json]         print CLI version"},
+	{Name: "init", Handler: initProject, Usage: staticCommandUsage(initUsage), ListSuffix: " [--force] [--tests] [--template <site|minimal>] [dir] scaffold a starter GOWDK project"},
+	{Name: "add", Handler: addAddon, Usage: staticCommandUsage(addUsage), ListSuffix: " <addon> [--config <file>] [--base-url <url>] | add --list [--registry] [--json]  wire or list addons"},
+	{Name: "tokens", Handler: tokens, Usage: staticCommandUsage("usage: gowdk tokens <file.gwdk>"), ListSuffix: " <file.gwdk>       print language tokens"},
+	{Name: "fmt", Handler: format, Usage: staticCommandUsage("usage: gowdk fmt [--write] [--check] <files>"), ListSuffix: " [--write] [--check] <files>  format .gwdk files (--check reports files that need formatting)"},
+	{Name: "check", Handler: check, Usage: func() string { return projectCommandUsage("check", true) }, ListSuffix: " [--config <file>] [--env-file <file>] [--module <name>] [--json] [--warnings-as-errors] [--ssr] [files...] parse and validate .gwdk files"},
+	{Name: "fix", Handler: fixCommand, Usage: staticCommandUsage(fixUsage), ListSuffix: " [--dry-run] [--code <diagnostic-code>] [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] apply registered safe diagnostic fixes"},
+	{Name: "manifest", Handler: manifestJSON, Usage: func() string { return projectCommandUsage("manifest", false) }, ListSuffix: " [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON"},
+	{Name: "sitemap", Handler: siteMapJSON, Usage: func() string { return projectCommandUsage("sitemap", false) }, ListSuffix: " [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON"},
+	{Name: "routes", Handler: routesJSON, Usage: func() string { return projectCommandUsage("routes", false) }, ListSuffix: " [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON"},
+	{Name: "endpoints", Handler: endpointsJSONCommand, Usage: func() string { return projectCommandUsage("endpoints", false) }, ListSuffix: " [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print endpoint metadata JSON"},
+	{Name: "inspect", Handler: inspect, Usage: staticCommandUsage(inspectUsage), ListSuffix: " ir|tree|endpoint-graph|asset-graph|go-bindings [--config <file>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...] print validated compiler inspection JSON"},
+	{Name: "generate", Handler: generate, Usage: staticCommandUsage(generateUsage), ListSuffix: " stubs [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] write missing action/API Go handler stubs"},
+	{Name: "explain", Handler: explainDiagnostic, Usage: staticCommandUsage("usage: gowdk explain [--json] <diagnostic-code>"), ListSuffix: " [--json] <diagnostic-code> explain a diagnostic code and next steps"},
+	{Name: "doctor", Handler: doctor, Usage: staticCommandUsage(doctorUsage), ListSuffix: " [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...] check local GOWDK environment and project health"},
+	{Name: "test", Handler: gowdkTest, Usage: staticCommandUsage(testUsage), ListSuffix: " [--config <file>] [--env-file <file>] [--module <name>] [--target <name>] [--stage <unit|app|binary|browser>] [--run <pattern>] [--timeout <duration>] [--count <n>] [--cover] [--json] [--keep-workdir] [--browser-command <command>] [--ssr] [files...] run Go tests against generated app artifacts"},
+	{Name: "audit", Handler: audit, Usage: staticCommandUsage(auditUsage), ListSuffix: " [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--sarif[=<file>]] [--diff <previous-report>] [--schema[=report|security]] [--emit-tests[=<file>]] [--force] [--run] [files...] check security posture, emit SARIF/JSON-Schema, diff against a previous report, and run optional runtime tests"},
+	{Name: "contracts", Handler: contractsReport, Usage: staticCommandUsage("usage: gowdk contracts [--json] [dir]"), ListSuffix: " [--json] [dir]  print Go contract registration metadata"},
+	{Name: "graph", Handler: contractGraph, Usage: staticCommandUsage("usage: gowdk graph [--json] [dir]"), ListSuffix: " [--json] [dir]      print command/event contract graph"},
+	{Name: "trace", Handler: contractTrace, Usage: staticCommandUsage("usage: gowdk trace <contract> [--json] [dir]"), ListSuffix: " <contract> [--json] [dir] print one command/query/event/job contract trace"},
+	{Name: "list", Handler: listContracts, Usage: staticCommandUsage("usage: gowdk list commands|queries|events|jobs [--json] [dir]"), ListSuffix: " commands|queries|events|jobs [--json] [dir] print filtered contract metadata"},
+	{Name: "build", Handler: build, Usage: staticCommandUsage(buildUsage), ListSuffix: " [--config <file>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...] compile .gwdk files into build output"},
+	{Name: "clean", Handler: clean, Usage: staticCommandUsage(cleanUsage), ListSuffix: " [--config <file>] [--target <name>] [--out <dir>] [--dry-run] [--json] remove configured build outputs"},
+	{Name: "dev", Handler: dev, Usage: devUsage, ListSuffix: " [--addr <addr>] [--interval <duration>] [build flags...] build, serve, rebuild, and live reload"},
+	{Name: "preview", Handler: preview, Usage: previewUsage, ListSuffix: " [--addr <addr>] [--hot] [build flags...] build and serve a local deploy preview"},
+	{Name: "playground", Handler: playgroundCommand, Usage: staticCommandUsage(playgroundUsage), ListSuffix: " policy|export|run inspect sandbox policy, export projects, or run an opt-in sandbox build"},
+	{Name: "serve", Handler: serve, Usage: staticCommandUsage("usage: gowdk serve --dir <dir> [--addr <addr>]"), ListSuffix: " --dir <dir> [--addr <addr>] serve generated build output locally"},
+	{Name: "lsp", Handler: languageServer, Usage: staticCommandUsage(lspUsage), ListSuffix: " [--config <file>] [--ssr] start the language server over stdio"},
+}
+
+func topLevelCommand(name string) (topLevelCommandDescriptor, bool) {
+	for _, descriptor := range topLevelCommands {
+		if descriptor.Name == name {
+			return descriptor, true
+		}
+	}
+	return topLevelCommandDescriptor{}, false
 }
 
 func printVersion(args []string) error {
@@ -235,33 +178,9 @@ func usage() {
 	fmt.Println("compile-first Go web kit: build-time output, backend actions, SSR optional")
 	fmt.Println()
 	fmt.Println("Commands:")
-	fmt.Println("  version [--json]         print CLI version")
-	fmt.Println("  init [--force] [--tests] [--template <site|minimal>] [dir] scaffold a starter GOWDK project")
-	fmt.Println("  add <addon> [--config <file>] [--base-url <url>] | add --list [--registry] [--json]  wire or list addons")
-	fmt.Println("  tokens <file.gwdk>       print language tokens")
-	fmt.Println("  fmt [--write] [--check] <files>  format .gwdk files (--check reports files that need formatting)")
-	fmt.Println("  check [--config <file>] [--env-file <file>] [--module <name>] [--json] [--warnings-as-errors] [--ssr] [files...] parse and validate .gwdk files")
-	fmt.Println("  fix [--dry-run] [--code <diagnostic-code>] [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] apply registered safe diagnostic fixes")
-	fmt.Println("  manifest [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON")
-	fmt.Println("  sitemap [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON")
-	fmt.Println("  routes [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON")
-	fmt.Println("  endpoints [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print endpoint metadata JSON")
-	fmt.Println("  inspect ir|tree|endpoint-graph|asset-graph|go-bindings [--config <file>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...] print validated compiler inspection JSON")
-	fmt.Println("  generate stubs [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] write missing action/API Go handler stubs")
-	fmt.Println("  explain [--json] <diagnostic-code> explain a diagnostic code and next steps")
-	fmt.Println("  doctor [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...] check local GOWDK environment and project health")
-	fmt.Println("  audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--sarif[=<file>]] [--diff <previous-report>] [--schema[=report|security]] [--emit-tests[=<file>]] [--force] [--run] [files...] check security posture, emit SARIF/JSON-Schema, diff against a previous report, and run optional runtime tests")
-	fmt.Println("  contracts [--json] [dir]  print Go contract registration metadata")
-	fmt.Println("  graph [--json] [dir]      print command/event contract graph")
-	fmt.Println("  trace <contract> [--json] [dir] print one command/query/event/job contract trace")
-	fmt.Println("  list commands|queries|events|jobs [--json] [dir] print filtered contract metadata")
-	fmt.Println("  build [--config <file>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...] compile .gwdk files into build output")
-	fmt.Println("  clean [--config <file>] [--target <name>] [--out <dir>] [--dry-run] [--json] remove configured build outputs")
-	fmt.Println("  dev [--addr <addr>] [--interval <duration>] [build flags...] build, serve, rebuild, and live reload")
-	fmt.Println("  preview [--addr <addr>] [--hot] [build flags...] build and serve a local deploy preview")
-	fmt.Println("  playground policy|export|run inspect sandbox policy, export projects, or run an opt-in sandbox build")
-	fmt.Println("  serve --dir <dir> [--addr <addr>] serve generated build output locally")
-	fmt.Println("  lsp [--config <file>] [--ssr] start the language server over stdio")
+	for _, descriptor := range topLevelCommands {
+		fmt.Println("  " + descriptor.Name + descriptor.ListSuffix)
+	}
 }
 
 type cliOptions struct {

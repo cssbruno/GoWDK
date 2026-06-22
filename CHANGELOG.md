@@ -7,13 +7,15 @@ packages, and tooling contracts may change before 1.0.
 
 ### Added
 
-- Deterministic client expression built-ins for formatting and date/time:
-  `fixed(number, digits)`, `round(number, digits)`, `percent(number, digits)`,
-  and `formatTime(unixSeconds, layout)` (UTC, token layout). They use only
-  IEEE-754 and integer arithmetic — no `Intl`/`Date` — so the Go evaluator and
-  the browser runtime produce byte-identical output, cross-checked by the
-  expression conformance test. Text inputs also gain a `Ref.Select()` DOM ref
-  method alongside `Focus`/`Blur`/`ScrollIntoView`.
+- Bounded build-time iteration and transforms in `build {}` data: list and
+  object literals, `seq(start, end)` ranges, comprehensions
+  (`[expr for v in source if cond]`, with an optional index variable), list
+  reductions (`count`, `sum`, `join`, `first`, `last`, `take`, `reverse`), and
+  object/list field access (`v.field`, `list[i]`). Evaluation stays pure and
+  deterministic, serializes lists/objects to canonical JSON, and is bounded by an
+  element budget and nesting-depth limit that surface a diagnostic instead of
+  hanging the build. Go build functions may now also return slice and struct
+  fields. See `examples/build-iteration`.
 - Bounded `{#await fetchJSON[T](urlExpr)}` blocks in JS client islands for
   pending, resolved, and error placeholder UI.
 

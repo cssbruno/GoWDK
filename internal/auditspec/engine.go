@@ -24,11 +24,16 @@ var endpointKindForSelector = map[string]string{
 // It first reports policy-resolution problems (cycles, unknown extends), then
 // the per-target rule violations. Findings are returned in a stable order.
 func Evaluate(manifest securitymanifest.SecurityManifest, policies []Policy) []Finding {
+	policies, codeFindings := validatePolicyRuleCodes(policies)
 	resolved, resolutionFindings := resolve(policies)
-	findings := append([]Finding(nil), resolutionFindings...)
+	findings := append([]Finding(nil), codeFindings...)
+	findings = append(findings, resolutionFindings...)
 
 	matchedAnything := map[string]bool{}
 	frontendRawHTMLAllowlist := rawHTMLAllowlist(resolved)
+	sinkFingerprints := rawHTMLSinkFingerprints(manifest.Frontend.RawHTMLSinks)
+	activeExceptions, exceptionFindings := classifyRawHTMLExceptions(collectRawHTMLExceptions(resolved), sinkFingerprints)
+	findings = append(findings, exceptionFindings...)
 
 	for _, endpoint := range manifest.Endpoints {
 		for _, policy := range resolved {
@@ -70,12 +75,19 @@ func Evaluate(manifest securitymanifest.SecurityManifest, policies []Policy) []F
 		}
 	}
 
+	fctx := frontendContext{
+		surface:          manifest.Frontend,
+		rawHTMLAllowlist: frontendRawHTMLAllowlist,
+		activeExceptions: activeExceptions,
+		buildMode:        manifest.BuildMode,
+		cors:             manifest.CORS,
+	}
 	for _, policy := range resolved {
 		if !policy.hasFrontendSelector() {
 			continue
 		}
 		matchedAnything[policy.Name] = true
-		findings = append(findings, evalFrontend(manifest.Frontend, policy, frontendRawHTMLAllowlist)...)
+		findings = append(findings, evalFrontend(fctx, policy)...)
 	}
 
 	findings = append(findings, unmatchedSelectorFindings(resolved, matchedAnything)...)
@@ -318,9 +330,45 @@ func evalEndpoint(endpoint securitymanifest.EndpointEntry, policy Policy) []Find
 					fmt.Sprintf("%s endpoint %s body limit %d exceeds policy maximum %d", endpoint.Kind, endpoint.ID, endpoint.BodyLimitBytes, limit),
 					"Lower Build.BodyLimits, or raise the policy max_body if intentional."))
 			}
+		case RuleRequireRequestLimits:
+			findings = append(findings, evalRequestLimits(rule, policy, endpoint)...)
 		case RuleRequireVerifiedGuards:
 			findings = append(findings, evalGuardEvidence(rule, policy, endpointTarget(endpoint), endpoint.Source, endpoint.GuardEvidence)...)
 		}
+	}
+	return findings
+}
+
+// evalRequestLimits evaluates the effective request-limit posture: a positive
+// raw body cap, the cap installed before the body is parsed (so it precedes CSRF
+// token parsing and handler execution), and a multipart cap when multipart
+// bodies are accepted. Phase and multipart are only judged against an explicitly
+// recorded RequestLimits posture so an under-specified manifest is not
+// false-flagged for an ordering it never claimed.
+func evalRequestLimits(rule Rule, policy Policy, endpoint securitymanifest.EndpointEntry) []Finding {
+	limits := endpoint.RequestLimits
+	rawBytes := limits.RawBodyBytes
+	if rawBytes == 0 {
+		rawBytes = endpoint.BodyLimitBytes
+	}
+	if rawBytes <= 0 {
+		return []Finding{finding(ruleWithCode(rule, "audit_request_limit_missing"), policy, endpointTarget(endpoint), endpoint.Source,
+			fmt.Sprintf("%s endpoint %s does not declare a positive raw request body limit", endpoint.Kind, endpoint.ID),
+			"Set a positive Build.BodyLimits cap for this endpoint kind so the request body is bounded before parsing.")}
+	}
+	if limits.RawBodyBytes <= 0 {
+		return nil
+	}
+	var findings []Finding
+	if !limits.InstalledBeforeParse {
+		findings = append(findings, finding(ruleWithCode(rule, "audit_request_limit_phase_unsafe"), policy, endpointTarget(endpoint), endpoint.Source,
+			fmt.Sprintf("%s endpoint %s installs its body limit after the body is parsed", endpoint.Kind, endpoint.ID),
+			"Install the request body limit before CSRF token parsing and handler execution."))
+	}
+	if limits.MultipartEnabled && limits.MultipartMaxBytes <= 0 {
+		findings = append(findings, finding(ruleWithCode(rule, "audit_request_limit_unbounded_multipart"), policy, endpointTarget(endpoint), endpoint.Source,
+			fmt.Sprintf("%s endpoint %s accepts multipart bodies without a multipart byte limit", endpoint.Kind, endpoint.ID),
+			"Declare a multipart/upload byte limit for endpoints that accept multipart bodies."))
 	}
 	return findings
 }
@@ -446,10 +494,25 @@ func observabilityAccessPolicyChecksOrigin(entry securitymanifest.ObservabilityE
 	return false
 }
 
-func evalFrontend(surface securitymanifest.FrontendSurface, policy Policy, rawHTMLAllowlist map[string]bool) []Finding {
+// frontendContext bundles the global posture frontend rules reason over so the
+// per-policy evaluation signature stays small as new global gates are added.
+type frontendContext struct {
+	surface          securitymanifest.FrontendSurface
+	rawHTMLAllowlist map[string]bool
+	activeExceptions map[string]bool
+	buildMode        string
+	cors             securitymanifest.CORSPosture
+}
+
+func evalFrontend(ctx frontendContext, policy Policy) []Finding {
+	surface := ctx.surface
 	var findings []Finding
 	for _, rule := range policy.Rules {
 		switch rule.Kind {
+		case RuleCheckSecurityHeaders:
+			findings = append(findings, evalSecurityHeaders(surface, policy, ctx.buildMode)...)
+		case RuleCheckCORS:
+			findings = append(findings, evalCORS(ctx.cors, policy, rule)...)
 		case RuleNoSecretsInBundle:
 			for _, leak := range surface.BundleSecrets {
 				findings = append(findings, finding(rule, policy, "frontend", leak.Source,
@@ -469,28 +532,47 @@ func evalFrontend(surface securitymanifest.FrontendSurface, policy Policy, rawHT
 					"Declare guard public for an intentionally public page, or add a protective guard."))
 			}
 		case RuleDenyRawHTMLSinks:
-			findings = append(findings, evalRawHTMLSinks(surface, policy, rule, rawHTMLAllowlist)...)
-		case RuleAllowRawHTML:
-			// Handled by evalRawHTMLSinks against the resolved frontend allowlist.
+			findings = append(findings, evalRawHTMLSinks(surface, policy, rule, ctx.rawHTMLAllowlist, ctx.activeExceptions)...)
+		case RuleAllowRawHTML, RuleExceptRawHTML:
+			// Handled against the resolved frontend allowlist and exception set.
 		}
 	}
 	return findings
 }
 
-// evalRawHTMLSinks reports raw-HTML sinks that are not allowlisted by any
-// RuleAllowRawHTML rule on any resolved frontend policy.
-func evalRawHTMLSinks(surface securitymanifest.FrontendSurface, policy Policy, rule Rule, allow map[string]bool) []Finding {
+// evalCORS flags risky generated cross-origin policy. A wildcard origin is a
+// warning (every site may call the API); a wildcard origin combined with
+// credentials is an error.
+func evalCORS(cors securitymanifest.CORSPosture, policy Policy, rule Rule) []Finding {
+	if !cors.Enabled || !cors.AllowsAnyOrigin {
+		return nil
+	}
+	source := cors.Origin
+	if cors.AllowCredentials {
+		return []Finding{finding(ruleWithCode(rule, "audit_cors_credentialed_wildcard"), policy, "cors", source,
+			"CORS allows any origin together with credentials, exposing credentialed responses to every site",
+			"Replace the wildcard origin with an explicit allowlist, or disable AllowCredentials.")}
+	}
+	return []Finding{finding(ruleWithCode(rule, "audit_cors_wildcard_origin"), policy, "cors", source,
+		"CORS allows any origin, so generated API and contract endpoints accept cross-origin requests from any site",
+		"Restrict Build.CORS.AllowedOrigins to the specific origins that must call the API.")}
+}
+
+// evalRawHTMLSinks reports raw-HTML sinks that are neither allowlisted by a
+// RuleAllowRawHTML rule nor suppressed by an active fingerprinted exception on
+// any resolved frontend policy.
+func evalRawHTMLSinks(surface securitymanifest.FrontendSurface, policy Policy, rule Rule, allow, activeExceptions map[string]bool) []Finding {
 	if len(surface.RawHTMLSinks) == 0 {
 		return nil
 	}
 	var findings []Finding
 	for _, sink := range surface.RawHTMLSinks {
-		if rawHTMLSinkAllowed(allow, sink) {
+		if activeExceptions[sink.Fingerprint] || rawHTMLSinkAllowed(allow, sink) {
 			continue
 		}
 		findings = append(findings, finding(rule, policy, "frontend", sink.Source,
-			fmt.Sprintf("raw HTML sink %s:%s is not allowlisted", sink.OwnerID, sink.Field),
-			"Render escaped output, or add the sink to the policy raw-HTML allowlist."))
+			fmt.Sprintf("raw HTML sink %s:%s (fingerprint %s) is not allowlisted", sink.OwnerID, sink.Field, sink.Fingerprint),
+			"Render escaped output, or add an `except raw_html` exception pinning this fingerprint with owner, justification, expiry, and sanitizer."))
 	}
 	return findings
 }
@@ -548,6 +630,7 @@ func finding(rule Rule, policy Policy, target, source, message, remediation stri
 	return Finding{
 		Code:        rule.Code,
 		Severity:    severityFor(rule.Code),
+		CodeSource:  codeSourceFor(policy, rule),
 		Target:      target,
 		Policy:      policy.Name,
 		Rule:        string(rule.Kind),

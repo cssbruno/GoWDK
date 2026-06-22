@@ -78,6 +78,11 @@ func Baseline() []Policy {
 			Builtin: true,
 			Selectors: []Selector{
 				{Raw: "/**", Kind: SelectorRoute},
+				{Raw: "act:*", Kind: SelectorEndpoint},
+				{Raw: "api:*", Kind: SelectorEndpoint},
+				{Raw: "fragment:*", Kind: SelectorEndpoint},
+				{Raw: "command:*", Kind: SelectorEndpoint},
+				{Raw: "query:*", Kind: SelectorEndpoint},
 			},
 			Rules: []Rule{
 				{Kind: RuleRequireVerifiedGuards, Code: "audit_guard_unverified"},
@@ -103,6 +108,40 @@ func Baseline() []Policy {
 				{Kind: RuleNoSecretsInBundle, Code: "audit_bundle_secret"},
 				{Kind: RuleRequireClientRouteGuards, Code: "audit_client_route_unguarded"},
 				{Kind: RuleDenyRawHTMLSinks, Code: "audit_raw_html_sink"},
+			},
+		},
+		{
+			Name:    "baseline.headers",
+			Builtin: true,
+			Selectors: []Selector{
+				{Raw: "frontend", Kind: SelectorFrontend},
+			},
+			Rules: []Rule{
+				{Kind: RuleCheckSecurityHeaders},
+			},
+		},
+		{
+			Name:    "baseline.request_limits",
+			Builtin: true,
+			Selectors: []Selector{
+				{Raw: "act:*", Kind: SelectorEndpoint},
+				{Raw: "api:*", Kind: SelectorEndpoint},
+				{Raw: "fragment:*", Kind: SelectorEndpoint},
+				{Raw: "command:*", Kind: SelectorEndpoint},
+				{Raw: "query:*", Kind: SelectorEndpoint},
+			},
+			Rules: []Rule{
+				{Kind: RuleRequireRequestLimits},
+			},
+		},
+		{
+			Name:    "baseline.cors",
+			Builtin: true,
+			Selectors: []Selector{
+				{Raw: "frontend", Kind: SelectorFrontend},
+			},
+			Rules: []Rule{
+				{Kind: RuleCheckCORS},
 			},
 		},
 	}

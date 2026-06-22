@@ -1210,6 +1210,24 @@ func TestNilRegistryAPIsReturnStructuredErrors(t *testing.T) {
 	if err := PublishDomain(context.Background(), nil, patientCreated{}); !Is(err, ErrNilHandler) {
 		t.Fatalf("PublishDomain nil registry error = %v, want %s", err, ErrNilHandler)
 	}
+	if err := PublishEnvelope(context.Background(), nil, EventEnvelope{
+		Category: DomainEvent,
+		Type:     typeName[patientCreated](),
+		Value:    patientCreated{},
+	}); !Is(err, ErrNilHandler) {
+		t.Fatalf("PublishEnvelope nil registry error = %v, want %s", err, ErrNilHandler)
+	}
+	if err := RegisterJob[syncPatientsJob](nil, func(ctx context.Context, job syncPatientsJob) error {
+		return nil
+	}); !Is(err, ErrNilHandler) {
+		t.Fatalf("RegisterJob nil registry error = %v, want %s", err, ErrNilHandler)
+	}
+	if err := ExecuteJob(context.Background(), nil, syncPatientsJob{}); !Is(err, ErrNilHandler) {
+		t.Fatalf("ExecuteJob nil registry error = %v, want %s", err, ErrNilHandler)
+	}
+	if err := RegisterInvalidation[patientCreated, patientPageQuery](nil); !Is(err, ErrNilHandler) {
+		t.Fatalf("RegisterInvalidation nil registry error = %v, want %s", err, ErrNilHandler)
+	}
 }
 
 func TestZeroValueRegistryIsUsable(t *testing.T) {
@@ -1220,11 +1238,16 @@ func TestZeroValueRegistryIsUsable(t *testing.T) {
 	must(t, RegisterQuery[patientPageQuery, patientPage](registry, func(ctx context.Context, query patientPageQuery) (patientPage, error) {
 		return patientPage{Name: query.ID}, nil
 	}, RoleWeb))
-	var handled string
+	var handled []string
 	must(t, RegisterDomainEvent[patientCreated](registry, func(ctx context.Context, event patientCreated) error {
-		handled = event.ID
+		handled = append(handled, event.ID)
 		return nil
 	}, RoleWorker))
+	var jobLimit int
+	must(t, RegisterJob[syncPatientsJob](registry, func(ctx context.Context, job syncPatientsJob) error {
+		jobLimit = job.Limit
+		return nil
+	}, RoleCron))
 	must(t, RegisterInvalidation[patientCreated, patientPageQuery](registry))
 
 	commandResult, err := ExecuteCommandForRole[createPatient, createPatientResult](context.Background(), registry, RoleWeb, createPatient{Name: "patient-1"})
@@ -1238,8 +1261,21 @@ func TestZeroValueRegistryIsUsable(t *testing.T) {
 	if err := PublishDomainForRole(context.Background(), registry, RoleWorker, patientCreated{ID: "event-1"}); err != nil {
 		t.Fatalf("zero-value publish domain: %v", err)
 	}
-	if handled != "event-1" {
-		t.Fatalf("handled = %q, want event-1", handled)
+	if err := PublishEnvelopeForRole(context.Background(), registry, RoleWorker, EventEnvelope{
+		Category: DomainEvent,
+		Type:     typeName[patientCreated](),
+		Value:    patientCreated{ID: "event-2"},
+	}); err != nil {
+		t.Fatalf("zero-value publish envelope: %v", err)
+	}
+	if !slices.Equal(handled, []string{"event-1", "event-2"}) {
+		t.Fatalf("handled = %#v, want event-1 then event-2", handled)
+	}
+	if err := ExecuteJobForRole(context.Background(), registry, RoleCron, syncPatientsJob{Limit: 25}); err != nil {
+		t.Fatalf("zero-value execute job: %v", err)
+	}
+	if jobLimit != 25 {
+		t.Fatalf("jobLimit = %d, want 25", jobLimit)
 	}
 	if got := registry.Invalidations(); len(got) != 1 {
 		t.Fatalf("zero-value invalidations = %#v, want one", got)

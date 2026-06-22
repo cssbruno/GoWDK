@@ -23,7 +23,7 @@ gowdk inspect ir|tree|endpoint-graph|asset-graph|go-bindings [--config <file>] [
 gowdk generate stubs [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
 gowdk doctor [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...]
-gowdk test [--config <file>] [--env-file <file>] [--module <name>] [--target <name>] [--stage <unit|app|binary|browser>] [--run <pattern>] [--timeout <duration>] [--count <n>] [--cover] [--json] [--keep-workdir] [--update] [--browser-command <command>] [--ssr] [files...]
+gowdk test [--config <file>] [--env-file <file>] [--module <name>] [--target <name>] [--stage <unit|app|binary|browser>] [--run <pattern>] [--timeout <duration>] [--count <n>] [--cover] [--json] [--keep-workdir] [--browser-command <command>] [--ssr] [files...]
 gowdk audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--sarif[=<file>]] [--diff <previous-report>] [--schema[=report|security]] [--emit-tests[=<file>]] [--check-tests[=<file>]] [--force] [--run] [--run-timeout=<duration>] [files...]
 gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]

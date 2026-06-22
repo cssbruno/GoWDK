@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -16,7 +17,7 @@ import (
 	"github.com/cssbruno/gowdk/addons/ssr"
 )
 
-const testUsage = "usage: gowdk test [--config <file>] [--env-file <file>] [--module <name>] [--target <name>] [--stage <unit|app|binary|browser>] [--run <pattern>] [--timeout <duration>] [--count <n>] [--cover] [--json] [--keep-workdir] [--update] [--browser-command <command>] [--ssr] [files...]"
+const testUsage = "usage: gowdk test [--config <file>] [--env-file <file>] [--module <name>] [--target <name>] [--stage <unit|app|binary|browser>] [--run <pattern>] [--timeout <duration>] [--count <n>] [--cover] [--json] [--keep-workdir] [--browser-command <command>] [--ssr] [files...]"
 
 const (
 	testStageUnit    = "unit"
@@ -38,7 +39,6 @@ type testOptions struct {
 	Cover          bool
 	JSON           bool
 	KeepWorkdir    bool
-	Update         bool
 	BrowserCommand string
 	SSR            bool
 }
@@ -146,8 +146,6 @@ func parseTestOptions(args []string) (testOptions, error) {
 			options.JSON = true
 		case arg == "--keep-workdir":
 			options.KeepWorkdir = true
-		case arg == "--update":
-			options.Update = true
 		case arg == "--config":
 			index++
 			if index >= len(args) {
@@ -339,19 +337,55 @@ func buildTestWorkdir(cli cliOptions, options testOptions, modules []string) (*t
 	}
 
 	fmt.Fprintf(os.Stderr, "gowdk test [build]: %s\n", work.Root)
+	request := buildRequest{
+		OutputDir:  work.OutputDir,
+		AppDir:     work.AppDir,
+		BinaryPath: work.BinaryPath,
+		Modules:    modules,
+		Paths:      append([]string(nil), options.Paths...),
+	}
 	if err := runInWorkingDir(cli.ProjectRoot, func() error {
-		return buildOnce(cli, buildRequest{
-			OutputDir:  work.OutputDir,
-			AppDir:     work.AppDir,
-			BinaryPath: work.BinaryPath,
-			Modules:    modules,
-			Paths:      append([]string(nil), options.Paths...),
-		}, newBuildTimingRecorder(false))
+		return runTestBuildOnce(cli, request, options.JSON)
 	}); err != nil {
 		cleanup()
 		return nil, nil, err
 	}
 	return work, cleanup, nil
+}
+
+func runTestBuildOnce(cli cliOptions, request buildRequest, quietStdout bool) error {
+	if !quietStdout {
+		return buildOnce(cli, request, newBuildTimingRecorder(false))
+	}
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		return err
+	}
+	previousStdout := os.Stdout
+	os.Stdout = writer
+	defer func() {
+		os.Stdout = previousStdout
+	}()
+	drained := make(chan error, 1)
+	go func() {
+		_, err := io.Copy(io.Discard, reader)
+		drained <- err
+	}()
+
+	buildErr := buildOnce(cli, request, newBuildTimingRecorder(false))
+	closeErr := writer.Close()
+	drainErr := <-drained
+	readerErr := reader.Close()
+	if buildErr != nil {
+		return buildErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if drainErr != nil {
+		return drainErr
+	}
+	return readerErr
 }
 
 func testBinaryName() string {
@@ -410,9 +444,6 @@ func runGoTestStage(projectRoot string, stage string, options testOptions, env [
 	}
 	if options.RunPattern != "" {
 		args = append(args, "-run", options.RunPattern)
-	}
-	if options.Update {
-		args = append(args, "-update")
 	}
 	args = append(args, "./...")
 

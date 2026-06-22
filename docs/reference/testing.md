@@ -43,7 +43,7 @@ Stages:
 
 Supported selectors and Go test flags include `--config`, `--env-file`,
 `--module`, `--target`, `--ssr`, `--run`, `--timeout`, `--count`, `--cover`,
-`--json`, and `--update`. Use `--keep-workdir` when a failed run needs artifact
+and `--json`. Use `--keep-workdir` when a failed run needs artifact
 inspection.
 
 Tests can read:

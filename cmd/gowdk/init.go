@@ -245,13 +245,17 @@ func TestGOWDKGeneratedApp(t *testing.T) {
 	outputDir := requiredEnv(t, "GOWDK_TEST_OUTPUT_DIR")
 	appDir := requiredEnv(t, "GOWDK_TEST_APP_DIR")
 	binaryPath := requiredEnv(t, "GOWDK_TEST_BINARY")
-	baseURL := requiredEnv(t, "GOWDK_TEST_BASE_URL")
 
 	assertFile(t, filepath.Join(outputDir, "index.html"))
 	assertFile(t, filepath.Join(outputDir, "gowdk-routes.json"))
 	assertFile(t, filepath.Join(outputDir, "gowdk-assets.json"))
 	assertDir(t, appDir)
 	assertFile(t, binaryPath)
+
+	baseURL := strings.TrimSpace(os.Getenv("GOWDK_TEST_BASE_URL"))
+	if baseURL == "" {
+		return
+	}
 
 	assertGET(t, baseURL+"/_gowdk/health", http.StatusOK, "\"status\":\"ok\"")
 	assertGET(t, baseURL+"/", http.StatusOK, "<main")

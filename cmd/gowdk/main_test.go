@@ -1138,6 +1138,7 @@ func TestInitCommandSupportsOptionalTestScaffold(t *testing.T) {
 		`requiredEnv(t, "GOWDK_TEST_OUTPUT_DIR")`,
 		`run generated app tests with gowdk test`,
 		`filepath.Join(outputDir, "gowdk-routes.json")`,
+		`os.Getenv("GOWDK_TEST_BASE_URL")`,
 		`assertGET(t, baseURL+"/_gowdk/health", http.StatusOK`,
 		`assertGET(t, baseURL+"/missing", http.StatusNotFound, "")`,
 	} {
@@ -1145,9 +1146,58 @@ func TestInitCommandSupportsOptionalTestScaffold(t *testing.T) {
 			t.Fatalf("expected optional test scaffold to contain %q:\n%s", expected, payload)
 		}
 	}
+	if strings.Contains(string(payload), `requiredEnv(t, "GOWDK_TEST_BASE_URL")`) {
+		t.Fatalf("optional test scaffold should not require base URL for app-stage tests:\n%s", payload)
+	}
 }
 
 func TestTestCommandRunsInitializedProject(t *testing.T) {
+	root := initTestProjectWithLocalReplace(t)
+
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"test", "--count=1", "--timeout=2m"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+func TestTestCommandRunsInitializedProjectAppStageWithJSON(t *testing.T) {
+	root := initTestProjectWithLocalReplace(t)
+
+	withWorkingDir(t, root, func() {
+		stdout, _, err := captureCLIOutput(t, func() error {
+			return run([]string{"test", "--stage", "app", "--json", "--run", "TestGOWDKGeneratedApp", "--count=1", "--timeout=2m"})
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.TrimSpace(stdout) == "" {
+			t.Fatal("expected gowdk test --json to emit go test JSON events")
+		}
+		for _, line := range strings.Split(strings.TrimSpace(stdout), "\n") {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			var event map[string]any
+			if err := json.Unmarshal([]byte(line), &event); err != nil {
+				t.Fatalf("expected gowdk test --json stdout to contain only go test JSON events, got line %q in:\n%s", line, stdout)
+			}
+		}
+		if strings.Contains(stdout, ".gowdk") || strings.Contains(stdout, "gowdk-routes.json") {
+			t.Fatalf("expected gowdk test --json stdout to omit build artifact paths:\n%s", stdout)
+		}
+	})
+}
+
+func TestTestCommandRejectsUpdateFlag(t *testing.T) {
+	_, err := parseTestOptions([]string{"--update"})
+	if err == nil || !strings.Contains(err.Error(), `unknown test flag "--update"`) {
+		t.Fatalf("expected --update to be rejected, got %v", err)
+	}
+}
+
+func initTestProjectWithLocalReplace(t *testing.T) string {
+	t.Helper()
 	root := filepath.Join(t.TempDir(), "site")
 	if err := run([]string{"init", "--tests", root}); err != nil {
 		t.Fatal(err)
@@ -1168,12 +1218,7 @@ func TestTestCommandRunsInitializedProject(t *testing.T) {
 	if err := file.Close(); err != nil {
 		t.Fatal(err)
 	}
-
-	withWorkingDir(t, root, func() {
-		if err := run([]string{"test", "--count=1", "--timeout=2m"}); err != nil {
-			t.Fatal(err)
-		}
-	})
+	return root
 }
 
 func TestInitCommandRejectsUnknownTemplate(t *testing.T) {

@@ -48,7 +48,7 @@ under Go's race detector in pull-request CI.
 ### Functional
 
 - `gowdk test` supports `--stage unit|app|binary|browser`, `--run`,
-  `--timeout`, `--count`, `--cover`, `--json`, `--keep-workdir`, `--update`,
+  `--timeout`, `--count`, `--cover`, `--json`, `--keep-workdir`,
   `--config`, `--env-file`, `--module`, `--target`, and `--ssr`.
 - The default stage is `binary`.
 - The `app` and `binary` stages build generated output into a temporary

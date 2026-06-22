@@ -15,7 +15,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/cssbruno/gowdk/runtime/asset"
@@ -80,13 +79,6 @@ type Handler struct {
 	// unbounded and pinning a goroutine. Zero disables the deadline.
 	RequestTimeout time.Duration
 }
-
-type middlewareChainCache struct {
-	once    sync.Once
-	handler http.Handler
-}
-
-var handlerMiddlewareChains sync.Map
 
 // DefaultRequestTimeout is the per-request handler deadline applied to
 // generated apps. It sits below the server WriteTimeout (30s) so handler
@@ -161,16 +153,11 @@ func (handler *Handler) ServeHTTP(response http.ResponseWriter, request *http.Re
 }
 
 func (handler *Handler) middlewareChain() http.Handler {
-	value, _ := handlerMiddlewareChains.LoadOrStore(handler, &middlewareChainCache{})
-	cache := value.(*middlewareChainCache)
-	cache.once.Do(func() {
-		next := http.Handler(http.HandlerFunc(handler.serveHTTP))
-		if len(handler.Middlewares) > 0 {
-			next = ApplyMiddlewares(next, handler.Middlewares...)
-		}
-		cache.handler = next
-	})
-	return cache.handler
+	next := http.Handler(http.HandlerFunc(handler.serveHTTP))
+	if len(handler.Middlewares) > 0 {
+		next = ApplyMiddlewares(next, handler.Middlewares...)
+	}
+	return next
 }
 
 func (handler *Handler) serveHTTP(response http.ResponseWriter, request *http.Request) {

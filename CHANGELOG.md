@@ -7,6 +7,15 @@ packages, and tooling contracts may change before 1.0.
 
 ### Added
 
+- Bounded build-time iteration and transforms in `build {}` data: list and
+  object literals, `seq(start, end)` ranges, comprehensions
+  (`[expr for v in source if cond]`, with an optional index variable), list
+  reductions (`count`, `sum`, `join`, `first`, `last`, `take`, `reverse`), and
+  object/list field access (`v.field`, `list[i]`). Evaluation stays pure and
+  deterministic, serializes lists/objects to canonical JSON, and is bounded by an
+  element budget and nesting-depth limit that surface a diagnostic instead of
+  hanging the build. Go build functions may now also return slice and struct
+  fields. See `examples/build-iteration`.
 - Bounded `{#await fetchJSON[T](urlExpr)}` blocks in JS client islands for
   pending, resolved, and error placeholder UI.
 

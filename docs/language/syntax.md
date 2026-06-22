@@ -261,6 +261,42 @@ field. Build expressions support string concatenation with `+`, numeric
 comparisons, parentheses, and unary `+`/`-`. Duplicate build fields are
 rejected.
 
+### Build-time iteration and transforms
+
+Build values can also be **lists** and **objects**, and `build {}` can reshape
+them at build time with bounded, deterministic iteration:
+
+```gwdk
+=> { prices: [12, 49, 8, 99, 25] }
+=> { premium: [p for p in field("prices") if p >= 25] }
+=> { premiumCount: count(field("premium")), revenue: sum(field("premium")) }
+=> { tiers: [ {label: "tier-" + n, slot: n} for n in seq(1, 4) ] }
+=> { tierLabels: [t.label for t in field("tiers")] }
+=> { heading: join(field("tierLabels"), " / ") }
+```
+
+- `[a, b, c]` is a list literal; `{ name: value, ... }` is an object literal.
+- `seq(end)` and `seq(start, end)` produce a half-open integer range.
+- A comprehension `[expr for v in source]` maps each element of a list `source`;
+  add `if cond` to filter, and `for v, i in source` to bind a zero-based index.
+- `v.field` reads an object field and `list[i]` indexes a list.
+- Reductions `count`, `sum`, `join(list, sep)`, `first`, `last`, `take(list, n)`,
+  and `reverse` operate on lists; `seq` and these builtins compose anywhere as
+  ordinary calls.
+- Bracket and brace forms (list/object literals and comprehensions) are whole
+  field-value forms. Chain multi-step transforms by binding an intermediate list
+  field and reading it back with `field("name")`, exactly like earlier-field
+  references.
+
+Evaluation stays pure and deterministic: no I/O or randomness, lists and objects
+serialize to canonical JSON, and re-running the build over the same inputs yields
+byte-identical output. Iteration is bounded — a `build {}` block may produce at
+most 50,000 list elements and nest expressions at most 64 deep — and exceeding a
+limit is a build diagnostic. Genuinely complex logic still belongs in a normal Go
+build function, which may return slice and struct fields. A build-time list does
+not yet feed a `g:for` prerender region; build-time iteration reshapes data into
+scalars (and JSON values) consumed via interpolation.
+
 Inside `view {}`, route params can be referenced explicitly with
 `{param("slug")}` in text, quoted attributes, and component prop values. SPA
 builds reject `param(...)` references that are not declared by the page route.

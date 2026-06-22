@@ -1,0 +1,24 @@
+package pages
+
+page build.iteration
+route "/release-digest"
+guard public
+
+build {
+  => { prices: [12, 49, 8, 99, 25] }
+  => { premium: [p for p in field("prices") if p >= 25] }
+  => { premiumCount: count(field("premium")), revenue: sum(field("premium")), priceList: join(field("prices"), ", ") }
+  => { tiers: [ {label: "tier-" + n, slot: n} for n in seq(1, 4) ] }
+  => { tierLabelList: [t.label for t in field("tiers")] }
+  => { tierLabels: join(field("tierLabelList"), " / ") }
+}
+
+view {
+  <main>
+    <h1>Build-time iteration</h1>
+    <p data-prices="{priceList}">All prices: {priceList}</p>
+    <p>Premium items: {premiumCount}</p>
+    <p>Premium revenue: {revenue}</p>
+    <p>Tier labels: {tierLabels}</p>
+  </main>
+}

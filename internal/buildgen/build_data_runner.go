@@ -546,16 +546,21 @@ func parseBuildFunctionOutput(output []byte) (map[string]string, error) {
 		if !isLiteralName(key) {
 			return nil, fmt.Errorf("invalid build field name %q", key)
 		}
-		scalar, ok := buildScalarString(value)
+		field, ok := buildFieldOutputString(value)
 		if !ok {
-			return nil, fmt.Errorf("build field %s must be a string, number, boolean, or null", key)
+			return nil, fmt.Errorf("build field %s must be a string, number, boolean, null, array, or object", key)
 		}
-		data[key] = scalar
+		data[key] = field
 	}
 	return data, nil
 }
 
-func buildScalarString(value any) (string, bool) {
+// buildFieldOutputString renders one field of a Go build function's JSON object
+// as a build-data string. Scalars keep their canonical scalar form; arrays and
+// objects (slice/struct fields) serialize to JSON so they flow through the
+// map[string]string build-data contract. encoding/json sorts object keys and
+// preserves array order, so the serialization is deterministic across builds.
+func buildFieldOutputString(value any) (string, bool) {
 	switch typed := value.(type) {
 	case nil:
 		return "", true
@@ -568,6 +573,12 @@ func buildScalarString(value any) (string, bool) {
 		return strconv.FormatFloat(typed, 'f', -1, 64), true
 	case bool:
 		return strconv.FormatBool(typed), true
+	case []any, map[string]any:
+		payload, err := json.Marshal(typed)
+		if err != nil {
+			return "", false
+		}
+		return string(payload), true
 	default:
 		return "", false
 	}

@@ -1,0 +1,7 @@
+package css
+
+view {
+  <div>
+    <slot />
+  </div>
+}

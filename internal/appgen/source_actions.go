@@ -69,7 +69,7 @@ func actionsUseActionValidation(action BackendActionAdapter) bool {
 
 func actionsUseForm(actions []BackendActionAdapter) bool {
 	for _, action := range actions {
-		if action.Binding.Status != source.BackendBindingMissing && action.Binding.Status != source.BackendBindingUnsupportedSignature && actionNeedsValues(action) {
+		if action.Binding.Status != source.BackendBindingMissing && action.Binding.Status != source.BackendBindingUnsupportedSignature && (actionNeedsValues(action) || actionUsesMultipart(action)) {
 			return true
 		}
 	}
@@ -121,6 +121,9 @@ func sortedActionAdapters(actions []BackendActionAdapter) []BackendActionAdapter
 }
 
 func actionNeedsValues(action BackendActionAdapter) bool {
+	if actionUsesMultipart(action) {
+		return true
+	}
 	if action.Binding.Status != source.BackendBindingBound {
 		return true
 	}
@@ -181,8 +184,24 @@ func actionCaseStmts(action BackendActionAdapter, csrf bool, rateLimit bool) []a
 		stmts = append(stmts, returnBool(true))
 		return stmts
 	}
-	stmts = append(stmts, actionParseFormStmts(csrf)...)
-	if actionNeedsValues(action) {
+	stmts = append(stmts, actionParseFormStmts(action, csrf)...)
+	if actionUsesMultipart(action) {
+		stmts = append(stmts,
+			define([]ast.Expr{id("data")}, call(sel("gowdkform", "FromMultipartForm"), selExpr(id("request"), "MultipartForm"))),
+			define([]ast.Expr{id("values")}, selExpr(id("data"), "Values")),
+		)
+	} else if actionNeedsData(action) {
+		stmts = append(stmts,
+			define([]ast.Expr{id("values")}, call(sel("gowdkform", "FromURLValues"), selExpr(id("request"), "PostForm"))),
+			define([]ast.Expr{id("data")}, &ast.CompositeLit{
+				Type: sel("gowdkform", "Data"),
+				Elts: []ast.Expr{
+					keyValue("Values", id("values")),
+					keyValue("Files", &ast.CompositeLit{Type: sel("gowdkform", "Files")}),
+				},
+			}),
+		)
+	} else if actionNeedsValues(action) {
 		stmts = append(stmts, define([]ast.Expr{id("values")}, call(sel("gowdkform", "FromURLValues"), selExpr(id("request"), "PostForm"))))
 	}
 	stmts = append(stmts, actionInputDecodeStmts(action)...)
@@ -196,26 +215,30 @@ func actionCaseStmts(action BackendActionAdapter, csrf bool, rateLimit bool) []a
 	return stmts
 }
 
-func actionParseFormStmts(csrf bool) []ast.Stmt {
-	return actionParseFormStmtsWithErrors(csrf, false)
+func actionParseFormStmts(action BackendActionAdapter, csrf bool) []ast.Stmt {
+	return actionParseFormStmtsWithErrors(csrf, false, actionUsesMultipart(action))
 }
 
 func contractParseFormStmts(csrf bool) []ast.Stmt {
-	return actionParseFormStmtsWithErrors(csrf, true)
+	return actionParseFormStmtsWithErrors(csrf, true, false)
 }
 
 func actionBodyLimitStmt() ast.Stmt {
 	return assign([]ast.Expr{selExpr(id("request"), "Body")}, call(sel("http", "MaxBytesReader"), id("response"), selExpr(id("request"), "Body"), id("maxActionBodyBytes")))
 }
 
-func actionParseFormStmtsWithErrors(csrf bool, jsonErrors bool) []ast.Stmt {
+func actionParseFormStmtsWithErrors(csrf bool, jsonErrors bool, multipart bool) []ast.Stmt {
 	writeError := writeNoStoreErrorStmt
 	if jsonErrors {
 		writeError = writeNoStoreJSONErrorStmt
 	}
+	parseCall := call(selExpr(id("request"), "ParseForm"))
+	if multipart {
+		parseCall = call(selExpr(id("request"), "ParseMultipartForm"), sel("gowdkform", "DefaultMultipartMemoryBytes"))
+	}
 	stmts := []ast.Stmt{
 		&ast.IfStmt{
-			Init: define([]ast.Expr{id("err")}, call(selExpr(id("request"), "ParseForm"))),
+			Init: define([]ast.Expr{id("err")}, parseCall),
 			Cond: notNil("err"),
 			Body: block(
 				&ast.IfStmt{
@@ -229,6 +252,12 @@ func actionParseFormStmtsWithErrors(csrf bool, jsonErrors bool) []ast.Stmt {
 				returnBool(true),
 			),
 		},
+	}
+	if multipart {
+		stmts = append(stmts, &ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: selExpr(id("request"), "MultipartForm"), Op: token.NEQ, Y: id("nil")},
+			Body: block(&ast.DeferStmt{Call: call(selExpr(selExpr(id("request"), "MultipartForm"), "RemoveAll"))}),
+		})
 	}
 	if csrf {
 		stmts = append(stmts, &ast.IfStmt{
@@ -268,20 +297,31 @@ func actionInputDecodeStmts(action BackendActionAdapter) []ast.Stmt {
 func boundActionInputDecodeStmts(action BackendActionAdapter) []ast.Stmt {
 	switch action.Binding.Signature {
 	case source.BackendSignatureAction0:
+		if actionUsesMultipart(action) {
+			stmts := expectedSubmissionStmts(action)
+			if action.ValidatesInput {
+				stmts = append(stmts, actionRequiredValidationStmts(action)...)
+			}
+			return stmts
+		}
 		if action.ValidatesInput {
 			return actionRequiredValidationStmts(action)
 		}
 		return nil
-	case source.BackendSignatureActionValues:
-		stmts := expectedValuesStmts(action)
+	case source.BackendSignatureActionValues, source.BackendSignatureActionData:
+		stmts := expectedSubmissionStmts(action)
 		if action.ValidatesInput {
 			stmts = append(stmts, actionRequiredValidationStmts(action)...)
 		}
 		return stmts
 	case source.BackendSignatureActionForm, source.BackendSignatureActionFormPtr:
-		stmts := expectedValuesStmts(action)
+		stmts := expectedSubmissionStmts(action)
+		decoderArg := ast.Expr(id("values"))
+		if boundActionDecoderUsesData(action) {
+			decoderArg = id("data")
+		}
 		stmts = append(stmts,
-			define([]ast.Expr{id("input"), id("err")}, call(sel(boundActionDecoderName(action)), id("values"))),
+			define([]ast.Expr{id("input"), id("err")}, call(sel(boundActionDecoderName(action)), decoderArg)),
 			ifErrReturnInvalidForm(),
 		)
 		if action.ValidatesInput {
@@ -289,8 +329,15 @@ func boundActionInputDecodeStmts(action BackendActionAdapter) []ast.Stmt {
 		}
 		return stmts
 	default:
-		return expectedValuesStmts(action)
+		return expectedSubmissionStmts(action)
 	}
+}
+
+func expectedSubmissionStmts(action BackendActionAdapter) []ast.Stmt {
+	if actionNeedsData(action) {
+		return expectedDataStmts(action)
+	}
+	return expectedValuesStmts(action)
 }
 
 func expectedValuesStmts(action BackendActionAdapter) []ast.Stmt {
@@ -305,13 +352,32 @@ func expectedValuesStmts(action BackendActionAdapter) []ast.Stmt {
 	}}
 }
 
+func expectedDataStmts(action BackendActionAdapter) []ast.Stmt {
+	return []ast.Stmt{&ast.IfStmt{
+		Init: define([]ast.Expr{id("decodedData"), id("err")}, call(sel("gowdkform", "DecodeExpectedData"), id("data"), actionFormSchemaExpr(action))),
+		Cond: notNil("err"),
+		Body: block(
+			writeNoStoreErrorStmt(sel("http", "StatusBadRequest"), "invalid form"),
+			returnBool(true),
+		),
+		Else: block(
+			assign([]ast.Expr{id("data")}, id("decodedData")),
+			assign([]ast.Expr{id("values")}, selExpr(id("data"), "Values")),
+		),
+	}}
+}
+
 func actionRequiredValidationStmts(action BackendActionAdapter) []ast.Stmt {
 	stmts := []ast.Stmt{
 		define([]ast.Expr{id("validation")}, &ast.CompositeLit{Type: sel("gowdkvalidation", "Result")}),
 	}
 	for _, field := range action.RequiredFields {
+		submission := ast.Expr(id("values"))
+		if actionNeedsData(action) {
+			submission = id("data")
+		}
 		stmts = append(stmts, &ast.IfStmt{
-			Cond: &ast.UnaryExpr{Op: token.NOT, X: call(selExpr(id("values"), "HasSubmitted"), stringLit(field))},
+			Cond: &ast.UnaryExpr{Op: token.NOT, X: call(selExpr(submission, "HasSubmitted"), stringLit(field))},
 			Body: block(exprStmt(call(selExpr(id("validation"), "Add"), stringLit(field), stringLit(actionValidationMessage(action.RequiredMessages[field], "required"))))),
 		})
 	}
@@ -413,6 +479,8 @@ func boundActionResultStmts(action BackendActionAdapter) []ast.Stmt {
 	args := []ast.Expr{id("ctx")}
 	switch action.Binding.Signature {
 	case source.BackendSignatureAction0:
+	case source.BackendSignatureActionData:
+		args = append(args, id("data"))
 	case source.BackendSignatureActionForm:
 		args = append(args, id("input"))
 	case source.BackendSignatureActionFormPtr:
@@ -656,17 +724,46 @@ func actionUsesBoundInputDecoder(action BackendActionAdapter) bool {
 	return action.Binding.Signature == source.BackendSignatureActionForm || action.Binding.Signature == source.BackendSignatureActionFormPtr
 }
 
+func actionUsesMultipart(action BackendActionAdapter) bool {
+	return len(action.UploadFields) > 0
+}
+
+func actionNeedsData(action BackendActionAdapter) bool {
+	return actionUsesMultipart(action) || action.Binding.Signature == source.BackendSignatureActionData || boundActionDecoderUsesData(action)
+}
+
+func boundActionDecoderUsesData(action BackendActionAdapter) bool {
+	for _, field := range action.Binding.InputFields {
+		if backendInputFieldIsFile(field) {
+			return true
+		}
+	}
+	return false
+}
+
+func backendInputFieldIsFile(field source.BackendInputField) bool {
+	fieldType, ok := source.LookupBackendInputFieldType(field.Type)
+	return ok && (fieldType.Kind == source.BackendInputFieldKindFile || fieldType.Kind == source.BackendInputFieldKindFileSlice)
+}
+
 func boundActionDecoderDecl(action BackendActionAdapter) *ast.FuncDecl {
 	inputType := sel(action.BackendAlias, action.Binding.InputType)
 	stmts := []ast.Stmt{
 		define([]ast.Expr{id("input")}, &ast.CompositeLit{Type: inputType}),
+	}
+	paramName := "values"
+	paramType := ast.Expr(sel("gowdkform", "Values"))
+	if boundActionDecoderUsesData(action) {
+		paramName = "data"
+		paramType = sel("gowdkform", "Data")
+		stmts = append(stmts, define([]ast.Expr{id("values")}, selExpr(id("data"), "Values")))
 	}
 	for index, field := range action.Binding.InputFields {
 		stmts = append(stmts, boundActionFieldDecodeStmts(index, field)...)
 	}
 	stmts = append(stmts, &ast.ReturnStmt{Results: []ast.Expr{id("input"), id("nil")}})
 	return funcDecl(boundActionDecoderName(action), []*ast.Field{
-		{Names: []*ast.Ident{id("values")}, Type: sel("gowdkform", "Values")},
+		{Names: []*ast.Ident{id(paramName)}, Type: paramType},
 	}, []*ast.Field{{Type: inputType}, {Type: id("error")}}, stmts)
 }
 
@@ -688,6 +785,16 @@ func boundActionFieldDecodeStmts(index int, field source.BackendInputField) []as
 	case source.BackendInputFieldKindStringSlice:
 		return []ast.Stmt{
 			define([]ast.Expr{value}, call(sel("gowdkform", "Strings"), id("values"), stringLit(field.FormName))),
+			&ast.IfStmt{
+				Cond: &ast.BinaryExpr{X: call(id("len"), value), Op: token.GTR, Y: intLit(0)},
+				Body: block(assign([]ast.Expr{selExpr(id("input"), field.FieldName)}, value)),
+			},
+		}
+	case source.BackendInputFieldKindFile:
+		return boundActionScalarFieldDecodeStmts(value, field, call(selExpr(id("data"), "File"), stringLit(field.FormName)), value)
+	case source.BackendInputFieldKindFileSlice:
+		return []ast.Stmt{
+			define([]ast.Expr{value}, call(selExpr(id("data"), "FileList"), stringLit(field.FormName))),
 			&ast.IfStmt{
 				Cond: &ast.BinaryExpr{X: call(id("len"), value), Op: token.GTR, Y: intLit(0)},
 				Body: block(assign([]ast.Expr{selExpr(id("input"), field.FieldName)}, value)),
@@ -718,7 +825,7 @@ func fmtFieldValueName(index int) string {
 
 func convertIfNeeded(goType string, value ast.Expr) ast.Expr {
 	fieldType := source.MustBackendInputFieldType(goType)
-	if fieldType.Kind == source.BackendInputFieldKindString || fieldType.Kind == source.BackendInputFieldKindBool || fieldType.Kind == source.BackendInputFieldKindStringSlice {
+	if fieldType.Kind == source.BackendInputFieldKindString || fieldType.Kind == source.BackendInputFieldKindBool || fieldType.Kind == source.BackendInputFieldKindStringSlice || fieldType.Kind == source.BackendInputFieldKindFile || fieldType.Kind == source.BackendInputFieldKindFileSlice {
 		return value
 	}
 	return call(id(fieldType.Name), value)
@@ -812,6 +919,38 @@ func formSchemaExpr(fields []string) ast.Expr {
 	}
 }
 
+func actionFormSchemaExpr(action BackendActionAdapter) ast.Expr {
+	uploads := map[string]ActionUploadField{}
+	for _, field := range action.UploadFields {
+		uploads[field.Field] = field
+	}
+	elts := make([]ast.Expr, 0, len(action.InputFields))
+	for _, field := range action.InputFields {
+		fieldElts := []ast.Expr{keyValue("Name", stringLit(field))}
+		if upload, ok := uploads[field]; ok {
+			fieldElts = append(fieldElts, keyValue("File", &ast.UnaryExpr{
+				Op: token.AND,
+				X: &ast.CompositeLit{
+					Type: sel("gowdkform", "FilePolicy"),
+					Elts: []ast.Expr{
+						keyValue("MaxFiles", intLit(upload.MaxFiles)),
+						keyValue("MaxBytes", int64Lit(upload.MaxBytes)),
+						keyValue("AllowedContentTypes", stringSliceExpr(upload.AllowedContentTypes)),
+					},
+				},
+			}))
+		}
+		elts = append(elts, &ast.CompositeLit{Elts: fieldElts})
+	}
+	return &ast.CompositeLit{
+		Type: sel("gowdkform", "Schema"),
+		Elts: []ast.Expr{keyValue("Fields", &ast.CompositeLit{
+			Type: &ast.ArrayType{Elt: sel("gowdkform", "Field")},
+			Elts: elts,
+		})},
+	}
+}
+
 func stringSliceExpr(values []string) ast.Expr {
 	if len(values) == 0 {
 		return id("nil")
@@ -866,6 +1005,10 @@ func returnBool(value bool) ast.Stmt {
 
 func notNil(name string) ast.Expr {
 	return &ast.BinaryExpr{X: id(name), Op: token.NEQ, Y: id("nil")}
+}
+
+func notNilExpr(expr ast.Expr) ast.Expr {
+	return &ast.BinaryExpr{X: expr, Op: token.NEQ, Y: id("nil")}
 }
 
 func block(stmts ...ast.Stmt) *ast.BlockStmt {

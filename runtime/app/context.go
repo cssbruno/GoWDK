@@ -16,22 +16,33 @@ const (
 	routeContextKey       contextKey = "gowdk-route"
 	endpointContextKey    contextKey = "gowdk-endpoint"
 	errorPagesContextKey  contextKey = "gowdk-error-pages"
+	localeContextKey      contextKey = "gowdk-locale"
 )
 
 // RouteMetadata describes one generated request-time page route.
 type RouteMetadata struct {
-	Kind          string
-	PageID        string
-	Method        string
-	Path          string
-	Render        string
-	Cache         string
-	ErrorPage     string
-	DynamicParams []string
-	RouteParams   []RouteParamMetadata
-	Layouts       []string
-	Guards        []string
-	HasLoad       bool
+	Kind             string
+	PageID           string
+	Method           string
+	Path             string
+	Render           string
+	Cache            string
+	ErrorPage        string
+	LayoutErrorPages []LayoutErrorPageMetadata
+	Locale           string
+	DynamicParams    []string
+	RouteParams      []RouteParamMetadata
+	Layouts          []string
+	Guards           []string
+	HasLoad          bool
+}
+
+// LayoutErrorPageMetadata describes a layout-level generated error boundary
+// available to one request-time page route. The generated route stores these in
+// nearest-to-outermost precedence order.
+type LayoutErrorPageMetadata struct {
+	Layout    string
+	ErrorPage string
 }
 
 // RouteParamMetadata describes a generated dynamic route parameter.
@@ -122,10 +133,23 @@ func Session(ctx context.Context) any {
 	return ctx.Value(sessionContextKey)
 }
 
+// WithLocale stores the active generated route locale in a context.
+func WithLocale(ctx context.Context, locale string) context.Context {
+	return context.WithValue(ctx, localeContextKey, locale)
+}
+
+// Locale returns the active generated route locale attached by generated
+// adapters. It returns an empty string when localization is not configured.
+func Locale(ctx context.Context) string {
+	locale, _ := ctx.Value(localeContextKey).(string)
+	return locale
+}
+
 // WithRoute stores generated route metadata in a context.
 func WithRoute(ctx context.Context, route RouteMetadata) context.Context {
 	route.DynamicParams = copyStrings(route.DynamicParams)
 	route.RouteParams = copyRouteParamMetadata(route.RouteParams)
+	route.LayoutErrorPages = copyLayoutErrorPageMetadata(route.LayoutErrorPages)
 	route.Layouts = copyStrings(route.Layouts)
 	route.Guards = copyStrings(route.Guards)
 	return context.WithValue(ctx, routeContextKey, route)
@@ -137,6 +161,7 @@ func Route(ctx context.Context) (RouteMetadata, bool) {
 	route, ok := ctx.Value(routeContextKey).(RouteMetadata)
 	route.DynamicParams = copyStrings(route.DynamicParams)
 	route.RouteParams = copyRouteParamMetadata(route.RouteParams)
+	route.LayoutErrorPages = copyLayoutErrorPageMetadata(route.LayoutErrorPages)
 	route.Layouts = copyStrings(route.Layouts)
 	route.Guards = copyStrings(route.Guards)
 	return route, ok
@@ -168,6 +193,15 @@ func copyRouteParamMetadata(values []RouteParamMetadata) []RouteParamMetadata {
 		return nil
 	}
 	copied := make([]RouteParamMetadata, len(values))
+	copy(copied, values)
+	return copied
+}
+
+func copyLayoutErrorPageMetadata(values []LayoutErrorPageMetadata) []LayoutErrorPageMetadata {
+	if len(values) == 0 {
+		return nil
+	}
+	copied := make([]LayoutErrorPageMetadata, len(values))
 	copy(copied, values)
 	return copied
 }

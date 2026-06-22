@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/token"
 	"sort"
+	"strings"
 
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -202,8 +203,20 @@ func ssrLoadFetchStmts(route SSRRoute, trace bool) []ast.Stmt {
 	}
 	stmts = append(stmts, define([]ast.Expr{id("loadContext")}, call(sel("gowdkssr", "NewLoadContext"), loadRequest, id("nil"))))
 	loadCall := call(sel(route.LoadBackendAlias, route.LoadBinding.FunctionName), id("loadContext"))
-	switch route.LoadBinding.Signature {
-	case source.BackendSignatureLoadError:
+	switch {
+	case loadSignatureReturnsStruct(route.LoadBinding.Signature) && loadSignatureReturnsError(route.LoadBinding.Signature):
+		stmts = append(stmts,
+			define([]ast.Expr{id("typedLoadData"), id("err")}, loadCall),
+			&ast.IfStmt{
+				Cond: notNil("err"),
+				Body: block(append(ssrLoadTraceFinishStmts(trace, id("err")), ssrLoadErrorStmts()...)...),
+			},
+		)
+		stmts = append(stmts, ssrStructLoadDataStmts(route.LoadBinding, id("typedLoadData"))...)
+	case loadSignatureReturnsStruct(route.LoadBinding.Signature):
+		stmts = append(stmts, define([]ast.Expr{id("typedLoadData")}, loadCall))
+		stmts = append(stmts, ssrStructLoadDataStmts(route.LoadBinding, id("typedLoadData"))...)
+	case loadSignatureReturnsError(route.LoadBinding.Signature):
 		stmts = append(stmts,
 			define([]ast.Expr{id("loadData"), id("err")}, loadCall),
 			&ast.IfStmt{
@@ -216,6 +229,68 @@ func ssrLoadFetchStmts(route SSRRoute, trace bool) []ast.Stmt {
 	}
 	stmts = append(stmts, ssrLoadTraceFinishStmts(trace, id("nil"))...)
 	return stmts
+}
+
+func loadSignatureReturnsError(signature source.BackendSignatureKind) bool {
+	return signature == source.BackendSignatureLoadError || signature == source.BackendSignatureLoadStructError
+}
+
+func loadSignatureReturnsStruct(signature source.BackendSignatureKind) bool {
+	return signature == source.BackendSignatureLoadStruct || signature == source.BackendSignatureLoadStructError
+}
+
+func ssrStructLoadDataStmts(binding source.BackendBinding, result ast.Expr) []ast.Stmt {
+	if !binding.ResultPointer {
+		return []ast.Stmt{define([]ast.Expr{id("loadData")}, ssrStructLoadDataMapExpr(binding, result))}
+	}
+	return []ast.Stmt{
+		define([]ast.Expr{id("loadData")}, emptyLoadDataMapExpr()),
+		&ast.IfStmt{
+			Cond: notNilExpr(result),
+			Body: block(assign([]ast.Expr{id("loadData")}, ssrStructLoadDataMapExpr(binding, result))),
+		},
+	}
+}
+
+func ssrStructLoadDataMapExpr(binding source.BackendBinding, result ast.Expr) ast.Expr {
+	fields := topLevelResultFields(binding.ResultFields)
+	elts := make([]ast.Expr, 0, len(fields))
+	for _, field := range fields {
+		elts = append(elts, &ast.KeyValueExpr{
+			Key:   stringLit(field.Path),
+			Value: selectorPathExpr(result, field.Selector),
+		})
+	}
+	return &ast.CompositeLit{
+		Type: &ast.MapType{Key: id("string"), Value: id("any")},
+		Elts: elts,
+	}
+}
+
+func emptyLoadDataMapExpr() ast.Expr {
+	return &ast.CompositeLit{Type: &ast.MapType{Key: id("string"), Value: id("any")}}
+}
+
+func topLevelResultFields(fields []source.BackendResultField) []source.BackendResultField {
+	var topLevel []source.BackendResultField
+	for _, field := range fields {
+		if field.Path == "" || field.Selector == "" || strings.Contains(field.Path, ".") || strings.Contains(field.Selector, ".") {
+			continue
+		}
+		topLevel = append(topLevel, field)
+	}
+	sort.Slice(topLevel, func(i, j int) bool {
+		return topLevel[i].Path < topLevel[j].Path
+	})
+	return topLevel
+}
+
+func selectorPathExpr(base ast.Expr, selector string) ast.Expr {
+	expr := base
+	for _, part := range strings.Split(selector, ".") {
+		expr = selExpr(expr, part)
+	}
+	return expr
 }
 
 func ssrLoadTraceStartStmts(route SSRRoute) []ast.Stmt {
@@ -419,7 +494,8 @@ func ssrLoadErrorStmts() []ast.Stmt {
 				returnBool(true),
 			),
 		},
-		exprStmt(call(sel("gowdkruntime", "WriteErrorPage"), id("response"), id("request"), sel("http", "StatusInternalServerError"), handlerErrorMessageExpr(id("err"), sel("http", "StatusInternalServerError")))),
+		define([]ast.Expr{id("errorStatus")}, call(sel("gowdkresponse", "HandlerStatus"), id("err"), sel("http", "StatusInternalServerError"))),
+		exprStmt(call(sel("gowdkruntime", "WriteErrorPage"), id("response"), id("request"), id("errorStatus"), handlerErrorMessageExpr(id("err"), id("errorStatus")))),
 		returnBool(true),
 	}
 }
@@ -437,6 +513,12 @@ func ssrRouteContextStmts(route SSRRoute, includeParams bool) []ast.Stmt {
 	}
 	if route.ErrorPage != "" {
 		metadata = append(metadata, keyValue("ErrorPage", stringLit(route.ErrorPage)))
+	}
+	if len(route.LayoutErrorPages) > 0 {
+		metadata = append(metadata, keyValue("LayoutErrorPages", layoutErrorPageMetadataExpr(route.LayoutErrorPages)))
+	}
+	if route.Locale != "" {
+		metadata = append(metadata, keyValue("Locale", stringLit(route.Locale)))
 	}
 	dynamicParams := route.DynamicParams
 	if len(dynamicParams) == 0 {
@@ -470,6 +552,9 @@ func ssrRouteContextStmts(route SSRRoute, includeParams bool) []ast.Stmt {
 	if includeParams {
 		stmts = append(stmts, assign([]ast.Expr{id("ctx")}, call(sel("gowdkruntime", "WithParams"), id("ctx"), id("params"))))
 		stmts = append(stmts, typedRouteParamStmts(route.RouteParams)...)
+	}
+	if route.Locale != "" {
+		stmts = append(stmts, assign([]ast.Expr{id("ctx")}, call(sel("gowdkruntime", "WithLocale"), id("ctx"), stringLit(route.Locale))))
 	}
 	stmts = append(stmts, assign([]ast.Expr{id("request")}, call(selExpr(id("request"), "WithContext"), id("ctx"))))
 	return stmts
@@ -573,6 +658,23 @@ func routeParamMetadataExpr(params []source.RouteParam) ast.Expr {
 	}
 	return &ast.CompositeLit{
 		Type: &ast.ArrayType{Elt: sel("gowdkruntime", "RouteParamMetadata")},
+		Elts: elts,
+	}
+}
+
+func layoutErrorPageMetadataExpr(errorPages []LayoutErrorPage) ast.Expr {
+	elts := make([]ast.Expr, 0, len(errorPages))
+	for _, errorPage := range errorPages {
+		elts = append(elts, &ast.CompositeLit{
+			Type: sel("gowdkruntime", "LayoutErrorPageMetadata"),
+			Elts: []ast.Expr{
+				keyValue("Layout", stringLit(errorPage.Layout)),
+				keyValue("ErrorPage", stringLit(errorPage.ErrorPage)),
+			},
+		})
+	}
+	return &ast.CompositeLit{
+		Type: &ast.ArrayType{Elt: sel("gowdkruntime", "LayoutErrorPageMetadata")},
 		Elts: elts,
 	}
 }

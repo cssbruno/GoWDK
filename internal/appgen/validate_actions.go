@@ -34,6 +34,9 @@ func validateActionEndpoints(endpoints []ActionEndpoint) error {
 		if err := validateInputFields(endpoint); err != nil {
 			return err
 		}
+		if err := validateUploadFields(endpoint); err != nil {
+			return err
+		}
 		if err := validateRequiredFields(endpoint); err != nil {
 			return err
 		}
@@ -49,6 +52,37 @@ func validateActionEndpoints(endpoints []ActionEndpoint) error {
 			return fmt.Errorf("generated action %s.%s endpoint path %q duplicates action %s.%s", endpoint.PageID, endpoint.ActionName, endpoint.Route, previous.PageID, previous.ActionName)
 		}
 		seen[endpoint.Route] = endpoint
+	}
+	return nil
+}
+
+func validateUploadFields(endpoint ActionEndpoint) error {
+	expected := map[string]bool{}
+	for _, field := range endpoint.InputFields {
+		expected[field] = true
+	}
+	seen := map[string]bool{}
+	for _, field := range endpoint.UploadFields {
+		name := strings.TrimSpace(field.Field)
+		if name == "" {
+			return fmt.Errorf("generated action %s.%s declares an empty upload field", endpoint.PageID, endpoint.ActionName)
+		}
+		if seen[name] {
+			return fmt.Errorf("generated action %s.%s declares duplicate upload field %q", endpoint.PageID, endpoint.ActionName, name)
+		}
+		if !expected[name] {
+			return fmt.Errorf("generated action %s.%s upload field %q is not an expected input field", endpoint.PageID, endpoint.ActionName, name)
+		}
+		if field.MaxFiles <= 0 {
+			return fmt.Errorf("generated action %s.%s upload field %q must declare a positive max file count", endpoint.PageID, endpoint.ActionName, name)
+		}
+		if field.MaxBytes <= 0 {
+			return fmt.Errorf("generated action %s.%s upload field %q must declare a positive max file size", endpoint.PageID, endpoint.ActionName, name)
+		}
+		if len(field.AllowedContentTypes) == 0 {
+			return fmt.Errorf("generated action %s.%s upload field %q must declare allowed content types", endpoint.PageID, endpoint.ActionName, name)
+		}
+		seen[name] = true
 	}
 	return nil
 }

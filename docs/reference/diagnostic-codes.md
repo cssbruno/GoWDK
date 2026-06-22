@@ -123,6 +123,7 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
 - Server-lane view directives (`g:for`/`g:if` over `server {}` data):
   `server_for_invalid`, `server_for_nested_scope`, `server_if_invalid`,
   `server_if_nested_scope`, `server_load_field_conflict`,
+  `server_load_field_unknown`,
   `server_region_directive`, `server_url_tainted`, `ghtml_over_load_data`.
 - Backend endpoints: `invalid_backend_handler_name`,
   `invalid_go_endpoint_handler`, `malformed_go_endpoint_comment`,

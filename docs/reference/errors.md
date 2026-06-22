@@ -10,6 +10,10 @@ Expected errors are user-owned handler results:
 - Return `runtime/response.Response` values for normal not-found, forbidden,
   invalid request, conflict, validation, redirect, HTML, fragment, and JSON
   outcomes.
+- Return typed expected errors with `response.NotFound`,
+  `response.Forbidden`, `response.ValidationFailed`, or
+  `response.ServerError` when a generated boundary should map the error to
+  404, 403, 422, or 500.
 - Return `response.NewHandlerError(status, message, cause)` when a generated
   action or API handler should fail with a specific HTTP status.
 - Return ordinary Go errors only for failures where HTTP 500 is acceptable.
@@ -17,6 +21,12 @@ Expected errors are user-owned handler results:
   HTTP 500.
 - Return `ssr.RedirectTo("/path")` or `ssr.Redirect("/path", status)` from SSR
   load functions for safe local redirects.
+- Return typed expected errors from SSR load functions when the page should use
+  a non-500 generated boundary. Expected 404 responses use `404.html` when it
+  exists. Expected 500 responses use the route-local `error` page, nearest
+  layout-level `error` page, outer layout-level `error` pages, or `500.html`
+  when available. Expected 403 and 422 responses use safe fallback text until
+  status-specific generated documents are defined.
 
 Unexpected errors are generated-lane failures:
 
@@ -58,6 +68,27 @@ server {
 }
 ```
 
+Layout-level SSR error pages use `error` in `.layout.gwdk` files:
+
+```gwdk
+error "/errors/app-shell.html"
+
+view {
+  <main>
+    <slot />
+  </main>
+}
+```
+
+For HTTP 500 SSR load, render, and panic boundaries, generated apps select
+error pages in this order:
+
+1. Route-local `error` on the SSR page.
+2. The nearest layout-level `error` page in the route's layout stack.
+3. Outer layout-level `error` pages, including parent layouts.
+4. Global `500.html`.
+5. `http.Error`.
+
 Endpoint-local action and API error pages also use `error`:
 
 ```gwdk
@@ -83,14 +114,15 @@ failures. Successful SSR pages use their declared page cache policy instead.
 Supported boundary syntax:
 
 - Page/route boundary: `error` on SSR pages.
+- Layout boundary: `error` on layout files, selected for SSR 500 boundaries.
 - Endpoint boundary: `error` on `act` and `api`.
 - Global fallback pages: `404.html` and `500.html`.
 
 Not supported today:
 
-- Layout-level error boundary syntax.
 - Component-level error boundary syntax.
 - Fragment-specific error boundary syntax.
+- Templated in-layout error-region syntax with typed error values.
 - Generated response-transform hooks.
 - Rendering panic values, submitted form values, secrets, or stack traces.
 

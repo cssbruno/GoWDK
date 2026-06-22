@@ -45,6 +45,7 @@ type ActionEndpoint struct {
 	InputName        string
 	InputType        string
 	InputFields      []string
+	UploadFields     []ActionUploadField
 	RequiredFields   []string
 	RequiredMessages map[string]string
 	ValidationRules  []ActionValidationRule
@@ -56,6 +57,14 @@ type ActionEndpoint struct {
 	BackendAlias     string
 	Source           string
 	SourceSpan       source.SourceSpan
+}
+
+// ActionUploadField describes one generated multipart upload field policy.
+type ActionUploadField struct {
+	Field               string
+	MaxFiles            int
+	MaxBytes            int64
+	AllowedContentTypes []string
 }
 
 // ActionValidationRule describes one generated server-side form constraint.
@@ -114,6 +123,8 @@ type SSRRoute struct {
 	Render           gowdk.RenderMode
 	Cache            string
 	ErrorPage        string
+	LayoutErrorPages []LayoutErrorPage
+	Locale           string
 	DynamicParams    []string
 	RouteParams      []source.RouteParam
 	Layouts          []string
@@ -129,6 +140,11 @@ type SSRRoute struct {
 	ListSpecs        []SSRListSpec
 	CondSpecs        []SSRCondSpec
 	QueryRegions     []SSRQueryRegion
+}
+
+type LayoutErrorPage struct {
+	Layout    string
+	ErrorPage string
 }
 
 type SSRReplacement = source.SSRReplacement

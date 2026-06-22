@@ -70,6 +70,10 @@ type ActionInputField struct {
 // ActionFormField describes one direct literal form field for a g:post action.
 type ActionFormField struct {
 	Name             string
+	File             bool
+	MaxFiles         int
+	MaxFileSize      int64
+	AllowedFileTypes []string
 	Required         bool
 	RequiredMessage  string
 	MinLength        int

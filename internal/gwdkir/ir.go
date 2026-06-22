@@ -342,15 +342,17 @@ type EmitParam struct {
 
 // Layout is the normalized IR for one layout source.
 type Layout struct {
-	Source      string
-	Package     string
-	ID          string
-	Layouts     []string
-	Uses        []Use
-	Blocks      Blocks
-	Span        source.SourceSpan
-	LayoutSpans []source.NamedSpan
-	PackageSpan source.SourceSpan
+	Source        string
+	Package       string
+	ID            string
+	Layouts       []string
+	ErrorPage     string
+	Uses          []Use
+	Blocks        Blocks
+	Span          source.SourceSpan
+	LayoutSpans   []source.NamedSpan
+	ErrorPageSpan source.SourceSpan
+	PackageSpan   source.SourceSpan
 }
 
 // GoRef points at an imported Go package symbol.
@@ -457,15 +459,18 @@ const (
 
 // Binding describes the selected Go backend handler when one is known.
 type Binding struct {
-	Status       source.BackendBindingStatus
-	Message      string
-	ImportPath   string
-	PackageName  string
-	FunctionName string
-	Signature    source.BackendSignatureKind
-	InputType    string
-	InputPointer bool
-	InputFields  []source.BackendInputField
+	Status        source.BackendBindingStatus
+	Message       string
+	ImportPath    string
+	PackageName   string
+	FunctionName  string
+	Signature     source.BackendSignatureKind
+	InputType     string
+	InputPointer  bool
+	InputFields   []source.BackendInputField
+	ResultType    string
+	ResultPointer bool
+	ResultFields  []source.BackendResultField
 }
 
 // Template records a renderable view block.

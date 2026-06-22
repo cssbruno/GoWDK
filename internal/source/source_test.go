@@ -7,7 +7,7 @@ import (
 
 func TestSupportedBackendInputFieldTypes(t *testing.T) {
 	got := strings.Join(SupportedBackendInputFieldTypes(), ",")
-	want := "[]string,bool,byte,int,int16,int32,int64,int8,rune,string,uint,uint16,uint32,uint64,uint8"
+	want := "[]form.File,[]string,bool,byte,form.File,int,int16,int32,int64,int8,rune,string,uint,uint16,uint32,uint64,uint8"
 	if got != want {
 		t.Fatalf("SupportedBackendInputFieldTypes() = %q, want %q", got, want)
 	}

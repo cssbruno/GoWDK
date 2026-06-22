@@ -90,6 +90,9 @@ func validateLoadedConfig(path string, config gowdk.Config) error {
 	if err := config.Lifecycle.Validate(); err != nil {
 		return fmt.Errorf("%s lifecycle contract: %w", path, err)
 	}
+	if err := config.I18N.Validate(); err != nil {
+		return fmt.Errorf("%s i18n policy: %w", path, err)
+	}
 	if err := config.Build.CORS.Validate(); err != nil {
 		return fmt.Errorf("%s CORS policy: %w", path, err)
 	}
@@ -163,6 +166,12 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 				continue
 			}
 			config.Render = parseRenderConfig(field.Value)
+		case "I18N":
+			if needsConfigExpressionEvaluation(field.Value) {
+				needsExecutableLoad = true
+				continue
+			}
+			config.I18N = parseI18NConfig(field.Value)
 		case "Env":
 			if needsConfigExpressionEvaluation(field.Value) {
 				needsExecutableLoad = true
@@ -196,6 +205,7 @@ func supportedConfigLiteralFields() map[string]bool {
 		"Source":    true,
 		"Modules":   true,
 		"Render":    true,
+		"I18N":      true,
 		"Env":       true,
 		"Lifecycle": true,
 		"Build":     true,
@@ -355,6 +365,64 @@ func parseRenderConfig(expression ast.Expr) gowdk.RenderConfig {
 		}
 	}
 	return render
+}
+
+func parseI18NConfig(expression ast.Expr) gowdk.I18NConfig {
+	fields, ok := configLiteralFields(expression)
+	if !ok {
+		return gowdk.I18NConfig{}
+	}
+
+	var config gowdk.I18NConfig
+	for _, field := range fields {
+		switch field.Name {
+		case "Locales":
+			config.Locales = parseLocaleConfigs(field.Value)
+		case "DefaultLocale":
+			config.DefaultLocale = parseString(field.Value)
+		case "OmitDefaultPrefix":
+			config.OmitDefaultPrefix = parseBool(field.Value)
+		}
+	}
+	return config
+}
+
+func parseLocaleConfigs(expression ast.Expr) []gowdk.LocaleConfig {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return nil
+	}
+	locales := make([]gowdk.LocaleConfig, 0, len(literal.Elts))
+	for _, element := range literal.Elts {
+		locale, ok := parseLocaleConfig(element)
+		if !ok {
+			continue
+		}
+		if locale.Code == "" && locale.PathPrefix == "" && locale.Name == "" {
+			continue
+		}
+		locales = append(locales, locale)
+	}
+	return locales
+}
+
+func parseLocaleConfig(expression ast.Expr) (gowdk.LocaleConfig, bool) {
+	fields, ok := configLiteralFields(expression)
+	if !ok {
+		return gowdk.LocaleConfig{}, false
+	}
+	var locale gowdk.LocaleConfig
+	for _, field := range fields {
+		switch field.Name {
+		case "Code":
+			locale.Code = parseString(field.Value)
+		case "PathPrefix":
+			locale.PathPrefix = parseString(field.Value)
+		case "Name":
+			locale.Name = parseString(field.Value)
+		}
+	}
+	return locale, true
 }
 
 func parseRenderMode(expression ast.Expr) gowdk.RenderMode {
@@ -596,19 +664,19 @@ func parseCORSConfig(expression ast.Expr) (gowdk.CORSConfig, bool) {
 			cors.Enabled = parseBool(field.Value)
 		case "AllowedOrigins":
 			var ok bool
-			cors.AllowedOrigins, ok = parseLiteralStringList(field.Value)
+			cors.AllowedOrigins, ok = parseStaticStringList(field.Value)
 			needsExecutableLoad = needsExecutableLoad || !ok
 		case "AllowedMethods":
 			var ok bool
-			cors.AllowedMethods, ok = parseLiteralStringList(field.Value)
+			cors.AllowedMethods, ok = parseStaticStringList(field.Value)
 			needsExecutableLoad = needsExecutableLoad || !ok
 		case "AllowedHeaders":
 			var ok bool
-			cors.AllowedHeaders, ok = parseLiteralStringList(field.Value)
+			cors.AllowedHeaders, ok = parseStaticStringList(field.Value)
 			needsExecutableLoad = needsExecutableLoad || !ok
 		case "ExposedHeaders":
 			var ok bool
-			cors.ExposedHeaders, ok = parseLiteralStringList(field.Value)
+			cors.ExposedHeaders, ok = parseStaticStringList(field.Value)
 			needsExecutableLoad = needsExecutableLoad || !ok
 		case "AllowCredentials":
 			cors.AllowCredentials = parseBool(field.Value)
@@ -1366,6 +1434,13 @@ func parseStringList(expression ast.Expr) []string {
 		values = append(values, value)
 	}
 	return values
+}
+
+func parseStaticStringList(expression ast.Expr) ([]string, bool) {
+	if identifier, ok := expression.(*ast.Ident); ok && identifier.Name == "nil" {
+		return nil, true
+	}
+	return parseLiteralStringList(expression)
 }
 
 func parseLiteralStringList(expression ast.Expr) ([]string, bool) {

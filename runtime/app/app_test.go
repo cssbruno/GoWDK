@@ -2,9 +2,11 @@ package app
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -78,6 +80,16 @@ func TestHandlerWritesConfiguredSecurityHeaders(t *testing.T) {
 	}
 	if got := recorder.Header().Values("X-Frame-Options"); len(got) != 1 {
 		t.Fatalf("expected one canonical frame header value, got %#v", got)
+	}
+}
+
+func TestLocaleContextAccessors(t *testing.T) {
+	ctx := WithLocale(context.Background(), "pt-BR")
+	if got := Locale(ctx); got != "pt-BR" {
+		t.Fatalf("unexpected locale: %q", got)
+	}
+	if got := Locale(context.Background()); got != "" {
+		t.Fatalf("expected empty locale for unlocalized context, got %q", got)
 	}
 }
 
@@ -871,11 +883,21 @@ func TestWriteErrorPagePrefersRouteErrorPage(t *testing.T) {
 	root := fstest.MapFS{
 		"500.html":                    {Data: []byte("<main>Global Server Error</main>")},
 		"errors/dashboard.html":       {Data: []byte("<main>Dashboard Error</main>")},
+		"errors/layout.html":          {Data: []byte("<main>Layout Error</main>")},
 		"errors/other-dashboard.html": {Data: []byte("<main>Other Dashboard Error</main>")},
 	}
 	request := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
-	ctx := withErrorPages(request.Context(), LoadErrorPagesWith(root, ErrorPage{Path: "/errors/dashboard.html"}))
-	ctx = WithRoute(ctx, RouteMetadata{Kind: "ssr", PageID: "dashboard", Path: "/dashboard", ErrorPage: "errors/dashboard.html"})
+	ctx := withErrorPages(request.Context(), LoadErrorPagesWith(root, ErrorPage{Path: "/errors/dashboard.html"}, ErrorPage{Path: "/errors/layout.html"}))
+	ctx = WithRoute(ctx, RouteMetadata{
+		Kind:      "ssr",
+		PageID:    "dashboard",
+		Path:      "/dashboard",
+		ErrorPage: "errors/dashboard.html",
+		LayoutErrorPages: []LayoutErrorPageMetadata{{
+			Layout:    "shell",
+			ErrorPage: "errors/layout.html",
+		}},
+	})
 	request = request.WithContext(ctx)
 	recorder := httptest.NewRecorder()
 
@@ -889,6 +911,73 @@ func TestWriteErrorPagePrefersRouteErrorPage(t *testing.T) {
 	}
 	if cache := recorder.Header().Get("Cache-Control"); cache != "no-store" {
 		t.Fatalf("expected no-store error page, got %q", cache)
+	}
+}
+
+func TestWriteErrorPageUsesNearestLayoutErrorPage(t *testing.T) {
+	root := fstest.MapFS{
+		"500.html":              {Data: []byte("<main>Global Server Error</main>")},
+		"errors/root.html":      {Data: []byte("<main>Root Layout Error</main>")},
+		"errors/section.html":   {Data: []byte("<main>Section Layout Error</main>")},
+		"errors/unrelated.html": {Data: []byte("<main>Unrelated Error</main>")},
+	}
+	request := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	ctx := withErrorPages(request.Context(), LoadErrorPagesWith(root,
+		ErrorPage{Path: "/errors/root.html"},
+		ErrorPage{Path: "/errors/section.html"},
+		ErrorPage{Path: "/errors/unrelated.html"},
+	))
+	ctx = WithRoute(ctx, RouteMetadata{
+		Kind:   "ssr",
+		PageID: "dashboard",
+		Path:   "/dashboard",
+		LayoutErrorPages: []LayoutErrorPageMetadata{
+			{Layout: "section", ErrorPage: "errors/section.html"},
+			{Layout: "root", ErrorPage: "errors/root.html"},
+		},
+	})
+	request = request.WithContext(ctx)
+	recorder := httptest.NewRecorder()
+
+	WriteErrorPage(recorder, request, http.StatusInternalServerError, "load failed")
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if recorder.Body.String() != "<main>Section Layout Error</main>" {
+		t.Fatalf("unexpected body: %q", recorder.Body.String())
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store error page, got %q", cache)
+	}
+}
+
+func TestWriteErrorPageFallsBackToOuterLayoutErrorPage(t *testing.T) {
+	root := fstest.MapFS{
+		"500.html":         {Data: []byte("<main>Global Server Error</main>")},
+		"errors/root.html": {Data: []byte("<main>Root Layout Error</main>")},
+	}
+	request := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	ctx := withErrorPages(request.Context(), LoadErrorPagesWith(root, ErrorPage{Path: "/errors/root.html"}))
+	ctx = WithRoute(ctx, RouteMetadata{
+		Kind:   "ssr",
+		PageID: "dashboard",
+		Path:   "/dashboard",
+		LayoutErrorPages: []LayoutErrorPageMetadata{
+			{Layout: "section", ErrorPage: "errors/missing.html"},
+			{Layout: "root", ErrorPage: "errors/root.html"},
+		},
+	})
+	request = request.WithContext(ctx)
+	recorder := httptest.NewRecorder()
+
+	WriteErrorPage(recorder, request, http.StatusInternalServerError, "load failed")
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if recorder.Body.String() != "<main>Root Layout Error</main>" {
+		t.Fatalf("unexpected body: %q", recorder.Body.String())
 	}
 }
 
@@ -1676,6 +1765,50 @@ func TestActionValuesWithBodyLimitRejectsTooLargeBody(t *testing.T) {
 
 	if recorder.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+}
+
+func TestActionDataParsesMultipartFiles(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("caption", "profile"); err != nil {
+		t.Fatal(err)
+	}
+	part, err := writer.CreateFormFile("avatar", "avatar.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write([]byte("png")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := ActionData(func(ctx context.Context, data form.Data) (response.Response, error) {
+		if _, ok := Request(ctx); !ok {
+			t.Fatal("expected request in context")
+		}
+		if got := data.Values.First("caption"); got != "profile" {
+			t.Fatalf("unexpected caption: %q", got)
+		}
+		file, ok, err := data.File("avatar")
+		if err != nil || !ok || file.Filename != "avatar.png" || file.Size != 3 {
+			t.Fatalf("unexpected file: %#v ok=%v err=%v", file, ok, err)
+		}
+		return response.HTMLBody(http.StatusOK, "<p>uploaded</p>"), nil
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/upload", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+
+	handler(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if got := recorder.Body.String(); got != "<p>uploaded</p>" {
+		t.Fatalf("unexpected body: %s", got)
 	}
 }
 

@@ -357,7 +357,22 @@ parentheses. Local variables are visible only to later statements in the same
 client function, lifecycle block, or effect block. Expressions can read nested
 fields and indexed values from Go-typed object and slice state, such as
 `User.Name` and `Items[0].Name`. Expressions also support Go-ish conditional
-values: `if Open { "open" } else { "closed" }`.
+values such as `if Open { "open" } else { "closed" }`, plus bounded
+`switch`/`match` expressions:
+
+```gwdk
+client {
+  computed StatusLabel string {
+    return switch Status { case "draft": "Draft" case "live": "Live" default: "Unknown" }
+  }
+}
+```
+
+The expression form is inline:
+`switch Status { case "draft": "Draft" default: "Unknown" }`. `match` is an
+alias for `switch`. A default branch is required, case values must be comparable
+with the switch value, and all result branches must return compatible scalar
+types.
 
 Async handlers can use the compiler-owned `await fetchJSON[T](urlExpr)` form
 only in assignment statements, such as:
@@ -400,7 +415,8 @@ expression reuse:
 ```gwdk
 client {
   fn Next(value int) int {
-    return value + 1
+    let doubled int = value * 2
+    return switch doubled { case 0: 1 default: doubled + 1 }
   }
 
   fn Add() {
@@ -409,13 +425,16 @@ client {
 }
 ```
 
-Helpers must declare a scalar return type, contain exactly one `return expr`
-statement, and are callable from client expressions such as assignments, local
-initializers, handler arguments, and list mutation arguments. Helpers are not
-event handlers, so `g:on:click={Next(Count)}` is rejected; events must call a
-non-return handler such as `Add()`. Helper call graphs are validated at compile
-time and recursive cycles are rejected. JavaScript-style ternaries, broader
-built-ins such as date/time helpers, and recursion remain compile errors today.
+Helpers must declare a scalar return type and end with `return expr`. Before
+the final return, helpers may declare scalar locals with
+`let name type = expr`; those locals are visible to later helper locals and the
+return expression only. Helpers are callable from client expressions such as
+assignments, local initializers, handler arguments, and list mutation arguments.
+Helpers are not event handlers, so `g:on:click={Next(Count)}` is rejected;
+events must call a non-return handler such as `Add()`. Helper call graphs,
+including calls from helper local initializers, are validated at compile time
+and recursive cycles are rejected. JavaScript-style ternaries, broader built-ins
+such as date/time helpers, and recursion remain compile errors today.
 
 Expressions support the first compiler-owned built-ins:
 
@@ -445,8 +464,8 @@ type.
 
 Generated island JavaScript does not evaluate arbitrary JavaScript source from
 `client {}`. It interprets the compiler-owned expression subset above,
-including conditionals, scalar operators, field/index reads, helper calls, async
-fetch assignments, and the listed built-ins.
+including conditionals, switch/match expressions, scalar operators, field/index
+reads, helper calls, async fetch assignments, and the listed built-ins.
 
 Client blocks can declare computed values:
 

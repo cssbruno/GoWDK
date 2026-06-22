@@ -1,0 +1,10 @@
+package ssr
+
+error "/errors/shell.html"
+
+view {
+  <section>
+    <header>GOWDK SSR</header>
+    <slot />
+  </section>
+}

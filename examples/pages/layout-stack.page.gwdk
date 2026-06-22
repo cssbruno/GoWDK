@@ -1,5 +1,7 @@
 package pages
 
+use marketing "marketing"
+
 page layout.stack
 route "/layout-stack"
 guard public

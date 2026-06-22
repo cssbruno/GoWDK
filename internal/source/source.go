@@ -392,14 +392,17 @@ const (
 type BackendSignatureKind string
 
 const (
-	BackendSignatureAction0       BackendSignatureKind = "action0"
-	BackendSignatureActionValues  BackendSignatureKind = "action_values"
-	BackendSignatureActionForm    BackendSignatureKind = "action_form"
-	BackendSignatureActionFormPtr BackendSignatureKind = "action_form_ptr"
-	BackendSignatureAPI           BackendSignatureKind = "api"
-	BackendSignatureFragment      BackendSignatureKind = "fragment"
-	BackendSignatureLoad          BackendSignatureKind = "load"
-	BackendSignatureLoadError     BackendSignatureKind = "load_error"
+	BackendSignatureAction0         BackendSignatureKind = "action0"
+	BackendSignatureActionValues    BackendSignatureKind = "action_values"
+	BackendSignatureActionData      BackendSignatureKind = "action_data"
+	BackendSignatureActionForm      BackendSignatureKind = "action_form"
+	BackendSignatureActionFormPtr   BackendSignatureKind = "action_form_ptr"
+	BackendSignatureAPI             BackendSignatureKind = "api"
+	BackendSignatureFragment        BackendSignatureKind = "fragment"
+	BackendSignatureLoad            BackendSignatureKind = "load"
+	BackendSignatureLoadError       BackendSignatureKind = "load_error"
+	BackendSignatureLoadStruct      BackendSignatureKind = "load_struct"
+	BackendSignatureLoadStructError BackendSignatureKind = "load_struct_error"
 )
 
 // BackendInputField describes one form field decoded into a Go action input
@@ -408,6 +411,16 @@ type BackendInputField struct {
 	FieldName string
 	FormName  string
 	Type      string // canonical value from LookupBackendInputFieldType
+}
+
+// BackendResultField describes one exported Go result field visible to
+// compiler-tracked server {} load data. Path is the .gwdk-facing path after
+// json tag mapping (for example "user.name"); Selector is the Go selector path
+// from the load result value (for example "User.Name").
+type BackendResultField struct {
+	Path     string
+	Selector string
+	Type     string
 }
 
 // BackendInputFieldTypeSupported reports whether goType is a form-decoder type
@@ -444,22 +457,25 @@ func BackendInputFieldIntegerBitSize(goType string) int {
 // BackendBinding describes the Go handler selected for a backend block (a page
 // load, act, api, or fragment block, or a standalone Go endpoint).
 type BackendBinding struct {
-	Kind         string
-	PageID       string
-	Source       string
-	Span         SourceSpan
-	BlockName    string
-	Method       string
-	Route        string
-	ImportPath   string
-	PackageName  string
-	FunctionName string
-	Signature    BackendSignatureKind
-	InputType    string
-	InputPointer bool
-	InputFields  []BackendInputField
-	Status       BackendBindingStatus
-	Message      string
+	Kind          string
+	PageID        string
+	Source        string
+	Span          SourceSpan
+	BlockName     string
+	Method        string
+	Route         string
+	ImportPath    string
+	PackageName   string
+	FunctionName  string
+	Signature     BackendSignatureKind
+	InputType     string
+	InputPointer  bool
+	InputFields   []BackendInputField
+	ResultType    string
+	ResultPointer bool
+	ResultFields  []BackendResultField
+	Status        BackendBindingStatus
+	Message       string
 	// UnexportedCandidate is set when a handler is missing but a same-named
 	// unexported Go function exists in the inspected package, so tooling can
 	// explain that the function is present but not exported.

@@ -114,6 +114,58 @@ func validateComponentClient(component gwdkir.Component, stateTypes map[string]c
 		for _, param := range function.Params {
 			readFields[param.Name] = clientlang.NormalizeType(param.Type)
 		}
+		helperValid := true
+		for index, local := range helper.Locals {
+			if _, exists := readFields[local.Name]; exists {
+				diagnostics = append(diagnostics, ValidationError{
+					Code:          "component_client_error",
+					ComponentName: component.Name,
+					Source:        component.Source,
+					Span:          clientSpan(component, helperLocalSpan(function, index)),
+					Message:       fmt.Sprintf("component %s helper function %s local %q conflicts with an existing client value", component.Name, function.Name, local.Name),
+				})
+				helperValid = false
+				continue
+			}
+			actual, _, err := clientlang.CheckExprWithFunctions(local.Expr, readFields, helperFuncs)
+			if err != nil {
+				diagnostics = append(diagnostics, ValidationError{
+					Code:          "component_client_error",
+					ComponentName: component.Name,
+					Source:        component.Source,
+					Span:          clientExpressionErrorSpan(component, helperLocalStatement(function, index), helperLocalSpan(function, index), err),
+					Message:       fmt.Sprintf("component %s helper function %s local %s expression %q is invalid: %v", component.Name, function.Name, local.Name, local.Expr, err),
+				})
+				helperValid = false
+				continue
+			}
+			if actual == clientlang.TypeArray || actual == clientlang.TypeObject {
+				diagnostics = append(diagnostics, ValidationError{
+					Code:          "component_client_error",
+					ComponentName: component.Name,
+					Source:        component.Source,
+					Span:          clientSpan(component, helperLocalSpan(function, index)),
+					Message:       fmt.Sprintf("component %s helper function %s local %s cannot use %s expression", component.Name, function.Name, local.Name, actual),
+				})
+				helperValid = false
+				continue
+			}
+			if local.Type != clientlang.TypeUnknown && actual != clientlang.TypeUnknown && local.Type != actual && !compatibleNumericType(actual, local.Type) {
+				diagnostics = append(diagnostics, ValidationError{
+					Code:          "component_client_error",
+					ComponentName: component.Name,
+					Source:        component.Source,
+					Span:          clientSpan(component, helperLocalSpan(function, index)),
+					Message:       fmt.Sprintf("component %s helper function %s local %s expects %s, got %s", component.Name, function.Name, local.Name, local.Type, actual),
+				})
+				helperValid = false
+				continue
+			}
+			readFields[local.Name] = local.Type
+		}
+		if !helperValid {
+			continue
+		}
 		actual, _, err := clientlang.CheckExprWithFunctions(helper.Return, readFields, helperFuncs)
 		if err != nil {
 			diagnostics = append(diagnostics, ValidationError{
@@ -311,6 +363,20 @@ func functionReturnSpan(function clientlang.Function) clientlang.Span {
 	return function.StatementSpans[len(function.StatementSpans)-1]
 }
 
+func helperLocalSpan(function clientlang.Function, index int) clientlang.Span {
+	if index >= 0 && index < len(function.StatementSpans) {
+		return function.StatementSpans[index]
+	}
+	return function.Span
+}
+
+func helperLocalStatement(function clientlang.Function, index int) string {
+	if index >= 0 && index < len(function.Statements) {
+		return function.Statements[index]
+	}
+	return ""
+}
+
 func clientSpan(component gwdkir.Component, span clientlang.Span) source.SourceSpan {
 	return clientSpanColumns(component, span, 1, 2)
 }
@@ -371,6 +437,17 @@ func validateHelperCallGraph(helpers map[string]clientlang.Helper) error {
 	}
 	graph := map[string][]string{}
 	for name, helper := range helpers {
+		for _, local := range helper.Locals {
+			calls, err := clientlang.ExprCalls(local.Expr)
+			if err != nil {
+				return fmt.Errorf("%s local %s expression: %w", name, local.Name, err)
+			}
+			for _, call := range calls {
+				if _, ok := helpers[call]; ok {
+					graph[name] = append(graph[name], call)
+				}
+			}
+		}
 		calls, err := clientlang.ExprCalls(helper.Return)
 		if err != nil {
 			return fmt.Errorf("%s return expression: %w", name, err)

@@ -102,10 +102,32 @@ func errorPagePayload(request *http.Request, pages ErrorPages, status int) []byt
 		if payload := routeErrorPagePayload(request, pages); len(payload) > 0 {
 			return payload
 		}
+		if payload := layoutErrorPagePayload(request, pages); len(payload) > 0 {
+			return payload
+		}
 		return pages.InternalServerError
 	default:
 		return nil
 	}
+}
+
+func layoutErrorPagePayload(request *http.Request, pages ErrorPages) []byte {
+	if request == nil || len(pages.Custom) == 0 {
+		return nil
+	}
+	route, ok := Route(request.Context())
+	if !ok || len(route.LayoutErrorPages) == 0 {
+		return nil
+	}
+	for _, boundary := range route.LayoutErrorPages {
+		if boundary.ErrorPage == "" {
+			continue
+		}
+		if payload := pages.Custom[cleanErrorPagePath(boundary.ErrorPage)]; len(payload) > 0 {
+			return payload
+		}
+	}
+	return nil
 }
 
 func routeErrorPagePayload(request *http.Request, pages ErrorPages) []byte {

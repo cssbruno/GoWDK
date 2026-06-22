@@ -2005,6 +2005,69 @@ fn Add() {
 	}
 }
 
+func TestValidateManifestAllowsClientHelperLocalsAndSwitch(t *testing.T) {
+	app := appFixture{Components: []gwdkir.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: gwdkir.Blocks{
+			Client: true,
+			ClientBody: `fn Next(value int) int {
+  let next int = value + 1
+  return switch next { case 1: 1 default: next }
+}
+
+fn Add() {
+  Count = Next(Count)
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Add()}>{Count}</button>`,
+		},
+	}}}
+
+	if err := validateManifest(gowdk.Config{}, app); err != nil {
+		t.Fatalf("expected client helper locals and switch to validate, got %v", err)
+	}
+}
+
+func TestValidateManifestRejectsClientHelperLocalMismatch(t *testing.T) {
+	app := appFixture{Components: []gwdkir.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: gwdkir.Blocks{
+			Client: true,
+			ClientBody: `fn Bad(value int) int {
+  let next int = Open
+  return next
+}
+
+fn Add() {
+  Count = Bad(Count)
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Add()}>{Count}</button>`,
+		},
+	}}}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected helper local mismatch diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), "local next expects int, got bool") {
+		t.Fatalf("Missing helper local mismatch diagnostic: %#v", diagnostics)
+	}
+}
+
 func TestValidateManifestAllowsClientBuiltins(t *testing.T) {
 	app := appFixture{Components: []gwdkir.Component{{
 		Name:    "Nested",
@@ -2239,6 +2302,44 @@ fn Add() {
 	}
 	diagnostics := err.(ValidationErrors)
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
+		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
+	}
+}
+
+func TestValidateManifestRejectsHelperCallCycleThroughLocal(t *testing.T) {
+	app := appFixture{Components: []gwdkir.Component{{
+		Name:    "Counter",
+		Source:  "components/counter.cmp.gwdk",
+		Imports: []gwdkir.Import{{Alias: "ui", Path: "github.com/cssbruno/gowdk/testfixture/islands"}},
+		State: gwdkir.StateContract{
+			Type: gwdkir.GoRef{Alias: "ui", Name: "CounterState"},
+			Init: gwdkir.GoRef{Alias: "ui", Name: "NewCounterState"},
+		},
+		Blocks: gwdkir.Blocks{
+			Client: true,
+			ClientBody: `fn A() int {
+  let next int = B()
+  return next
+}
+
+fn B() int {
+  return A()
+}
+
+fn Add() {
+  Count = A()
+}`,
+			View:     true,
+			ViewBody: `<button g:on:click={Add()}>{Count}</button>`,
+		},
+	}}}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected helper local call cycle diagnostic")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), "helper call graph is invalid") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
 }
@@ -4510,6 +4611,41 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 			t.Fatalf("expected identical query route references to be valid, got %v", err)
 		}
 	})
+}
+
+func TestValidateManifestRejectsLocalizedRouteMethodConflicts(t *testing.T) {
+	app := appFixture{
+		Pages: []gwdkir.Page{
+			{
+				ID:     "home",
+				Route:  "/",
+				Blocks: gwdkir.Blocks{View: true},
+			},
+			{
+				ID:    "api",
+				Route: "/api-page",
+				Blocks: gwdkir.Blocks{
+					View: true,
+					APIs: []gwdkir.API{{
+						Name:   "Status",
+						Method: "GET",
+						Route:  "/en",
+					}},
+				},
+			},
+		},
+	}
+
+	err := validateManifest(gowdk.Config{I18N: gowdk.I18NConfig{
+		Locales: []gowdk.LocaleConfig{{Code: "en"}},
+	}}, app)
+	if err == nil {
+		t.Fatal("expected localized route conflict")
+	}
+	diagnostics := err.(ValidationErrors)
+	if !hasDiagnosticMessage(diagnostics, "route_method_conflict", "GET", "/en", "api api.Status", "page home") {
+		t.Fatalf("missing localized route conflict diagnostic: %#v", diagnostics)
+	}
 }
 
 func TestValidateManifestAllowsSameRouteWithDifferentMethods(t *testing.T) {

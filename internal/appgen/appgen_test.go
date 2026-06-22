@@ -2536,6 +2536,30 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 				Signature:    source.BackendSignatureAction0,
 			},
 		},
+		{
+			Guards:      []string{"public"},
+			PageID:      "Upload",
+			ActionName:  "Upload",
+			Route:       "/upload",
+			InputFields: []string{"avatar", "photos", "caption"},
+			UploadFields: []ActionUploadField{
+				{Field: "avatar", MaxFiles: 1, MaxBytes: 2048, AllowedContentTypes: []string{"image/png"}},
+				{Field: "photos", MaxFiles: 3, MaxBytes: 4096, AllowedContentTypes: []string{"image/*"}},
+			},
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
+				ImportPath:   "example.com/app/auth",
+				PackageName:  "auth",
+				FunctionName: "Upload",
+				Signature:    source.BackendSignatureActionForm,
+				InputType:    "UploadInput",
+				InputFields: []source.BackendInputField{
+					{FieldName: "Avatar", FormName: "avatar", Type: "form.File"},
+					{FieldName: "Photos", FormName: "photos", Type: "[]form.File"},
+					{FieldName: "Caption", FormName: "caption", Type: "string"},
+				},
+			},
+		},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -2565,6 +2589,16 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 		`result, err := auth.Login(ctx, input)`,
 		`result, err := auth.Save(ctx, &input)`,
 		`result, err := auth.Ping(ctx)`,
+		`request.ParseMultipartForm(gowdkform.DefaultMultipartMemoryBytes)`,
+		`gowdkform.DecodeExpectedData(data, gowdkform.Schema{Fields: []gowdkform.Field{{Name: "avatar", File: &gowdkform.FilePolicy{MaxFiles: 1, MaxBytes: 2048, AllowedContentTypes: []string{"image/png"}}}, {Name: "photos", File: &gowdkform.FilePolicy{MaxFiles: 3, MaxBytes: 4096, AllowedContentTypes: []string{"image/*"}}}, {Name: "caption"}}})`,
+		`func decodeUploadUploadBoundInput(data gowdkform.Data) (auth.UploadInput, error)`,
+		`field0, ok, err := data.File("avatar")`,
+		`input.Avatar = field0`,
+		`field1 := data.FileList("photos")`,
+		`input.Photos = field1`,
+		`field2, ok, err := gowdkform.String(values, "caption")`,
+		`input.Caption = field2`,
+		`result, err := auth.Upload(ctx, input)`,
 		`gowdkresponse.WriteNoStoreHTTP(response, result)`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -3311,13 +3345,19 @@ func TestGenerateWritesSSRLoadHandler(t *testing.T) {
 	appDir := filepath.Join(root, "generated-app")
 	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
 	writeTestFile(t, filepath.Join(outputDir, "errors", "dashboard.html"), "<main>Dashboard Error</main>")
+	writeTestFile(t, filepath.Join(outputDir, "errors", "shell.html"), "<main>Shell Error</main>")
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
 		PageID:    "dashboard",
 		Route:     "/dashboard",
+		Layouts:   []string{"shell"},
 		Guards:    []string{"public"},
 		ErrorPage: "/errors/dashboard.html",
-		HasLoad:   true,
+		LayoutErrorPages: []LayoutErrorPage{{
+			Layout:    "shell",
+			ErrorPage: "errors/shell.html",
+		}},
+		HasLoad: true,
 		LoadBinding: source.BackendBinding{
 			Status:       source.BackendBindingBound,
 			ImportPath:   "example.com/app/dashboard",
@@ -3343,17 +3383,69 @@ func TestGenerateWritesSSRLoadHandler(t *testing.T) {
 		`dashboard "example.com/app/dashboard"`,
 		`gowdkssr "github.com/cssbruno/gowdk/runtime/ssr"`,
 		`"fmt"`,
-		`ErrorPages: gowdkruntime.LoadErrorPagesWith(root, gowdkruntime.ErrorPage{Path: "errors/dashboard.html"})`,
-		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "ssr", ErrorPage: "errors/dashboard.html", Guards: []string{"public"}, HasLoad: true})`,
+		`ErrorPages: gowdkruntime.LoadErrorPagesWith(root, gowdkruntime.ErrorPage{Path: "errors/dashboard.html"}, gowdkruntime.ErrorPage{Path: "errors/shell.html"})`,
+		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "ssr", ErrorPage: "errors/dashboard.html", LayoutErrorPages: []gowdkruntime.LayoutErrorPageMetadata{gowdkruntime.LayoutErrorPageMetadata{Layout: "shell", ErrorPage: "errors/shell.html"}}, Layouts: []string{"shell"}, Guards: []string{"public"}, HasLoad: true})`,
 		`gowdkruntime.RecoverSSRRoutePanic(response, request, recovered)`,
 		`loadContext := gowdkssr.NewLoadContext(request, nil)`,
 		`loadData, err := dashboard.LoadDashboard(loadContext)`,
 		`redirectURL, redirectStatus, ok := gowdkssr.RedirectTarget(err)`,
 		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.Response{Kind: gowdkresponse.Redirect, Status: redirectStatus, URL: redirectURL})`,
-		`gowdkruntime.WriteErrorPage(response, request, http.StatusInternalServerError, gowdkresponse.HandlerErrorMessage(err, http.StatusInternalServerError))`,
+		`errorStatus := gowdkresponse.HandlerStatus(err, http.StatusInternalServerError)`,
+		`gowdkruntime.WriteErrorPage(response, request, errorStatus, gowdkresponse.HandlerErrorMessage(err, errorStatus))`,
 		`loadValue0, loadOK0 := gowdkssr.LoadPath(loadData, "user.name")`,
 		`gowdkruntime.WriteErrorPage(response, request, http.StatusInternalServerError, "missing load field user.name")`,
 		`strings.ReplaceAll(html, "__USER__", gowdkhtml.Escape(fmt.Sprint(loadValue0)))`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateWritesTypedSSRLoadResultAdapter(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:  "dashboard",
+		Route:   "/dashboard",
+		Guards:  []string{"public"},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "example.com/app/dashboard",
+			PackageName:  "dashboard",
+			FunctionName: "LoadDashboard",
+			Signature:    source.BackendSignatureLoadStructError,
+			ResultType:   "DashboardData",
+			ResultFields: []source.BackendResultField{
+				{Path: "user", Selector: "User"},
+				{Path: "User", Selector: "User"},
+				{Path: "user.name", Selector: "User.Name"},
+				{Path: "count", Selector: "Count"},
+				{Path: "Count", Selector: "Count"},
+			},
+		},
+		HTML: `<main><h1>__USER__</h1></main>`,
+		LoadReplacements: []SSRLoadReplacement{{
+			Path:        "user.name",
+			Placeholder: "__USER__",
+		}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`typedLoadData, err := dashboard.LoadDashboard(loadContext)`,
+		`loadData := map[string]any{"Count": typedLoadData.Count, "User": typedLoadData.User, "count": typedLoadData.Count, "user": typedLoadData.User}`,
+		`loadValue0, loadOK0 := gowdkssr.LoadPath(loadData, "user.name")`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
@@ -3765,6 +3857,59 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected auto-detected generated app source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateAutoRoutesLocalizesSSRRoutes(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:     "dashboard",
+		Route:  "/dashboard",
+		Render: gowdk.SSR,
+		Guards: []string{"public"},
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main><h1>Dashboard</h1></main>`,
+		},
+	}}}
+
+	config := gowdk.Config{
+		Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)},
+		I18N: gowdk.I18NConfig{
+			Locales: []gowdk.LocaleConfig{{Code: "en"}, {Code: "pt"}},
+		},
+	}
+	ir := gwdkanalysis.BuildProgram(config, app)
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		AutoRoutes: true,
+		Config:     config,
+		IR:         &ir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`case "/en/dashboard":`,
+		`case "/pt/dashboard":`,
+		`gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/en/dashboard", Render: "ssr", Locale: "en", Guards: []string{"public"}}`,
+		`gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/pt/dashboard", Render: "ssr", Locale: "pt", Guards: []string{"public"}}`,
+		`ctx = gowdkruntime.WithLocale(ctx, "en")`,
+		`ctx = gowdkruntime.WithLocale(ctx, "pt")`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected localized SSR generated app source to contain %q:\n%s", expected, source)
 		}
 	}
 }
@@ -4207,7 +4352,7 @@ func TestFragmentEndpointsRenderComponents(t *testing.T) {
 	}
 }
 
-func TestActionEndpointsRejectsFileInputsWithPageContext(t *testing.T) {
+func TestActionEndpointsRejectsFileInputsWithoutMultipartWithPageContext(t *testing.T) {
 	_, err := actionEndpointsFromManifestFixture(gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:    "profile",
 		Route: "/profile",
@@ -4222,8 +4367,32 @@ func TestActionEndpointsRejectsFileInputsWithPageContext(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected file input error")
 	}
-	if !strings.Contains(err.Error(), `profile: file input "avatar" is not supported`) {
+	if !strings.Contains(err.Error(), `profile: file input "avatar" requires enctype="multipart/form-data"`) {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestActionEndpointsInfersUploadFieldsFromMultipartForm(t *testing.T) {
+	routes, err := actionEndpointsFromManifestFixture(gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:    "profile",
+		Route: "/profile",
+		Blocks: gwdkir.Blocks{
+			ViewBody: `<form g:post={save} enctype="multipart/form-data"><input name="avatar" type="file" g:max-file-size="2048" g:max-files="1" accept="image/png,image/*" /></form>`,
+			Actions: []gwdkir.Action{{
+				Name:     "save",
+				Redirect: "/profile?ok=1",
+			}},
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(routes) != 1 || len(routes[0].UploadFields) != 1 {
+		t.Fatalf("expected one upload field, got %#v", routes)
+	}
+	upload := routes[0].UploadFields[0]
+	if upload.Field != "avatar" || upload.MaxFiles != 1 || upload.MaxBytes != 2048 || strings.Join(upload.AllowedContentTypes, ",") != "image/png,image/*" {
+		t.Fatalf("unexpected upload field: %#v", upload)
 	}
 }
 
@@ -4963,6 +5132,82 @@ func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	}
 }
 
+func TestGeneratedBinaryExecutesTypedSSRLoadUserLogic(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:  "dashboard",
+		Route:   "/dashboard",
+		Guards:  []string{"public"},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "gowdk-generated-app/dashboard",
+			PackageName:  "dashboard",
+			FunctionName: "LoadDashboard",
+			Signature:    source.BackendSignatureLoadStructError,
+			ResultType:   "DashboardData",
+			ResultFields: []source.BackendResultField{
+				{Path: "user", Selector: "User"},
+				{Path: "user.name", Selector: "User.Name"},
+				{Path: "count", Selector: "Count"},
+			},
+		},
+		HTML: `<main><h1>__USER__</h1><p>__COUNT__</p></main>`,
+		LoadReplacements: []SSRLoadReplacement{
+			{Path: "user.name", Placeholder: "__USER__"},
+			{Path: "count", Placeholder: "__COUNT__"},
+		},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "dashboard", "dashboard.go"), `package dashboard
+
+import "github.com/cssbruno/gowdk/runtime/ssr"
+
+type DashboardData struct {
+	User  UserData `+"`json:\"user\"`"+`
+	Count int      `+"`json:\"count\"`"+`
+}
+
+type UserData struct {
+	Name string `+"`json:\"name\"`"+`
+}
+
+func LoadDashboard(ctx ssr.LoadContext) (DashboardData, error) {
+	return DashboardData{User: UserData{Name: "Ada <admin>"}, Count: 3}, nil
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, _, err := waitForHTTPResponse("http://" + addr + "/dashboard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"Ada &lt;admin&gt;", "<p>3</p>"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected typed SSR load response to contain %q, got %s", expected, body)
+		}
+	}
+}
+
 func TestGeneratedBinaryExecutesInlineSSRScriptLoad(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -5556,6 +5801,164 @@ func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	}
 	if strings.Contains(body, "secret database detail") {
 		t.Fatalf("custom error page leaked load error detail: %s", body)
+	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+}
+
+func TestGeneratedBinaryUsesLayoutSSRLoadErrorPage(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "500.html"), "<main>Global Error</main>")
+	writeTestFile(t, filepath.Join(outputDir, "errors", "shell.html"), "<main>Shell Error</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:  "dashboard",
+		Route:   "/dashboard",
+		Layouts: []string{"shell"},
+		Guards:  []string{"public"},
+		LayoutErrorPages: []LayoutErrorPage{{
+			Layout:    "shell",
+			ErrorPage: "errors/shell.html",
+		}},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "gowdk-generated-app/dashboard",
+			PackageName:  "dashboard",
+			FunctionName: "LoadDashboard",
+			Signature:    source.BackendSignatureLoadError,
+		},
+		HTML: `<main><h1>__USER__</h1></main>`,
+		LoadReplacements: []SSRLoadReplacement{
+			{Path: "user.name", Placeholder: "__USER__"},
+		},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "dashboard", "dashboard.go"), `package dashboard
+
+import (
+	"errors"
+
+	"github.com/cssbruno/gowdk/runtime/ssr"
+)
+
+func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
+	return nil, errors.New("secret database detail")
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/dashboard", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	payload, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(payload)
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 status, got %d with body %s", response.StatusCode, body)
+	}
+	if strings.TrimSpace(body) != "<main>Shell Error</main>" {
+		t.Fatalf("unexpected layout error body: %s", body)
+	}
+	if strings.Contains(body, "secret database detail") {
+		t.Fatalf("layout error page leaked load error detail: %s", body)
+	}
+	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
+		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+}
+
+func TestGeneratedBinaryMapsExpectedSSRLoadErrorStatus(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "404.html"), "<main>Missing</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:  "dashboard",
+		Route:   "/dashboard",
+		Guards:  []string{"public"},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "gowdk-generated-app/dashboard",
+			PackageName:  "dashboard",
+			FunctionName: "LoadDashboard",
+			Signature:    source.BackendSignatureLoadError,
+		},
+		HTML: `<main><h1>__USER__</h1></main>`,
+		LoadReplacements: []SSRLoadReplacement{
+			{Path: "user.name", Placeholder: "__USER__"},
+		},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "dashboard", "dashboard.go"), `package dashboard
+
+import (
+	gowdkresponse "github.com/cssbruno/gowdk/runtime/response"
+	"github.com/cssbruno/gowdk/runtime/ssr"
+)
+
+func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
+	return nil, gowdkresponse.NotFound("dashboard missing", nil)
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	response, err := waitForHTTPStatus("http://"+addr+"/dashboard", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	payload, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(payload)
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 status, got %d with body %s", response.StatusCode, body)
+	}
+	if strings.TrimSpace(body) != "<main>Missing</main>" {
+		t.Fatalf("unexpected expected-error body: %s", body)
 	}
 	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
 		t.Fatalf("unexpected cache control: %q", cacheControl)
@@ -8516,7 +8919,7 @@ func waitForHTTPStatusWithHeaders(url, method, body string, headers map[string]s
 // through the production manifest->IR path, asserting against exactly what the
 // generated-app pipeline derives.
 func actionEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]ActionEndpoint, error) {
-	return actionEndpointsFromIR(gwdkanalysis.BuildProgram(gowdk.Config{}, app))
+	return actionEndpointsFromIR(gowdk.Config{}, gwdkanalysis.BuildProgram(gowdk.Config{}, app))
 }
 
 func apiEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]APIEndpoint, error) {
@@ -8540,6 +8943,26 @@ func TestDeniedPageRoutesSelectsGuardlessStaticPages(t *testing.T) {
 	denied := deniedPageRoutes(options)
 	if len(denied) != 1 || denied[0] != "/" {
 		t.Fatalf("expected only the guardless static route /, got %#v", denied)
+	}
+}
+
+func TestDeniedPageRoutesLocalizeGuardlessStaticPages(t *testing.T) {
+	options := Options{
+		Config: gowdk.Config{
+			I18N: gowdk.I18NConfig{
+				Locales: []gowdk.LocaleConfig{{Code: "en"}, {Code: "pt"}},
+			},
+		},
+		IR: &gwdkir.Program{Pages: []gwdkir.Page{
+			{ID: "home", Route: "/"},
+			{ID: "dashboard", Route: "/dashboard"},
+		}},
+		SSR: []SSRRoute{{PageID: "dashboard", Route: "/en/dashboard"}},
+	}
+
+	denied := deniedPageRoutes(options)
+	if strings.Join(denied, ",") != "/en,/pt" {
+		t.Fatalf("expected localized guardless static routes, got %#v", denied)
 	}
 }
 

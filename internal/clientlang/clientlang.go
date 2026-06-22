@@ -374,10 +374,18 @@ type Handler struct {
 // Helper is a return-valued component-local function callable from
 // expressions. Helpers cannot be called directly as event handlers.
 type Helper struct {
-	Params     []string    `json:"params,omitempty"`
-	ParamTypes []ValueType `json:"-"`
-	ReturnType ValueType   `json:"-"`
-	Return     string      `json:"return"`
+	Params     []string      `json:"params,omitempty"`
+	ParamTypes []ValueType   `json:"-"`
+	ReturnType ValueType     `json:"-"`
+	Locals     []HelperLocal `json:"locals,omitempty"`
+	Return     string        `json:"return"`
+}
+
+// HelperLocal is a scalar local evaluated before a helper's final return.
+type HelperLocal struct {
+	Name string    `json:"name"`
+	Expr string    `json:"expr"`
+	Type ValueType `json:"-"`
 }
 
 // Bootstrap is the runtime payload emitted into data-gowdk-client when a
@@ -747,10 +755,38 @@ func (program Program) HelperMap() map[string]Helper {
 			Params:     params,
 			ParamTypes: paramTypes,
 			ReturnType: NormalizeType(function.ReturnType),
-			Return:     strings.TrimSpace(strings.TrimPrefix(function.Statements[0], "return ")),
+			Locals:     helperLocals(function),
+			Return:     helperReturnExpr(function),
 		}
 	}
 	return helpers
+}
+
+func helperLocals(function Function) []HelperLocal {
+	if len(function.Statements) <= 1 {
+		return nil
+	}
+	locals := make([]HelperLocal, 0, len(function.Statements)-1)
+	for _, statement := range function.Statements[:len(function.Statements)-1] {
+		local, ok := parseLetStatement(statement)
+		if !ok {
+			continue
+		}
+		locals = append(locals, HelperLocal{
+			Name: local.Name,
+			Expr: local.Expr,
+			Type: NormalizeType(local.Type),
+		})
+	}
+	return locals
+}
+
+func helperReturnExpr(function Function) string {
+	if len(function.Statements) == 0 {
+		return ""
+	}
+	statement := strings.TrimSpace(function.Statements[len(function.Statements)-1])
+	return strings.TrimSpace(strings.TrimPrefix(statement, "return "))
 }
 
 // RefMap returns declared DOM refs keyed by name.
@@ -1124,16 +1160,29 @@ func validateFunctionReturnShape(function Function) error {
 		}
 		return nil
 	}
-	if len(function.Statements) != 1 {
-		return parseErrorf(function.Span.StartLine, "client helper function %s must contain exactly one return statement", function.Name)
+	if len(function.Statements) == 0 {
+		return parseErrorf(function.Span.StartLine, "client helper function %s must contain a final return statement", function.Name)
 	}
-	statement := strings.TrimSpace(function.Statements[0])
+	for index, statement := range function.Statements[:len(function.Statements)-1] {
+		statement = strings.TrimSpace(statement)
+		if strings.Contains(statement, "await ") {
+			return parseErrorf(functionStatementLine(function, index), "client helper function %s cannot use await", function.Name)
+		}
+		local, ok := parseLetStatement(statement)
+		if !ok {
+			return parseErrorf(functionStatementLine(function, index), "client helper function %s can only declare `let name type = expr` before its final return", function.Name)
+		}
+		if !isSupportedLocalType(NormalizeType(local.Type)) {
+			return parseErrorf(functionStatementLine(function, index), "client helper function %s local %q uses unsupported type %q", function.Name, local.Name, local.Type)
+		}
+	}
+	statement := strings.TrimSpace(function.Statements[len(function.Statements)-1])
 	if !strings.HasPrefix(statement, "return ") {
-		return parseErrorf(functionStatementLine(function, 0), "client helper function %s must use `return expr`", function.Name)
+		return parseErrorf(functionStatementLine(function, len(function.Statements)-1), "client helper function %s must end with `return expr`", function.Name)
 	}
 	expr := strings.TrimSpace(strings.TrimPrefix(statement, "return "))
 	if expr == "" {
-		return parseErrorf(functionStatementLine(function, 0), "client helper function %s must return an expression", function.Name)
+		return parseErrorf(functionStatementLine(function, len(function.Statements)-1), "client helper function %s must return an expression", function.Name)
 	}
 	return nil
 }
@@ -1163,7 +1212,7 @@ func isSupportedReturnType(value string) bool {
 
 func isReservedFunctionName(name string) bool {
 	switch name {
-	case "append", "remove", "move", "clear", "len", "lower", "upper", "contains", "string", "int", "float":
+	case "append", "remove", "move", "clear", "len", "lower", "upper", "contains", "string", "int", "float", "switch", "match":
 		return true
 	default:
 		return false
@@ -1247,7 +1296,7 @@ func allowsInlineBraceExpression(statement string) bool {
 	}
 	if right, ok := strings.CutPrefix(strings.TrimSpace(statement), "return "); ok {
 		right = strings.TrimSpace(right)
-		if !strings.HasPrefix(right, "if ") {
+		if !isInlineBraceExpressionStart(right) {
 			return false
 		}
 		_, err := ParseExpr(right)
@@ -1258,11 +1307,17 @@ func allowsInlineBraceExpression(statement string) bool {
 		return false
 	}
 	right := strings.TrimSpace(statement[assign+1:])
-	if !strings.HasPrefix(right, "if ") {
+	if !isInlineBraceExpressionStart(right) {
 		return false
 	}
 	_, err := ParseExpr(right)
 	return err == nil
+}
+
+func isInlineBraceExpressionStart(expr string) bool {
+	return strings.HasPrefix(expr, "if ") ||
+		strings.HasPrefix(expr, "switch ") ||
+		strings.HasPrefix(expr, "match ")
 }
 
 func balancedInlineBraces(source string) bool {

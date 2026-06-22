@@ -33,7 +33,8 @@ func inspectInlineScriptFeaturePackage(page gwdkir.Page, target string) featureP
 	if len(files) == 0 {
 		return pkg
 	}
-	inputStructs := collectInputStructs(files)
+	inputStructs := collectInputStructs(files, importMaps)
+	resultStructs := collectResultStructs(files)
 	for index, file := range files {
 		imports := importMaps[index]
 		for _, declaration := range file.Decls {
@@ -45,8 +46,9 @@ func inspectInlineScriptFeaturePackage(page gwdkir.Page, target string) featureP
 				pkg.Unexported[fn.Name.Name] = true
 				continue
 			}
-			signature, inputType, inputPointer := backendSignature(fn.Type, imports)
+			signature, inputType, inputPointer, resultType, resultPointer := backendSignature(fn.Type, imports)
 			var inputFields []source.BackendInputField
+			var resultFields []source.BackendResultField
 			var supportMessage string
 			if signature == source.BackendSignatureActionForm || signature == source.BackendSignatureActionFormPtr {
 				inputStruct, ok := inputStructs[inputType]
@@ -60,12 +62,27 @@ func inspectInlineScriptFeaturePackage(page gwdkir.Page, target string) featureP
 					inputFields = append([]source.BackendInputField(nil), inputStruct.Fields...)
 				}
 			}
+			if signature == source.BackendSignatureLoadStruct || signature == source.BackendSignatureLoadStructError {
+				resultStruct, ok := resultStructs[resultType]
+				if !ok {
+					supportMessage = fmt.Sprintf("typed load result %s must be an exported struct in the same package", resultType)
+					signature = ""
+				} else if resultStruct.Message != "" {
+					supportMessage = resultStruct.Message
+					signature = ""
+				} else {
+					resultFields = append([]source.BackendResultField(nil), resultStruct.Fields...)
+				}
+			}
 			pkg.Functions[fn.Name.Name] = featureFunction{
 				Name:           fn.Name.Name,
 				Signature:      signature,
 				InputType:      inputType,
 				InputPointer:   inputPointer,
 				InputFields:    inputFields,
+				ResultType:     resultType,
+				ResultPointer:  resultPointer,
+				ResultFields:   resultFields,
 				SupportMessage: supportMessage,
 			}
 		}
@@ -73,17 +90,17 @@ func inspectInlineScriptFeaturePackage(page gwdkir.Page, target string) featureP
 	return pkg
 }
 
-func backendSignature(function *ast.FuncType, imports map[string]string) (source.BackendSignatureKind, string, bool) {
+func backendSignature(function *ast.FuncType, imports map[string]string) (source.BackendSignatureKind, string, bool, string, bool) {
 	if kind, inputType, inputPointer, ok := actionSignature(function, imports); ok {
-		return kind, inputType, inputPointer
+		return kind, inputType, inputPointer, "", false
 	}
 	if isAPISignature(function, imports) {
-		return source.BackendSignatureAPI, "", false
+		return source.BackendSignatureAPI, "", false, "", false
 	}
-	if signature, ok := loadSignature(function, imports); ok {
-		return signature, "", false
+	if signature, resultType, resultPointer, ok := loadSignature(function, imports); ok {
+		return signature, "", false, resultType, resultPointer
 	}
-	return "", "", false
+	return "", "", false, "", false
 }
 
 func actionSignature(function *ast.FuncType, imports map[string]string) (source.BackendSignatureKind, string, bool, bool) {
@@ -109,6 +126,9 @@ func actionSignature(function *ast.FuncType, imports map[string]string) (source.
 	second := function.Params.List[1].Type
 	if isSelector(second, imports, formImportPath, "Values") {
 		return source.BackendSignatureActionValues, "", false, true
+	}
+	if isSelector(second, imports, formImportPath, "Data") {
+		return source.BackendSignatureActionData, "", false, true
 	}
 	if ident, ok := second.(*ast.Ident); ok && ident.IsExported() {
 		return source.BackendSignatureActionForm, ident.Name, false, true
@@ -136,20 +156,46 @@ func isAPISignature(function *ast.FuncType, imports map[string]string) bool {
 		isError(function.Results.List[1].Type)
 }
 
-func loadSignature(function *ast.FuncType, imports map[string]string) (source.BackendSignatureKind, bool) {
+func loadSignature(function *ast.FuncType, imports map[string]string) (source.BackendSignatureKind, string, bool, bool) {
 	if function == nil || function.Params == nil || function.Results == nil {
-		return "", false
+		return "", "", false, false
 	}
 	if len(function.Params.List) != 1 || !isLoadContextSelector(function.Params.List[0].Type, imports) {
-		return "", false
+		return "", "", false, false
 	}
 	if len(function.Results.List) == 1 && isMapStringAny(function.Results.List[0].Type) {
-		return source.BackendSignatureLoad, true
+		return source.BackendSignatureLoad, "", false, true
 	}
 	if len(function.Results.List) == 2 && isMapStringAny(function.Results.List[0].Type) && isError(function.Results.List[1].Type) {
-		return source.BackendSignatureLoadError, true
+		return source.BackendSignatureLoadError, "", false, true
 	}
-	return "", false
+	resultCount := len(function.Results.List)
+	if resultCount != 1 && resultCount != 2 {
+		return "", "", false, false
+	}
+	if resultCount == 2 && !isError(function.Results.List[1].Type) {
+		return "", "", false, false
+	}
+	resultType, resultPointer, ok := loadResultIdent(function.Results.List[0].Type)
+	if !ok {
+		return "", "", false, false
+	}
+	if resultCount == 2 {
+		return source.BackendSignatureLoadStructError, resultType, resultPointer, true
+	}
+	return source.BackendSignatureLoadStruct, resultType, resultPointer, true
+}
+
+func loadResultIdent(expression ast.Expr) (string, bool, bool) {
+	if ident, ok := expression.(*ast.Ident); ok && ident.IsExported() {
+		return ident.Name, false, true
+	}
+	if pointer, ok := expression.(*ast.StarExpr); ok {
+		if ident, ok := pointer.X.(*ast.Ident); ok && ident.IsExported() {
+			return ident.Name, true, true
+		}
+	}
+	return "", false, false
 }
 
 func isMapStringAny(expression ast.Expr) bool {

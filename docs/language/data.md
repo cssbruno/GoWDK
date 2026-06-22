@@ -9,7 +9,7 @@ Generated JavaScript does not own page loading policy.
 | --- | --- | --- | --- |
 | `paths {}` | build time | concrete dynamic SPA routes | Literal records only. Required for dynamic SPA pages unless the page uses request-time rendering. |
 | `build {}` | build time | static page data | Literal records plus imported or same-package Go functions, with optional `gowdk.BuildParams` route params. |
-| `server {}` | request time | SSR page data | One same-package `Load<PageID>` function returns `map[string]any` data. |
+| `server {}` | request time | SSR page data | One same-package `Load<PageID>` function returns `map[string]any` data or an exported typed result struct. |
 | `act` | request time | POST/action endpoint behavior | Same-package Go handler returns `runtime/response.Response`. |
 | `api` | request time | API endpoint behavior | Same-package Go handler returns `runtime/response.Response`. |
 | `fragment` | request time | partial endpoint behavior | Same-package Go hook or static generated fragment body. |
@@ -25,10 +25,17 @@ Generated JavaScript does not own page loading policy.
 ```go
 func LoadDashboard(ssr.LoadContext) map[string]any
 func LoadDashboard(ssr.LoadContext) (map[string]any, error)
+func LoadDashboard(ssr.LoadContext) DashboardData
+func LoadDashboard(ssr.LoadContext) (DashboardData, error)
 ```
 
 - One `server {}` block can declare multiple fields. They come from the single
-  returned map, including dotted paths such as `user.name`.
+  returned map or typed result struct, including dotted paths such as
+  `user.name`.
+- Typed load result structs must be exported same-package structs. Exported
+  fields are visible by Go field name or `json` tag name; `json:"-"` hides a
+  field. Generated SSR adapters convert top-level struct fields into the
+  existing load-data map without runtime reflection.
 - Layouts do not have independent `server {}` data yet. Request-time layout data
   composition is planned.
 - Load redirects use `ssr.RedirectTo("/path")` or
@@ -37,8 +44,8 @@ func LoadDashboard(ssr.LoadContext) (map[string]any, error)
 - Not-found, forbidden, validation, and typed expected-error helpers for load
   are planned. Today, guards handle guarded access and other load errors use
   the generated SSR error-page path.
-- Generated load data is map-based today. Typed load data accessors are planned
-  after the load result contract is stable.
+- For typed load result structs, declared `server {}` field paths are checked
+  against exported result fields. Map-returning load functions remain dynamic.
 
 ## Invalidation And Refresh
 

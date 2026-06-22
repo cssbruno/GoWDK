@@ -45,6 +45,7 @@ func lowerLayoutSyntax(path string, src []byte, ast gwdkast.File) (gwdkir.Layout
 			if (layout.Span == source.SourceSpan{}) {
 				layout.Span = metadata.Span
 			}
+		case "error":
 		default:
 			return gwdkir.Layout{}, lineDiagnosticError(DiagnosticUnsupportedLayoutMetadata, lineNumber, sourceLineText(src, lineNumber), "unsupported metadata %s", metadata.Name)
 		}
@@ -52,6 +53,10 @@ func lowerLayoutSyntax(path string, src []byte, ast gwdkast.File) (gwdkir.Layout
 	for _, ref := range ast.Layouts {
 		layout.Layouts = append(layout.Layouts, ref.ID)
 		layout.LayoutSpans = append(layout.LayoutSpans, source.NamedSpan{Name: ref.ID, Span: ref.Span})
+	}
+	if ast.ErrorPage != nil {
+		layout.ErrorPage = ast.ErrorPage.Path
+		layout.ErrorPageSpan = ast.ErrorPage.Span
 	}
 	for _, block := range ast.Blocks {
 		if err := applyLayoutSyntaxBlock(src, &layout, block); err != nil {

@@ -38,6 +38,12 @@ type LoginInput struct {
 	ignored string
 }
 
+type UploadInput struct {
+	Avatar form.File `+"`form:\"avatar\"`"+`
+	Photos []form.File `+"`form:\"photos\"`"+`
+	Caption string `+"`form:\"caption\"`"+`
+}
+
 type BrokenInput struct {
 	Nested map[string]string `+"`form:\"nested\"`"+`
 }
@@ -55,6 +61,14 @@ func LoginPtr(context.Context, *LoginInput) (response.Response, error) {
 }
 
 func Raw(context.Context, form.Values) (response.Response, error) {
+	return response.Response{}, nil
+}
+
+func RawData(context.Context, form.Data) (response.Response, error) {
+	return response.Response{}, nil
+}
+
+func Upload(context.Context, UploadInput) (response.Response, error) {
 	return response.Response{}, nil
 }
 
@@ -89,6 +103,8 @@ func BrokenFragment(context.Context, *http.Request) (response.Response, error) {
 				{Name: "Login"},
 				{Name: "LoginPtr"},
 				{Name: "Raw"},
+				{Name: "RawData"},
+				{Name: "Upload"},
 				{Name: "Broken"},
 				{Name: "Bad"},
 				{Name: "Missing"},
@@ -111,8 +127,11 @@ func BrokenFragment(context.Context, *http.Request) (response.Response, error) {
 	assertBinding(t, bindings["Login"], source.BackendBindingBound, source.BackendSignatureActionForm, "LoginInput", false)
 	assertBinding(t, bindings["LoginPtr"], source.BackendBindingBound, source.BackendSignatureActionFormPtr, "LoginInput", true)
 	assertBinding(t, bindings["Raw"], source.BackendBindingBound, source.BackendSignatureActionValues, "", false)
+	assertBinding(t, bindings["RawData"], source.BackendBindingBound, source.BackendSignatureActionData, "", false)
+	assertBinding(t, bindings["Upload"], source.BackendBindingBound, source.BackendSignatureActionForm, "UploadInput", false)
 	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
 	assertInputFields(t, bindings["Login"].InputFields, "Email:email:string,Tags:tag:[]string,Remember:remember:bool,Age:age:int,Score:score:uint64,Code:code:byte,Letter:letter:rune")
+	assertInputFields(t, bindings["Upload"].InputFields, "Avatar:avatar:form.File,Photos:photos:[]form.File,Caption:caption:string")
 	if got := bindings["Broken"]; got.Status != source.BackendBindingUnsupportedSignature {
 		t.Fatalf("expected Broken unsupported signature, got %#v", got)
 	}
@@ -264,6 +283,28 @@ func LoadProfile(ssr.LoadContext) map[string]any {
 	return map[string]any{"user": "Ada"}
 }
 
+type TypedData struct {
+	User  UserData `+"`json:\"user\"`"+`
+	Count int      `+"`json:\"count\"`"+`
+	Users []UserData `+"`json:\"users\"`"+`
+}
+
+type UserData struct {
+	Name string `+"`json:\"name\"`"+`
+}
+
+type InvalidData struct {
+	UserData
+}
+
+func LoadTyped(ssr.LoadContext) (TypedData, error) {
+	return TypedData{}, nil
+}
+
+func LoadInvalid(ssr.LoadContext) InvalidData {
+	return InvalidData{}
+}
+
 func LoadBroken() map[string]any {
 	return nil
 }
@@ -289,9 +330,27 @@ func LoadBroken() map[string]any {
 			},
 		},
 		{
+			ID:     "typed",
+			Source: filepath.Join(root, "typed.page.gwdk"),
+			Route:  "/typed",
+			Render: gowdk.SSR,
+			Blocks: gwdkir.Blocks{
+				Server: true,
+			},
+		},
+		{
 			ID:     "broken",
 			Source: filepath.Join(root, "broken.page.gwdk"),
 			Route:  "/broken",
+			Render: gowdk.SSR,
+			Blocks: gwdkir.Blocks{
+				Server: true,
+			},
+		},
+		{
+			ID:     "invalid",
+			Source: filepath.Join(root, "invalid.page.gwdk"),
+			Route:  "/invalid",
 			Render: gowdk.SSR,
 			Blocks: gwdkir.Blocks{
 				Server: true,
@@ -311,8 +370,19 @@ func LoadBroken() map[string]any {
 	bindings := compilerBindingsByBlock(app.BackendBindings)
 	assertBinding(t, bindings["LoadDashboard"], source.BackendBindingBound, source.BackendSignatureLoadError, "", false)
 	assertBinding(t, bindings["LoadProfile"], source.BackendBindingBound, source.BackendSignatureLoad, "", false)
+	assertBinding(t, bindings["LoadTyped"], source.BackendBindingBound, source.BackendSignatureLoadStructError, "", false)
+	if bindings["LoadTyped"].ResultType != "TypedData" {
+		t.Fatalf("expected typed load result type, got %#v", bindings["LoadTyped"])
+	}
+	assertResultFields(t, bindings["LoadTyped"].ResultFields, "user:User:dashboard.UserData,User:User:dashboard.UserData,user.name:User.Name:string,user.Name:User.Name:string,User.name:User.Name:string,User.Name:User.Name:string,count:Count:int,Count:Count:int,users:Users:[]dashboard.UserData,Users:Users:[]dashboard.UserData")
+	if strings.Contains(resultFieldsString(bindings["LoadTyped"].ResultFields), "users.name") {
+		t.Fatalf("slice element fields must not be exposed as direct load paths: %#v", bindings["LoadTyped"].ResultFields)
+	}
 	if got := bindings["LoadBroken"]; got.Status != source.BackendBindingUnsupportedSignature {
 		t.Fatalf("expected LoadBroken unsupported signature, got %#v", got)
+	}
+	if got := bindings["LoadInvalid"]; got.Status != source.BackendBindingUnsupportedSignature || got.Signature != "" || !strings.Contains(got.Message, "cannot use embedded fields") {
+		t.Fatalf("expected LoadInvalid unsupported typed result metadata, got %#v", got)
 	}
 	if got := bindings["LoadMissing"]; got.Status != source.BackendBindingMissing {
 		t.Fatalf("expected LoadMissing missing binding, got %#v", got)
@@ -737,6 +807,22 @@ func assertInputFields(t *testing.T, fields []source.BackendInputField, expected
 	if strings.Join(parts, ",") != expected {
 		t.Fatalf("unexpected input fields: %s", strings.Join(parts, ","))
 	}
+}
+
+func assertResultFields(t *testing.T, fields []source.BackendResultField, expected string) {
+	t.Helper()
+	got := resultFieldsString(fields)
+	if got != expected {
+		t.Fatalf("unexpected result fields: %s", got)
+	}
+}
+
+func resultFieldsString(fields []source.BackendResultField) string {
+	parts := make([]string, 0, len(fields))
+	for _, field := range fields {
+		parts = append(parts, field.Path+":"+field.Selector+":"+field.Type)
+	}
+	return strings.Join(parts, ",")
 }
 
 func compilerBindingsByBlock(bindings []source.BackendBinding) map[string]source.BackendBinding {

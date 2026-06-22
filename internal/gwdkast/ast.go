@@ -91,7 +91,7 @@ type RevalidateDecl struct {
 	Span    source.SourceSpan
 }
 
-// ErrorPageDecl is a route-local generated error page path.
+// ErrorPageDecl is a generated error page path.
 type ErrorPageDecl struct {
 	Path string
 	Span source.SourceSpan

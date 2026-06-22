@@ -118,7 +118,27 @@ bounds for sized integer types. It does not synthesize `required` because
 requiredness is enforced from literal form constraints, not from Go field type
 metadata.
 
-File uploads are intentionally user-owned. Direct `input type="file"` controls
-and multipart generated action forms are rejected. Use a normal Go API/server
-handler when uploads need explicit body limits, storage, validation, cleanup,
-auth, and logging policy.
+Multipart action uploads use normal HTML forms with explicit generated policy:
+
+```gwdk
+<form g:post={UploadAvatar} enctype="multipart/form-data">
+  <input name="avatar" type="file" required
+    g:max-file-size="1048576"
+    g:max-files="1"
+    accept="image/png,image/jpeg" />
+  <button>Upload</button>
+</form>
+```
+
+Each direct file control must declare literal `g:max-file-size`, `g:max-files`,
+and MIME `accept` entries. Exact MIME types and `type/*` wildcards are allowed;
+extension-only accept entries such as `.png` are rejected because generated
+server policy checks submitted content types. The generated action adapter
+parses multipart requests under `Build.BodyLimits.ActionBytes`, enforces the
+per-file policy, preserves CSRF behavior, and decodes uploads into `form.File`
+or `[]form.File` fields on typed action input structs. Low-level handlers can
+accept `form.Data`.
+
+Storage, content scanning, persistence, cleanup beyond parser temporary files,
+authorization, and domain validation remain user-owned Go behavior. Stream file
+content with `file.Open()` during the request.

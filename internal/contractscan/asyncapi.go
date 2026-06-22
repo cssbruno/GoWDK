@@ -227,6 +227,11 @@ func asyncAPISchemaForGoType(goType string) asyncAPISchema {
 	case source.BackendInputFieldKindStringSlice:
 		item := asyncAPISchema{Type: "string"}
 		return asyncAPISchema{Type: "array", Items: &item}
+	case source.BackendInputFieldKindFile:
+		return asyncAPISchema{Type: "string", Format: "binary"}
+	case source.BackendInputFieldKindFileSlice:
+		item := asyncAPISchema{Type: "string", Format: "binary"}
+		return asyncAPISchema{Type: "array", Items: &item}
 	case source.BackendInputFieldKindString:
 		return asyncAPISchema{Type: "string"}
 	default:

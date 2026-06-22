@@ -632,8 +632,12 @@ func guardlessBuildTimeRoutes(options Options, dynamic bool) []string {
 		return nil
 	}
 	ssrRoutes := map[string]bool{}
+	ssrPageIDs := map[string]bool{}
 	for _, route := range options.SSR {
 		ssrRoutes[route.Route] = true
+		if route.PageID != "" {
+			ssrPageIDs[route.PageID] = true
+		}
 	}
 	var routes []string
 	seen := map[string]bool{}
@@ -641,14 +645,19 @@ func guardlessBuildTimeRoutes(options Options, dynamic bool) []string {
 		if len(page.Guards) != 0 || page.Route == "" {
 			continue
 		}
-		if ssrRoutes[page.Route] || seen[page.Route] {
+		if ssrRoutes[page.Route] || ssrPageIDs[page.ID] {
 			continue
 		}
 		if strings.Contains(page.Route, "{") != dynamic {
 			continue
 		}
-		seen[page.Route] = true
-		routes = append(routes, page.Route)
+		for _, localized := range options.Config.I18N.LocalizedRoutes(page.Route) {
+			if seen[localized.Route] {
+				continue
+			}
+			seen[localized.Route] = true
+			routes = append(routes, localized.Route)
+		}
 	}
 	return routes
 }
@@ -716,6 +725,11 @@ func customErrorPagePaths(options Options) []string {
 	for _, route := range options.SSR {
 		if route.ErrorPage != "" {
 			seen[route.ErrorPage] = true
+		}
+		for _, errorPage := range route.LayoutErrorPages {
+			if errorPage.ErrorPage != "" {
+				seen[errorPage.ErrorPage] = true
+			}
 		}
 	}
 	paths := make([]string, 0, len(seen))

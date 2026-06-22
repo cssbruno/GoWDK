@@ -1,0 +1,24 @@
+package endpoints
+
+page endpoints.upload
+route "/endpoints/upload"
+guard public
+
+act UploadAvatar POST "/endpoints/upload"
+
+view {
+  <main>
+    <h1>Multipart action upload</h1>
+    <p>The generated action adapter enforces file count, size, and MIME policy before the Go handler streams the file.</p>
+
+    <form g:post={UploadAvatar} enctype="multipart/form-data" g:target="#upload-result" g:swap="innerHTML">
+      <label>Caption <input name="caption" maxlength="80" /></label>
+      <label>Avatar <input name="avatar" type="file" required g:max-file-size="1048576" g:max-files="1" accept="image/png,text/plain" /></label>
+      <button type="submit">Upload</button>
+    </form>
+
+    <section id="upload-result">
+      <p>No file has been uploaded.</p>
+    </section>
+  </main>
+}

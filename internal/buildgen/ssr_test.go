@@ -3,12 +3,14 @@ package buildgen
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 )
 
 func TestBuildSkipsRequestTimePagesAndKeepsSPAArtifacts(t *testing.T) {
@@ -461,6 +463,60 @@ func TestSSRArtifactsRenderLoadPlaceholders(t *testing.T) {
 	}
 }
 
+func TestSSRArtifactsPreserveTypedLoadResultMetadata(t *testing.T) {
+	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}
+	resultFields := []source.BackendResultField{
+		{Path: "user", Selector: "User", Type: "dashboard.UserData"},
+		{Path: "User", Selector: "User", Type: "dashboard.UserData"},
+		{Path: "user.name", Selector: "User.Name", Type: "string"},
+		{Path: "User.Name", Selector: "User.Name", Type: "string"},
+	}
+	program := gwdkir.Program{Pages: []gwdkir.Page{{
+		ID:     "dashboard",
+		Route:  "/dashboard",
+		Render: gowdk.SSR,
+		LoadBinding: gwdkir.Binding{
+			Status:        source.BackendBindingBound,
+			ImportPath:    "example.com/app/dashboard",
+			PackageName:   "dashboard",
+			FunctionName:  "LoadDashboard",
+			Signature:     source.BackendSignatureLoadStructError,
+			ResultType:    "DashboardData",
+			ResultPointer: true,
+			ResultFields:  resultFields,
+		},
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `=> { user.name }`,
+			View:       true,
+			ViewBody:   `<main>{user.name}</main>`,
+		},
+	}}}
+
+	artifacts, err := SSRArtifactsFromIR(config, program, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected one artifact, got %#v", artifacts)
+	}
+	binding := artifacts[0].LoadBinding
+	if binding.ResultType != "DashboardData" || !binding.ResultPointer {
+		t.Fatalf("typed result metadata was not preserved: %#v", binding)
+	}
+	if got := resultFieldsString(binding.ResultFields); got != resultFieldsString(resultFields) {
+		t.Fatalf("typed result fields were not preserved: %s", got)
+	}
+}
+
+func resultFieldsString(fields []source.BackendResultField) string {
+	parts := make([]string, 0, len(fields))
+	for _, field := range fields {
+		parts = append(parts, field.Path+":"+field.Selector+":"+field.Type)
+	}
+	return strings.Join(parts, ",")
+}
+
 func TestSSRArtifactsMarkLoadURLPlaceholders(t *testing.T) {
 	outputDir := t.TempDir()
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
@@ -555,5 +611,58 @@ func TestSSRArtifactsComposePageLoadThroughLayouts(t *testing.T) {
 	}
 	if !strings.Contains(artifact.HTML, "<header>"+placeholder+"</header><main>"+placeholder+"</main>") {
 		t.Fatalf("expected layout and page to compose around page load data, got:\n%s", artifact.HTML)
+	}
+}
+
+func TestSSRArtifactsIncludeLayoutErrorPageBoundaries(t *testing.T) {
+	outputDir := t.TempDir()
+	app := gwdkanalysis.Sources{
+		Pages: []gwdkir.Page{{
+			ID:      "dashboard",
+			Route:   "/dashboard",
+			Render:  gowdk.SSR,
+			Layouts: []string{"section"},
+			Blocks: gwdkir.Blocks{
+				Server:     true,
+				ServerBody: `=> { user.name }`,
+				View:       true,
+				ViewBody:   `<main>{user.name}</main>`,
+			},
+		}},
+		Layouts: []gwdkir.Layout{
+			{
+				ID:        "root",
+				ErrorPage: "errors/root.html",
+				Blocks: gwdkir.Blocks{
+					View:     true,
+					ViewBody: `<body><slot /></body>`,
+				},
+			},
+			{
+				ID:        "section",
+				Layouts:   []string{"root"},
+				ErrorPage: "errors/section.html",
+				Blocks: gwdkir.Blocks{
+					View:     true,
+					ViewBody: `<section><slot /></section>`,
+				},
+			},
+		},
+	}
+
+	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected one artifact, got %#v", artifacts)
+	}
+	got := artifacts[0].LayoutErrorPages
+	want := []LayoutErrorPage{
+		{Layout: "section", ErrorPage: "errors/section.html"},
+		{Layout: "root", ErrorPage: "errors/root.html"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected layout error pages:\n got %#v\nwant %#v", got, want)
 	}
 }

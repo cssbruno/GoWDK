@@ -100,8 +100,8 @@ type EndpointEntry struct {
 // endpoint. It expresses more than a single byte cap: it distinguishes the raw
 // body cap from decoded-object and multipart caps, records how compressed
 // bodies are bounded, and records whether the cap is installed before the body
-// is parsed (so a body limit precedes CSRF token parsing and handler
-// execution). BodyLimitBytes on the parent entry mirrors RawBodyBytes.
+// is parsed (so a body limit precedes generated guards, CSRF token parsing, and
+// handler execution). BodyLimitBytes on the parent entry mirrors RawBodyBytes.
 type RequestLimitPosture struct {
 	EndpointKind           string `json:"endpointKind,omitempty"`
 	RawBodyBytes           int64  `json:"rawBodyBytes"`

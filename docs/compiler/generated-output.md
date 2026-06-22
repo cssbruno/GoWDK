@@ -47,6 +47,10 @@ Implemented today:
   declare the layout.
 - Dynamic app routes with literal `paths {}` declarations are expanded by
   `gowdk build`.
+- Configured `I18N.Locales` expand generated page routes once per locale.
+  Localized SPA output receives locale-prefixed paths, generated HTML gets
+  `<html lang="...">`, `gowdk-routes.json` records the route `locale`, and
+  `gowdk.BuildParams.Locale` is passed to Go build helpers.
 - Literal dynamic route params can render in the current literal `view {}`
   interpolation subset.
 - Literal `build {}` data can render in the current literal `view {}`
@@ -174,10 +178,12 @@ Implemented today:
   generated request-time slice. Dynamic route params are substituted into
   generated SSR placeholders with request-time HTML escaping. Declared
   `server { => { field } }` pages call same-package Go load functions named
-  `Load<PageID>` with `ssr.LoadContext` and replace declared load placeholders
-  with escaped returned values. Load errors that wrap `ssr.RedirectError`
-  become no-store local redirects; other load failures use generated error-page
-  output.
+  `Load<PageID>` with `ssr.LoadContext`. Load functions can return
+  `map[string]any` or exported same-package typed result structs; generated
+  adapters convert typed struct results into the existing load-data map and
+  replace declared load placeholders with escaped returned values. Load errors
+  that wrap `ssr.RedirectError` become no-store local redirects; other load
+  failures use generated error-page output.
 - Request-time SSR and hybrid pages compose declared layouts before rendering
   the generated response, and load placeholders are shared across page and
   layout markup. Generated route metadata records the layout stack.
@@ -197,6 +203,14 @@ Implemented today:
   an intentional client message by returning `response.HandlerError` with an
   explicit `Message`; generated 4xx handler errors keep their application
   message contract.
+- Generated SSR load errors honor `response.HandlerStatus`, so typed expected
+  errors such as `response.NotFound`, `response.Forbidden`,
+  `response.ValidationFailed`, and `response.ServerError` write no-store
+  404/403/422/500 responses instead of forcing every load error to 500.
+- Generated SSR route metadata includes layout-level error pages declared by
+  `.layout.gwdk` files. Runtime 500 boundaries select route-local error pages,
+  then nearest layout error pages, then outer layout error pages, then
+  `500.html`.
 - Generated apps can return partial fragment responses from
   action handlers for `X-GOWDK-Partial` requests and standalone
   `fragment Name GET "/path" "#target" { ... }` routes. Standalone fragment
@@ -206,8 +220,10 @@ Implemented today:
   known components at app generation time. If the source package exports
   `func Name(context.Context) (response.Response, error)`, the generated
   fragment handler calls that request-time hook instead of the static fallback.
-- Generated app action endpoint extraction rejects direct file inputs and
-  multipart `g:post` forms. Uploads belong in user-owned API/server handlers.
+- Generated app action endpoint extraction accepts multipart `g:post` forms
+  only when direct file inputs declare literal `g:max-file-size`,
+  `g:max-files`, and MIME `accept` policy. Upload storage, scanning, and
+  persistence remain user-owned handler behavior.
 - `internal/compiler` resolves same-package action, API, fragment, and SSR load
   handlers through `go/packages` and `go/types`, so build tags, renamed imports,
   type aliases, and package load errors follow ordinary Go package semantics.
@@ -347,8 +363,9 @@ Action handlers decode allowlisted form fields into named input wrappers,
 cap request bodies before parsing, preserve repeated values, return HTTP 413
 for oversized submissions, return HTTP 400 for unexpected fields, and return
 HTTP 422 for generated required-field validation failures. Direct file inputs
-and multipart action forms are rejected before generated app output because
-uploads are user-owned API/server behavior. For
+inside multipart action forms decode to `form.File` or `[]form.File` only when
+the view declares explicit file count, size, and MIME policy; generated code
+enforces those limits before user handlers run. For
 partial requests, generated handlers can return the first parsed action
 fragment matching `X-GOWDK-Target` and expose fragment target/swap metadata in
 headers. Feature-bound generated action handlers can call no-input,
@@ -408,6 +425,8 @@ as `/blog/hello-gowdk`. The optional `endpoints` array records generated
 request-time action, API, fragment, command, and query adapter routes; it does
 not point at static files. Dynamic endpoint routes also include
 `dynamicParams` and typed `routeParams` when route parameters are declared.
+When locale routing is enabled, localized page entries also include `locale`.
+Endpoint routes are not rewritten by locale config.
 
 ## Current App Asset Manifest
 

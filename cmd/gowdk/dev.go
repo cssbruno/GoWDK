@@ -17,6 +17,15 @@ import (
 
 const defaultDevOutputDir = "gowdk_cache"
 
+// gowdkListenerFDEnv names the variable that hands an inherited listening socket
+// to the generated child process. It mirrors the runtime's reader (see
+// runtime/app: GOWDK_LISTENER_FD).
+const gowdkListenerFDEnv = "GOWDK_LISTENER_FD"
+
+// devRuntimeListenerFD is the descriptor number the child sees for the inherited
+// socket: exec.Cmd places ExtraFiles[0] at fd 3, after stdin/stdout/stderr.
+const devRuntimeListenerFD = 3
+
 func dev(args []string) error {
 	options, err := parseDevOptions(args)
 	if err != nil {
@@ -249,7 +258,7 @@ func (serve *devServeState) apply(state devBuildState, absDir string) error {
 
 func (serve *devServeState) useStatic(absDir string) error {
 	if serve.process != nil {
-		serve.process.stop()
+		serve.process.close()
 		serve.process = nil
 	}
 	if serve.server != nil && serve.staticDir == absDir {
@@ -279,20 +288,24 @@ func (serve *devServeState) useRuntime(runtime devRuntime) error {
 		serve.staticDir = ""
 	}
 	if serve.server == nil {
-		targetAddr, err := freeDevRuntimeAddr()
+		listener, targetAddr, err := reserveDevRuntimeAddr()
 		if err != nil {
 			return err
 		}
 		server, err := startDevRuntimeProxy(serve.addr, targetAddr, serve.reload)
 		if err != nil {
+			if listener != nil {
+				listener.Close()
+			}
 			return err
 		}
 		serve.server = server
 		serve.staticDir = ""
 		if serve.process == nil {
-			serve.process = &devRuntimeProcess{addr: targetAddr}
+			serve.process = &devRuntimeProcess{addr: targetAddr, listener: listener}
 		} else {
 			serve.process.addr = targetAddr
+			serve.process.listener = listener
 		}
 	}
 	if serve.process == nil {
@@ -335,7 +348,7 @@ func (serve *devServeState) runtimeAddr() string {
 
 func (serve *devServeState) close() {
 	if serve.process != nil {
-		serve.process.stop()
+		serve.process.close()
 		serve.process = nil
 	}
 	if serve.server != nil {
@@ -400,11 +413,32 @@ func stopDevStaticServer(server *http.Server) {
 	}
 }
 
-// freeDevRuntimeAddr returns a free loopback address for the generated app to
-// bind. The probe listener is closed before the address is handed back, so a
-// brief TOCTOU window remains in which another process could claim the port
-// before the generated binary binds it. Fully closing it requires handing the
-// bound listener to the child process (socket activation), tracked separately.
+// reserveDevRuntimeAddr picks the loopback address the generated app will serve
+// on. On platforms that support descriptor inheritance it returns a listener
+// bound to that address, kept open for the dev session and handed to the child
+// (see devRuntimeProcess.restart); the port is therefore never released between
+// being chosen and being served, closing the TOCTOU window. Elsewhere the
+// listener is nil and the caller falls back to the bound address alone.
+func reserveDevRuntimeAddr() (net.Listener, string, error) {
+	listener, err := acquireDevRuntimeListener()
+	if err != nil {
+		return nil, "", err
+	}
+	if listener != nil {
+		return listener, listener.Addr().String(), nil
+	}
+	addr, err := freeDevRuntimeAddr()
+	if err != nil {
+		return nil, "", err
+	}
+	return nil, addr, nil
+}
+
+// freeDevRuntimeAddr returns a free loopback address by probing with a throwaway
+// listener that is closed before the address is handed back. This leaves a brief
+// TOCTOU window in which another process could claim the port before the
+// generated binary binds it, so it is only used as a fallback on platforms
+// without descriptor inheritance (see reserveDevRuntimeAddr).
 func freeDevRuntimeAddr() (string, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -420,6 +454,7 @@ func freeDevRuntimeAddr() (string, error) {
 type devRuntimeProcess struct {
 	plan     devRuntime
 	addr     string
+	listener net.Listener
 	mu       sync.Mutex
 	cmd      *exec.Cmd
 	waitDone chan error
@@ -431,6 +466,19 @@ func (process *devRuntimeProcess) restart() error {
 	command.Env = append(os.Environ(), "GOWDK_ADDR="+process.addr)
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
+	if process.listener != nil {
+		// Hand the already-bound socket to the child so it serves on the same
+		// port the parent reserved, without rebinding (and without a window in
+		// which the port could be reclaimed). A fresh duplicate is passed on
+		// every restart because the previous child's copy dies with it.
+		file, err := listenerInheritFile(process.listener)
+		if err != nil {
+			return fmt.Errorf("share dev runtime listener: %w", err)
+		}
+		defer file.Close()
+		command.ExtraFiles = []*os.File{file}
+		command.Env = append(command.Env, fmt.Sprintf("%s=%d", gowdkListenerFDEnv, devRuntimeListenerFD))
+	}
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("start generated app: %w", err)
 	}
@@ -453,6 +501,23 @@ func (process *devRuntimeProcess) stop() {
 	}
 	if waitDone != nil {
 		<-waitDone
+	}
+}
+
+// close tears the process down for good: it stops the child and releases the
+// reserved listener. Unlike stop (used between restarts), it must only be called
+// when the runtime is being abandoned, since the listener reservation is what
+// keeps the port held across restarts.
+func (process *devRuntimeProcess) close() {
+	process.stop()
+	process.mu.Lock()
+	listener := process.listener
+	process.listener = nil
+	process.mu.Unlock()
+	if listener != nil {
+		if err := listener.Close(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
 	}
 }
 

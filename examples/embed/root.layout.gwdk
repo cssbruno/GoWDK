@@ -1,0 +1,7 @@
+package embed
+
+view {
+  <div>
+    <slot />
+  </div>
+}

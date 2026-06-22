@@ -23,6 +23,7 @@
     token: new Set(expressionSpec.tokenOperators || [])
   });
   const builtinSpecByName = Object.freeze(Object.fromEntries((expressionSpec.builtins || []).map((builtin) => [builtin.name, builtin])));
+  const expressionSwitchKeywords = new Set(expressionSpec.switchKeywords || []);
   const registry = window.__gowdkIslandRegistry || (window.__gowdkIslandRegistry = { components: Object.create(null), roots: new WeakMap() });
   window.__gowdkMountIslands = () => {
     Object.keys(registry.components).forEach((name) => mountComponentIsland(name, document));
@@ -59,6 +60,9 @@
     const nextScope = Object.create(null);
     (helper.params || []).forEach((param, index) => {
       nextScope[param] = args[index];
+    });
+    (helper.locals || []).forEach((local) => {
+      nextScope[local.name] = valueOf(local.expr || "", state, nextScope, helpers, stack.concat([name]));
     });
     return valueOf(helper.return || "", state, nextScope, helpers, stack.concat([name]));
   }
@@ -300,7 +304,37 @@
           this.expect("}");
           return { kind: "if", cond, thenExpr, elseExpr };
         }
+        if (this.peek().kind === "ident" && expressionSwitchKeywords.has(this.peek().value)) {
+          return this.parseSwitch();
+        }
         return this.parseOr();
+      },
+      parseSwitch() {
+        const keyword = this.expect("ident").value;
+        const value = this.parseOr();
+        this.expect("{");
+        const cases = [];
+        let defaultExpr = null;
+        for (;;) {
+          if (this.match("}")) {
+            if (!cases.length) throw new Error(keyword + " expression must contain at least one case");
+            if (!defaultExpr) throw new Error(keyword + " expression must contain a default branch");
+            return { kind: "switch", keyword, value, cases, defaultExpr };
+          }
+          if (this.match("ident", "case")) {
+            const match = this.parseConditional();
+            this.expect(":");
+            cases.push({ match, value: this.parseConditional() });
+            continue;
+          }
+          if (this.match("ident", "default")) {
+            if (defaultExpr) throw new Error(keyword + " expression must contain only one default branch");
+            this.expect(":");
+            defaultExpr = this.parseConditional();
+            continue;
+          }
+          throw new Error("expected case or default in " + keyword + " expression");
+        }
       },
       parseOr() {
         let expr = this.parseAnd();
@@ -490,6 +524,15 @@
         return requireBool("if", evalExpression(expr.cond, state, scope, helpers, stack))
           ? evalExpression(expr.thenExpr, state, scope, helpers, stack)
           : evalExpression(expr.elseExpr, state, scope, helpers, stack);
+      case "switch": {
+        const value = evalExpression(expr.value, state, scope, helpers, stack);
+        for (const item of expr.cases) {
+          if (deepEqual(value, evalExpression(item.match, state, scope, helpers, stack))) {
+            return evalExpression(item.value, state, scope, helpers, stack);
+          }
+        }
+        return evalExpression(expr.defaultExpr, state, scope, helpers, stack);
+      }
       default:
         throw new Error("unknown expression node");
     }

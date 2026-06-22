@@ -32,6 +32,10 @@ packages, and tooling contracts may change before 1.0.
 - Request-time URL templates now validate `srcset` per candidate and encode SSR
   route/load/server-region substitutions when they appear inside URL-bearing
   attributes.
+- The dev server keeps the generated app's runtime port reserved and hands the
+  already-bound socket to the child process, closing a TOCTOU window in which
+  the port could be reclaimed between being probed and being bound (on platforms
+  that support file-descriptor inheritance; others keep the previous probe).
 
 ## v0.7.0 - 2026-06-17
 

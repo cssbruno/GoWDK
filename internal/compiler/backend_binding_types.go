@@ -57,12 +57,15 @@ type featureFunction struct {
 	InputType      string
 	InputPointer   bool
 	InputFields    []source.BackendInputField
+	ResultType     string
+	ResultPointer  bool
+	ResultFields   []source.BackendResultField
 	SupportMessage string
 }
 
 func (function featureFunction) Action() bool {
 	switch function.Signature {
-	case source.BackendSignatureAction0, source.BackendSignatureActionValues, source.BackendSignatureActionForm, source.BackendSignatureActionFormPtr:
+	case source.BackendSignatureAction0, source.BackendSignatureActionValues, source.BackendSignatureActionData, source.BackendSignatureActionForm, source.BackendSignatureActionFormPtr:
 		return true
 	default:
 		return false
@@ -78,7 +81,12 @@ func (function featureFunction) Fragment() bool {
 }
 
 func (function featureFunction) Load() bool {
-	return function.Signature == source.BackendSignatureLoad || function.Signature == source.BackendSignatureLoadError
+	switch function.Signature {
+	case source.BackendSignatureLoad, source.BackendSignatureLoadError, source.BackendSignatureLoadStruct, source.BackendSignatureLoadStructError:
+		return true
+	default:
+		return false
+	}
 }
 
 func bindingPackageName(pkgName string, fallback string) string {
@@ -113,5 +121,10 @@ func packageLabel(pkg featurePackage) string {
 
 type inputStruct struct {
 	Fields  []source.BackendInputField
+	Message string
+}
+
+type resultStruct struct {
+	Fields  []source.BackendResultField
 	Message string
 }

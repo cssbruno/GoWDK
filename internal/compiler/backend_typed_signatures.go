@@ -6,17 +6,17 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func backendTypedSignature(function *types.Signature, pkg *types.Package) (source.BackendSignatureKind, string, bool, []source.BackendInputField, string) {
+func backendTypedSignature(function *types.Signature, pkg *types.Package) (source.BackendSignatureKind, string, bool, []source.BackendInputField, string, bool, []source.BackendResultField, string) {
 	if kind, inputType, inputPointer, inputFields, supportMessage, ok := typedActionSignature(function, pkg); ok {
-		return kind, inputType, inputPointer, inputFields, supportMessage
+		return kind, inputType, inputPointer, inputFields, "", false, nil, supportMessage
 	}
 	if isTypedAPISignature(function) {
-		return source.BackendSignatureAPI, "", false, nil, ""
+		return source.BackendSignatureAPI, "", false, nil, "", false, nil, ""
 	}
-	if signature, ok := typedLoadSignature(function); ok {
-		return signature, "", false, nil, ""
+	if signature, resultType, resultPointer, resultFields, supportMessage, ok := typedLoadSignature(function, pkg); ok {
+		return signature, "", false, nil, resultType, resultPointer, resultFields, supportMessage
 	}
-	return "", "", false, nil, ""
+	return "", "", false, nil, "", false, nil, ""
 }
 
 func typedActionSignature(function *types.Signature, pkg *types.Package) (source.BackendSignatureKind, string, bool, []source.BackendInputField, string, bool) {
@@ -43,6 +43,9 @@ func typedActionSignature(function *types.Signature, pkg *types.Package) (source
 	second := params.At(1).Type()
 	if isTypedNamed(second, formImportPath, "Values") {
 		return source.BackendSignatureActionValues, "", false, nil, "", true
+	}
+	if isTypedNamed(second, formImportPath, "Data") {
+		return source.BackendSignatureActionData, "", false, nil, "", true
 	}
 	inputName, inputPointer, inputType, ok := typedLocalInputType(second, pkg)
 	if !ok {
@@ -74,22 +77,41 @@ func isTypedAPISignature(function *types.Signature) bool {
 		isTypedError(results.At(1).Type())
 }
 
-func typedLoadSignature(function *types.Signature) (source.BackendSignatureKind, bool) {
+func typedLoadSignature(function *types.Signature, pkg *types.Package) (source.BackendSignatureKind, string, bool, []source.BackendResultField, string, bool) {
 	if function == nil || function.Params() == nil || function.Results() == nil {
-		return "", false
+		return "", "", false, nil, "", false
 	}
 	params := function.Params()
 	results := function.Results()
 	if params.Len() != 1 || !isTypedLoadContext(params.At(0).Type()) {
-		return "", false
+		return "", "", false, nil, "", false
 	}
 	if results.Len() == 1 && isTypedMapStringAny(results.At(0).Type()) {
-		return source.BackendSignatureLoad, true
+		return source.BackendSignatureLoad, "", false, nil, "", true
 	}
 	if results.Len() == 2 && isTypedMapStringAny(results.At(0).Type()) && isTypedError(results.At(1).Type()) {
-		return source.BackendSignatureLoadError, true
+		return source.BackendSignatureLoadError, "", false, nil, "", true
 	}
-	return "", false
+	resultCount := results.Len()
+	if resultCount != 1 && resultCount != 2 {
+		return "", "", false, nil, "", false
+	}
+	if resultCount == 2 && !isTypedError(results.At(1).Type()) {
+		return "", "", false, nil, "", false
+	}
+	resultType, resultPointer, namedType, ok := typedLocalResultType(results.At(0).Type(), pkg)
+	if !ok {
+		return "", "", false, nil, "", false
+	}
+	resultStruct := backendTypedResultStruct(resultType, namedType)
+	signature := source.BackendSignatureLoadStruct
+	if resultCount == 2 {
+		signature = source.BackendSignatureLoadStructError
+	}
+	if resultStruct.Message != "" {
+		return "", resultType, resultPointer, nil, resultStruct.Message, true
+	}
+	return signature, resultType, resultPointer, append([]source.BackendResultField(nil), resultStruct.Fields...), "", true
 }
 
 func typedLocalInputType(typ types.Type, pkg *types.Package) (string, bool, types.Type, bool) {
@@ -110,6 +132,23 @@ func typedLocalInputType(typ types.Type, pkg *types.Package) (string, bool, type
 		return "", false, nil, true
 	}
 	return named.Obj().Name(), inputPointer, named, true
+}
+
+func typedLocalResultType(typ types.Type, pkg *types.Package) (string, bool, types.Type, bool) {
+	resultPointer := false
+	typ = types.Unalias(typ)
+	if pointer, ok := typ.(*types.Pointer); ok {
+		resultPointer = true
+		typ = types.Unalias(pointer.Elem())
+	}
+	named, ok := typ.(*types.Named)
+	if !ok || named.Obj() == nil || !named.Obj().Exported() {
+		return "", false, nil, false
+	}
+	if pkg == nil || named.Obj().Pkg() == nil || named.Obj().Pkg().Path() != pkg.Path() {
+		return "", false, nil, false
+	}
+	return named.Obj().Name(), resultPointer, named, true
 }
 
 func isTypedNamed(typ types.Type, importPath, name string) bool {

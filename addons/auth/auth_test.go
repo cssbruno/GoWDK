@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -89,6 +90,24 @@ func TestHashPasswordWithIterationsRejectsInvalidIterations(t *testing.T) {
 	}
 	if _, err := (PBKDF2Hasher{Iterations: MaxIterations + 1}).HashPassword("same"); err == nil {
 		t.Fatalf("PBKDF2Hasher accepted iterations=%d", MaxIterations+1)
+	}
+}
+
+func TestDecodeHashEnforcesIterationBoundsBeforeDerivation(t *testing.T) {
+	canonicalSalt := base64.RawStdEncoding.EncodeToString([]byte(strings.Repeat("s", pbkdf2SaltLength)))
+	canonicalKey := base64.RawStdEncoding.EncodeToString([]byte(strings.Repeat("k", pbkdf2KeyLength)))
+	encoded := "pbkdf2-sha256$" + strconv.Itoa(MaxIterations) + "$" + canonicalSalt + "$" + canonicalKey
+	iterations, salt, key, err := decodeHash(encoded)
+	if err != nil {
+		t.Fatalf("decode hash at max iterations: %v", err)
+	}
+	if iterations != MaxIterations || len(salt) != pbkdf2SaltLength || len(key) != pbkdf2KeyLength {
+		t.Fatalf("decoded hash = iterations %d salt %d key %d", iterations, len(salt), len(key))
+	}
+
+	tooHigh := "pbkdf2-sha256$" + strconv.Itoa(MaxIterations+1) + "$" + canonicalSalt + "$" + canonicalKey
+	if _, _, _, err := decodeHash(tooHigh); !errors.Is(err, ErrInvalidHash) {
+		t.Fatalf("decode hash above max error = %v, want %v", err, ErrInvalidHash)
 	}
 }
 

@@ -135,6 +135,30 @@ func TestIslandExpressionRuntimeMatchesGoEvaluator(t *testing.T) {
 			State:  map[string]any{},
 		},
 		{
+			Name:   "round collapses negative zero",
+			Expr:   `string(round(-0.001, 2))`,
+			Values: map[string]string{},
+			State:  map[string]any{},
+		},
+		{
+			Name:   "fixed rejects oversized value",
+			Expr:   `fixed(Big, 0)`,
+			Values: map[string]string{"Big": "1000000000000000000000"},
+			State:  map[string]any{"Big": 1e21},
+		},
+		{
+			Name:   "percent rejects non-number",
+			Expr:   `percent(Flag, 1)`,
+			Values: map[string]string{"Flag": "true"},
+			State:  map[string]any{"Flag": true},
+		},
+		{
+			Name:   "format time rejects unsafe timestamp",
+			Expr:   `formatTime(Big, "YYYY")`,
+			Values: map[string]string{"Big": "10000000000000000"},
+			State:  map[string]any{"Big": 1e16},
+		},
+		{
 			Name:   "nil literal comparison",
 			Expr:   `nil == nil`,
 			Values: map[string]string{},

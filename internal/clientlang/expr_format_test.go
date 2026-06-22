@@ -1,6 +1,9 @@
 package clientlang
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestFormatFixed(t *testing.T) {
 	cases := []struct {
@@ -28,6 +31,19 @@ func TestFormatFixed(t *testing.T) {
 	}
 	if _, err := formatFixed(1, 21); err == nil {
 		t.Fatal("expected error for out-of-range digits")
+	}
+	if _, err := formatFixed(1e21, 0); err == nil {
+		t.Fatal("expected error for value beyond the safe-integer range")
+	}
+}
+
+func TestRoundCollapsesNegativeZero(t *testing.T) {
+	got, err := roundTo(-0.001, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Signbit(got) {
+		t.Fatal("roundTo(-0.001, 2) returned negative zero; want positive zero")
 	}
 }
 
@@ -85,6 +101,9 @@ func TestFormatUnixTime(t *testing.T) {
 	}
 	if _, err := formatUnixTime(1.5, "YYYY"); err == nil {
 		t.Fatal("expected error for fractional timestamp")
+	}
+	if _, err := formatUnixTime(1e16, "YYYY"); err == nil {
+		t.Fatal("expected error for out-of-range timestamp")
 	}
 }
 

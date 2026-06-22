@@ -72,6 +72,7 @@
   // floor/abs and integer math so both evaluators agree; see the expression
   // conformance test.
   const maxFormatDigits = 20;
+  const maxSafeFormatInteger = 9007199254740991;
   function formatScale(digits) {
     let scale = 1;
     for (let index = 0; index < digits; index++) scale *= 10;
@@ -102,6 +103,7 @@
     const scale = formatScale(digits);
     const negative = value < 0;
     const scaled = roundHalfAway(Math.abs(value) * scale);
+    if (scaled > maxSafeFormatInteger) throw new Error("built-in " + name + " cannot format a value this large");
     let rawDigits = scaled.toFixed(0);
     let out;
     if (digits === 0) {
@@ -119,7 +121,10 @@
     requireFormatDigits("round", digits);
     if (!Number.isFinite(value)) throw new Error("built-in round expects a finite number");
     const scale = formatScale(digits);
-    return roundHalfAway(value * scale) / scale;
+    const rounded = roundHalfAway(value * scale) / scale;
+    // Collapse negative zero to positive zero so text/value/attribute bindings
+    // stringify it the same as the Go evaluator.
+    return rounded === 0 ? 0 : rounded;
   }
   function civilFromDays(days) {
     const z = days + 719468;
@@ -158,6 +163,7 @@
     if (typeof value !== "number") throw new Error("built-in formatTime argument 1 expects a unix timestamp");
     if (typeof layout !== "string") throw new Error("built-in formatTime argument 2 expects a string layout");
     if (!Number.isFinite(value) || value !== Math.floor(value)) throw new Error("built-in formatTime expects an integer unix timestamp");
+    if (Math.abs(value) > maxSafeFormatInteger) throw new Error("built-in formatTime timestamp is out of range");
     const days = Math.floor(value / 86400);
     const secondOfDay = value - days * 86400;
     const hour = Math.floor(secondOfDay / 3600);
@@ -204,6 +210,7 @@
       return roundToValue(value, digits);
     },
     percent(value, digits) {
+      if (typeof value !== "number") throw new Error("built-in percent argument 1 expects a number");
       return formatFixedValue("percent", value * 100, digits) + "%";
     },
     formatTime(value, layout) {

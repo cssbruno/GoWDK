@@ -18,6 +18,13 @@ import (
 // the decimal scale stays an exactly representable power of ten.
 const maxFormatDigits = 20
 
+// maxSafeInteger is 2^53-1, the largest integer both float64 and a JavaScript
+// number represent exactly. Bounding the formatting/date builtins to this range
+// keeps the Go evaluator and the browser runtime byte-identical: beyond it
+// integer precision is lost (and JS toFixed switches to exponent notation), so
+// both evaluators reject rather than diverge.
+const maxSafeInteger = 9007199254740991
+
 // formatScale returns 10^digits built by repeated multiplication so the value is
 // identical in Go and JavaScript (math.Pow / Math.pow are not guaranteed
 // bit-identical across runtimes).
@@ -50,6 +57,9 @@ func formatFixed(value float64, digits int) (string, error) {
 	scale := formatScale(digits)
 	negative := value < 0
 	scaled := roundHalfAway(math.Abs(value) * scale)
+	if scaled > maxSafeInteger {
+		return "", fmt.Errorf("built-in fixed cannot format a value this large")
+	}
 	rawDigits := strconv.FormatFloat(scaled, 'f', 0, 64)
 	var out string
 	if digits == 0 {
@@ -76,7 +86,13 @@ func roundTo(value float64, digits int) (float64, error) {
 		return 0, fmt.Errorf("built-in round expects a finite number")
 	}
 	scale := formatScale(digits)
-	return roundHalfAway(value*scale) / scale, nil
+	rounded := roundHalfAway(value*scale) / scale
+	if rounded == 0 {
+		// Collapse negative zero to positive zero; the browser stringifies -0 as
+		// "0", so returning +0 keeps the SSR/build and hydrated output identical.
+		rounded = 0
+	}
+	return rounded, nil
 }
 
 // formatPercent renders value*100 with digits fractional places and a percent
@@ -96,6 +112,9 @@ func formatPercent(value float64, digits int) (string, error) {
 func formatUnixTime(unix float64, layout string) (string, error) {
 	if !isFiniteFloat(unix) || unix != math.Floor(unix) {
 		return "", fmt.Errorf("built-in formatTime expects an integer unix timestamp")
+	}
+	if math.Abs(unix) > maxSafeInteger {
+		return "", fmt.Errorf("built-in formatTime timestamp is out of range")
 	}
 	seconds := int64(unix)
 	days := floorDivInt(seconds, 86400)

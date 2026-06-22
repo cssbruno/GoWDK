@@ -66,6 +66,7 @@ func apiCaseStmts(api BackendAPIAdapter, csrf bool, rateLimit bool) []ast.Stmt {
 	if api.ErrorPage != "" {
 		stmts = append(stmts, endpointPanicBoundaryStmt())
 	}
+	stmts = append(stmts, apiBodyLimitStmt())
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(api.Guards)...)
 	if api.Binding.Status != source.BackendBindingBound {
@@ -73,9 +74,6 @@ func apiCaseStmts(api BackendAPIAdapter, csrf bool, rateLimit bool) []ast.Stmt {
 		stmts = append(stmts, returnBool(true))
 		return stmts
 	}
-	stmts = append(stmts,
-		assign([]ast.Expr{selExpr(id("request"), "Body")}, call(sel("http", "MaxBytesReader"), id("response"), selExpr(id("request"), "Body"), id("maxAPIBodyBytes"))),
-	)
 	stmts = append(stmts, apiCSRFStmts(csrf)...)
 	stmts = append(stmts,
 		define([]ast.Expr{id("result"), id("err")}, call(sel(api.BackendAlias, api.Binding.FunctionName), id("ctx"), id("request"))),
@@ -90,6 +88,10 @@ func apiCaseStmts(api BackendAPIAdapter, csrf bool, rateLimit bool) []ast.Stmt {
 		returnBool(true),
 	)
 	return stmts
+}
+
+func apiBodyLimitStmt() ast.Stmt {
+	return assign([]ast.Expr{selExpr(id("request"), "Body")}, call(sel("http", "MaxBytesReader"), id("response"), selExpr(id("request"), "Body"), id("maxAPIBodyBytes")))
 }
 
 func apiCSRFStmts(csrf bool) []ast.Stmt {

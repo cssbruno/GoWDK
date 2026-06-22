@@ -177,21 +177,19 @@ func frameConflict(values map[string]string) (string, bool) {
 		return "", false
 	}
 
-	xfoDenies := strings.EqualFold(strings.TrimSpace(xfo), "DENY") || strings.EqualFold(strings.TrimSpace(xfo), "SAMEORIGIN")
-	allowsCrossOrigin := false
-	none := false
-	for _, src := range frameAncestors {
-		switch src {
-		case "'none'":
-			none = true
-		case "'self'":
-			// same-origin only; consistent with SAMEORIGIN.
-		default:
-			allowsCrossOrigin = true
+	switch strings.ToUpper(strings.TrimSpace(xfo)) {
+	case "DENY":
+		if !frameAncestorsOnly(frameAncestors, "'none'") {
+			return "X-Frame-Options DENY only matches CSP frame-ancestors 'none'", true
+		}
+	case "SAMEORIGIN":
+		if !frameAncestorsOnly(frameAncestors, "'self'") {
+			return "X-Frame-Options SAMEORIGIN only matches CSP frame-ancestors 'self'", true
 		}
 	}
-	if xfoDenies && (allowsCrossOrigin || (!none && len(frameAncestors) == 0)) {
-		return "X-Frame-Options forbids cross-origin framing but the CSP frame-ancestors directive permits it", true
-	}
 	return "", false
+}
+
+func frameAncestorsOnly(frameAncestors []string, want string) bool {
+	return len(frameAncestors) == 1 && frameAncestors[0] == want
 }

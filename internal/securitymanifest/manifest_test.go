@@ -268,6 +268,31 @@ func TestBuildRecordsEffectiveRequestLimitPosture(t *testing.T) {
 	}
 }
 
+func TestBuildRecordsCORSOnlyForGeneratedCORSRoutes(t *testing.T) {
+	config := gowdk.Config{Build: gowdk.BuildConfig{CORS: gowdk.CORSConfig{
+		Enabled:        true,
+		AllowedOrigins: []string{"*"},
+	}}}
+	actionOnly := Build(config, gwdkir.Program{
+		Endpoints: []gwdkir.Endpoint{
+			{Kind: gwdkir.EndpointAction, Symbol: "Submit", Method: http.MethodPost, Path: "/submit", Guards: []string{"public"}},
+			{Kind: gwdkir.EndpointFragment, Symbol: "Panel", Method: http.MethodGet, Path: "/panel", Guards: []string{"public"}},
+		},
+	})
+	if actionOnly.CORS.Enabled || actionOnly.CORS.AllowsAnyOrigin {
+		t.Fatalf("action/fragment-only output should not record generated CORS posture, got %#v", actionOnly.CORS)
+	}
+
+	apiOutput := Build(config, gwdkir.Program{
+		Endpoints: []gwdkir.Endpoint{
+			{Kind: gwdkir.EndpointAPI, Symbol: "Health", Method: http.MethodGet, Path: "/api/health", Guards: []string{"public"}},
+		},
+	})
+	if !apiOutput.CORS.Enabled || !apiOutput.CORS.AllowsAnyOrigin {
+		t.Fatalf("API output should record generated CORS posture, got %#v", apiOutput.CORS)
+	}
+}
+
 func TestBuildRecordsGuardContractAndObservabilityEvidence(t *testing.T) {
 	root := t.TempDir()
 	absPage := filepath.Join(root, "patients.page.gwdk")

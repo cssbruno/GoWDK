@@ -163,6 +163,33 @@ func TestBaselineFlagsUnverifiedGuardEvidence(t *testing.T) {
 	}
 }
 
+func TestBaselineFlagsUnverifiedEndpointGuardEvidence(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Endpoints: []securitymanifest.EndpointEntry{{
+			ID:     "Health",
+			Kind:   "api",
+			Method: "POST",
+			Path:   "/api/health",
+			Guards: []string{"app.guard"},
+			CSRF:   true,
+			GuardEvidence: []securitymanifest.GuardEvidence{{
+				ID:                 "app.guard",
+				BindingStatus:      "unverified-app-owned",
+				RuntimeTestFixture: "unverified-app-owned",
+			}},
+			RequestLimits: soundLimits("api"),
+			Source:        "api.page.gwdk:8",
+		}},
+	}
+	findings := Evaluate(manifest, Baseline())
+	if got := codes(findings); got["audit_guard_unverified"] != 1 {
+		t.Fatalf("expected one endpoint guard finding, got %#v", got)
+	}
+	if findings[0].Target != "api:Health#guard:app.guard" {
+		t.Fatalf("expected endpoint-targeted guard finding, got %#v", findings[0])
+	}
+}
+
 func TestBaselineFlagsUnsafeObservabilityPosture(t *testing.T) {
 	manifest := securitymanifest.SecurityManifest{
 		Observability: []securitymanifest.ObservabilityEntry{{
@@ -312,6 +339,32 @@ func TestBaselineFlagsConflictingFramePolicy(t *testing.T) {
 	)
 	if got := codes(Evaluate(manifest, Baseline())); got["audit_header_frame_conflict"] != 1 {
 		t.Fatalf("expected one frame-conflict finding, got %#v", got)
+	}
+}
+
+func TestBaselineDistinguishesFramePolicyStrength(t *testing.T) {
+	cases := []struct {
+		name string
+		xfo  string
+		csp  string
+		want int
+	}{
+		{name: "deny-none", xfo: "DENY", csp: "default-src 'self'; frame-ancestors 'none'"},
+		{name: "sameorigin-self", xfo: "SAMEORIGIN", csp: "default-src 'self'; frame-ancestors 'self'"},
+		{name: "deny-self-conflict", xfo: "DENY", csp: "default-src 'self'; frame-ancestors 'self'", want: 1},
+		{name: "sameorigin-none-conflict", xfo: "SAMEORIGIN", csp: "default-src 'self'; frame-ancestors 'none'", want: 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			manifest := headerManifest("development",
+				securitymanifest.ConfiguredHeader{Name: "X-Content-Type-Options", Value: "nosniff"},
+				securitymanifest.ConfiguredHeader{Name: "X-Frame-Options", Value: tc.xfo},
+				securitymanifest.ConfiguredHeader{Name: "Content-Security-Policy", Value: tc.csp},
+			)
+			if got := codes(Evaluate(manifest, Baseline()))["audit_header_frame_conflict"]; got != tc.want {
+				t.Fatalf("frame conflict count = %d, want %d", got, tc.want)
+			}
+		})
 	}
 }
 

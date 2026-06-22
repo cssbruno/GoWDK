@@ -173,6 +173,7 @@ func actionCaseStmts(action BackendActionAdapter, csrf bool, rateLimit bool) []a
 	if action.ErrorPage != "" {
 		stmts = append(stmts, endpointPanicBoundaryStmt())
 	}
+	stmts = append(stmts, actionBodyLimitStmt())
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(action.Guards)...)
 	if action.Binding.Status != "" && action.Binding.Status != source.BackendBindingBound {
@@ -203,13 +204,16 @@ func contractParseFormStmts(csrf bool) []ast.Stmt {
 	return actionParseFormStmtsWithErrors(csrf, true)
 }
 
+func actionBodyLimitStmt() ast.Stmt {
+	return assign([]ast.Expr{selExpr(id("request"), "Body")}, call(sel("http", "MaxBytesReader"), id("response"), selExpr(id("request"), "Body"), id("maxActionBodyBytes")))
+}
+
 func actionParseFormStmtsWithErrors(csrf bool, jsonErrors bool) []ast.Stmt {
 	writeError := writeNoStoreErrorStmt
 	if jsonErrors {
 		writeError = writeNoStoreJSONErrorStmt
 	}
 	stmts := []ast.Stmt{
-		assign([]ast.Expr{selExpr(id("request"), "Body")}, call(sel("http", "MaxBytesReader"), id("response"), selExpr(id("request"), "Body"), id("maxActionBodyBytes"))),
 		&ast.IfStmt{
 			Init: define([]ast.Expr{id("err")}, call(selExpr(id("request"), "ParseForm"))),
 			Cond: notNil("err"),

@@ -78,6 +78,11 @@ func Baseline() []Policy {
 			Builtin: true,
 			Selectors: []Selector{
 				{Raw: "/**", Kind: SelectorRoute},
+				{Raw: "act:*", Kind: SelectorEndpoint},
+				{Raw: "api:*", Kind: SelectorEndpoint},
+				{Raw: "fragment:*", Kind: SelectorEndpoint},
+				{Raw: "command:*", Kind: SelectorEndpoint},
+				{Raw: "query:*", Kind: SelectorEndpoint},
 			},
 			Rules: []Rule{
 				{Kind: RuleRequireVerifiedGuards, Code: "audit_guard_unverified"},

@@ -49,6 +49,9 @@ func executableContractHandlerStmts(exposure BackendContractExposure, csrf bool,
 		exposure.Endpoint.Path,
 		"",
 	)
+	if exposure.Endpoint.Kind == BackendEndpointCommand {
+		stmts = append(stmts, actionBodyLimitStmt())
+	}
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(exposure.Guards)...)
 	stmts = append(stmts, contractInputStmts(exposure, csrf)...)

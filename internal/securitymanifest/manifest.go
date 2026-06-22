@@ -270,7 +270,7 @@ func Build(config gowdk.Config, ir gwdkir.Program) SecurityManifest {
 	}
 
 	manifest.Observability = observabilityEntries(config, ir)
-	manifest.CORS = corsPosture(config)
+	manifest.CORS = corsPosture(config, manifest.Endpoints)
 	manifest.Frontend.UnguardedRoutes = unguarded
 	manifest.Frontend.BundleSecrets = bundleLeaks(ir)
 	manifest.Frontend.RawHTMLSinks = rawHTMLSinks(ir)
@@ -465,9 +465,9 @@ func programSourcePaths(ir gwdkir.Program) []string {
 	return paths
 }
 
-func corsPosture(config gowdk.Config) CORSPosture {
+func corsPosture(config gowdk.Config, endpoints []EndpointEntry) CORSPosture {
 	cors := config.Build.CORS
-	if !cors.Enabled {
+	if !cors.Enabled || !hasCORSEndpoints(endpoints) {
 		return CORSPosture{}
 	}
 	posture := CORSPosture{
@@ -488,6 +488,16 @@ func corsPosture(config gowdk.Config) CORSPosture {
 		posture.AllowedOrigins = append(posture.AllowedOrigins, origin)
 	}
 	return posture
+}
+
+func hasCORSEndpoints(endpoints []EndpointEntry) bool {
+	for _, endpoint := range endpoints {
+		switch endpoint.Kind {
+		case "api", "command", "query":
+			return true
+		}
+	}
+	return false
 }
 
 func buildMode(config gowdk.Config) string {
@@ -710,9 +720,9 @@ func bodyLimitFor(config gowdk.Config, kind compiler.EndpointKind) int64 {
 
 // requestLimitsFor projects the effective request-limit posture for one endpoint
 // kind. The generated runtime installs an http.MaxBytesReader on the raw body
-// before it is parsed (see runtime/app.prepareActionValues and
-// APIHandlerWithBodyLimit), so the raw cap bounds compressed input too and is in
-// force before CSRF token parsing and handler execution.
+// before generated guards, CSRF parsing, or body parsing, so the raw cap bounds
+// compressed input too and is in force before app-owned request code can read the
+// body through the generated route lane.
 func requestLimitsFor(config gowdk.Config, kind compiler.EndpointKind) RequestLimitPosture {
 	raw := bodyLimitFor(config, kind)
 	return RequestLimitPosture{

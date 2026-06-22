@@ -211,7 +211,16 @@ func startServices(ctx context.Context, serviceContext ServiceContext, services 
 func startServer(server *http.Server) <-chan error {
 	done := make(chan error, 1)
 	go func() {
-		err := server.ListenAndServe()
+		listener, err := inheritedListener()
+		if err != nil {
+			done <- fmt.Errorf("gowdk server failed: %w", err)
+			return
+		}
+		if listener != nil {
+			err = server.Serve(listener)
+		} else {
+			err = server.ListenAndServe()
+		}
 		if errors.Is(err, http.ErrServerClosed) {
 			err = nil
 		}

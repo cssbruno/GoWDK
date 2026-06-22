@@ -1,0 +1,7 @@
+package pages
+
+view {
+  <article>
+    <slot />
+  </article>
+}

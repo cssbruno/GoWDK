@@ -6,6 +6,7 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/viewmodel"
 	"github.com/cssbruno/gowdk/internal/viewparse"
 )
@@ -24,6 +25,7 @@ func validatePageServerLists(page gwdkir.Page) []ValidationError {
 	loads := collectPageLoads(page)
 	var diagnostics []ValidationError
 	validateServerLoadFieldConflicts(page, loads, &diagnostics)
+	validateServerLoadResultFields(page, loads, &diagnostics)
 	walkPageListNodes(page, nodes, loads, nil, false, &diagnostics)
 	return diagnostics
 }
@@ -281,6 +283,25 @@ func validateServerLoadFieldConflicts(page gwdkir.Page, loads pageLoads, diagnos
 	}
 }
 
+func validateServerLoadResultFields(page gwdkir.Page, loads pageLoads, diagnostics *[]ValidationError) {
+	if len(loads.fields) == 0 || page.LoadBinding.Status != source.BackendBindingBound || page.LoadBinding.ResultType == "" {
+		return
+	}
+	known := map[string]bool{}
+	for _, field := range page.LoadBinding.ResultFields {
+		if field.Path != "" {
+			known[field.Path] = true
+		}
+	}
+	for field := range loads.fields {
+		if known[field] {
+			continue
+		}
+		*diagnostics = append(*diagnostics, pageServerLoadDiagnostic(page, "server_load_field_unknown",
+			fmt.Sprintf("%s: server {} load field %q is not exported by typed load result %s; update the field path, add a json tag, or expose the field from %s", page.ID, field, page.LoadBinding.ResultType, page.LoadBinding.ResultType)))
+	}
+}
+
 func pageBuildFields(page gwdkir.Page) map[string]bool {
 	fields := map[string]bool{}
 	for _, record := range page.Blocks.BuildRecords {
@@ -483,6 +504,16 @@ func pageListDiagnostic(page gwdkir.Page, code, message string) ValidationError 
 		PageID:  page.ID,
 		Source:  page.Source,
 		Span:    firstSpan(page.Blocks.Spans.View, page.Spans.Page),
+		Message: message,
+	}
+}
+
+func pageServerLoadDiagnostic(page gwdkir.Page, code, message string) ValidationError {
+	return ValidationError{
+		Code:    code,
+		PageID:  page.ID,
+		Source:  page.Source,
+		Span:    firstSpan(page.Blocks.Spans.Server, page.Blocks.Spans.View, page.Spans.Page),
 		Message: message,
 	}
 }

@@ -1003,6 +1003,10 @@ func notNil(name string) ast.Expr {
 	return &ast.BinaryExpr{X: id(name), Op: token.NEQ, Y: id("nil")}
 }
 
+func notNilExpr(expr ast.Expr) ast.Expr {
+	return &ast.BinaryExpr{X: expr, Op: token.NEQ, Y: id("nil")}
+}
+
 func block(stmts ...ast.Stmt) *ast.BlockStmt {
 	return &ast.BlockStmt{List: stmts}
 }

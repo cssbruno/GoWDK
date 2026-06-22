@@ -3,6 +3,7 @@ package appgen
 import (
 	"testing"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -39,7 +40,7 @@ func TestActionEndpointsFromIR(t *testing.T) {
 		}},
 	}
 
-	endpoints, err := actionEndpointsFromIR(ir)
+	endpoints, err := actionEndpointsFromIR(gowdk.Config{}, ir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,6 +56,53 @@ func TestActionEndpointsFromIR(t *testing.T) {
 	}
 	if endpoint.Binding.Status != source.BackendBindingBound || endpoint.Binding.FunctionName != "Subscribe" {
 		t.Fatalf("expected backend binding from IR endpoint, got %#v", endpoint.Binding)
+	}
+}
+
+func TestActionEndpointsFromIRLocalizesInheritedRoutes(t *testing.T) {
+	ir := gwdkir.Program{
+		Pages: []gwdkir.Page{{
+			ID:    "contact",
+			Route: "/contact",
+			Blocks: gwdkir.Blocks{
+				ViewBody: `<form g:post={Submit}><input name="email" required /></form>`,
+				Actions: []gwdkir.Action{{
+					Name: "Submit",
+				}},
+			},
+		}},
+		Endpoints: []gwdkir.Endpoint{{
+			Kind:   gwdkir.EndpointAction,
+			PageID: "contact",
+			Symbol: "Submit",
+			Method: "POST",
+			Path:   "/contact",
+			Binding: gwdkir.Binding{
+				Status:       source.BackendBindingBound,
+				ImportPath:   "example.com/app/contact",
+				PackageName:  "contact",
+				FunctionName: "Submit",
+				Signature:    source.BackendSignatureAction0,
+			},
+		}},
+	}
+
+	endpoints, err := actionEndpointsFromIR(gowdk.Config{I18N: gowdk.I18NConfig{
+		Locales: []gowdk.LocaleConfig{{Code: "en"}, {Code: "pt-BR", PathPrefix: "/br"}},
+	}}, ir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(endpoints) != 2 {
+		t.Fatalf("expected two localized action endpoints, got %#v", endpoints)
+	}
+	if endpoints[0].Route != "/en/contact" || endpoints[1].Route != "/br/contact" {
+		t.Fatalf("unexpected localized action routes: %#v", endpoints)
+	}
+	for _, endpoint := range endpoints {
+		if endpoint.Binding.Status != source.BackendBindingBound || endpoint.Binding.FunctionName != "Submit" {
+			t.Fatalf("expected localized endpoint to preserve original binding, got %#v", endpoint)
+		}
 	}
 }
 
@@ -184,7 +232,7 @@ func TestStandaloneGoEndpointsFromIR(t *testing.T) {
 			},
 		},
 	}
-	actions, err := actionEndpointsFromIR(ir)
+	actions, err := actionEndpointsFromIR(gowdk.Config{}, ir)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -49,6 +49,7 @@ type RouteBinding struct {
 	Package       string
 	Render        gowdk.RenderMode
 	Cache         string
+	Locale        string
 	DynamicParams []string
 	RouteParams   []source.RouteParam
 	Layouts       []string
@@ -123,7 +124,7 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 	for _, route := range ir.Routes {
 		switch route.Kind {
 		case gwdkir.RouteSSR:
-			routes = append(routes, RouteBinding{
+			binding := RouteBinding{
 				Kind:          RouteSSR,
 				Method:        route.Method,
 				Route:         route.Path,
@@ -138,15 +139,19 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				Source:        route.Source,
 				SourceSpan:    route.Span,
 				Handler:       "ssr.Render" + exportedRouteName(route.PageID),
-			})
-			info = append(info, RouteInfo{
-				Code:    "spa_disabled",
-				PageID:  route.PageID,
-				Route:   route.Path,
-				Message: fmt.Sprintf("%s uses request-time page behavior; generated SPA/static page output is disabled for this route", route.PageID),
-			})
+			}
+			localized := localizedRouteBindings(config.I18N, binding)
+			routes = append(routes, localized...)
+			for _, route := range localized {
+				info = append(info, RouteInfo{
+					Code:    "spa_disabled",
+					PageID:  route.PageID,
+					Route:   route.Route,
+					Message: fmt.Sprintf("%s uses request-time page behavior; generated SPA/static page output is disabled for this route", route.PageID),
+				})
+			}
 		case gwdkir.RouteHybrid:
-			routes = append(routes, RouteBinding{
+			routes = append(routes, localizedRouteBindings(config.I18N, RouteBinding{
 				Kind:          RouteHybrid,
 				Method:        route.Method,
 				Route:         route.Path,
@@ -161,9 +166,9 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				Source:        route.Source,
 				SourceSpan:    route.Span,
 				Handler:       "hybrid.Render" + exportedRouteName(route.PageID),
-			})
+			})...)
 		default:
-			routes = append(routes, RouteBinding{
+			binding := RouteBinding{
 				Kind:          RouteSPA,
 				Method:        route.Method,
 				Route:         route.Path,
@@ -178,13 +183,17 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 				Source:        route.Source,
 				SourceSpan:    route.Span,
 				Handler:       fmt.Sprintf(`embedded.SPA("pages/%s.html")`, routeAssetName(route.PageID)),
-			})
-			info = append(info, RouteInfo{
-				Code:    "ssr_disabled",
-				PageID:  route.PageID,
-				Route:   route.Path,
-				Message: fmt.Sprintf("%s uses build-time page output; request-time page rendering is disabled for this route", route.PageID),
-			})
+			}
+			localized := localizedRouteBindings(config.I18N, binding)
+			routes = append(routes, localized...)
+			for _, route := range localized {
+				info = append(info, RouteInfo{
+					Code:    "ssr_disabled",
+					PageID:  route.PageID,
+					Route:   route.Route,
+					Message: fmt.Sprintf("%s uses build-time page output; request-time page rendering is disabled for this route", route.PageID),
+				})
+			}
 		}
 	}
 
@@ -319,6 +328,18 @@ func BuildRouteMetadataFromIR(config gowdk.Config, ir gwdkir.Program) RouteMetad
 	}
 
 	return RouteMetadata{Routes: routes, Endpoints: endpoints, Info: info}
+}
+
+func localizedRouteBindings(config gowdk.I18NConfig, binding RouteBinding) []RouteBinding {
+	localized := config.LocalizedRoutes(binding.Route)
+	out := make([]RouteBinding, 0, len(localized))
+	for _, route := range localized {
+		next := binding
+		next.Route = route.Route
+		next.Locale = route.Locale
+		out = append(out, next)
+	}
+	return out
 }
 
 func contractBindingStatus(status gwdkir.ContractBindingStatus) gwdkir.ContractBindingStatus {

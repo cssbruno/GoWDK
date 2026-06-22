@@ -132,7 +132,8 @@ generated request-time backend route metadata:
     {
       "page": "home",
       "route": "/",
-      "path": "index.html"
+      "path": "index.html",
+      "locale": "en"
     }
   ],
   "endpoints": [
@@ -151,6 +152,10 @@ generated request-time backend route metadata:
   ]
 }
 ```
+
+`locale` is omitted when route localization is disabled. When `Config.I18N`
+declares locales, each localized page artifact records the locale code beside
+its generated route and output path.
 
 ## Current App Asset Manifest
 

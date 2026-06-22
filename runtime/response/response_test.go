@@ -432,6 +432,17 @@ func TestHandlerError(t *testing.T) {
 	}
 }
 
+func TestHandlerErrorKeepsUnkeyedLiteralShape(t *testing.T) {
+	err := HandlerError{http.StatusServiceUnavailable, "handler unavailable", errors.New("database unavailable")}
+
+	if got := HandlerStatus(err, http.StatusInternalServerError); got != http.StatusServiceUnavailable {
+		t.Fatalf("unexpected handler status: %d", got)
+	}
+	if got := HandlerErrorMessage(err, err.Status); got != "handler unavailable" {
+		t.Fatalf("unexpected handler message: %q", got)
+	}
+}
+
 func TestExpectedErrorsMapToStatuses(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -446,12 +457,16 @@ func TestExpectedErrorsMapToStatuses(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			var expectedErr expectedError
+			if !errors.As(tt.err, &expectedErr) {
+				t.Fatalf("expected expectedError, got %T", tt.err)
+			}
+			if expectedErr.kind != tt.kind {
+				t.Fatalf("unexpected kind: %q", expectedErr.kind)
+			}
 			var handlerErr HandlerError
 			if !errors.As(tt.err, &handlerErr) {
 				t.Fatalf("expected HandlerError, got %T", tt.err)
-			}
-			if handlerErr.Kind != tt.kind {
-				t.Fatalf("unexpected kind: %q", handlerErr.Kind)
 			}
 			if got := HandlerStatus(tt.err, http.StatusInternalServerError); got != tt.status {
 				t.Fatalf("unexpected status: %d", got)

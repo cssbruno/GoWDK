@@ -112,13 +112,6 @@ func regionLoadFieldsExpr(replacements []SSRLoadReplacement) ast.Expr {
 // parameterless public pages while dynamic or guarded pages stay on fallback.
 func regionLoadThunk(route SSRRoute) ast.Expr {
 	loadCall := call(sel(route.LoadBackendAlias, route.LoadBinding.FunctionName), id("loadContext"))
-	var ret ast.Stmt
-	switch route.LoadBinding.Signature {
-	case source.BackendSignatureLoadError:
-		ret = &ast.ReturnStmt{Results: []ast.Expr{loadCall}}
-	default:
-		ret = &ast.ReturnStmt{Results: []ast.Expr{loadCall, id("nil")}}
-	}
 	stmts := ssrRouteContextStmts(route, false)
 	stmts = append(stmts,
 		define([]ast.Expr{id("pageURL")}, &ast.StarExpr{X: selExpr(id("request"), "URL")}),
@@ -130,8 +123,8 @@ func regionLoadThunk(route SSRRoute) ast.Expr {
 		assign([]ast.Expr{selExpr(id("pageRequest"), "URL")}, &ast.UnaryExpr{Op: token.AND, X: id("pageURL")}),
 		assign([]ast.Expr{id("request")}, id("pageRequest")),
 		define([]ast.Expr{id("loadContext")}, call(sel("gowdkssr", "NewLoadContext"), id("request"), id("nil"))),
-		ret,
 	)
+	stmts = append(stmts, regionLoadReturnStmts(route.LoadBinding, loadCall)...)
 	return &ast.FuncLit{
 		Type: &ast.FuncType{
 			Params: &ast.FieldList{List: []*ast.Field{
@@ -143,5 +136,30 @@ func regionLoadThunk(route SSRRoute) ast.Expr {
 			}},
 		},
 		Body: block(stmts...),
+	}
+}
+
+func regionLoadReturnStmts(binding source.BackendBinding, loadCall ast.Expr) []ast.Stmt {
+	switch {
+	case loadSignatureReturnsStruct(binding.Signature) && loadSignatureReturnsError(binding.Signature):
+		stmts := []ast.Stmt{
+			define([]ast.Expr{id("typedLoadData"), id("err")}, loadCall),
+			&ast.IfStmt{
+				Cond: notNil("err"),
+				Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil"), id("err")}}),
+			},
+		}
+		stmts = append(stmts, ssrStructLoadDataStmts(binding, id("typedLoadData"))...)
+		stmts = append(stmts, &ast.ReturnStmt{Results: []ast.Expr{id("loadData"), id("nil")}})
+		return stmts
+	case loadSignatureReturnsStruct(binding.Signature):
+		stmts := []ast.Stmt{define([]ast.Expr{id("typedLoadData")}, loadCall)}
+		stmts = append(stmts, ssrStructLoadDataStmts(binding, id("typedLoadData"))...)
+		stmts = append(stmts, &ast.ReturnStmt{Results: []ast.Expr{id("loadData"), id("nil")}})
+		return stmts
+	case loadSignatureReturnsError(binding.Signature):
+		return []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{loadCall}}}
+	default:
+		return []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{loadCall, id("nil")}}}
 	}
 }

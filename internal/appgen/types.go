@@ -124,6 +124,7 @@ type SSRRoute struct {
 	Cache            string
 	ErrorPage        string
 	LayoutErrorPages []LayoutErrorPage
+	Locale           string
 	DynamicParams    []string
 	RouteParams      []source.RouteParam
 	Layouts          []string

@@ -48,6 +48,7 @@ type SiteMapRoute struct {
 	Package       string             `json:"package,omitempty"`
 	Render        gowdk.RenderMode   `json:"render,omitempty"`
 	Cache         string             `json:"cache,omitempty"`
+	Locale        string             `json:"locale,omitempty"`
 	DynamicParams []string           `json:"dynamicParams,omitempty"`
 	RouteParams   []routeParamJSON   `json:"routeParams,omitempty"`
 	Layouts       []string           `json:"layouts,omitempty"`
@@ -203,6 +204,7 @@ func siteMapRoutes(routes []compiler.RouteBinding) []SiteMapRoute {
 			Package:       route.Package,
 			Render:        route.Render,
 			Cache:         route.Cache,
+			Locale:        route.Locale,
 			DynamicParams: append([]string(nil), route.DynamicParams...),
 			RouteParams:   routeParamsJSON(route.RouteParams),
 			Layouts:       append([]string(nil), route.Layouts...),

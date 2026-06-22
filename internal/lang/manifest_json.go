@@ -186,27 +186,36 @@ type artifactJSON struct {
 }
 
 type backendBindingJSON struct {
-	Kind         string                      `json:"kind"`
-	PageID       string                      `json:"pageId"`
-	Source       string                      `json:"source,omitempty"`
-	BlockName    string                      `json:"blockName"`
-	Method       string                      `json:"method,omitempty"`
-	Route        string                      `json:"route"`
-	ImportPath   string                      `json:"importPath,omitempty"`
-	PackageName  string                      `json:"packageName,omitempty"`
-	FunctionName string                      `json:"functionName"`
-	Signature    source.BackendSignatureKind `json:"signature,omitempty"`
-	InputType    string                      `json:"inputType,omitempty"`
-	InputPointer bool                        `json:"inputPointer,omitempty"`
-	InputFields  []backendInputJSON          `json:"inputFields,omitempty"`
-	Status       source.BackendBindingStatus `json:"status"`
-	Message      string                      `json:"message,omitempty"`
+	Kind          string                      `json:"kind"`
+	PageID        string                      `json:"pageId"`
+	Source        string                      `json:"source,omitempty"`
+	BlockName     string                      `json:"blockName"`
+	Method        string                      `json:"method,omitempty"`
+	Route         string                      `json:"route"`
+	ImportPath    string                      `json:"importPath,omitempty"`
+	PackageName   string                      `json:"packageName,omitempty"`
+	FunctionName  string                      `json:"functionName"`
+	Signature     source.BackendSignatureKind `json:"signature,omitempty"`
+	InputType     string                      `json:"inputType,omitempty"`
+	InputPointer  bool                        `json:"inputPointer,omitempty"`
+	InputFields   []backendInputJSON          `json:"inputFields,omitempty"`
+	ResultType    string                      `json:"resultType,omitempty"`
+	ResultPointer bool                        `json:"resultPointer,omitempty"`
+	ResultFields  []backendResultJSON         `json:"resultFields,omitempty"`
+	Status        source.BackendBindingStatus `json:"status"`
+	Message       string                      `json:"message,omitempty"`
 }
 
 type backendInputJSON struct {
 	FieldName string `json:"fieldName"`
 	FormName  string `json:"formName"`
 	Type      string `json:"type"`
+}
+
+type backendResultJSON struct {
+	Path     string `json:"path"`
+	Selector string `json:"selector"`
+	Type     string `json:"type"`
 }
 
 // marshalManifestJSON emits the manifest JSON report from the validated IR
@@ -303,21 +312,39 @@ func backendBindingsJSON(bindings []source.BackendBinding) []backendBindingJSON 
 	out := make([]backendBindingJSON, 0, len(bindings))
 	for _, binding := range bindings {
 		out = append(out, backendBindingJSON{
-			Kind:         binding.Kind,
-			PageID:       binding.PageID,
-			Source:       binding.Source,
-			BlockName:    binding.BlockName,
-			Method:       binding.Method,
-			Route:        binding.Route,
-			ImportPath:   binding.ImportPath,
-			PackageName:  binding.PackageName,
-			FunctionName: binding.FunctionName,
-			Signature:    binding.Signature,
-			InputType:    binding.InputType,
-			InputPointer: binding.InputPointer,
-			InputFields:  backendInputFieldsJSON(binding.InputFields),
-			Status:       binding.Status,
-			Message:      binding.Message,
+			Kind:          binding.Kind,
+			PageID:        binding.PageID,
+			Source:        binding.Source,
+			BlockName:     binding.BlockName,
+			Method:        binding.Method,
+			Route:         binding.Route,
+			ImportPath:    binding.ImportPath,
+			PackageName:   binding.PackageName,
+			FunctionName:  binding.FunctionName,
+			Signature:     binding.Signature,
+			InputType:     binding.InputType,
+			InputPointer:  binding.InputPointer,
+			InputFields:   backendInputFieldsJSON(binding.InputFields),
+			ResultType:    binding.ResultType,
+			ResultPointer: binding.ResultPointer,
+			ResultFields:  backendResultFieldsJSON(binding.ResultFields),
+			Status:        binding.Status,
+			Message:       binding.Message,
+		})
+	}
+	return out
+}
+
+func backendResultFieldsJSON(fields []source.BackendResultField) []backendResultJSON {
+	if len(fields) == 0 {
+		return nil
+	}
+	out := make([]backendResultJSON, 0, len(fields))
+	for _, field := range fields {
+		out = append(out, backendResultJSON{
+			Path:     field.Path,
+			Selector: field.Selector,
+			Type:     field.Type,
 		})
 	}
 	return out

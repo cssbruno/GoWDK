@@ -3386,6 +3386,57 @@ func TestGenerateWritesSSRLoadHandler(t *testing.T) {
 	}
 }
 
+func TestGenerateWritesTypedSSRLoadResultAdapter(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>App</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:  "dashboard",
+		Route:   "/dashboard",
+		Guards:  []string{"public"},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "example.com/app/dashboard",
+			PackageName:  "dashboard",
+			FunctionName: "LoadDashboard",
+			Signature:    source.BackendSignatureLoadStructError,
+			ResultType:   "DashboardData",
+			ResultFields: []source.BackendResultField{
+				{Path: "user", Selector: "User"},
+				{Path: "User", Selector: "User"},
+				{Path: "user.name", Selector: "User.Name"},
+				{Path: "count", Selector: "Count"},
+				{Path: "Count", Selector: "Count"},
+			},
+		},
+		HTML: `<main><h1>__USER__</h1></main>`,
+		LoadReplacements: []SSRLoadReplacement{{
+			Path:        "user.name",
+			Placeholder: "__USER__",
+		}},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`typedLoadData, err := dashboard.LoadDashboard(loadContext)`,
+		`loadData := map[string]any{"Count": typedLoadData.Count, "User": typedLoadData.User, "count": typedLoadData.Count, "user": typedLoadData.User}`,
+		`loadValue0, loadOK0 := gowdkssr.LoadPath(loadData, "user.name")`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
 func TestGenerateWritesURLAwareSSRLoadReplacements(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -3790,6 +3841,59 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected auto-detected generated app source to contain %q:\n%s", expected, source)
+		}
+	}
+}
+
+func TestGenerateAutoRoutesLocalizesSSRRoutes(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:     "dashboard",
+		Route:  "/dashboard",
+		Render: gowdk.SSR,
+		Guards: []string{"public"},
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main><h1>Dashboard</h1></main>`,
+		},
+	}}}
+
+	config := gowdk.Config{
+		Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)},
+		I18N: gowdk.I18NConfig{
+			Locales: []gowdk.LocaleConfig{{Code: "en"}, {Code: "pt"}},
+		},
+	}
+	ir := gwdkanalysis.BuildProgram(config, app)
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		AutoRoutes: true,
+		Config:     config,
+		IR:         &ir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`case "/en/dashboard":`,
+		`case "/pt/dashboard":`,
+		`gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/en/dashboard", Render: "ssr", Locale: "en", Guards: []string{"public"}}`,
+		`gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/pt/dashboard", Render: "ssr", Locale: "pt", Guards: []string{"public"}}`,
+		`ctx = gowdkruntime.WithLocale(ctx, "en")`,
+		`ctx = gowdkruntime.WithLocale(ctx, "pt")`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected localized SSR generated app source to contain %q:\n%s", expected, source)
 		}
 	}
 }
@@ -5009,6 +5113,82 @@ func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	}
 	if cacheControl := headers.Get("Cache-Control"); cacheControl != "no-store" {
 		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+}
+
+func TestGeneratedBinaryExecutesTypedSSRLoadUserLogic(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID:  "dashboard",
+		Route:   "/dashboard",
+		Guards:  []string{"public"},
+		HasLoad: true,
+		LoadBinding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "gowdk-generated-app/dashboard",
+			PackageName:  "dashboard",
+			FunctionName: "LoadDashboard",
+			Signature:    source.BackendSignatureLoadStructError,
+			ResultType:   "DashboardData",
+			ResultFields: []source.BackendResultField{
+				{Path: "user", Selector: "User"},
+				{Path: "user.name", Selector: "User.Name"},
+				{Path: "count", Selector: "Count"},
+			},
+		},
+		HTML: `<main><h1>__USER__</h1><p>__COUNT__</p></main>`,
+		LoadReplacements: []SSRLoadReplacement{
+			{Path: "user.name", Placeholder: "__USER__"},
+			{Path: "count", Placeholder: "__COUNT__"},
+		},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(appDir, "dashboard", "dashboard.go"), `package dashboard
+
+import "github.com/cssbruno/gowdk/runtime/ssr"
+
+type DashboardData struct {
+	User  UserData `+"`json:\"user\"`"+`
+	Count int      `+"`json:\"count\"`"+`
+}
+
+type UserData struct {
+	Name string `+"`json:\"name\"`"+`
+}
+
+func LoadDashboard(ctx ssr.LoadContext) (DashboardData, error) {
+	return DashboardData{User: UserData{Name: "Ada <admin>"}, Count: 3}, nil
+}
+`)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, _, err := waitForHTTPResponse("http://" + addr + "/dashboard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"Ada &lt;admin&gt;", "<p>3</p>"} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected typed SSR load response to contain %q, got %s", expected, body)
+		}
 	}
 }
 
@@ -8723,7 +8903,7 @@ func waitForHTTPStatusWithHeaders(url, method, body string, headers map[string]s
 // through the production manifest->IR path, asserting against exactly what the
 // generated-app pipeline derives.
 func actionEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]ActionEndpoint, error) {
-	return actionEndpointsFromIR(gwdkanalysis.BuildProgram(gowdk.Config{}, app))
+	return actionEndpointsFromIR(gowdk.Config{}, gwdkanalysis.BuildProgram(gowdk.Config{}, app))
 }
 
 func apiEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]APIEndpoint, error) {
@@ -8747,6 +8927,26 @@ func TestDeniedPageRoutesSelectsGuardlessStaticPages(t *testing.T) {
 	denied := deniedPageRoutes(options)
 	if len(denied) != 1 || denied[0] != "/" {
 		t.Fatalf("expected only the guardless static route /, got %#v", denied)
+	}
+}
+
+func TestDeniedPageRoutesLocalizeGuardlessStaticPages(t *testing.T) {
+	options := Options{
+		Config: gowdk.Config{
+			I18N: gowdk.I18NConfig{
+				Locales: []gowdk.LocaleConfig{{Code: "en"}, {Code: "pt"}},
+			},
+		},
+		IR: &gwdkir.Program{Pages: []gwdkir.Page{
+			{ID: "home", Route: "/"},
+			{ID: "dashboard", Route: "/dashboard"},
+		}},
+		SSR: []SSRRoute{{PageID: "dashboard", Route: "/en/dashboard"}},
+	}
+
+	denied := deniedPageRoutes(options)
+	if strings.Join(denied, ",") != "/en,/pt" {
+		t.Fatalf("expected localized guardless static routes, got %#v", denied)
 	}
 }
 

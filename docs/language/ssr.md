@@ -21,11 +21,15 @@ SSR is optional and must not become the default framework identity.
   Go function named `Load<PageID>`. `<PageID>` is the explicit `page` value
   when present, otherwise the filename-derived page ID.
 - Supported load function signatures are
-  `func LoadDashboard(ssr.LoadContext) map[string]any` and
-  `func LoadDashboard(ssr.LoadContext) (map[string]any, error)`. Returned
-  values replace generated SSR placeholders with request-time HTML escaping.
-  Dotted paths resolve through nested maps with string keys, structs, pointers,
-  interfaces, exported Go field names, and `json` tag names.
+  `func LoadDashboard(ssr.LoadContext) map[string]any`,
+  `func LoadDashboard(ssr.LoadContext) (map[string]any, error)`,
+  `func LoadDashboard(ssr.LoadContext) DashboardData`, and
+  `func LoadDashboard(ssr.LoadContext) (DashboardData, error)`.
+  Typed result structs must be exported same-package structs. Exported fields
+  are exposed by Go field name or `json` tag name, and `json:"-"` hides a field.
+  Returned values replace generated SSR placeholders with request-time HTML
+  escaping. Dotted paths resolve through nested maps with string keys, structs,
+  pointers, interfaces, exported Go field names, and `json` tag names.
 - Load functions can return `ssr.RedirectTo("/login")` or
   `ssr.Redirect("/login", http.StatusTemporaryRedirect)` to ask generated SSR
   handlers to write a no-store local redirect. Redirect URLs must be local

@@ -22,6 +22,7 @@ type SSRArtifact struct {
 	Cache            string
 	ErrorPage        string
 	LayoutErrorPages []LayoutErrorPage
+	Locale           string
 	DynamicParams    []string
 	RouteParams      []source.RouteParam
 	Layouts          []string
@@ -82,12 +83,14 @@ func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string
 		if !isRequestTimePage(config, page) {
 			continue
 		}
-		artifact, err := ssrArtifact(config, page, components, layouts, append(baseStylesheets, css.pageStylesheets[page.ID]...), actionFields[page.ID], realtimeEventTypeNames, queryTypeNames)
-		if err != nil {
-			failures = append(failures, err.Error())
-			continue
+		for _, route := range config.I18N.LocalizedRoutes(page.Route) {
+			artifact, err := ssrArtifact(config, page, route, components, layouts, append(baseStylesheets, css.pageStylesheets[page.ID]...), actionFields[page.ID], realtimeEventTypeNames, queryTypeNames)
+			if err != nil {
+				failures = append(failures, err.Error())
+				continue
+			}
+			artifacts = append(artifacts, artifact)
 		}
-		artifacts = append(artifacts, artifact)
 	}
 	if len(failures) > 0 {
 		return nil, errors.New(strings.Join(failures, "\n"))
@@ -95,10 +98,10 @@ func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string
 	return artifacts, nil
 }
 
-func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, realtimeEventTypeNames map[string]string, queryTypeNames map[string]string) (SSRArtifact, error) {
+func ssrArtifact(config gowdk.Config, page gwdkir.Page, route gowdk.LocalizedRoute, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, realtimeEventTypeNames map[string]string, queryTypeNames map[string]string) (SSRArtifact, error) {
 	render := page.RenderMode(config.Render.DefaultMode())
 	routeData, replacements := ssrRouteData(page)
-	buildData, err := parseBuildDataFromBlocks(page.Blocks, routeData, page.Imports, page.Source)
+	buildData, err := parseBuildDataFromBlocks(page.Blocks, routeData, route.Locale, page.Imports, page.Source)
 	if err != nil {
 		return SSRArtifact{}, fmt.Errorf("%s: %w", page.ID, err)
 	}
@@ -113,7 +116,7 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 	for key, value := range loadData {
 		data[key] = value
 	}
-	html, regions, err := renderPage(config, page, components, layouts, stylesheets, actionFields, data, realtimeEventTypeNames, queryTypeNames, renderModeRequestTime)
+	html, regions, err := renderPage(config, page, route.Route, components, layouts, stylesheets, actionFields, data, route.Locale, realtimeEventTypeNames, queryTypeNames, renderModeRequestTime)
 	if err != nil {
 		return SSRArtifact{}, err
 	}
@@ -131,11 +134,12 @@ func ssrArtifact(config gowdk.Config, page gwdkir.Page, components map[string]vi
 	queryRegions := ssrQueryRegions(html, regions.Lists, regions.Conds, loadReplacements, replacements, len(page.DynamicParams()) > 0)
 	return SSRArtifact{
 		PageID:           page.ID,
-		Route:            page.Route,
+		Route:            route.Route,
 		Render:           render,
 		Cache:            page.CachePolicy(),
 		ErrorPage:        page.ErrorPage,
 		LayoutErrorPages: layoutErrorPagesForPage(page, layouts),
+		Locale:           route.Locale,
 		DynamicParams:    page.DynamicParams(),
 		RouteParams:      append([]source.RouteParam(nil), page.TypedRouteParams()...),
 		Layouts:          append([]string(nil), page.Layouts...),

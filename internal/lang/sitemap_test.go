@@ -62,6 +62,38 @@ view {
 	}
 }
 
+func TestSiteMapJSONIncludesLocalizedRoutes(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home.page.gwdk")
+	writeSiteMapFile(t, home, `package app
+
+page home
+route "/"
+guard public
+
+view {
+}
+`)
+
+	payload, diagnostics := SiteMapJSON(gowdk.Config{I18N: gowdk.I18NConfig{
+		Locales: []gowdk.LocaleConfig{{Code: "en"}, {Code: "pt"}},
+	}}, []string{home})
+	if diagnostics.HasErrors() {
+		t.Fatal(diagnostics)
+	}
+	output := string(payload)
+	for _, expected := range []string{
+		`"route": "/en"`,
+		`"locale": "en"`,
+		`"route": "/pt"`,
+		`"locale": "pt"`,
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected %q in sitemap JSON:\n%s", expected, output)
+		}
+	}
+}
+
 func TestSiteMapJSONIncludesEndpointGraph(t *testing.T) {
 	root := t.TempDir()
 	page := filepath.Join(root, "contact.page.gwdk")

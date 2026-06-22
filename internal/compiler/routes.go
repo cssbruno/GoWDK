@@ -4,41 +4,44 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func validateUniquePageRoutes(pages []gwdkir.Page) []ValidationError {
+func validateUniquePageRoutes(config gowdk.Config, pages []gwdkir.Page) []ValidationError {
 	seen := map[string]gwdkir.Page{}
 	var diagnostics []ValidationError
 	for _, page := range pages {
-		info, issues := parseRoute(page.Route)
-		if len(issues) > 0 {
-			continue
+		for _, route := range localizedPageRoutes(config.I18N, page) {
+			info, issues := parseRoute(route)
+			if len(issues) > 0 {
+				continue
+			}
+			first, exists := seen[info.Pattern]
+			if !exists {
+				seen[info.Pattern] = page
+				continue
+			}
+			diagnostics = append(diagnostics, ValidationError{
+				Code:   "duplicate_route",
+				PageID: page.ID,
+				Source: page.Source,
+				Span:   page.Spans.Route,
+				Related: relatedSpan(
+					first.Source,
+					first.Spans.Route,
+					fmt.Sprintf("route %q first declared here", route),
+				),
+				Message: duplicateRouteMessage(
+					route,
+					first.ID,
+					first.Source,
+					page.ID,
+					page.Source,
+				),
+			})
 		}
-		first, exists := seen[info.Pattern]
-		if !exists {
-			seen[info.Pattern] = page
-			continue
-		}
-		diagnostics = append(diagnostics, ValidationError{
-			Code:   "duplicate_route",
-			PageID: page.ID,
-			Source: page.Source,
-			Span:   page.Spans.Route,
-			Related: relatedSpan(
-				first.Source,
-				first.Spans.Route,
-				fmt.Sprintf("route %q first declared here", page.Route),
-			),
-			Message: duplicateRouteMessage(
-				page.Route,
-				first.ID,
-				first.Source,
-				page.ID,
-				page.Source,
-			),
-		})
 	}
 	return diagnostics
 }
@@ -64,10 +67,10 @@ func duplicateRouteMessage(route, firstID, firstSource, duplicateID, duplicateSo
 	return message
 }
 
-func validateAmbiguousDynamicPageRoutes(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs []gwdkir.ContractReference) []ValidationError {
+func validateAmbiguousDynamicPageRoutes(config gowdk.Config, pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs []gwdkir.ContractReference) []ValidationError {
 	var registered []routeRegistration
 	var diagnostics []ValidationError
-	for _, current := range routeRegistrations(pages, endpoints, refs) {
+	for _, current := range routeRegistrations(config, pages, endpoints, refs) {
 		for _, previous := range registered {
 			if current.Pattern == previous.Pattern {
 				// Exact duplicates are reported by the duplicate-route and
@@ -185,10 +188,10 @@ func routePatternSegments(pattern string) []string {
 	return strings.Split(trimmed, "/")
 }
 
-func validateRouteMethodConflicts(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs []gwdkir.ContractReference) []ValidationError {
+func validateRouteMethodConflicts(config gowdk.Config, pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs []gwdkir.ContractReference) []ValidationError {
 	seen := map[string][]routeRegistration{}
 	var diagnostics []ValidationError
-	for _, registration := range routeRegistrations(pages, endpoints, refs) {
+	for _, registration := range routeRegistrations(config, pages, endpoints, refs) {
 		key := registration.Method + " " + registration.Pattern
 		for _, previous := range seen[key] {
 			if previous.Kind == "page" && registration.Kind == "page" {
@@ -236,44 +239,52 @@ type routeRegistration struct {
 	Span     source.SourceSpan
 }
 
-func routeRegistrations(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs []gwdkir.ContractReference) []routeRegistration {
+func routeRegistrations(config gowdk.Config, pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs []gwdkir.ContractReference) []routeRegistration {
 	var registrations []routeRegistration
 	for _, page := range pages {
-		pageInfo, pageIssues := parseRoute(page.Route)
-		if len(pageIssues) == 0 {
+		for _, route := range localizedPageRoutes(config.I18N, page) {
+			pageInfo, pageIssues := parseRoute(route)
+			if len(pageIssues) > 0 {
+				continue
+			}
 			registrations = append(registrations, routeRegistration{
 				Kind:    "page",
 				Owner:   "page " + page.ID,
 				Method:  "GET",
-				Route:   page.Route,
+				Route:   route,
 				Pattern: pageInfo.Pattern,
 				PageID:  page.ID,
 				Source:  page.Source,
 				Span:    page.Spans.Route,
 			})
+		}
+		_, pageIssues := parseRoute(page.Route)
+		if len(pageIssues) == 0 {
 			for _, action := range page.Blocks.Actions {
 				route := action.Route
 				if route == "" {
 					route = page.Route
 				}
-				info, issues := parseRoute(route)
-				if len(issues) > 0 {
-					continue
-				}
 				method := strings.ToUpper(strings.TrimSpace(action.Method))
 				if method == "" {
 					method = "POST"
 				}
-				registrations = append(registrations, routeRegistration{
-					Kind:    "action",
-					Owner:   "action " + page.ID + "." + action.Name,
-					Method:  method,
-					Route:   route,
-					Pattern: info.Pattern,
-					PageID:  page.ID,
-					Source:  page.Source,
-					Span:    firstSpan(action.RouteSpan, action.Span, page.Spans.Route),
-				})
+				for _, currentRoute := range actionRegistrationRoutes(config.I18N, page.Route, route, action.Route == "") {
+					info, issues := parseRoute(currentRoute)
+					if len(issues) > 0 {
+						continue
+					}
+					registrations = append(registrations, routeRegistration{
+						Kind:    "action",
+						Owner:   "action " + page.ID + "." + action.Name,
+						Method:  method,
+						Route:   currentRoute,
+						Pattern: info.Pattern,
+						PageID:  page.ID,
+						Source:  page.Source,
+						Span:    firstSpan(action.RouteSpan, action.Span, page.Spans.Route),
+					})
+				}
 			}
 		}
 
@@ -380,6 +391,27 @@ func routeRegistrations(pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs
 		})
 	}
 	return registrations
+}
+
+func localizedPageRoutes(config gowdk.I18NConfig, page gwdkir.Page) []string {
+	localized := config.LocalizedRoutes(page.Route)
+	routes := make([]string, 0, len(localized))
+	for _, route := range localized {
+		routes = append(routes, route.Route)
+	}
+	return routes
+}
+
+func actionRegistrationRoutes(config gowdk.I18NConfig, pageRoute string, route string, inherited bool) []string {
+	if !inherited || !config.Enabled() {
+		return []string{route}
+	}
+	localized := config.LocalizedRoutes(pageRoute)
+	routes := make([]string, 0, len(localized))
+	for _, item := range localized {
+		routes = append(routes, item.Route)
+	}
+	return routes
 }
 
 func allowedPageOwnedQueryRouteConflict(first routeRegistration, current routeRegistration) bool {

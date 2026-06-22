@@ -56,7 +56,6 @@ type Response struct {
 // HandlerError wraps failures raised by generated handlers.
 type HandlerError struct {
 	Status  int
-	Kind    ErrorKind
 	Message string
 	Cause   error
 }
@@ -83,6 +82,19 @@ func NewHandlerError(status int, message string, cause error) error {
 	return HandlerError{Status: status, Message: message, Cause: cause}
 }
 
+type expectedError struct {
+	HandlerError
+	kind ErrorKind
+}
+
+func (err expectedError) Error() string {
+	return err.HandlerError.Error()
+}
+
+func (err expectedError) Unwrap() error {
+	return err.HandlerError
+}
+
 // NewExpectedError creates a typed application-owned error for generated
 // boundaries. The message is client-facing; do not include secrets or internal
 // service details.
@@ -91,7 +103,10 @@ func NewExpectedError(kind ErrorKind, message string, cause error) error {
 	if message == "" {
 		message = http.StatusText(status)
 	}
-	return HandlerError{Status: status, Kind: kind, Message: message, Cause: cause}
+	return expectedError{
+		HandlerError: HandlerError{Status: status, Message: message, Cause: cause},
+		kind:         kind,
+	}
 }
 
 // NotFound creates an expected HTTP 404 error for generated boundaries.

@@ -43,7 +43,7 @@ func parsePathParams(source string) (map[string]string, error) {
 	return parseLiteralStringMap(source, "path param")
 }
 
-func parseBuildData(body string, routeParams map[string]string, imports []gwdkir.Import, scripts []gwdkir.GoBlock, source string) (map[string]string, error) {
+func parseBuildData(body string, routeParams map[string]string, locale string, imports []gwdkir.Import, scripts []gwdkir.GoBlock, source string) (map[string]string, error) {
 	lines := significantBuildLines(body)
 	if len(lines) == 1 {
 		call, ok, err := parseBuildDataCallLine(lines[0])
@@ -51,7 +51,7 @@ func parseBuildData(body string, routeParams map[string]string, imports []gwdkir
 			return nil, err
 		}
 		if ok {
-			return runBuildDataCallRef(call, imports, scripts, source, routeParams)
+			return runBuildDataCallRef(call, imports, scripts, source, routeParams, locale)
 		}
 	}
 	data := map[string]buildValue{}
@@ -85,12 +85,12 @@ func parseBuildData(body string, routeParams map[string]string, imports []gwdkir
 	return buildValueStrings(data), nil
 }
 
-func parseBuildDataFromBlocks(blocks gwdkir.Blocks, routeParams map[string]string, imports []gwdkir.Import, source string) (map[string]string, error) {
+func parseBuildDataFromBlocks(blocks gwdkir.Blocks, routeParams map[string]string, locale string, imports []gwdkir.Import, source string) (map[string]string, error) {
 	if blocks.BuildCall != nil {
-		return runBuildDataCallRef(buildCallRef{Alias: blocks.BuildCall.Alias, Function: blocks.BuildCall.Function}, imports, blocks.GoBlocks, source, routeParams)
+		return runBuildDataCallRef(buildCallRef{Alias: blocks.BuildCall.Alias, Function: blocks.BuildCall.Function}, imports, blocks.GoBlocks, source, routeParams, locale)
 	}
 	if len(blocks.BuildRecords) == 0 {
-		return parseBuildData(blocks.BuildBody, routeParams, imports, blocks.GoBlocks, source)
+		return parseBuildData(blocks.BuildBody, routeParams, locale, imports, blocks.GoBlocks, source)
 	}
 	data := map[string]buildValue{}
 	for index, record := range blocks.BuildRecords {

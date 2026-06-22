@@ -137,6 +137,36 @@ responses. Request-time safety policies still win for actions, APIs, partial
 responses, SSR load redirects, CSRF HTML mutation, and generated request-time
 errors; those use `no-store`.
 
+### Localized Page Routes
+
+Project config can declare locale-prefixed page output:
+
+```go
+var Config = gowdk.Config{
+	I18N: gowdk.I18NConfig{
+		DefaultLocale: "en",
+		Locales: []gowdk.LocaleConfig{
+			{Code: "en"},
+			{Code: "pt-BR", PathPrefix: "/br"},
+		},
+	},
+}
+```
+
+With that config, `route "/about"` emits `/en/about` and `/br/about`. The
+root route `/` emits `/en` and `/br`. `OmitDefaultPrefix` keeps the default
+locale on the original route, so `route "/about"` can emit `/about` plus
+`/br/about`.
+
+Locale routing applies to generated page routes only: build-time SPA output,
+`paths {}`-expanded SPA output, generated SSR/hybrid page routes, route
+metadata, site-map JSON, and SEO sitemap output. Action, API, fragment,
+command, and query endpoint paths keep their declared routes.
+
+Go build helpers can read `gowdk.BuildParams.Locale` or
+`BuildParams.LocaleCode()`. Generated SSR handlers attach the active locale to
+`runtime/app.Locale(ctx)`.
+
 ## SPA Routes
 
 SPA render is the default:
@@ -366,14 +396,15 @@ For standalone fragment and action-driven partial examples, see
 
 Endpoint user code can read generated endpoint metadata with
 `runtime/app.Endpoint(ctx)`. This is the stable accessor for action, API, and
-fragment handler metadata today. Typed load-result and action-result data
-accessors are deferred until those result contracts are stable.
+fragment handler metadata today. Typed SSR load result structs are supported for
+declared `server {}` data. Typed action-result data accessors are deferred until
+action result contracts are stable.
 
 `server { => { field, user.name } }` execution calls same-package Go
 `Load<PageID>` functions at request time through `ssr.LoadContext`. Returned
 declared identifiers and dotted paths are resolved from nested maps with string
-keys, structs, pointers, interfaces, exported Go field names, and `json` tag
-names, then HTML-escaped into generated placeholders.
+keys, typed result structs, pointers, interfaces, exported Go field names, and
+`json` tag names, then HTML-escaped into generated placeholders.
 
 ## Route Plans
 

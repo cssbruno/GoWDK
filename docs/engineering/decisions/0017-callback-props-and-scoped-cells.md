@@ -72,6 +72,28 @@ two-way path with one model: **state lives in a scoped cell; sharing is reading
 that cell; two-way is reading it plus a write-back callback.** It depends on #517
 landing the scoped-cell primitive.
 
+### Surface details this ADR reserves
+
+Two grammar/encoding details the implementing change must honor, surfaced in
+review:
+
+- **Callback event names are lower-cased on the wire.** HTML attribute names are
+  lower-cased by the DOM, while `CustomEvent` names are case-sensitive, and the
+  runtime derives the event to listen for by slicing the
+  `data-gowdk-parent-on-<event>` attribute. So a callback prop `onDone` maps to
+  the parent-on attribute `data-gowdk-parent-on-done` and the child dispatches the
+  lower-cased event `done` (the canonical encoding is: drop the `on` prefix,
+  lower-case the remainder). Authoring is `onCamelCase`; the wire/event is the
+  lower-cased name. The compiler validates the child declares the matching
+  callback so the parent listener and child dispatch cannot drift.
+- **`bind:` is a reserved directive prefix.** Non-`g:` attributes that contain a
+  colon are currently parsed as `target:source` component prop renames, so
+  `bind:value={…}` would otherwise be read as a prop named `bind` sourced from
+  `value`. This ADR reserves `bind:*` as a binding directive that is matched
+  *before* the prop-rename rule; `bind` is not usable as a rename target. (If a
+  future need for a literal `bind` prop arises, it uses the rename's escape form,
+  not the bare `bind:`.)
+
 ### Net model
 
 **Events are callbacks, state is scoped cells.** Two principled mechanisms

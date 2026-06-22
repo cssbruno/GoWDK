@@ -28,6 +28,62 @@ func (source *scriptedEventSource) ReceiveEventBatch(ctx context.Context) (Event
 	return EventBatch{}, ctx.Err()
 }
 
+func TestWorkerDispatchFailureLogRedactsSecrets(t *testing.T) {
+	tests := []struct {
+		name string
+		err  string
+		want string
+		leak string
+	}{
+		{
+			name: "bearer token",
+			err:  "subscriber failed Authorization: Bearer abcdefgh1234567890",
+			want: "Authorization: Bearer [REDACTED]",
+			leak: "abcdefgh1234567890",
+		},
+		{
+			name: "dsn password",
+			err:  "subscriber failed opening postgres://app:supersecret@db.local/gowdk",
+			want: "postgres://app:[REDACTED]@db.local/gowdk",
+			leak: "supersecret",
+		},
+		{
+			name: "key value secret",
+			err:  "subscriber failed api_key=sk_live_123456789",
+			want: "api_key=[REDACTED]",
+			leak: "sk_live_123456789",
+		},
+		{
+			name: "non secret",
+			err:  "subscriber failed with temporary outage",
+			want: "subscriber failed with temporary outage",
+		},
+	}
+
+	previousLogger := WorkerLogger
+	defer func() { WorkerLogger = previousLogger }()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var logged []string
+			WorkerLogger = func(message string) {
+				logged = append(logged, message)
+			}
+
+			logWorkerDispatchFailure(errors.New(tt.err))
+
+			if len(logged) != 1 {
+				t.Fatalf("logged = %#v, want one message", logged)
+			}
+			if !strings.Contains(logged[0], tt.want) {
+				t.Fatalf("logged message = %q, want it to contain %q", logged[0], tt.want)
+			}
+			if tt.leak != "" && strings.Contains(logged[0], tt.leak) {
+				t.Fatalf("logged message leaked %q: %q", tt.leak, logged[0])
+			}
+		})
+	}
+}
+
 func TestRunEventWorkerDispatchesAndAcks(t *testing.T) {
 	registry := NewRegistry()
 	var webHandled, workerHandled, rolelessHandled int

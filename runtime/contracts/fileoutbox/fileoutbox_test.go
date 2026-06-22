@@ -198,32 +198,70 @@ func TestReceiveEventBatchNackKeepsRecords(t *testing.T) {
 }
 
 func TestReceiveEventBatchNackRedactsLastError(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "outbox.jsonl")
-	store := New(path, WithJSONTypeDecoder[patientCreated]())
-	if err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{{
-		Category: contracts.DomainEvent,
-		Type:     patientCreatedType,
-		Value:    patientCreated{ID: "patient-1"},
-	}}); err != nil {
-		t.Fatalf("store events: %v", err)
+	tests := []struct {
+		name string
+		err  string
+		want string
+		leak string
+	}{
+		{
+			name: "bearer token",
+			err:  "subscriber failed Authorization: Bearer abcdefgh1234567890",
+			want: "Authorization: Bearer [REDACTED]",
+			leak: "abcdefgh1234567890",
+		},
+		{
+			name: "dsn password",
+			err:  "subscriber failed opening postgres://app:supersecret@db.local/gowdk",
+			want: "postgres://app:[REDACTED]@db.local/gowdk",
+			leak: "supersecret",
+		},
+		{
+			name: "key value secret",
+			err:  "subscriber failed password=hunter2",
+			want: "password=[REDACTED]",
+			leak: "hunter2",
+		},
+		{
+			name: "non secret",
+			err:  "subscriber failed with temporary outage",
+			want: "subscriber failed with temporary outage",
+		},
 	}
 
-	batch, err := store.ReceiveEventBatch(context.Background())
-	if err != nil {
-		t.Fatalf("receive batch: %v", err)
-	}
-	if err := batch.Nack(context.Background(), errors.New("subscriber failed password=hunter2")); err != nil {
-		t.Fatalf("nack batch: %v", err)
-	}
-	records, err := store.Records(context.Background())
-	if err != nil {
-		t.Fatalf("records: %v", err)
-	}
-	if len(records) != 1 {
-		t.Fatalf("len(records) = %d, want 1", len(records))
-	}
-	if strings.Contains(records[0].LastError, "hunter2") || !strings.Contains(records[0].LastError, "password=[REDACTED]") {
-		t.Fatalf("last error was not redacted: %q", records[0].LastError)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "outbox.jsonl")
+			store := New(path, WithJSONTypeDecoder[patientCreated]())
+			if err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{{
+				Category: contracts.DomainEvent,
+				Type:     patientCreatedType,
+				Value:    patientCreated{ID: "patient-1"},
+			}}); err != nil {
+				t.Fatalf("store events: %v", err)
+			}
+
+			batch, err := store.ReceiveEventBatch(context.Background())
+			if err != nil {
+				t.Fatalf("receive batch: %v", err)
+			}
+			if err := batch.Nack(context.Background(), errors.New(tt.err)); err != nil {
+				t.Fatalf("nack batch: %v", err)
+			}
+			records, err := store.Records(context.Background())
+			if err != nil {
+				t.Fatalf("records: %v", err)
+			}
+			if len(records) != 1 {
+				t.Fatalf("len(records) = %d, want 1", len(records))
+			}
+			if !strings.Contains(records[0].LastError, tt.want) {
+				t.Fatalf("last error = %q, want it to contain %q", records[0].LastError, tt.want)
+			}
+			if tt.leak != "" && strings.Contains(records[0].LastError, tt.leak) {
+				t.Fatalf("last error leaked %q: %q", tt.leak, records[0].LastError)
+			}
+		})
 	}
 }
 

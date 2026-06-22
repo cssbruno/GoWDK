@@ -684,6 +684,7 @@ func TestHandlerHealth(t *testing.T) {
 			"assets/app.css": "assets/app.css",
 		}},
 		Metrics: metrics,
+		Tracer:  gowdktrace.NewTracer(gowdktrace.WithSampler(gowdktrace.AlwaysOff())),
 	}
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/_gowdk/health", nil)
@@ -698,10 +699,10 @@ func TestHandlerHealth(t *testing.T) {
 			t.Fatalf("expected health response to contain %q, got %s", expected, recorder.Body.String())
 		}
 	}
-	if !strings.Contains(recorder.Body.String(), `"metrics"`) || !strings.Contains(recorder.Body.String(), `"requests":1`) {
-		t.Fatalf("expected health metrics, got %s", recorder.Body.String())
+	if !strings.Contains(recorder.Body.String(), `"metrics"`) || !strings.Contains(recorder.Body.String(), `"requests":1`) || !strings.Contains(recorder.Body.String(), `"trace"`) || !strings.Contains(recorder.Body.String(), `"sampler":"always_off"`) {
+		t.Fatalf("expected health metrics and trace health, got %s", recorder.Body.String())
 	}
-	if snapshot := metrics.Snapshot(); snapshot.Requests != 1 || snapshot.Health != 1 {
+	if snapshot := metrics.Snapshot(); snapshot.Requests != 1 || snapshot.Health != 1 || snapshot.ActiveRequests != 0 || snapshot.TotalLatencyNS <= 0 {
 		t.Fatalf("unexpected metrics snapshot: %#v", snapshot)
 	}
 }
@@ -731,6 +732,49 @@ func TestHandlerMetricsRecordDispatchOutcomes(t *testing.T) {
 	snapshot := metrics.Snapshot()
 	if snapshot.Requests != 4 || snapshot.Static != 1 || snapshot.Backend != 1 || snapshot.MethodNotAllow != 1 || snapshot.NotFound != 1 {
 		t.Fatalf("unexpected metrics snapshot: %#v", snapshot)
+	}
+	if snapshot.ActiveRequests != 0 || snapshot.TotalLatencyNS <= 0 || snapshot.MaxLatencyNS <= 0 {
+		t.Fatalf("unexpected latency/active metrics: %#v", snapshot)
+	}
+}
+
+func TestHandlerMetricsRecordGeneratedRouteMetrics(t *testing.T) {
+	metrics := &Metrics{}
+	router, err := NewBackendRouter(BackendRoute{
+		Method:     http.MethodGet,
+		Path:       "/patients/{id}",
+		Kind:       "api",
+		EndpointID: "patients.Get",
+		Handler: func(response http.ResponseWriter, request *http.Request) bool {
+			response.WriteHeader(http.StatusInternalServerError)
+			return true
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := Handler{
+		Root:     fstest.MapFS{},
+		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
+		Metrics:  metrics,
+		Backend:  router.HandlerFunc(),
+	}
+
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/patients/42", nil))
+
+	snapshot := metrics.Snapshot()
+	if snapshot.Requests != 1 || snapshot.Backend != 1 || snapshot.Errors != 1 {
+		t.Fatalf("unexpected top-level metrics: %#v", snapshot)
+	}
+	if len(snapshot.Routes) != 1 {
+		t.Fatalf("route metrics = %#v, want one route", snapshot.Routes)
+	}
+	route := snapshot.Routes[0]
+	if route.Kind != "api" || route.Route != "/patients/{id}" || route.EndpointID != "patients.Get" {
+		t.Fatalf("unexpected route labels: %#v", route)
+	}
+	if route.Requests != 1 || route.ActiveRequests != 0 || route.Errors != 1 || route.TotalLatencyNS <= 0 || route.MaxLatencyNS <= 0 {
+		t.Fatalf("unexpected route counters: %#v", route)
 	}
 }
 
@@ -2179,7 +2223,7 @@ func TestLocalTraceAccessAllowsDirectLocalhostRequest(t *testing.T) {
 func TestTracedBackendRouteMarksServerStatusError(t *testing.T) {
 	ring := gowdktrace.NewRingSink(4)
 	tracer := gowdktrace.NewTracer(gowdktrace.WithSink(ring))
-	handler := traceBackendRoute("api", "/api/fail", gowdktrace.SourceRef{}, func(writer http.ResponseWriter, request *http.Request) bool {
+	handler := traceBackendRoute("api", "/api/fail", "api.Fail", gowdktrace.SourceRef{}, func(writer http.ResponseWriter, request *http.Request) bool {
 		http.Error(writer, "failed", http.StatusInternalServerError)
 		return true
 	})
@@ -2213,7 +2257,7 @@ func TestTracedBackendRouteRecordsEndpointLanes(t *testing.T) {
 			ring := gowdktrace.NewRingSink(4)
 			tracer := gowdktrace.NewTracer(gowdktrace.WithSink(ring))
 			source := gowdktrace.SourceRef{File: "patients.page.gwdk", Line: 12, Column: 3, OwnerKind: tt.kind, OwnerID: "patients"}
-			handler := traceBackendRoute(tt.kind, "/patients", source, func(writer http.ResponseWriter, request *http.Request) bool {
+			handler := traceBackendRoute(tt.kind, "/patients", "patients."+tt.kind, source, func(writer http.ResponseWriter, request *http.Request) bool {
 				writer.WriteHeader(http.StatusNoContent)
 				return true
 			})
@@ -2249,7 +2293,7 @@ func TestTracedBackendRouteRecordsEndpointLanes(t *testing.T) {
 func TestTracedBackendRouteContinuesWhenSpanDropped(t *testing.T) {
 	ring := gowdktrace.NewRingSink(1)
 	tracer := gowdktrace.NewTracer(gowdktrace.WithSink(ring), gowdktrace.WithIDGenerator(invalidTraceIDGenerator{}))
-	handler := traceBackendRoute("action", "/patients", gowdktrace.SourceRef{}, func(writer http.ResponseWriter, request *http.Request) bool {
+	handler := traceBackendRoute("action", "/patients", "patients.Create", gowdktrace.SourceRef{}, func(writer http.ResponseWriter, request *http.Request) bool {
 		writer.WriteHeader(http.StatusNoContent)
 		return true
 	})
@@ -2271,7 +2315,7 @@ func TestTracedBackendRouteContinuesWhenSpanDropped(t *testing.T) {
 func TestTracedBackendRouteRecordsPanicAsRedactedError(t *testing.T) {
 	ring := gowdktrace.NewRingSink(4)
 	tracer := gowdktrace.NewTracer(gowdktrace.WithSink(ring))
-	handler := traceBackendRoute("action", "/panic", gowdktrace.SourceRef{}, func(writer http.ResponseWriter, request *http.Request) bool {
+	handler := traceBackendRoute("action", "/panic", "panic.Run", gowdktrace.SourceRef{}, func(writer http.ResponseWriter, request *http.Request) bool {
 		panic("database password=hunter2")
 	})
 	request := httptest.NewRequest(http.MethodPost, "/panic", nil)

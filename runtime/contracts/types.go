@@ -53,6 +53,7 @@ type (
 type EventEnvelope struct {
 	ID          string
 	TraceParent string
+	Audience    []string
 	Category    EventCategory
 	Type        string
 	Value       any
@@ -85,6 +86,7 @@ type EventDecoder func(json.RawMessage) (any, error)
 type StoredEventEnvelope struct {
 	ID          string          `json:"id,omitempty"`
 	TraceParent string          `json:"traceparent,omitempty"`
+	Audience    []string        `json:"audience,omitempty"`
 	Category    EventCategory   `json:"category"`
 	Type        string          `json:"type"`
 	Value       json.RawMessage `json:"value"`
@@ -109,7 +111,7 @@ func MarshalEventEnvelopeJSON(event EventEnvelope) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(StoredEventEnvelope{ID: event.ID, TraceParent: event.TraceParent, Category: event.Category, Type: event.Type, Value: value})
+	return json.Marshal(StoredEventEnvelope{ID: event.ID, TraceParent: event.TraceParent, Audience: normalizeAudience(event.Audience), Category: event.Category, Type: event.Type, Value: value})
 }
 
 // DecodeEventEnvelopeJSON decodes the shared JSON transport shape and uses a
@@ -128,7 +130,7 @@ func DecodeEventEnvelopeJSON(payload []byte, decoders map[string]EventDecoder) (
 		}
 		value = decoded
 	}
-	return EventEnvelope{ID: stored.ID, TraceParent: stored.TraceParent, Category: stored.Category, Type: stored.Type, Value: value}, nil
+	return EventEnvelope{ID: stored.ID, TraceParent: stored.TraceParent, Audience: normalizeAudience(stored.Audience), Category: stored.Category, Type: stored.Type, Value: value}, nil
 }
 
 // Outbox stores command-emitted events for durable delivery. Implementations

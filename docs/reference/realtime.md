@@ -57,6 +57,9 @@ Current behavior:
 - Generated command adapters dispatch command-emitted presentation events to a
   subscription-filtered fanout, so only explicitly subscribed event types are
   streamed.
+- Presentation event envelopes can carry normalized `Audience` labels.
+  Dependency-free SSE fanout can assign server-owned labels to each client and
+  only deliver scoped events to clients that match every event label.
 - Generated stream handlers run inherited subscribed-page guards before opening
   an SSE response. They choose page guards from `?path=...` or the request
   referer path when available; if no page path can be identified, guarded
@@ -64,8 +67,8 @@ Current behavior:
 - Generated `gowdk.js` connects pages with subscribed regions to the SSE stream
   and applies explicit `replaceHTML` patches to matching query-owned elements.
 - Generated apps expose `RealtimeEventsPath` and
-  `RegisterRealtimeFanout(realtime.PresentationFanout)` for app-owned server
-  setup.
+  `RegisterRealtimeFanout(realtime.PresentationFanout)` so app startup code can
+  replace the default fanout with an audience-scoped hub or another transport.
 
 Current limits:
 
@@ -74,8 +77,8 @@ Current limits:
 - Only explicit `replaceHTML` patches are supported in the generated client
   runtime; richer patch shapes are deferred.
 - Custom retry/backoff/replay, active server-side session-change stream
-  revocation, richer patch shapes, and route-specific refresh endpoints remain
-  follow-up work.
+  revocation, richer patch shapes, fragment/API-specific query execution, and
+  route-specific refresh endpoints remain follow-up work.
 
 ## Query Invalidations
 
@@ -188,6 +191,46 @@ The browser runtime applies patches only to regions whose validated
 patch operations, missing HTML, malformed payloads, and unsupported swaps emit
 `gowdk:realtime-error` and leave the DOM unchanged.
 
+## Audience Scoping
+
+Audience scoping is server-owned. Browser query parameters, event names, or
+client-provided labels are not trusted authorization input.
+
+To emit a user- or tenant-scoped presentation event from a command handler:
+
+```go
+return result, contracts.EmitPresentationForAudience(
+	ctx,
+	PatientNotice{ID: patientID},
+	"tenant:"+tenantID,
+	"user:"+userID,
+)
+```
+
+To let generated streams deliver those events, replace the generated default
+fanout during app startup with an SSE hub that derives labels from authenticated
+request state:
+
+```go
+hub := realtime.NewSSE(
+	realtime.WithSSEAudienceFromRequest(func(request *http.Request) []string {
+		tenantID, userID := tenantAndUserFromSession(request)
+		if tenantID == "" || userID == "" {
+			return nil
+		}
+		return []string{"tenant:" + tenantID, "user:" + userID}
+	}),
+)
+
+gowdkapp.RegisterRealtimeFanout(hub)
+```
+
+`tenantAndUserFromSession` is app-owned code. Empty event audience means
+broadcast to every guard-authorized and subscription-matched client. Non-empty
+event audience uses AND matching: every event label must be present in the
+client label set. Clients with no audience labels receive broadcast events
+only.
+
 ## Stream Failure And Backpressure
 
 Generated streams are ordinary same-origin SSE responses. Before the response
@@ -227,7 +270,16 @@ import (
 	"github.com/cssbruno/gowdk/runtime/contracts"
 )
 
-hub := realtime.NewSSE(realtime.WithSSEBufferSize(32))
+hub := realtime.NewSSE(
+	realtime.WithSSEBufferSize(32),
+	realtime.WithSSEAudienceFromRequest(func(request *http.Request) []string {
+		tenantID, userID := tenantAndUserFromSession(request)
+		if tenantID == "" || userID == "" {
+			return nil
+		}
+		return []string{"tenant:" + tenantID, "user:" + userID}
+	}),
+)
 http.Handle("/gowdk/events", hub)
 
 gowdkapp.RegisterContractEventSink(
@@ -277,10 +329,11 @@ Each presentation event is written as one text JSON `contracts.EventEnvelope`.
 - In-process SSE and WebSocket hubs only know about clients connected to the
   same process. Multi-instance deployments should pair fanout with a broker,
   outbox, or external pub/sub path when all clients must see the same event.
-- Generated realtime streams are guard-checked and subscription/type filtered,
-  but the current presentation fanout is not scoped by user, session, tenant, or
-  audience. Do not put user-specific payloads on the shared fanout unless the
-  application owns an additional filtering layer.
+- Generated realtime streams are guard-checked and subscription/type filtered.
+  Add `WithSSEAudienceFromRequest` plus `EmitPresentationForAudience` for
+  user-, session-, or tenant-specific presentation payloads. Without an
+  audience-scoped fanout, scoped events are not delivered to generated SSE
+  clients.
 - SSE responses set `X-Accel-Buffering: no`; reverse proxies may still need
   explicit buffering and timeout settings for long-lived streams.
 - WebSocket deployments should set origin checks and proxy upgrade headers.

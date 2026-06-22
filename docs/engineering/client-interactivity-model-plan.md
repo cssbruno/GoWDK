@@ -94,7 +94,14 @@ Event bus (#514, closed); full-page hydration; resumability (Qwik-style).
 
 ## Status
 
-This document is the epic's architectural plan. The epic issue (#520) remains the
-open tracker; it closes when its workstreams (#384, #517, #518, #519) land. This
-plan and ADRs 0016/0017 capture the decided direction so the workstreams can
-proceed in order.
+The epic's named workstreams have landed:
+
+- #384: single-source client semantics.
+- #517: scoped state direction.
+- #518: callback props and scoped cells, captured in ADR 0017.
+- #519: pure Go helpers, captured in ADR 0016.
+- #501 and #504: gated client-language expansions after #384.
+
+This document remains the architectural record for the unified model. Follow-up
+client polish should open focused issues instead of keeping #520 open as the
+tracker.

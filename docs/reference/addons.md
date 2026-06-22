@@ -277,15 +277,17 @@ Separate worker/cron binary generators remain planned deployment tooling.
 `addons/realtime` registers the browser presentation-event fanout feature. It
 does not import the optional WebSocket transport dependency or patch the DOM.
 Use dependency-free `runtime/contracts/sse` through `realtime.NewSSE` for
-one-way browser notifications, or opt into the nested
+one-way browser notifications, including server-owned audience scoping through
+`WithSSEAudienceFromRequest`, or opt into the nested
 `runtime/contracts/websocketfanout` module when the app needs WebSocket
 sessions. See `docs/reference/realtime.md`.
 
 `addons/observability` registers the generated trace instrumentation feature.
 Debug builds wire route, endpoint, guard, browser navigation, and island spans
-to the dependency-free `runtime/trace` collector and local viewer. Optional OTLP
-export is isolated in the nested `runtime/trace/otel` module. See
-`docs/reference/observability.md`.
+to the dependency-free `runtime/trace` collector and local viewer. The runtime
+also exposes trace/span `slog` helpers, local health snapshots, and
+process-local generated route metrics; optional OTLP export is isolated in the
+nested `runtime/trace/otel` module. See `docs/reference/observability.md`.
 
 ## Auth Addon
 

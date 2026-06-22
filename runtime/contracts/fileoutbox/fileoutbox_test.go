@@ -26,6 +26,7 @@ func TestStoreEventsAppendsDurableRecords(t *testing.T) {
 
 	err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{{
 		ID:       "event-1",
+		Audience: []string{"tenant:clinic", "user:ada"},
 		Category: contracts.DomainEvent,
 		Type:     patientCreatedType,
 		Value:    patientCreated{ID: "patient-1"},
@@ -49,6 +50,9 @@ func TestStoreEventsAppendsDurableRecords(t *testing.T) {
 	}
 	if records[0].EventID != "event-1" {
 		t.Fatalf("record event ID = %q, want event-1", records[0].EventID)
+	}
+	if len(records[0].Audience) != 2 || records[0].Audience[0] != "tenant:clinic" || records[0].Audience[1] != "user:ada" {
+		t.Fatalf("record audience = %#v, want tenant/user labels", records[0].Audience)
 	}
 	if records[0].ID == records[0].EventID {
 		t.Fatalf("record ID should be distinct from event ID: %#v", records[0])
@@ -167,7 +171,7 @@ func TestReceiveEventBatchDecodesAndAcksRecords(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "outbox.jsonl")
 	store := New(path, WithJSONTypeDecoder[patientCreated]())
 	if err := store.StoreEvents(context.Background(), []contracts.EventEnvelope{
-		{Category: contracts.DomainEvent, Type: patientCreatedType, Value: patientCreated{ID: "patient-1"}},
+		{Audience: []string{"tenant:clinic"}, Category: contracts.DomainEvent, Type: patientCreatedType, Value: patientCreated{ID: "patient-1"}},
 		{Category: contracts.DomainEvent, Type: patientCreatedType, Value: patientCreated{ID: "patient-2"}},
 	}); err != nil {
 		t.Fatalf("store events: %v", err)
@@ -182,6 +186,9 @@ func TestReceiveEventBatchDecodesAndAcksRecords(t *testing.T) {
 	}
 	if batch.Events[0].ID == "" || batch.Events[1].ID == "" || batch.Events[0].ID == batch.Events[1].ID {
 		t.Fatalf("expected replayed events to carry unique IDs: %#v", batch.Events)
+	}
+	if len(batch.Events[0].Audience) != 1 || batch.Events[0].Audience[0] != "tenant:clinic" {
+		t.Fatalf("first event audience = %#v, want tenant label", batch.Events[0].Audience)
 	}
 	first, ok := batch.Events[0].Value.(patientCreated)
 	if !ok || first.ID != "patient-1" {

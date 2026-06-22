@@ -341,7 +341,7 @@ func RunContractEventWorkerWithSeenStoreAndOptions(ctx context.Context, source g
 }
 func newBackendRouter() (*gowdkruntime.BackendRouter, error) {
 	contractRegistry := ContractRegistry()
-	return gowdkruntime.NewBackendRouter(gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", Handler: action}, gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/patients", Kind: "command", Handler: commandPatientsCreatePatientPOSTPatients(contractRegistry)}, gowdkruntime.BackendRoute{Method: http.MethodGet, Path: "/patients", Kind: "query", Handler: queryPatientsGetPatientPageGETPatients(contractRegistry)})
+	return gowdkruntime.NewBackendRouter(gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", EndpointID: "newsletter.Subscribe", Handler: action}, gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/patients", Kind: "command", EndpointID: "patients.CreatePatient", Handler: commandPatientsCreatePatientPOSTPatients(contractRegistry)}, gowdkruntime.BackendRoute{Method: http.MethodGet, Path: "/patients", Kind: "query", EndpointID: "patients.GetPatientPage", Handler: queryPatientsGetPatientPageGETPatients(contractRegistry)})
 }
 
 var csrfTokenSource *gowdkactions.CSRF

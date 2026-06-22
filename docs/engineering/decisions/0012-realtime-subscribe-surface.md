@@ -127,3 +127,10 @@ templates reference domain or integration events directly.
   explicit `RegisterInvalidation[event, query]` scan metadata, build-report and
   graph output, generated `gowdk.query.invalidate` presentation events, and
   query-region document refetch.
+- #538: user/session/audience scoping. Implemented for dependency-free SSE
+  through optional `EventEnvelope.Audience` labels,
+  `contracts.EmitPresentationForAudience`, and
+  `realtime.WithSSEAudienceFromRequest`. The labels are server-owned; generated
+  streams remain guard-checked and subscription/type filtered, and applications
+  install an audience-aware fanout when they send user- or tenant-specific
+  presentation payloads.

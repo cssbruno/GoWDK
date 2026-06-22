@@ -3,6 +3,7 @@ package sse
 import (
 	"bufio"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -85,6 +86,54 @@ func TestHubStreamsPresentationEvents(t *testing.T) {
 	}
 }
 
+func TestHubFiltersPresentationEventsByAudience(t *testing.T) {
+	hub := New(WithAudienceFromRequest(func(request *http.Request) []string {
+		if request.URL.Query().Get("client") == "ada" {
+			return []string{"tenant:clinic", "user:ada"}
+		}
+		return nil
+	}))
+	server := httptest.NewServer(hub)
+	defer server.Close()
+
+	broadcast, err := http.Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer broadcast.Body.Close()
+	ada, err := http.Get(server.URL + "?client=ada")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ada.Body.Close()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for hub.ClientCount() < 2 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if hub.ClientCount() != 2 {
+		t.Fatalf("hub.ClientCount() = %d, want 2", hub.ClientCount())
+	}
+
+	err = hub.SendPresentationEvents(context.Background(), []contracts.EventEnvelope{
+		{Category: contracts.PresentationEvent, Type: "PatientNotice", Value: patientNotice{ID: "public"}},
+		{Category: contracts.PresentationEvent, Type: "PatientNotice", Audience: []string{"tenant:clinic", "user:ada"}, Value: patientNotice{ID: "private"}},
+	})
+	if err != nil {
+		t.Fatalf("send presentation events: %v", err)
+	}
+
+	broadcastData := readSSEDataLines(t, broadcast.Body, 1)
+	if !strings.Contains(broadcastData[0], `"id":"public"`) || strings.Contains(broadcastData[0], `"id":"private"`) {
+		t.Fatalf("broadcast client saw unexpected data: %#v", broadcastData)
+	}
+	adaData := readSSEDataLines(t, ada.Body, 2)
+	joined := strings.Join(adaData, "\n")
+	if !strings.Contains(joined, `"id":"public"`) || !strings.Contains(joined, `"id":"private"`) {
+		t.Fatalf("audienced client did not receive public and private events: %#v", adaData)
+	}
+}
+
 func TestHubDisconnectsSlowClient(t *testing.T) {
 	hub := New(WithBufferSize(1))
 	client := &sseClient{
@@ -109,6 +158,26 @@ func TestHubDisconnectsSlowClient(t *testing.T) {
 	default:
 		t.Fatal("expected the slow client to be disconnected on buffer overflow")
 	}
+}
+
+func readSSEDataLines(t *testing.T, body io.Reader, want int) []string {
+	t.Helper()
+	buffered := bufio.NewReader(body)
+	deadline := time.Now().Add(2 * time.Second)
+	var data []string
+	for len(data) < want && time.Now().Before(deadline) {
+		line, err := buffered.ReadString('\n')
+		if err != nil {
+			t.Fatalf("read SSE line: %v", err)
+		}
+		if strings.HasPrefix(line, "data: ") {
+			data = append(data, line)
+		}
+	}
+	if len(data) != want {
+		t.Fatalf("read %d data lines, want %d: %#v", len(data), want, data)
+	}
+	return data
 }
 
 func TestHubReturnsContextError(t *testing.T) {

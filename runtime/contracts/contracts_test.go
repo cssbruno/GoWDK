@@ -240,6 +240,27 @@ func TestCaptureCommandEventsDoesNotDispatchSubscribers(t *testing.T) {
 	}
 }
 
+func TestEmitPresentationForAudienceCapturesAudienceLabels(t *testing.T) {
+	registry := NewRegistry()
+	must(t, RegisterCommand[createPatient, createPatientResult](registry, func(ctx context.Context, command createPatient) (createPatientResult, error) {
+		if err := EmitPresentationForAudience(ctx, patientCreatedNotice{ID: "patient-1"}, "tenant:clinic", "user:ada", "user:ada", ""); err != nil {
+			return createPatientResult{}, err
+		}
+		return createPatientResult{ID: "patient-1"}, nil
+	}))
+
+	_, events, err := CaptureCommandEvents[createPatient, createPatientResult](context.Background(), registry, createPatient{Name: "Ada"})
+	if err != nil {
+		t.Fatalf("capture command events: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("len(events) = %d, want 1: %#v", len(events), events)
+	}
+	if len(events[0].Audience) != 2 || events[0].Audience[0] != "tenant:clinic" || events[0].Audience[1] != "user:ada" {
+		t.Fatalf("event audience = %#v, want normalized tenant/user labels", events[0].Audience)
+	}
+}
+
 func TestCaptureCommandEventsDropsEventsAfterFailure(t *testing.T) {
 	registry := NewRegistry()
 	var handled int
@@ -1130,6 +1151,7 @@ func TestEventEnvelopeObservationUsesStableLabels(t *testing.T) {
 func TestEventEnvelopeJSONPreservesID(t *testing.T) {
 	payload, err := MarshalEventEnvelopeJSON(EventEnvelope{
 		ID:       "event-1",
+		Audience: []string{"tenant:clinic", "user:ada", "user:ada", ""},
 		Category: DomainEvent,
 		Type:     ContractName[patientCreated](),
 		Value:    patientCreated{ID: "patient-1"},
@@ -1145,6 +1167,9 @@ func TestEventEnvelopeJSONPreservesID(t *testing.T) {
 	}
 	if decoded.ID != "event-1" {
 		t.Fatalf("decoded ID = %q, want event-1", decoded.ID)
+	}
+	if len(decoded.Audience) != 2 || decoded.Audience[0] != "tenant:clinic" || decoded.Audience[1] != "user:ada" {
+		t.Fatalf("decoded audience = %#v, want normalized tenant/user labels", decoded.Audience)
 	}
 	if value, ok := decoded.Value.(patientCreated); !ok || value.ID != "patient-1" {
 		t.Fatalf("decoded value = %#v, want patientCreated patient-1", decoded.Value)

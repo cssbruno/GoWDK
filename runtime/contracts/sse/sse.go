@@ -19,9 +19,10 @@ const (
 
 // Hub fans presentation events out to connected server-sent events clients.
 type Hub struct {
-	mu         sync.Mutex
-	bufferSize int
-	clients    map[*sseClient]bool
+	mu                  sync.Mutex
+	bufferSize          int
+	audienceFromRequest func(*http.Request) []string
+	clients             map[*sseClient]bool
 }
 
 // sseClient is one connected browser. disconnect is closed (once) to ask the
@@ -31,6 +32,7 @@ type sseClient struct {
 	queue      chan []byte
 	disconnect chan struct{}
 	once       sync.Once
+	audience   map[string]struct{}
 }
 
 func (client *sseClient) drop() {
@@ -47,6 +49,16 @@ func WithBufferSize(size int) Option {
 		if size > 0 {
 			hub.bufferSize = size
 		}
+	}
+}
+
+// WithAudienceFromRequest assigns one or more server-owned audience labels to a
+// connecting client. Empty labels make the client receive broadcast events
+// only. Do not read audience labels from client-controlled query parameters
+// without authenticating them first.
+func WithAudienceFromRequest(fn func(*http.Request) []string) Option {
+	return func(hub *Hub) {
+		hub.audienceFromRequest = fn
 	}
 }
 
@@ -80,6 +92,7 @@ func (hub *Hub) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	client := &sseClient{
 		queue:      make(chan []byte, hub.bufferSize),
 		disconnect: make(chan struct{}),
+		audience:   audienceSet(hub.clientAudience(request)),
 	}
 	hub.add(client)
 	defer hub.remove(client)
@@ -117,7 +130,7 @@ func (hub *Hub) SendPresentationEvents(ctx context.Context, events []contracts.E
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	payloads := make([][]byte, 0, len(events))
+	payloads := make([]payloadWithAudience, 0, len(events))
 	for _, event := range events {
 		if event.Category != contracts.PresentationEvent {
 			continue
@@ -126,7 +139,7 @@ func (hub *Hub) SendPresentationEvents(ctx context.Context, events []contracts.E
 		if err != nil {
 			return err
 		}
-		payloads = append(payloads, payload)
+		payloads = append(payloads, payloadWithAudience{payload: payload, audience: event.AudienceLabels()})
 	}
 	if len(payloads) == 0 {
 		return nil
@@ -136,8 +149,11 @@ func (hub *Hub) SendPresentationEvents(ctx context.Context, events []contracts.E
 	for client := range hub.clients {
 	queueLoop:
 		for _, payload := range payloads {
+			if !audienceMatches(payload.audience, client.audience) {
+				continue
+			}
 			select {
-			case client.queue <- payload:
+			case client.queue <- payload.payload:
 			default:
 				// The client cannot keep up. Drop it so the browser reconnects
 				// and resynchronizes, rather than silently missing events (for
@@ -154,11 +170,49 @@ func (hub *Hub) SendPresentationEvents(ctx context.Context, events []contracts.E
 	return nil
 }
 
+type payloadWithAudience struct {
+	payload  []byte
+	audience []string
+}
+
 // ClientCount returns the number of currently connected clients.
 func (hub *Hub) ClientCount() int {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
 	return len(hub.clients)
+}
+
+func (hub *Hub) clientAudience(request *http.Request) []string {
+	if hub.audienceFromRequest == nil {
+		return nil
+	}
+	return contracts.EventEnvelope{Audience: hub.audienceFromRequest(request)}.AudienceLabels()
+}
+
+func audienceSet(audience []string) map[string]struct{} {
+	if len(audience) == 0 {
+		return nil
+	}
+	out := make(map[string]struct{}, len(audience))
+	for _, label := range audience {
+		out[label] = struct{}{}
+	}
+	return out
+}
+
+func audienceMatches(eventAudience []string, clientAudience map[string]struct{}) bool {
+	if len(eventAudience) == 0 {
+		return true
+	}
+	if len(clientAudience) == 0 {
+		return false
+	}
+	for _, label := range eventAudience {
+		if _, ok := clientAudience[label]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func (hub *Hub) add(client *sseClient) {

@@ -24,6 +24,11 @@ packages, and tooling contracts may change before 1.0.
 - The client expression runtime now receives its operator and builtin metadata
   from the Go compiler/runtime spec instead of hardcoded JavaScript tables,
   reducing Go/JS drift for generated islands.
+- Added the client interactivity & communication model plan
+  (`docs/engineering/client-interactivity-model-plan.md`): the epic decomposition
+  that reduces the browser surface to ~5 orthogonal primitives, gated on
+  single-source semantics (#384) and sequencing scoped state (#517), callback
+  props (#518), and pure Go helpers (#519).
 - Docs now use the current `server {}` / `go server {}` server-lane syntax
   outside changelog/migration/diagnostics contexts, the README addon table
   lists `observability` and `spa`, and the security-audit docs no longer tie the

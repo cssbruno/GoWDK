@@ -19,8 +19,11 @@ repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "${repo_root}"
 
 # Removed forms. `load {` and `go ssr` are matched on a token boundary so that
-# `payload {`, `download`, and `go server` do not trip the check.
-pattern='(^|[^[:alnum:]_])load [{]|(^|[^[:alnum:]_])go ssr([^[:alnum:]_]|$)|g:each|g:when'
+# `payload {`, `download`, and `go server` do not trip the check. Quoted
+# `load` grammar tokens are also matched in grammar alternatives, but JSON
+# fields such as `"load": true` are left alone because the manifest field is
+# still current.
+pattern='(^|[^[:alnum:]_])load[[:space:]]*[{]|["`]load["`][[:space:]]*($|[|)])|(^|[^[:alnum:]_])go[[:space:]]+ssr([^[:alnum:]_]|$)|g:each|g:when'
 
 # Paths that may reference removed forms because their job is to document the
 # migration: the changelog, migration guides, and diagnostics references, plus

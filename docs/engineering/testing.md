@@ -94,7 +94,7 @@ runtime integration, or nondeterministic output.
 
 - `internal/compiler` tests cover SSR addon enforcement, duplicate page/component/layout identities, layout reference resolution, dynamic SPA routes requiring `paths`, actions without SSR, and `server {}` rejection on SPA pages.
 - `internal/discover` tests cover recursive `.gwdk` include/exclude matching.
-- `internal/parser` tests cover page/component/layout metadata declarations, `paths`, `build`, `load`, `view`, `props`, `act`, captured `paths`/`build`/`load`/`view` bodies, the first action input/redirect body subset, and render mode rejection.
+- `internal/parser` tests cover page/component/layout metadata declarations, `paths`, `build`, `server`, `view`, `props`, `act`, captured `paths`/`build`/`server`/`view` bodies, the first action input/redirect body subset, and render mode rejection.
 - `internal/viewrender` tests cover view markup rendering, escaping, expression attributes, shorthand class/id normalization, component expansion, and missing component/prop errors.
 - `internal/buildgen` tests cover app-shell HTML emission, literal build data,
   imported Go build data functions, build-data route-param binding, literal

@@ -48,7 +48,7 @@ outside the component contract and inline package-go-block slices.
 - `partials.md`: partial update status and planned fragment behavior.
 - `forms.md`: form submission, progressive enhancement, validation, and
   invalidation boundaries.
-- `ssr.md`: SSR render-mode, `load`, and guard behavior.
+- `ssr.md`: SSR render-mode, `server {}`, and guard behavior.
 - `hybrid.md`: hybrid request-time behavior and deferred hybrid capabilities.
 - `diagnostics.md`: current diagnostic shape and known codes.
 - `formatting.md`: current formatter behavior.

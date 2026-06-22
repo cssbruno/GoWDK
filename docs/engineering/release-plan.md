@@ -350,7 +350,7 @@ Every 0.x minor release must have:
 - [x] Support imported package aliases consistently.
 - [ ] Support route params into build functions. Deferred to #327.
 - [x] Support `context.Context` for request-time functions.
-- [ ] Support typed route params in `load`, APIs, actions, and fragments where
+- [ ] Support typed route params in server data, APIs, actions, and fragments where
   relevant. The current generated route context exposes `app.Params(ctx)` and
   `app.TypedParams(ctx)` for SSR/load; per-route structs and broader
   action/API/fragment typed accessors are deferred to #23.
@@ -484,7 +484,7 @@ Every 0.x minor release must have:
   dynamic detail pages, and route-local error pages. Deferred to
   [#102](https://github.com/cssbruno/GoWDK/issues/102).
 - [x] Document hybrid lifecycle, bare hybrid behavior, hybrid with and without
-  `load`, SSR feature requirement, cache, revalidation, action invalidation,
+  server data, SSR feature requirement, cache, revalidation, action invalidation,
   fragment refresh, and data refresh.
 - [x] Defer hybrid streaming until simpler behavior is stable.
 - [x] Add route/build report output that shows hybrid clearly.

@@ -1,6 +1,6 @@
 ---
 name: gowdk-language-change
-description: Change GOWDK language syntax or semantics. Use for parser, formatter, lexer, analyzer, diagnostics, `.gwdk` metadata, `view {}` markup, guards, routes, layouts, actions, APIs, `build`, `load`, `paths`, or docs/examples for language behavior.
+description: Change GOWDK language syntax or semantics. Use for parser, formatter, lexer, analyzer, diagnostics, `.gwdk` metadata, `view {}` markup, guards, routes, layouts, actions, APIs, `build`, `server`, `paths`, or docs/examples for language behavior.
 ---
 
 # GOWDK Language Change

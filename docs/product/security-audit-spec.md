@@ -94,6 +94,55 @@ only from the diagnostic registry, so the baseline never hardcodes severity.
 - **Phase 4 (shipped):** `runtime/testkit`, generated `_test.go`,
   standalone `--emit-tests`, generated-app `--run`, and the `runtime/app`
   security-header capability.
+- **Phase 5 (shipped):** posture hardening — header value semantics
+  (`baseline.headers`), structured request limits (`baseline.request_limits`),
+  fingerprinted raw-HTML exceptions, rule-compatible diagnostic-code overrides,
+  and the generated CORS policy + `baseline.cors` gate. See the baseline gates
+  table above for what each proves (issues #586–#590).
+
+## Baseline Gates: Implemented vs Planned
+
+The built-in baseline proves exactly the gates listed below — each `baseline.*`
+policy maps to an implemented engine check, asserted by
+`TestBaselinePoliciesMapToImplementedChecks`. Anything not listed is app-owned
+or planned, recorded as posture or tracked by a follow-up issue, and is **not**
+silently claimed as enforced.
+
+### Implemented baseline gates
+
+| Baseline policy | Proves | Codes |
+| --- | --- | --- |
+| `baseline.actions` / `baseline.api` / `baseline.contract_commands` | State-changing endpoints enforce CSRF and declare a guard | `audit_action_missing_csrf`, `audit_api_missing_csrf`, `audit_command_missing_csrf`, `audit_guardless_endpoint_page`, `audit_api_public_by_omission` |
+| `baseline.fragments` / `baseline.contract_queries` | Read endpoints declare a guard | `audit_guardless_endpoint_page` |
+| `baseline.contracts` | Web-exposed contracts declare roles | `audit_contract_roleless` |
+| `baseline.guards` | App-owned guards carry runtime fixture evidence | `audit_guard_unverified` |
+| `baseline.observability` | Generated trace endpoints are not over-exposed | `audit_observability_*` |
+| `baseline.frontend` | Bundle secret scan, client route-guard coverage, raw-HTML sink allowlisting with fingerprinted exceptions | `audit_bundle_secret`, `audit_client_route_unguarded`, `audit_raw_html_sink`, `audit_raw_html_exception_*` |
+| `baseline.headers` | Semantic strength of configured security headers (CSP, nosniff, Referrer-Policy, HSTS, framing) | `audit_header_*` |
+| `baseline.request_limits` | Effective request limits: a positive raw body cap installed before body/CSRF parsing, plus a multipart cap when multipart is accepted | `audit_request_limit_*` |
+| `baseline.cors` | Generated cross-origin policy is not a wildcard (and never a credentialed wildcard) | `audit_cors_wildcard_origin`, `audit_cors_credentialed_wildcard` |
+
+The posture manifest also records effective values the baseline reasons over:
+normalized/redacted header values, a `RequestLimitPosture` per endpoint (raw,
+decoded, multipart, compressed-body handling, install phase, config origin), a
+stable fingerprint per raw-HTML sink, and the configured `CORSPosture`.
+
+### App-owned or planned (not yet a baseline gate)
+
+These are recorded as posture and/or tracked, but the baseline does **not** yet
+fail a build on them:
+
+- Server read/header/write/idle timeouts — app-owned on `http.Server`.
+- Redirect policy and open-redirect checks — app-owned.
+- Rate-limit posture — `runtime/ratelimit` exists; not yet projected or audited.
+- Cookie posture (`Secure`/`HttpOnly`/`SameSite`) — auth/app-owned.
+- Cache-control policy — partial via `response` no-store; not audited.
+- Decoded-object/cardinality ceilings — `RequestLimitPosture.DecodedObjectBytes`
+  exists as a posture field; no baseline ceiling is enforced yet.
+
+Production build gating (`gowdk build`) blocks only on **error**-severity
+findings from these implemented gates (see `enforceBuildSecurityAudit`);
+warning-severity hardening advice never breaks a build.
 
 ## Issue Alignment
 

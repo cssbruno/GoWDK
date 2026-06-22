@@ -131,6 +131,47 @@ func TestBuildPopulatesFrontendAuditSurface(t *testing.T) {
 	}
 }
 
+func TestRawHTMLSinkFingerprintIsStableAndSourceSensitive(t *testing.T) {
+	base := RawHTMLFingerprint("page", "home", "{Body}", "home.page.gwdk:12", 0)
+	if base == "" {
+		t.Fatal("fingerprint should not be empty")
+	}
+	if base != RawHTMLFingerprint("page", "home", "{Body}", "home.page.gwdk:12", 0) {
+		t.Fatal("fingerprint should be stable for identical inputs")
+	}
+	if base == RawHTMLFingerprint("page", "home", "{Body}", "home.page.gwdk:40", 0) {
+		t.Fatal("moving the source should change the fingerprint")
+	}
+	if base == RawHTMLFingerprint("page", "home", "{Rendered}", "home.page.gwdk:12", 0) {
+		t.Fatal("changing the expression should change the fingerprint")
+	}
+	if base == RawHTMLFingerprint("page", "home", "{Body}", "home.page.gwdk:12", 1) {
+		t.Fatal("a different sink ordinal should change the fingerprint")
+	}
+}
+
+func TestBuildRecordsRawHTMLSinkFingerprint(t *testing.T) {
+	ir := gwdkir.Program{
+		Templates: []gwdkir.Template{{
+			OwnerKind: gwdkir.SourcePage,
+			OwnerID:   "home",
+			Source:    "home.page.gwdk",
+			Body:      `<main><div g:unsafe-html={Body}></div></main>`,
+			BodyStart: source.SourcePosition{Line: 12, Column: 1},
+			Span:      source.SourceSpan{Start: source.SourcePosition{Line: 11, Column: 1}},
+		}},
+	}
+	manifest := Build(gowdk.Config{}, ir)
+	if len(manifest.Frontend.RawHTMLSinks) != 1 {
+		t.Fatalf("expected one sink, got %#v", manifest.Frontend.RawHTMLSinks)
+	}
+	sink := manifest.Frontend.RawHTMLSinks[0]
+	want := RawHTMLFingerprint(sink.OwnerKind, sink.OwnerID, sink.Field, sink.Source, sink.Ordinal)
+	if sink.Fingerprint != want || sink.Fingerprint == "" {
+		t.Fatalf("sink fingerprint should match the exported derivation, got %#v", sink)
+	}
+}
+
 func hasBundleLeak(leaks []BundleLeak, source string, kind string) bool {
 	for _, leak := range leaks {
 		if leak.Source == source && leak.Kind == kind {
@@ -138,6 +179,33 @@ func hasBundleLeak(leaks []BundleLeak, source string, kind string) bool {
 		}
 	}
 	return false
+}
+
+func TestBuildRecordsNormalizedAndRedactedHeaderValues(t *testing.T) {
+	config := gowdk.Config{Build: gowdk.BuildConfig{
+		Mode: gowdk.Production,
+		SecurityHeaders: gowdk.SecurityHeadersConfig{
+			Enabled: true,
+			Headers: map[string]string{
+				"Content-Security-Policy": "  default-src   'self' ",
+				"X-Internal-Token":        "live_sk_abcdef0123456789abcdef",
+			},
+		},
+	}}
+	manifest := Build(config, gwdkir.Program{})
+	if manifest.BuildMode != string(gowdk.Production) {
+		t.Fatalf("expected production build mode in manifest, got %q", manifest.BuildMode)
+	}
+	byName := map[string]string{}
+	for _, header := range manifest.Frontend.ConfiguredHeaders {
+		byName[header.Name] = header.Value
+	}
+	if got := byName["Content-Security-Policy"]; got != "default-src 'self'" {
+		t.Fatalf("expected normalized CSP value, got %q", got)
+	}
+	if got := byName["X-Internal-Token"]; got != "[redacted]" {
+		t.Fatalf("expected secret-shaped header value to be redacted, got %q", got)
+	}
 }
 
 func TestBuildHonorsConfiguredBodyLimits(t *testing.T) {
@@ -160,6 +228,68 @@ func TestBuildHonorsConfiguredBodyLimits(t *testing.T) {
 				t.Fatalf("api body limit = %d, want %d", endpoint.BodyLimitBytes, 512<<10)
 			}
 		}
+	}
+}
+
+func TestBuildRecordsEffectiveRequestLimitPosture(t *testing.T) {
+	config := gowdk.Config{Build: gowdk.BuildConfig{BodyLimits: gowdk.BodyLimitsConfig{APIBytes: 512 << 10}}}
+	ir := gwdkir.Program{
+		Endpoints: []gwdkir.Endpoint{
+			{Kind: gwdkir.EndpointAction, Symbol: "Submit", Method: "POST", Path: "/a", PageID: "p", Guards: []string{"public"}},
+			{Kind: gwdkir.EndpointAPI, Symbol: "List", Method: "POST", Path: "/api/l", PageID: "p", Guards: []string{"public"}},
+		},
+	}
+	manifest := Build(config, ir)
+	byID := map[string]EndpointEntry{}
+	for _, endpoint := range manifest.Endpoints {
+		byID[endpoint.ID] = endpoint
+	}
+
+	api := byID["List"].RequestLimits
+	if api.RawBodyBytes != 512<<10 || byID["List"].BodyLimitBytes != api.RawBodyBytes {
+		t.Fatalf("api raw body limit should mirror BodyLimitBytes, got %#v", byID["List"])
+	}
+	if !api.InstalledBeforeParse || api.Phase != "before-body-parse-and-csrf" {
+		t.Fatalf("api limit should be installed before parse/CSRF, got %#v", api)
+	}
+	if api.CompressedBodyHandling != "raw-bytes-bounded" {
+		t.Fatalf("compressed bodies should be bounded by the raw cap, got %#v", api)
+	}
+	if api.Origin != "config:Build.BodyLimits.APIBytes" {
+		t.Fatalf("api limit origin should attribute to config, got %q", api.Origin)
+	}
+
+	action := byID["Submit"].RequestLimits
+	if action.RawBodyBytes != gowdk.DefaultRequestBodyLimitBytes {
+		t.Fatalf("action should fall back to the default cap, got %#v", action)
+	}
+	if action.Origin != "default:gowdk.DefaultRequestBodyLimitBytes" {
+		t.Fatalf("default action limit should attribute to the default, got %q", action.Origin)
+	}
+}
+
+func TestBuildRecordsCORSOnlyForGeneratedCORSRoutes(t *testing.T) {
+	config := gowdk.Config{Build: gowdk.BuildConfig{CORS: gowdk.CORSConfig{
+		Enabled:        true,
+		AllowedOrigins: []string{"*"},
+	}}}
+	actionOnly := Build(config, gwdkir.Program{
+		Endpoints: []gwdkir.Endpoint{
+			{Kind: gwdkir.EndpointAction, Symbol: "Submit", Method: http.MethodPost, Path: "/submit", Guards: []string{"public"}},
+			{Kind: gwdkir.EndpointFragment, Symbol: "Panel", Method: http.MethodGet, Path: "/panel", Guards: []string{"public"}},
+		},
+	})
+	if actionOnly.CORS.Enabled || actionOnly.CORS.AllowsAnyOrigin {
+		t.Fatalf("action/fragment-only output should not record generated CORS posture, got %#v", actionOnly.CORS)
+	}
+
+	apiOutput := Build(config, gwdkir.Program{
+		Endpoints: []gwdkir.Endpoint{
+			{Kind: gwdkir.EndpointAPI, Symbol: "Health", Method: http.MethodGet, Path: "/api/health", Guards: []string{"public"}},
+		},
+	})
+	if !apiOutput.CORS.Enabled || !apiOutput.CORS.AllowsAnyOrigin {
+		t.Fatalf("API output should record generated CORS posture, got %#v", apiOutput.CORS)
 	}
 }
 

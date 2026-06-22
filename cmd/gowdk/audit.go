@@ -501,6 +501,9 @@ func printAuditReport(report auditReport) {
 			location = finding.Source
 		}
 		fmt.Printf("[%s] %s: %s\n", strings.ToUpper(string(finding.Severity)), finding.Code, finding.Message)
+		if finding.CodeSource != "" {
+			fmt.Printf("  code: %s (severity %s, source: %s)\n", finding.Code, finding.Severity, finding.CodeSource)
+		}
 		if location != "" {
 			fmt.Printf("  at: %s\n", location)
 		}

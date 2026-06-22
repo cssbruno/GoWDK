@@ -65,6 +65,41 @@ func TestParseAuditDenyRolelessContractRule(t *testing.T) {
 	}
 }
 
+func TestParseAuditExceptRawHTMLRule(t *testing.T) {
+	file, err := ParseAuditSyntax([]byte(`policy waivers {
+  match "frontend"
+  except raw_html "abc123" owner "team-x" justification "server-sanitized" expires "2027-01-01" trusted_type "bluemonday"
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(file.Policies) != 1 || len(file.Policies[0].Rules) != 1 {
+		t.Fatalf("unexpected policies: %#v", file.Policies)
+	}
+	rule := file.Policies[0].Rules[0]
+	if rule.Kind != "except_raw_html" || rule.Value != "abc123" {
+		t.Fatalf("unexpected except rule: %#v", rule)
+	}
+	if rule.Attrs["owner"] != "team-x" || rule.Attrs["justification"] != "server-sanitized" {
+		t.Fatalf("unexpected exception attrs: %#v", rule.Attrs)
+	}
+	if rule.Attrs["expires"] != "2027-01-01" || rule.Attrs["sanitizer"] != "bluemonday" {
+		t.Fatalf("trusted_type should map to sanitizer and expires should parse: %#v", rule.Attrs)
+	}
+}
+
+func TestParseAuditExceptRawHTMLRejectsUnknownAttribute(t *testing.T) {
+	_, err := ParseAuditSyntax([]byte(`policy waivers {
+  match "frontend"
+  except raw_html "abc" bogus "x"
+}
+`))
+	if err == nil || !strings.Contains(err.Error(), "unsupported except raw_html attribute") {
+		t.Fatalf("expected unknown-attribute error, got %v", err)
+	}
+}
+
 func TestParseAuditSyntaxReportsUnsupportedPolicyLine(t *testing.T) {
 	_, err := ParseAuditSyntax([]byte(`policy bad {
   surprise now

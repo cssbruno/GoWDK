@@ -179,7 +179,7 @@ policy admin {
 	}
 	found := false
 	for _, finding := range report.Findings {
-		if finding.Code == "audit_required_guard_missing" && finding.Policy == "admin" && finding.Source == pagePath+":4" {
+		if finding.Code == "audit_required_guard_missing" && finding.Policy == "admin" && finding.Source == "admin.page.gwdk:4" {
 			found = true
 		}
 	}
@@ -222,7 +222,7 @@ policy broken extends missing {
 	}
 	found := false
 	for _, finding := range report.Findings {
-		if finding.Code == "policy_unknown_extends" && finding.Policy == "broken" && finding.Source == auditPath+":3" {
+		if finding.Code == "policy_unknown_extends" && finding.Policy == "broken" && finding.Source == "security.audit.gwdk:3" {
 			found = true
 		}
 	}
@@ -729,6 +729,55 @@ view {
 	}
 	if !auditReportHasCode(t, stdout, "audit_test_stale") {
 		t.Fatalf("expected audit_test_stale after posture change, got %s", stdout)
+	}
+}
+
+func TestAuditCommandCheckTestsDetectsTamperedBody(t *testing.T) {
+	root := t.TempDir()
+	config := writeAuditCLIConfigWithSecurityHeaders(t, root)
+	writeCLITestModule(t, root, "example.com/gowdk-audit-tamper")
+	writeCLIFile(t, filepath.Join(root, "model.go"), `package app
+
+type Model struct{}
+`)
+	pagePath := filepath.Join(root, "home.page.gwdk")
+	writeCLIFile(t, pagePath, `package app
+
+page home
+route "/"
+
+view {
+  <main>Home</main>
+}
+`)
+	testPath := filepath.Join(root, "security_audit_test.go")
+
+	if _, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"audit", "--config", config, "--emit-tests=" + testPath, pagePath})
+	}); err != nil {
+		t.Fatalf("emit-tests: %v", err)
+	}
+
+	// Hand-edit the generated body while leaving the generated marker and the
+	// identity metadata line (including its source= digest) intact: a header-only
+	// check would miss this, so --check-tests must compare the actual body.
+	committed, err := os.ReadFile(testPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tampered := append(append([]byte(nil), committed...), []byte("\n// hand-edited after generation\n")...)
+	if err := os.WriteFile(testPath, tampered, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, _, err := captureCLIOutput(t, func() error {
+		return run([]string{"audit", "--json", "--config", config, "--check-tests=" + testPath, pagePath})
+	})
+	if err == nil {
+		t.Fatal("expected --check-tests to fail for a hand-edited generated test body")
+	}
+	if !auditReportHasCode(t, stdout, "audit_test_stale") {
+		t.Fatalf("expected audit_test_stale for a tampered body, got %s", stdout)
 	}
 }
 

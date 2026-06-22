@@ -759,6 +759,45 @@ func TestRejectedDynamicSamplerDoesNotReturnTracerContext(t *testing.T) {
 	}
 }
 
+func TestRejectedDynamicSamplerPropagatesUnsampledTraceContext(t *testing.T) {
+	tracer := trace.NewTracer(
+		trace.WithSampler(denySampler{}),
+		trace.WithIDGenerator(staticIDGenerator{
+			traceID: "4bf92f3577b34da6a3ce929d0e0e4736",
+			spanID:  "00f067aa0ba902b7",
+		}),
+	)
+	ctx, span := tracer.Start(context.Background(), "sampled-out")
+	if span != nil {
+		t.Fatal("rejected sampler should not allocate a span")
+	}
+	tc, ok := trace.TraceContextFromContext(ctx)
+	if !ok {
+		t.Fatal("rejected root should propagate a trace context so descendants inherit the drop")
+	}
+	if tc.Sampled {
+		t.Fatal("propagated trace context for a dropped span must be unsampled")
+	}
+	if !tc.TraceID.Valid() || !tc.SpanID.Valid() {
+		t.Fatalf("dropped root should carry its generated identity, got %#v", tc)
+	}
+}
+
+func TestParentBasedSamplerKeepsDroppedRootTraceWhole(t *testing.T) {
+	// The first call (the root) is rejected by the counted sampler; a re-rolled
+	// root would be accepted on the next call. The child must inherit the root's
+	// drop instead of re-rolling, so the counted sampler is never consulted for
+	// it and one logical trace is not split into kept and dropped fragments.
+	tracer := trace.NewTracer(trace.WithSampler(trace.ParentBasedSampler(&trace.CountedSampler{N: 2})))
+	rootCtx, root := tracer.Start(context.Background(), "root")
+	if root != nil {
+		t.Fatal("first root should be dropped by the counted sampler")
+	}
+	if _, child := tracer.Start(rootCtx, "child"); child != nil {
+		t.Fatal("a child of a dropped root must inherit the drop, not re-roll as a new root")
+	}
+}
+
 func BenchmarkStartAlwaysOff(b *testing.B) {
 	tracer := trace.NewTracer(trace.WithSampler(trace.AlwaysOff()))
 	ctx := context.Background()

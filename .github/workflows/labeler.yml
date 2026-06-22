@@ -1,0 +1,26 @@
+name: Labeler
+
+# Applies labels from .github/labeler.yml to PRs based on changed paths.
+# Uses pull_request_target so it works for PRs from forks; it only reads the
+# diff's file list, never runs PR code.
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    name: Apply path labels
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label PR
+        uses: actions/labeler@v5
+        with:
+          sync-labels: false

@@ -1,0 +1,34 @@
+name: Release Please
+
+# Maintains a standing "Release PR" from conventional commits on main. The PR
+# bumps the canonical version in cmd/gowdk/main.go and keeps the VS Code
+# extension package.json in lockstep (CI enforces sync-version --check). It does
+# NOT touch CHANGELOG.md (skip-changelog) — that stays hand-written.
+#
+# Merging the Release PR creates the vX.Y.Z tag, which triggers release.yml to
+# build and publish artifacts.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    name: Maintain release PR and tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run release-please
+        uses: googleapis/release-please-action@v4
+        with:
+          # IMPORTANT: must be a Personal Access Token or GitHub App token, NOT
+          # the default GITHUB_TOKEN. Tags pushed by GITHUB_TOKEN do not trigger
+          # other workflows, so release.yml would never fire. The token needs
+          # `contents: write` and `pull-requests: write` (repo scope for a PAT).
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

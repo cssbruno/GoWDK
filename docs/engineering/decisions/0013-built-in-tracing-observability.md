@@ -28,6 +28,8 @@ boundary.
 Rules:
 
 - Trace identity uses W3C Trace Context `traceparent` IDs.
+- Trace propagation preserves valid bounded `tracestate` and rejects invalid
+  `traceparent` values instead of carrying ambiguous context.
 - The core package exposes `TraceID`, `SpanID`, `Tracer`, `Span`, `Sampler`,
   `Sink`, and context propagation helpers.
 - Span metadata uses explicit GOWDK surfaces (`backend`, `frontend`, `worker`)
@@ -36,11 +38,15 @@ Rules:
 - The root package includes only dependency-free sinks: console, JSON Lines,
   in-memory ring, multi-sink, exporter adapter, and an in-process collector
   handler for JSON/SSE local inspection.
+- The root package exposes local tracer/collector health snapshots and
+  standard-library `slog` trace/span correlation helpers.
 - OpenTelemetry compatibility is represented by semantic-convention attribute
   keys and an OTLP-like exporter interface/value shape. Concrete OTLP
   transports must remain optional and outside the root dependency graph.
 - Generated app auto-instrumentation consumes this runtime API rather than
   creating a parallel tracing model.
+- Generated app metrics remain dependency-free and low-cardinality, keyed by
+  generated route templates and endpoint IDs rather than raw URLs.
 
 ## Consequences
 
@@ -55,7 +61,8 @@ Rules:
 
 - The first slice does not send data to hosted observability systems.
 - The in-memory collector is process-local and loses traces on restart.
-- Generated app wiring still needs a later integration phase.
+- Production metrics/log backends, alerting, retention, and hosted analysis
+  remain app-owned integration work.
 
 ### Neutral
 

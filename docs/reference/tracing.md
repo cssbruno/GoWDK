@@ -93,7 +93,18 @@ http.Handle("/_gowdk/traces", collector.Handler())
 {
   "spans": [],
   "dropped": 0,
-  "rejected": 0
+  "rejected": 0,
+  "health": {
+    "spans": 0,
+    "dropped": 0,
+    "rejected": 0,
+    "subscribers": 0,
+    "subscriberQueueDepth": 0,
+    "subscriberQueueCapacity": 0,
+    "sseLimit": 32,
+    "ingestRateLimit": 120,
+    "ingestRateWindowDuration": "1m0s"
+  }
 }
 ```
 
@@ -124,10 +135,29 @@ collector := gowdktrace.NewCollector(
 )
 ```
 
+`collector.HealthSnapshot()` returns the same storage, dropped, rejected,
+subscriber, and ingest-limit counters for app-owned health endpoints.
+
 Generated apps mount the viewer behind `runtime/app.LocalTraceAccess`. If an
 application mounts `Collector.Handler()` or `ViewerHandler()` itself on an
 internet-facing route, the application must still provide normal authentication,
 authorization, TLS, reverse-proxy, and production rate-limit policy.
+
+## Log Correlation And Health
+
+Use the active trace context to attach stable `slog` attributes:
+
+```go
+logger.InfoContext(ctx, "loaded patient", gowdktrace.SlogArgs(ctx)...)
+```
+
+`SlogAttrs(ctx)` returns `trace_id` and `span_id` attributes. `SlogArgs(ctx)`
+returns the same data as alternating key/value arguments for `slog.Logger`
+methods. Both return nil when the context has no valid trace identity.
+
+`tracer.HealthSnapshot()` reports the sampler, sampling ratio when known,
+sampled spans, successful exports, export failures, and recent export latency.
+Generated app health includes this snapshot when a tracer is attached.
 
 ## Sampling
 
@@ -144,5 +174,5 @@ The disabled `AlwaysOff` path with no start options is allocation-free.
   debug builds.
 - Concrete OTLP export lives in the nested `runtime/trace/otel` module so the
   root module does not depend on OpenTelemetry.
-- Durable storage, hosted trace analysis, production sampling policy, and
-  production access policy stay app-owned.
+- Durable storage, hosted analysis, metrics/log backends, production sampling
+  policy, and production access policy stay app-owned.

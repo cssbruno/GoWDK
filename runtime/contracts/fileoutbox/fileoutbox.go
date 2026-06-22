@@ -28,6 +28,7 @@ type Record struct {
 	ID            string                  `json:"id"`
 	EventID       string                  `json:"eventId,omitempty"`
 	TraceParent   string                  `json:"traceparent,omitempty"`
+	Audience      []string                `json:"audience,omitempty"`
 	StoredAt      time.Time               `json:"storedAt"`
 	Category      contracts.EventCategory `json:"category"`
 	Type          string                  `json:"type"`
@@ -141,6 +142,7 @@ func (store *Store) StoreEvents(ctx context.Context, events []contracts.EventEnv
 			ID:          newRecordID(),
 			EventID:     event.ID,
 			TraceParent: event.TraceParent,
+			Audience:    event.AudienceLabels(),
 			StoredAt:    store.now().UTC(),
 			Category:    event.Category,
 			Type:        event.Type,
@@ -258,6 +260,7 @@ func (store *Store) decodeRecordsLocked(records []Record) ([]contracts.EventEnve
 		events = append(events, contracts.EventEnvelope{
 			ID:          eventID,
 			TraceParent: record.TraceParent,
+			Audience:    record.Audience,
 			Category:    record.Category,
 			Type:        record.Type,
 			Value:       value,

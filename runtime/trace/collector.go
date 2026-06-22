@@ -122,6 +122,19 @@ type collectorRateWindow struct {
 	count int
 }
 
+// CollectorHealthSnapshot is a point-in-time view of local collector state.
+type CollectorHealthSnapshot struct {
+	Spans                    int    `json:"spans"`
+	Dropped                  uint64 `json:"dropped"`
+	Rejected                 uint64 `json:"rejected"`
+	Subscribers              int    `json:"subscribers"`
+	SubscriberQueueDepth     int    `json:"subscriberQueueDepth"`
+	SubscriberQueueCapacity  int    `json:"subscriberQueueCapacity"`
+	SSELimit                 int    `json:"sseLimit"`
+	IngestRateLimit          int    `json:"ingestRateLimit"`
+	IngestRateWindowDuration string `json:"ingestRateWindowDuration"`
+}
+
 // CollectorOption configures a Collector.
 type CollectorOption func(*Collector)
 
@@ -207,6 +220,30 @@ func (collector *Collector) Rejected() uint64 {
 	return collector.rejected.Load()
 }
 
+// HealthSnapshot returns local collector storage, rejection, and stream queue
+// health.
+func (collector *Collector) HealthSnapshot() CollectorHealthSnapshot {
+	if collector == nil {
+		return CollectorHealthSnapshot{}
+	}
+	snapshot := CollectorHealthSnapshot{
+		Spans:                    len(collector.Spans()),
+		Dropped:                  collector.Dropped(),
+		Rejected:                 collector.Rejected(),
+		SSELimit:                 collector.sseLimit,
+		IngestRateLimit:          collector.ingestRateLimit,
+		IngestRateWindowDuration: collector.ingestRateWindow.String(),
+	}
+	collector.mu.Lock()
+	defer collector.mu.Unlock()
+	snapshot.Subscribers = len(collector.subscribers)
+	for subscriber := range collector.subscribers {
+		snapshot.SubscriberQueueDepth += len(subscriber)
+		snapshot.SubscriberQueueCapacity += cap(subscriber)
+	}
+	return snapshot
+}
+
 // Handler serves recent spans as JSON. Requests to /events or requests with an
 // Accept header containing text/event-stream receive an SSE stream of existing
 // and future spans. POST requests accept one Snapshot or a JSON array of
@@ -251,10 +288,11 @@ func (collector *Collector) Handler() http.Handler {
 		}
 		response.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(response).Encode(struct {
-			Spans    []Snapshot `json:"spans"`
-			Dropped  uint64     `json:"dropped"`
-			Rejected uint64     `json:"rejected"`
-		}{Spans: collector.Spans(), Dropped: collector.Dropped(), Rejected: collector.Rejected()})
+			Spans    []Snapshot              `json:"spans"`
+			Dropped  uint64                  `json:"dropped"`
+			Rejected uint64                  `json:"rejected"`
+			Health   CollectorHealthSnapshot `json:"health"`
+		}{Spans: collector.Spans(), Dropped: collector.Dropped(), Rejected: collector.Rejected(), Health: collector.HealthSnapshot()})
 	})
 }
 

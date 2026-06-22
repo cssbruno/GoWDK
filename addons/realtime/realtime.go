@@ -3,6 +3,8 @@
 package realtime
 
 import (
+	"net/http"
+
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/runtime/contracts"
 	runtimerealtime "github.com/cssbruno/gowdk/runtime/realtime"
@@ -33,4 +35,11 @@ func NewSSE(options ...SSEOption) *SSEHub {
 // WithSSEBufferSize sets each SSE client's queued message buffer.
 func WithSSEBufferSize(size int) SSEOption {
 	return runtimerealtime.WithSSEBufferSize(size)
+}
+
+// WithSSEAudienceFromRequest assigns server-owned audience labels to one SSE
+// client. Scoped presentation events are delivered only when every event label
+// is present in the client audience set.
+func WithSSEAudienceFromRequest(fn func(*http.Request) []string) SSEOption {
+	return runtimerealtime.WithSSEAudienceFromRequest(fn)
 }

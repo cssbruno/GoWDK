@@ -2,8 +2,9 @@
 
 `addons/observability` enables generated GOWDK Trace wiring for debug builds.
 The addon name stays `observability`, but the current implemented surface is
-GOWDK Trace plus local inspection primitives. It is not a hosted metrics, logs,
-or trace-analysis backend.
+GOWDK Trace, local inspection primitives, dependency-free health snapshots,
+low-cardinality generated route metrics, and trace/span correlation helpers for
+standard-library `slog`. It is not a hosted observability platform.
 
 It registers `FeatureObservability`; `runtime/trace` remains the
 dependency-free root runtime, and optional OTLP export lives in the nested
@@ -45,6 +46,13 @@ Current generated instrumentation:
   trace context, and posts frontend spans to the local collector.
 - JS islands, WASM island loaders, and page-level client Go WASM loaders reuse
   `window.__gowdkTrace`.
+- `runtime/trace.SlogAttrs` and `SlogArgs` expose active `trace_id` and
+  `span_id` values for app-owned structured logs.
+- `runtime/app.Metrics` records request count, active request count, latency,
+  errors, and generated backend route metrics keyed by route templates and
+  endpoint IDs.
+- Generated app health includes tracer export health when a tracer is attached,
+  and the local collector JSON includes collector queue/reject health.
 
 The generated local collector keeps a bounded in-memory ring of 1024 completed
 spans. It requires JSON POST ingest, rejects cross-origin browser ingest, caps
@@ -83,6 +91,7 @@ tracer := trace.NewTracer(trace.WithSink(sink))
 
 Do not treat the local collector or viewer as a production observability
 backend. Production deployments should set sampling deliberately, keep viewer
-access gated or disabled, and send spans to app-owned telemetry infrastructure.
-Full slog correlation, expanded route metrics, durable storage, hosted analysis,
-and production access policy remain future observability work.
+access gated or disabled, and send spans, logs, and metrics to app-owned
+telemetry infrastructure. Durable storage, hosted analysis, production metrics
+export, richer log-pipeline integration, alerting, retention, and production
+access policy remain future observability work.

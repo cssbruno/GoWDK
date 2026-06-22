@@ -27,11 +27,12 @@ type BackendHandler func(http.ResponseWriter, *http.Request) bool
 
 // BackendRoute describes one generated action or API route.
 type BackendRoute struct {
-	Method  string
-	Path    string
-	Kind    string
-	Source  gowdktrace.SourceRef
-	Handler BackendHandler
+	Method     string
+	Path       string
+	Kind       string
+	EndpointID string
+	Source     gowdktrace.SourceRef
+	Handler    BackendHandler
 }
 
 // BackendRouter dispatches generated backend routes.
@@ -50,6 +51,7 @@ type backendRouteEntry struct {
 	method  string
 	kind    string
 	path    string
+	id      string
 	source  gowdktrace.SourceRef
 	handler BackendHandler
 }
@@ -57,6 +59,7 @@ type backendRouteEntry struct {
 type backendPatternRouteEntry struct {
 	key     backendRouteKey
 	kind    string
+	id      string
 	source  gowdktrace.SourceRef
 	handler BackendHandler
 }
@@ -96,20 +99,20 @@ func (router *BackendRouter) handle(route BackendRoute) error {
 		kind = "backend"
 	}
 	key := backendRouteKey{method: method, path: normalizeBackendPath(route.Path)}
-	handler := BackendBoundary(kind, traceBackendRoute(kind, key.path, route.Source, route.Handler))
+	handler := BackendBoundary(kind, traceBackendRoute(kind, key.path, route.EndpointID, route.Source, route.Handler))
 	if backendRouteIsDynamic(key.path) {
 		for _, existing := range router.patterns {
 			if existing.key == key {
 				return fmt.Errorf("duplicate backend route %s %s", key.method, key.path)
 			}
 		}
-		router.patterns = append(router.patterns, backendPatternRouteEntry{key: key, kind: kind, source: route.Source, handler: handler})
+		router.patterns = append(router.patterns, backendPatternRouteEntry{key: key, kind: kind, id: route.EndpointID, source: route.Source, handler: handler})
 		return nil
 	}
 	if _, exists := router.routes[key]; exists {
 		return fmt.Errorf("duplicate backend route %s %s", key.method, key.path)
 	}
-	router.routes[key] = backendRouteEntry{method: key.method, kind: kind, path: key.path, source: route.Source, handler: handler}
+	router.routes[key] = backendRouteEntry{method: key.method, kind: kind, path: key.path, id: route.EndpointID, source: route.Source, handler: handler}
 	return nil
 }
 
@@ -210,7 +213,7 @@ func (router *BackendRouter) corsRoute(method string, requestPath string) (backe
 			continue
 		}
 		if _, ok := gowdkroute.Match(route.key.path, requestPath); ok {
-			return backendRouteEntry{method: route.key.method, kind: route.kind, path: route.key.path, source: route.source, handler: route.handler}, true
+			return backendRouteEntry{method: route.key.method, kind: route.kind, path: route.key.path, id: route.id, source: route.source, handler: route.handler}, true
 		}
 	}
 	return backendRouteEntry{}, false
@@ -225,7 +228,7 @@ func backendRouteSupportsCORS(kind string) bool {
 	}
 }
 
-func traceBackendRoute(kind, routePath string, source gowdktrace.SourceRef, handler BackendHandler) BackendHandler {
+func traceBackendRoute(kind, routePath string, endpointID string, source gowdktrace.SourceRef, handler BackendHandler) BackendHandler {
 	if handler == nil {
 		return nil
 	}
@@ -239,7 +242,9 @@ func traceBackendRoute(kind, routePath string, source gowdktrace.SourceRef, hand
 		if request == nil {
 			return handler(writer, request)
 		}
-		if _, ok := gowdktrace.TracerFromContext(request.Context()); !ok {
+		metrics := metricsFromContext(request.Context())
+		_, hasTracer := gowdktrace.TracerFromContext(request.Context())
+		if metrics == nil && !hasTracer {
 			return handler(writer, request)
 		}
 		recorder, ok := writer.(interface{ traceRecorder() *traceResponseWriter })
@@ -249,6 +254,11 @@ func traceBackendRoute(kind, routePath string, source gowdktrace.SourceRef, hand
 		} else {
 			traceRecorder = &traceResponseWriter{ResponseWriter: writer, status: http.StatusOK}
 			writer = wrapTraceResponseWriter(traceRecorder)
+		}
+		routeMetric, routeStart := metrics.startRoute(kind, routePath, endpointID)
+		defer func() { metrics.finishRoute(routeMetric, routeStart, traceRecorder.status) }()
+		if !hasTracer {
+			return handler(writer, request)
 		}
 		ctx, span := gowdktrace.Start(request.Context(), name,
 			gowdktrace.WithSurface(gowdktrace.SurfaceBackend),
@@ -261,6 +271,9 @@ func traceBackendRoute(kind, routePath string, source gowdktrace.SourceRef, hand
 		)
 		defer func() {
 			if recovered := recover(); recovered != nil {
+				if traceRecorder.status < http.StatusInternalServerError {
+					traceRecorder.status = http.StatusInternalServerError
+				}
 				if span != nil {
 					span.SetStatus(gowdktrace.StatusError, redactSecrets(strings.TrimSpace(fmt.Sprint(recovered))))
 					span.End()

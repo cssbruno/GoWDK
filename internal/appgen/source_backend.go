@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/token"
 	"sort"
+	"strings"
 
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -120,6 +121,7 @@ func backendRouteExpr(registration BackendEndpointRegistration, method ast.Expr,
 		keyValue("Method", method),
 		keyValue("Path", stringLit(registration.Path)),
 		keyValue("Kind", stringLit(string(registration.Kind))),
+		keyValue("EndpointID", stringLit(backendEndpointID(registration))),
 		keyValue("Handler", handler),
 	}
 	if trace {
@@ -130,6 +132,21 @@ func backendRouteExpr(registration BackendEndpointRegistration, method ast.Expr,
 	return &ast.CompositeLit{
 		Type: sel("gowdkruntime", "BackendRoute"),
 		Elts: elts,
+	}
+}
+
+func backendEndpointID(registration BackendEndpointRegistration) string {
+	switch {
+	case strings.Contains(registration.Name, "."):
+		return registration.Name
+	case registration.PageID != "" && registration.Name != "":
+		return registration.PageID + "." + registration.Name
+	case registration.Name != "":
+		return registration.Name
+	case registration.PageID != "":
+		return registration.PageID
+	default:
+		return string(registration.Kind) + " " + registration.Path
 	}
 }
 

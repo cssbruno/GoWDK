@@ -37,13 +37,17 @@ hybrid-with-load request-time slices. SSR remains optional.
 
 ## Observability
 
-- Logs: compiler diagnostics and current generated runtime request logs.
+- Logs: compiler diagnostics, generated runtime startup/fatal logs, and
+  app-owned structured logs. `runtime/trace` exposes `slog` trace/span
+  correlation helpers for app-owned log records.
 - Metrics: route counts and render mode counts are available through manifests.
-  `runtime/app.Metrics` records dependency-free request counters for generated
-  app dispatch paths, and generated apps can expose snapshots through
+  `runtime/app.Metrics` records dependency-free request counters, active
+  requests, errors, latency, and generated backend route metrics keyed by
+  route templates and endpoint IDs. Generated apps can expose snapshots through
   `/_gowdk/health` when a metrics collector is attached.
-- Traces: request-time SSR, actions, APIs, and fragments are future production
-  observability concerns.
+- Traces: `runtime/trace` and `addons/observability` provide dependency-free
+  local trace IDs, spans, sampling, collector/viewer health, and optional nested
+  OTLP export.
 - Alerts: action failures, API failures, SSR errors, and asset serving errors
   are future production concerns.
 - Dashboards: generated manifest and route behavior should be inspectable.

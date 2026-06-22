@@ -154,6 +154,31 @@ func TestTracestatePropagatesThroughChildSpan(t *testing.T) {
 	}
 }
 
+func TestSlogAttrsExposeTraceAndSpanIDs(t *testing.T) {
+	ctx := trace.ContextWithTraceContext(context.Background(), trace.TraceContext{
+		TraceID: "4bf92f3577b34da6a3ce929d0e0e4736",
+		SpanID:  "00f067aa0ba902b7",
+	})
+
+	attrs := trace.SlogAttrs(ctx)
+	if len(attrs) != 2 {
+		t.Fatalf("len(attrs) = %d, want 2: %#v", len(attrs), attrs)
+	}
+	if attrs[0].Key != trace.SlogTraceIDKey || attrs[0].Value.String() != "4bf92f3577b34da6a3ce929d0e0e4736" {
+		t.Fatalf("unexpected trace attr: %#v", attrs[0])
+	}
+	if attrs[1].Key != trace.SlogSpanIDKey || attrs[1].Value.String() != "00f067aa0ba902b7" {
+		t.Fatalf("unexpected span attr: %#v", attrs[1])
+	}
+	args := trace.SlogArgs(ctx)
+	if len(args) != 4 || args[0] != trace.SlogTraceIDKey || args[2] != trace.SlogSpanIDKey {
+		t.Fatalf("unexpected slog args: %#v", args)
+	}
+	if got := trace.SlogAttrs(context.Background()); got != nil {
+		t.Fatalf("SlogAttrs without context = %#v, want nil", got)
+	}
+}
+
 func TestRemoteSampledFlagDoesNotOverrideLocalSampler(t *testing.T) {
 	header := http.Header{}
 	header.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
@@ -319,14 +344,17 @@ func TestCollectorHandlerServesJSONAndSSE(t *testing.T) {
 		t.Fatalf("unexpected json status %d", response.Code)
 	}
 	var payload struct {
-		Spans   []trace.Snapshot `json:"spans"`
-		Dropped uint64           `json:"dropped"`
+		Spans  []trace.Snapshot              `json:"spans"`
+		Health trace.CollectorHealthSnapshot `json:"health"`
 	}
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
 	}
 	if len(payload.Spans) != 1 || payload.Spans[0].Name != "collected" {
 		t.Fatalf("unexpected collector json: %#v", payload)
+	}
+	if payload.Health.Spans != 1 || payload.Health.SSELimit == 0 || payload.Health.IngestRateLimit == 0 {
+		t.Fatalf("unexpected collector health: %#v", payload.Health)
 	}
 
 	server := httptest.NewServer(collector.Handler())
@@ -658,6 +686,48 @@ func TestExporterSinkReceivesOTLPShape(t *testing.T) {
 	}
 }
 
+func TestTracerHealthSnapshotRecordsSamplingAndExports(t *testing.T) {
+	ring := trace.NewRingSink(4)
+	tracer := trace.NewTracer(
+		trace.WithSink(ring),
+		trace.WithSampler(trace.RatioSampler(0.5)),
+		trace.WithIDGenerator(staticIDGenerator{
+			traceID: "00000000000000000000000000000001",
+			spanID:  "00f067aa0ba902b7",
+		}),
+	)
+	_, span := tracer.Start(context.Background(), "health")
+	if span == nil {
+		t.Fatal("expected deterministic ratio sampler to sample valid trace")
+	}
+	span.EndTime(time.Unix(2, 0).UTC())
+
+	health := waitForTracerHealth(t, tracer, func(health trace.TracerHealthSnapshot) bool {
+		return health.ExportedSpans == 1
+	})
+	if health.Sampler != "ratio" || health.SamplingRatio != "0.5" || health.SampledSpans != 1 {
+		t.Fatalf("unexpected sampling health: %#v", health)
+	}
+	if health.LastExportLatencyNS <= 0 || health.MaxExportLatencyNS <= 0 {
+		t.Fatalf("expected export latency in health snapshot: %#v", health)
+	}
+}
+
+func TestTracerHealthSnapshotRecordsExportFailure(t *testing.T) {
+	logged := captureSinkLogs(t)
+	tracer := trace.NewTracer(trace.WithSink(failingSink{err: errors.New("export failed")}))
+	_, span := tracer.Start(context.Background(), "failed-export")
+	span.EndTime(time.Unix(2, 0).UTC())
+
+	health := waitForTracerHealth(t, tracer, func(health trace.TracerHealthSnapshot) bool {
+		return health.ExportFailures == 1
+	})
+	if health.ExportedSpans != 0 || health.LastExportLatencyNS <= 0 {
+		t.Fatalf("unexpected export failure health: %#v", health)
+	}
+	_ = waitForSinkLog(t, logged)
+}
+
 func TestAlwaysOffSamplerDoesNotAllocateSpanOrContext(t *testing.T) {
 	tracer := trace.NewTracer(trace.WithSampler(trace.AlwaysOff()))
 	ctx := context.Background()
@@ -848,6 +918,21 @@ func waitForSinkLog(t *testing.T, logged <-chan string) string {
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for sink log")
 		return ""
+	}
+}
+
+func waitForTracerHealth(t *testing.T, tracer *trace.Tracer, ready func(trace.TracerHealthSnapshot) bool) trace.TracerHealthSnapshot {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		health := tracer.HealthSnapshot()
+		if ready(health) {
+			return health
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for tracer health, last=%#v", health)
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 

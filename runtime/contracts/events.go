@@ -42,6 +42,14 @@ func EmitPresentation[E any](ctx context.Context, event E) error {
 	return emit(ctx, PresentationEvent, event)
 }
 
+// EmitPresentationForAudience records a browser-facing presentation event for
+// dispatch after the current command succeeds. The event is delivered only to
+// realtime clients whose server-owned audience labels contain every supplied
+// label. Empty audience labels keep the event broadcast-scoped.
+func EmitPresentationForAudience[E any](ctx context.Context, event E, audience ...string) error {
+	return emitWithAudience(ctx, PresentationEvent, event, audience)
+}
+
 // PublishDomain dispatches a domain event immediately.
 func PublishDomain[E any](ctx context.Context, registry *Registry, event E) error {
 	return dispatchEvent(ctx, registry, DomainEvent, event)

@@ -169,7 +169,14 @@ func (handler *Handler) middlewareChain() http.Handler {
 
 func (handler *Handler) serveHTTP(response http.ResponseWriter, request *http.Request) {
 	metrics := handler.Metrics
-	metrics.recordRequest()
+	metricsStart := metrics.startRequest()
+	var metricsRecorder *traceResponseWriter
+	if metrics != nil {
+		metricsRecorder = &traceResponseWriter{ResponseWriter: response, status: http.StatusOK}
+		response = wrapTraceResponseWriter(metricsRecorder)
+		defer func() { metrics.finishRequest(metricsStart, metricsRecorder.status) }()
+		request = request.WithContext(contextWithMetrics(request.Context(), metrics))
+	}
 	if handler.RequestTimeout > 0 {
 		ctx, cancel := context.WithTimeout(request.Context(), handler.RequestTimeout)
 		defer cancel()
@@ -789,6 +796,9 @@ func (handler Handler) health(response http.ResponseWriter) {
 	}
 	if handler.Metrics != nil {
 		payload["metrics"] = handler.Metrics.Snapshot()
+	}
+	if handler.Tracer != nil {
+		payload["trace"] = handler.Tracer.HealthSnapshot()
 	}
 	_ = json.NewEncoder(response).Encode(payload)
 }

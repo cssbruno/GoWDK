@@ -380,17 +380,20 @@ responses.
 
 Generated runtime metrics are process-local counters exposed through
 `runtime/app.Metrics` when the generated handler is configured with a collector.
-Export, scrape, or aggregate them through app-owned telemetry code. Keep metrics
-labels low-cardinality and avoid user identifiers, tokens, submitted values, or
-full URLs with sensitive query strings.
+Snapshots include request counts, active requests, errors, latency, and generated
+backend route metrics keyed by route templates and endpoint IDs. Export, scrape,
+or aggregate them through app-owned telemetry code. Keep metrics labels
+low-cardinality and avoid user identifiers, tokens, submitted values, or full
+URLs with sensitive query strings.
 
 ## Logging, Readiness, And Shutdown
 
 Generated server entrypoints log startup and fatal listen errors with the Go
 standard logger. App-owned middleware and handlers own request logs, structured
-logs, sampling, trace IDs, and log sinks. Do not log secrets, raw submitted form
-values, bearer tokens, CSRF tokens, private keys, database URLs, or full query
-strings that may contain user data.
+logs, sampling, and log sinks. Use `runtime/trace.SlogArgs(ctx)` or
+`SlogAttrs(ctx)` to attach active trace/span IDs to app-owned `slog` records.
+Do not log secrets, raw submitted form values, bearer tokens, CSRF tokens,
+private keys, database URLs, or full query strings that may contain user data.
 
 Use `/_gowdk/health` as a process/readiness check after the binary starts and
 after each deployment step. If the app depends on a database, queue, cache, or

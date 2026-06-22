@@ -281,8 +281,25 @@ result, events, err := contracts.CaptureCommandEvents[CreatePatient, CreatePatie
 )
 ```
 
-Each captured `EventEnvelope` contains a stable event ID, event category, Go
-type name, and typed value. Capturing does not run event subscribers.
+Each captured `EventEnvelope` contains a stable event ID, optional
+`traceparent`, optional normalized `Audience` labels, event category, Go type
+name, and typed value. Capturing does not run event subscribers.
+
+For browser-facing presentation events that should only reach a tenant, user,
+session, or other server-owned audience, use:
+
+```go
+err := contracts.EmitPresentationForAudience(
+    ctx,
+    PatientNotice{ID: id},
+    "tenant:"+tenantID,
+    "user:"+userID,
+)
+```
+
+Audience labels are delivered through the same event envelope and preserved by
+the file outbox. Dependency-free SSE fanout uses those labels only when the app
+installs an audience-aware hub; see `docs/reference/realtime.md`.
 
 For tests, `runtime/testkit` wraps this path with an in-memory registry helper
 and typed event assertions. See `docs/reference/testing.md` and

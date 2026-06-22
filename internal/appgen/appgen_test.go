@@ -879,7 +879,7 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 		`gowdkvalidation "github.com/cssbruno/gowdk/runtime/validation"`,
 		`"unicode/utf8"`,
 		`func newBackendRouter() (*gowdkruntime.BackendRouter, error)`,
-		`gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", Handler: action}`,
+		`gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", EndpointID: "newsletter.Subscribe", Handler: action}`,
 		`func action(response http.ResponseWriter, request *http.Request) bool`,
 		`case "/newsletter":`,
 		`const maxActionBodyBytes int64 = 1 << 20`,
@@ -981,8 +981,8 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 		`values[gowdkruntime.ServiceValueContractRegistry] = ContractRegistry()`,
 		`contractRegistryOnce sync.Once`,
 		`contractRegistry := ContractRegistry()`,
-		`Kind: "command", Handler: commandPatientsCreatePatientPOSTPatients(contractRegistry)`,
-		`Kind: "query", Handler: queryPatientsGetPatientPageGETPatients(contractRegistry)`,
+		`Kind: "command", EndpointID: "patients.CreatePatient", Handler: commandPatientsCreatePatientPOSTPatients(contractRegistry)`,
+		`Kind: "query", EndpointID: "patients.GetPatientPage", Handler: queryPatientsGetPatientPageGETPatients(contractRegistry)`,
 		`var contractEventSink gowdkcontracts.CommandEventSink`,
 		`func RegisterContractEventSink(sink gowdkcontracts.CommandEventSink)`,
 		`contractEventSinkMu.Lock()`,
@@ -1528,7 +1528,7 @@ func TestGenerateWritesDerivedCommandContractBackendRoute(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`Kind: "command", Handler: commandPatientsCreatePatientPOSTPatients`,
+		`Kind: "command", EndpointID: "patients.CreatePatient", Handler: commandPatientsCreatePatientPOSTPatients`,
 		`func commandPatientsCreatePatientPOSTPatients(response http.ResponseWriter, request *http.Request) bool`,
 		`GOWDK command contract is not implemented`,
 	} {
@@ -1684,8 +1684,8 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 		`missing = append(missing, "GOWDK_TEST_DATABASE_URL is required but is not set")`,
 		`func newBackendRouter() (*gowdkruntime.BackendRouter, error)`,
 		`gowdkpartial "github.com/cssbruno/gowdk/runtime/partial"`,
-		`gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", Handler: action}`,
-		`gowdkruntime.BackendRoute{Method: http.MethodGet, Path: "/patients/list", Kind: "fragment", Handler: fragment}`,
+		`gowdkruntime.BackendRoute{Method: http.MethodPost, Path: "/newsletter", Kind: "action", EndpointID: "newsletter.Subscribe", Handler: action}`,
+		`gowdkruntime.BackendRoute{Method: http.MethodGet, Path: "/patients/list", Kind: "fragment", EndpointID: "patients.List", Handler: fragment}`,
 		`func fragment(response http.ResponseWriter, request *http.Request) bool`,
 		`gowdkpartial.Fragment("#patients", "<section>Patients</section>")`,
 	} {
@@ -1856,7 +1856,7 @@ func TestGenerateWiresCORSForAPIRoutes(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
-		`backendRouter, err := gowdkruntime.NewBackendRouter(gowdkruntime.BackendRoute{Method: "GET", Path: "/api/health", Kind: "api", Handler: api})`,
+		`backendRouter, err := gowdkruntime.NewBackendRouter(gowdkruntime.BackendRoute{Method: "GET", Path: "/api/health", Kind: "api", EndpointID: "status.Health", Handler: api})`,
 		`if err := backendRouter.SetCORSPolicy(gowdkruntime.CORSPolicy{AllowedOrigins: []string{"https://app.example"}, AllowedMethods: []string{"GET", "POST"}, AllowedHeaders: []string{"Content-Type", "X-CSRF"}, ExposedHeaders: []string{"X-Total-Count"}, AllowCredentials: true, MaxAgeSeconds: 600}); err != nil {`,
 		`return backendRouter, nil`,
 	} {

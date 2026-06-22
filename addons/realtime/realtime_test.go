@@ -1,6 +1,7 @@
 package realtime
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/cssbruno/gowdk"
@@ -15,7 +16,10 @@ func TestAddonEnablesRealtimeFeature(t *testing.T) {
 }
 
 func TestNewSSEReturnsPresentationFanout(t *testing.T) {
-	var fanout contracts.PresentationFanout = NewSSE(WithSSEBufferSize(1))
+	var fanout contracts.PresentationFanout = NewSSE(
+		WithSSEBufferSize(1),
+		WithSSEAudienceFromRequest(func(*http.Request) []string { return []string{"tenant:test"} }),
+	)
 	if fanout == nil {
 		t.Fatal("expected SSE fanout")
 	}

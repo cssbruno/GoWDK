@@ -114,6 +114,9 @@ jobs:
       - name: Check for removed source syntax in docs
         run: sh scripts/check-removed-syntax.sh
 
+      - name: Check docs do not pin a release version
+        run: sh scripts/check-doc-versions.sh
+
   docs-site:
     name: Docs site compile
     runs-on: ubuntu-latest

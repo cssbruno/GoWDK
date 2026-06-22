@@ -65,13 +65,13 @@ nacked-batch backoff options while adapters retain durable retry and
 dead-letter policy ownership.
 
 `runtime/trace` provides the first dependency-free GOWDK Trace core. It owns
-W3C-compatible trace/span IDs, `traceparent` propagation, context spans,
+W3C-compatible trace/span IDs, bounded `traceparent`/`tracestate` propagation, context spans,
 GOWDK surface/lane/source metadata, attributes, events, status, sampling,
 console/JSONL/ring/multi/exporter sinks, and a bounded in-process JSON/SSE
-collector. Generated app auto-instrumentation, durable storage, a browser trace
-viewer, and concrete OTLP transport are later integration work. Debug-gated
-generated instrumentation now covers backend, SSR/load, contract, browser, and
-island lanes through `addons/observability`.
+collector with hardened browser ingest. Durable storage and concrete production
+telemetry backends are app-owned integration work. Debug-gated generated
+instrumentation now covers backend, SSR/load, contract, browser, and island
+lanes through `addons/observability`.
 
 Still partial: broad local client-side reactivity, richer hybrid streaming and
 data refresh, non-HTTP revalidation, generated worker/cron binary scaffolding,
@@ -209,7 +209,7 @@ manifest report (`internal/lang/testdata/manifest_golden`).
 | `runtime/security` | Runtime-safe security text helpers. | Runtime | Provides conservative secret-like text redaction for generated app panic/error logging without importing compiler-private `internal/` packages. |
 | `runtime/testkit` | Generated audit test helpers. | Runtime | Provides small `httptest` helpers used by generated `gowdk_audit_test.go` files and `gowdk audit --run` to verify route status, method rejection, and configured response headers in-process against generated app handlers. |
 | `runtime/contracts` | Typed contract registry and in-process dispatch. | Runtime | Implemented for queries, commands, backend-owned domain and integration events, presentation events, jobs, metadata, stable observation names and labels for logs/metrics/traces, local command-buffered event dispatch, event-envelope capture/replay with stable IDs, dependency-free outbox/broker/presentation-fanout/event-source/seen-store interfaces, command event sinks, an event worker loop with ack/nack, context cancellation, optional post-ack deduplication windows, explicit nacked-batch backoff options, a dependency-free file outbox adapter, dependency-free in-memory broker/EventSource adapter, dependency-free in-memory and file-backed seen stores, and dependency-free SSE presentation fanout adapter with retry hints and drop-on-full per-client buffers. Concrete Redis Streams, Redis TTL seen-store, NATS, and WebSocket adapters are nested optional modules. Separate worker/cron binary generators and deployment recipes are platform tooling, not runtime core. |
-| `runtime/trace` | Dependency-free runtime tracing core. | Runtime | Provides W3C-compatible trace/span IDs, `traceparent` inject/extract helpers, context spans, GOWDK surface/lane/source metadata, attributes, events, status, always-on/off and ratio sampling, console/JSONL/ring/multi/exporter sinks, OTLP-shaped snapshots without an OpenTelemetry dependency, and a bounded JSON/SSE collector. Generated backend, SSR/load, guard, contract, browser, and island instrumentation is opt-in and debug-gated through `addons/observability`; durable trace storage and production sampling/access policy remain app-owned. |
+| `runtime/trace` | Dependency-free runtime tracing core. | Runtime | Provides W3C-compatible trace/span IDs, bounded `traceparent`/`tracestate` inject/extract helpers, context spans, GOWDK surface/lane/source metadata, attributes, events, status, always-on/off and ratio sampling, console/JSONL/ring/multi/exporter sinks, OTLP-shaped snapshots without an OpenTelemetry dependency, and a bounded JSON/SSE collector with hardened browser ingest. Generated backend, SSR/load, guard, contract, browser, and island instrumentation is opt-in and debug-gated through `addons/observability`; durable trace storage and production sampling/access policy remain app-owned. |
 | `runtime/actions` | Request-time action helpers. | Runtime | Owns CSRF token validation/generation, generated action registries, form decoding, and required-field validation helpers. |
 | `runtime/api` | Request-time API helpers. | Runtime | Owns strict JSON request decoding, query helpers, and JSON/error/no-content response helpers. |
 | `runtime/partial` | Request-time partial update helpers. | Runtime | Owns fragment responses, swap helpers, and partial client hook constants. |

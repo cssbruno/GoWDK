@@ -58,11 +58,19 @@ func TestStartRecordsSpanToSink(t *testing.T) {
 func TestTraceparentInjectExtractRoundTrip(t *testing.T) {
 	traceID := trace.TraceID("4bf92f3577b34da6a3ce929d0e0e4736")
 	spanID := trace.SpanID("00f067aa0ba902b7")
-	ctx := trace.ContextWithTraceContext(context.Background(), trace.TraceContext{TraceID: traceID, SpanID: spanID, Sampled: true})
+	ctx := trace.ContextWithTraceContext(context.Background(), trace.TraceContext{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		Sampled:    true,
+		TraceState: "rojo=00f067aa0ba902b7,congo=t61rcWkgMzE",
+	})
 	header := http.Header{}
 	trace.Inject(ctx, header)
 	if got := header.Get("traceparent"); got != "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01" {
 		t.Fatalf("unexpected traceparent: %q", got)
+	}
+	if got := header.Get("tracestate"); got != "rojo=00f067aa0ba902b7,congo=t61rcWkgMzE" {
+		t.Fatalf("unexpected tracestate: %q", got)
 	}
 
 	extracted := trace.Extract(context.Background(), header)
@@ -70,8 +78,94 @@ func TestTraceparentInjectExtractRoundTrip(t *testing.T) {
 	if !ok {
 		t.Fatal("expected extracted trace context")
 	}
-	if traceContext.TraceID != traceID || traceContext.SpanID != spanID || !traceContext.Sampled || !traceContext.Remote {
+	if traceContext.TraceID != traceID || traceContext.SpanID != spanID || !traceContext.Sampled || !traceContext.Remote || traceContext.TraceState != "rojo=00f067aa0ba902b7,congo=t61rcWkgMzE" {
 		t.Fatalf("unexpected extracted context: %#v", traceContext)
+	}
+}
+
+func TestTraceContextRejectsMalformedTraceparent(t *testing.T) {
+	validTraceID := "4bf92f3577b34da6a3ce929d0e0e4736"
+	validSpanID := "00f067aa0ba902b7"
+	tests := []struct {
+		name        string
+		traceparent string
+	}{
+		{name: "malformed", traceparent: "not-a-traceparent"},
+		{name: "zero trace id", traceparent: "00-00000000000000000000000000000000-" + validSpanID + "-01"},
+		{name: "zero span id", traceparent: "00-" + validTraceID + "-0000000000000000-01"},
+		{name: "uppercase trace id", traceparent: "00-4BF92F3577B34DA6A3CE929D0E0E4736-" + validSpanID + "-01"},
+		{name: "uppercase flags", traceparent: "00-" + validTraceID + "-" + validSpanID + "-0A"},
+		{name: "unsupported version", traceparent: "fe-" + validTraceID + "-" + validSpanID + "-01"},
+		{name: "oversized", traceparent: strings.Repeat("0", trace.MaxTraceparentHeaderBytes+1)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := trace.ParseTraceparent(tt.traceparent); err == nil {
+				t.Fatal("expected ParseTraceparent to reject invalid input")
+			}
+			header := http.Header{"Traceparent": []string{tt.traceparent}}
+			if _, ok := trace.TraceContextFromContext(trace.Extract(context.Background(), header)); ok {
+				t.Fatal("invalid traceparent should not enter context")
+			}
+		})
+	}
+}
+
+func TestTraceContextDropsInvalidTracestate(t *testing.T) {
+	header := http.Header{}
+	header.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+	header.Set("tracestate", "bad key=value")
+
+	ctx := trace.Extract(context.Background(), header)
+	traceContext, ok := trace.TraceContextFromContext(ctx)
+	if !ok {
+		t.Fatal("valid traceparent should still be extracted")
+	}
+	if traceContext.TraceState != "" {
+		t.Fatalf("invalid tracestate should be dropped, got %q", traceContext.TraceState)
+	}
+
+	header.Set("tracestate", strings.Repeat("a", trace.MaxTracestateHeaderBytes+1))
+	ctx = trace.Extract(context.Background(), header)
+	traceContext, ok = trace.TraceContextFromContext(ctx)
+	if !ok {
+		t.Fatal("valid traceparent should survive oversized tracestate")
+	}
+	if traceContext.TraceState != "" {
+		t.Fatalf("oversized tracestate should be dropped, got %q", traceContext.TraceState)
+	}
+}
+
+func TestTracestatePropagatesThroughChildSpan(t *testing.T) {
+	header := http.Header{}
+	header.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+	header.Set("tracestate", "rojo=00f067aa0ba902b7")
+	ctx := trace.Extract(context.Background(), header)
+
+	tracer := trace.NewTracer()
+	ctx, span := tracer.Start(ctx, "child")
+	if span == nil {
+		t.Fatal("expected sampled child span")
+	}
+	out := http.Header{}
+	trace.Inject(ctx, out)
+	if got := out.Get("tracestate"); got != "rojo=00f067aa0ba902b7" {
+		t.Fatalf("child span lost tracestate: %q", got)
+	}
+}
+
+func TestRemoteSampledFlagDoesNotOverrideLocalSampler(t *testing.T) {
+	header := http.Header{}
+	header.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+	ctx := trace.Extract(context.Background(), header)
+
+	tracer := trace.NewTracer(trace.WithSampler(trace.AlwaysOff()))
+	next, span := tracer.Start(ctx, "sampled-remote")
+	if span != nil {
+		t.Fatal("remote sampled flag should not override local sampler")
+	}
+	if next != ctx {
+		t.Fatal("sampled-out start should return the extracted context unchanged")
 	}
 }
 
@@ -269,7 +363,7 @@ func TestCollectorAcceptsValidSingleAndBatchPayloads(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(singlePayload)))
+	handler.ServeHTTP(response, jsonPostRequest(http.MethodPost, "/", singlePayload))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("single POST status = %d body=%q, want 204", response.Code, response.Body.String())
 	}
@@ -279,7 +373,7 @@ func TestCollectorAcceptsValidSingleAndBatchPayloads(t *testing.T) {
 		t.Fatal(err)
 	}
 	response = httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(batchPayload)))
+	handler.ServeHTTP(response, jsonPostRequest(http.MethodPost, "/", batchPayload))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("batch POST status = %d body=%q, want 204", response.Code, response.Body.String())
 	}
@@ -305,7 +399,7 @@ func TestCollectorRejectsInvalidBatchWithoutPartialRecord(t *testing.T) {
 				t.Fatal(err)
 			}
 			response := httptest.NewRecorder()
-			collector.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(payload)))
+			collector.Handler().ServeHTTP(response, jsonPostRequest(http.MethodPost, "/", payload))
 			if response.Code != http.StatusBadRequest {
 				t.Fatalf("POST status = %d body=%q, want 400", response.Code, response.Body.String())
 			}
@@ -331,7 +425,7 @@ func TestCollectorRejectsAmbiguousOrOversizedPayloads(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			collector := trace.NewCollector(4)
 			response := httptest.NewRecorder()
-			collector.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body)))
+			collector.Handler().ServeHTTP(response, jsonPostRequest(http.MethodPost, "/", []byte(tt.body)))
 			if response.Code != tt.status {
 				t.Fatalf("POST status = %d body=%q, want %d", response.Code, response.Body.String(), tt.status)
 			}
@@ -339,6 +433,170 @@ func TestCollectorRejectsAmbiguousOrOversizedPayloads(t *testing.T) {
 				t.Fatalf("rejected payload recorded spans: %#v", got)
 			}
 		})
+	}
+}
+
+func TestCollectorRejectsMissingOrNonJSONContentType(t *testing.T) {
+	payload := []byte(snapshotJSON(t, validSnapshot("single")))
+	tests := []struct {
+		name        string
+		contentType string
+	}{
+		{name: "missing"},
+		{name: "plain text", contentType: "text/plain"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			collector := trace.NewCollector(4)
+			request := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(payload))
+			if tt.contentType != "" {
+				request.Header.Set("Content-Type", tt.contentType)
+			}
+			response := httptest.NewRecorder()
+
+			collector.Handler().ServeHTTP(response, request)
+
+			if response.Code != http.StatusUnsupportedMediaType {
+				t.Fatalf("POST status = %d body=%q, want 415", response.Code, response.Body.String())
+			}
+			if collector.Rejected() != 1 {
+				t.Fatalf("collector rejected count = %d, want 1", collector.Rejected())
+			}
+		})
+	}
+}
+
+func TestCollectorRejectsUnsupportedMethods(t *testing.T) {
+	collector := trace.NewCollector(4)
+	response := httptest.NewRecorder()
+
+	collector.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodPut, "/", nil))
+
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("method status = %d body=%q, want 405", response.Code, response.Body.String())
+	}
+	if allow := response.Header().Get("Allow"); allow != "GET, POST" {
+		t.Fatalf("Allow = %q, want GET, POST", allow)
+	}
+	if collector.Rejected() != 1 {
+		t.Fatalf("collector rejected count = %d, want 1", collector.Rejected())
+	}
+}
+
+func TestCollectorRejectsCrossOriginBrowserIngest(t *testing.T) {
+	collector := trace.NewCollector(4)
+	payload := []byte(snapshotJSON(t, validSnapshot("browser")))
+	request := jsonPostRequest(http.MethodPost, "http://trace.local/browser", payload)
+	request.Header.Set("Origin", "http://evil.local")
+	response := httptest.NewRecorder()
+
+	collector.ViewerHandler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("browser ingest status = %d body=%q, want 403", response.Code, response.Body.String())
+	}
+	if len(collector.Spans()) != 0 {
+		t.Fatalf("cross-origin request recorded spans: %#v", collector.Spans())
+	}
+}
+
+func TestCollectorAcceptsSameOriginAndMissingOriginBrowserIngest(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		origin string
+	}{
+		{name: "same origin", origin: "http://trace.local"},
+		{name: "missing origin"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			collector := trace.NewCollector(4)
+			payload := []byte(snapshotJSON(t, validSnapshot("browser")))
+			request := jsonPostRequest(http.MethodPost, "http://trace.local/browser", payload)
+			if tt.origin != "" {
+				request.Header.Set("Origin", tt.origin)
+			}
+			response := httptest.NewRecorder()
+
+			collector.ViewerHandler().ServeHTTP(response, request)
+
+			if response.Code != http.StatusNoContent {
+				t.Fatalf("browser ingest status = %d body=%q, want 204", response.Code, response.Body.String())
+			}
+			if got := collector.Spans(); len(got) != 1 || got[0].Name != "browser" {
+				t.Fatalf("browser ingest stored unexpected spans: %#v", got)
+			}
+		})
+	}
+}
+
+func TestCollectorRateLimitsIngest(t *testing.T) {
+	collector := trace.NewCollector(4, trace.WithCollectorIngestRate(1, time.Minute))
+	handler := collector.Handler()
+	payload := []byte(snapshotJSON(t, validSnapshot("limited")))
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, jsonPostRequest(http.MethodPost, "/", payload))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("first POST status = %d body=%q, want 204", response.Code, response.Body.String())
+	}
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, jsonPostRequest(http.MethodPost, "/", payload))
+	if response.Code != http.StatusTooManyRequests {
+		t.Fatalf("second POST status = %d body=%q, want 429", response.Code, response.Body.String())
+	}
+	if collector.Rejected() != 1 {
+		t.Fatalf("collector rejected count = %d, want 1", collector.Rejected())
+	}
+}
+
+func TestCollectorSSELimit(t *testing.T) {
+	collector := trace.NewCollector(4, trace.WithCollectorSSELimit(1))
+	if err := collector.RecordSpan(context.Background(), validSnapshot("existing")); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(collector.Handler())
+	defer server.Close()
+
+	first, err := server.Client().Get(server.URL + "/events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Body.Close()
+	if first.StatusCode != http.StatusOK {
+		t.Fatalf("first SSE status = %d, want 200", first.StatusCode)
+	}
+
+	second, err := server.Client().Get(server.URL + "/events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Body.Close()
+	if second.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("second SSE status = %d, want 429", second.StatusCode)
+	}
+	if collector.Rejected() != 1 {
+		t.Fatalf("collector rejected count = %d, want 1", collector.Rejected())
+	}
+}
+
+func TestCollectorRejectedCounterIsExposedInJSON(t *testing.T) {
+	collector := trace.NewCollector(4)
+	collector.Handler().ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{}`)))
+
+	response := httptest.NewRecorder()
+	collector.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("json status = %d body=%q, want 200", response.Code, response.Body.String())
+	}
+	var payload struct {
+		Rejected uint64 `json:"rejected"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Rejected != 1 {
+		t.Fatalf("json rejected = %d, want 1", payload.Rejected)
 	}
 }
 
@@ -478,6 +736,12 @@ func snapshotJSON(t *testing.T, span trace.Snapshot) string {
 		t.Fatal(err)
 	}
 	return string(payload)
+}
+
+func jsonPostRequest(method string, target string, payload []byte) *http.Request {
+	request := httptest.NewRequest(method, target, bytes.NewReader(payload))
+	request.Header.Set("Content-Type", "application/json")
+	return request
 }
 
 func stringAttributeSlice(t *testing.T, attrs []trace.Attribute, key string) []string {

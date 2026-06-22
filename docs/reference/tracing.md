@@ -52,11 +52,18 @@ gowdktrace.Inject(ctx, headers)
 ctx = gowdktrace.Extract(context.Background(), headers)
 ```
 
-The wire format is W3C `traceparent`:
+The wire format is W3C `traceparent`, with valid `tracestate` preserved when
+present:
 
 ```text
 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 ```
+
+`Extract` rejects malformed `traceparent` values and ignores malformed
+`tracestate` values while preserving the trace identity. Header limits are
+fixed: `traceparent` is capped at 256 bytes and `tracestate` at 512 bytes. The
+remote sampled flag is input context only; the local sampler still decides
+whether a new span is recorded.
 
 ## Sinks
 
@@ -68,8 +75,8 @@ Current sinks:
   overflow.
 - `MultiSink(...)`: sends spans to multiple sinks in order.
 - `ExporterSink(exporter)`: adapts an OTLP-like exporter interface.
-- `NewCollector(limit)`: sink plus local JSON/SSE HTTP handler and browser span
-  ingest.
+- `NewCollector(limit, options...)`: sink plus local JSON/SSE HTTP handler and
+  browser span ingest.
 
 ## Collector
 
@@ -85,7 +92,8 @@ http.Handle("/_gowdk/traces", collector.Handler())
 ```json
 {
   "spans": [],
-  "dropped": 0
+  "dropped": 0,
+  "rejected": 0
 }
 ```
 
@@ -93,6 +101,33 @@ http.Handle("/_gowdk/traces", collector.Handler())
 streams `event: gowdk-trace` messages for existing and future spans. The viewer
 handler adds `GET /` for the self-contained UI and `POST /browser` for generated
 browser spans.
+
+POST ingest is treated as untrusted input:
+
+- requests must use `Content-Type: application/json` or `application/*+json`;
+- browser-originated requests must be same-origin when an `Origin` header is
+  present;
+- request bodies are capped at 1 MiB and batches at 128 spans;
+- span names, attributes, events, strings, and encoded snapshot size are
+  bounded before storage;
+- POST ingest is rate-limited per remote address by default;
+- SSE subscribers are capped by default and slow subscribers are dropped instead
+  of blocking span recording.
+
+Tune local collector limits when mounting it directly:
+
+```go
+collector := gowdktrace.NewCollector(
+	256,
+	gowdktrace.WithCollectorSSELimit(16),
+	gowdktrace.WithCollectorIngestRate(60, time.Minute),
+)
+```
+
+Generated apps mount the viewer behind `runtime/app.LocalTraceAccess`. If an
+application mounts `Collector.Handler()` or `ViewerHandler()` itself on an
+internet-facing route, the application must still provide normal authentication,
+authorization, TLS, reverse-proxy, and production rate-limit policy.
 
 ## Sampling
 
@@ -109,3 +144,5 @@ The disabled `AlwaysOff` path with no start options is allocation-free.
   debug builds.
 - Concrete OTLP export lives in the nested `runtime/trace/otel` module so the
   root module does not depend on OpenTelemetry.
+- Durable storage, hosted trace analysis, production sampling policy, and
+  production access policy stay app-owned.

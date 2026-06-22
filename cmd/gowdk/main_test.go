@@ -1125,18 +1125,55 @@ func TestInitCommandSupportsOptionalTestScaffold(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	goMod, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(goMod), "require github.com/cssbruno/gowdk v"+version) {
+		t.Fatalf("expected optional test scaffold to include GOWDK module requirement:\n%s", goMod)
+	}
 	for _, expected := range []string{
 		"package gowdktest",
-		`os.Getenv("GOWDK_BIN")`,
-		`t.Skip("set GOWDK_BIN=/path/to/gowdk to run generated app smoke tests")`,
-		`exec.Command(gowdkBin, "build")`,
-		`filepath.Join(projectRoot, "bin", "site")`,
-		`cmd.Dir = projectRoot`,
+		`os.Getenv(name)`,
+		`requiredEnv(t, "GOWDK_TEST_OUTPUT_DIR")`,
+		`run generated app tests with gowdk test`,
+		`filepath.Join(outputDir, "gowdk-routes.json")`,
+		`assertGET(t, baseURL+"/_gowdk/health", http.StatusOK`,
+		`assertGET(t, baseURL+"/missing", http.StatusNotFound, "")`,
 	} {
 		if !strings.Contains(string(payload), expected) {
 			t.Fatalf("expected optional test scaffold to contain %q:\n%s", expected, payload)
 		}
 	}
+}
+
+func TestTestCommandRunsInitializedProject(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "site")
+	if err := run([]string{"init", "--tests", root}); err != nil {
+		t.Fatal(err)
+	}
+	repoRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	goMod := filepath.Join(root, "go.mod")
+	file, err := os.OpenFile(goMod, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fmt.Fprintf(file, "\nreplace github.com/cssbruno/gowdk => %s\n", filepath.ToSlash(repoRoot)); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"test", "--count=1", "--timeout=2m"}); err != nil {
+			t.Fatal(err)
+		}
+	})
 }
 
 func TestInitCommandRejectsUnknownTemplate(t *testing.T) {

@@ -61,6 +61,7 @@ Create a one-page app, build its generated server, and run the binary:
 ```sh
 gowdk init --tests --template site ./hello-gowdk
 cd ./hello-gowdk
+gowdk test
 gowdk build
 ./bin/site
 ```
@@ -152,6 +153,7 @@ pipeline. Run `gowdk` with no arguments for full flags.
 | --- | --- |
 | `gowdk init` | Scaffold a starter project (`--template site\|minimal`, `--tests`) |
 | `gowdk build` | Compile `.gwdk` into static output, a generated Go app, a single binary, optional Docker files, or WASM (`--out`, `--app`, `--bin`, `--docker`, `--wasm`, backend variants) |
+| `gowdk test` | Build temporary generated app artifacts and run Go tests against unit, app, binary, or opt-in browser stages |
 | `gowdk dev` | Build, serve, rebuild on change, live-reload browsers, show an error overlay |
 | `gowdk preview` | Build and serve a local deploy preview |
 | `gowdk serve` | Serve already-generated build output |
@@ -245,6 +247,7 @@ This table describes the current demoable 0.x slice. Status levels:
 | Realtime | Works, contract unstable | `FeatureRealtime` and `addons/realtime` provide opt-in presentation-event fanout packaging, dependency-free SSE helpers with server-owned audience scoping, nested WebSocket transport docs, compiler-validated `g:subscribe` metadata, generated subscription-filtered guarded SSE fanout, bounded SSE retry/drop behavior, a bounded generated client patch loop for query-owned regions, generated `gowdk.query.invalidate` events, and current-document refresh for non-subscribed invalidated query regions. | Custom retry/backoff/replay, active session-change stream revocation, richer patch shapes, fragment/API-specific query execution, and route-specific refresh endpoints remain hardening work. | [Realtime](docs/reference/realtime.md) | [SSE](runtime/contracts/sse) |
 | Observability | Early | `runtime/trace` provides dependency-free W3C trace IDs, context spans, sampling, sinks, source refs, bounded `traceparent`/`tracestate` propagation, slog trace/span helpers, tracer/collector health, a hardened local JSON/SSE collector, and a self-contained viewer. `runtime/app.Metrics` records process-local counters and low-cardinality generated route metrics. `addons/observability` enables debug-only generated backend, SSR, load, frontend, and island tracing, and `runtime/trace/otel` provides an optional nested OTLP bridge. | Durable production storage, hosted analysis, metrics/log backends, and production sampling policy remain app-owned. | [Observability](docs/reference/observability.md) | [Runtime trace](runtime/trace) |
 | Security audit | Early | `gowdk audit` derives an IR-backed posture for routes, endpoints, contracts, and frontend surface risks; evaluates the built-in baseline plus declared `*.audit.gwdk` policies; exits non-zero on error findings; can emit/run generated audit tests; and `gowdk build` runs the same baseline, blocking production builds on error findings unless `--allow-insecure` is set. | The audit DSL and generated tests cover the M8 slice; broader auth/session ownership, richer role fixtures, and deeper browser/data-flow analysis remain app-owned or planned. | [Security](docs/engineering/security.md) | [Spec](docs/product/security-audit-spec.md) |
+| Testing | Early | `gowdk init --tests` writes a non-skipping generated app smoke test plus `go.mod`, `gowdk test` builds temporary generated output/app/binary artifacts and runs ordinary Go tests with `GOWDK_TEST_*` context, and `runtime/testkit` provides scenario, cookie-preserving client, response, and contract helpers. CI runs a focused runtime race detector lane. | Browser tests remain opt-in through an external command, and richer generated endpoint/browser scaffolds are still planned. | [Testing](docs/reference/testing.md) | [Testkit](runtime/testkit) |
 | Dev server | Works | `gowdk dev` polls inputs, skips no-op rebuilds, serves or runs generated output through a dev-only proxy when runtime mode is needed, live-reloads browsers, shows a browser overlay with diagnostic codes/source spans/changed-file context, and hot-swaps matching JS island component roots. | Dev-only runtime panic surfacing, state-preserving/broader HMR, and richer editor integration remain planned. | [Dev](docs/reference/dev.md) | [Getting started](docs/getting-started.md) |
 | Editor/LSP | Works | The VS Code extension and dependency-free LSP provide diagnostics, formatting, completions, hover, outline, semantic tokens, definitions, references, site-map visualization, project-aware navigation, and editor-visible `g:command`/`g:query` binding diagnostics for supported paths. | Richer quick fixes and route/endpoint/contract map polish are planned. | [Language server](docs/product/language-server.md) | [VS Code](editors/vscode) |
 

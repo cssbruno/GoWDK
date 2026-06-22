@@ -170,10 +170,16 @@ view {
 }
 
 func initTestFiles() []initFile {
-	return []initFile{{
-		Path: "tests/gowdk_smoke_test.go",
-		Body: initSmokeTestSource(),
-	}}
+	return []initFile{
+		{
+			Path: "go.mod",
+			Body: initGoModSource(),
+		},
+		{
+			Path: "tests/gowdk_smoke_test.go",
+			Body: initSmokeTestSource(),
+		},
+	}
 }
 
 type initOptions struct {
@@ -212,60 +218,98 @@ func initConfigSource() string {
 	return string(formatted)
 }
 
+func initGoModSource() string {
+	release := version
+	if !strings.HasPrefix(release, "v") {
+		release = "v" + release
+	}
+	return "module gowdk-starter\n\n" +
+		"go 1.26.4\n\n" +
+		"require github.com/cssbruno/gowdk " + release + "\n"
+}
+
 func initSmokeTestSource() string {
-	file := &ast.File{
-		Name: ast.NewIdent("gowdktest"),
-		Decls: []ast.Decl{
-			&ast.GenDecl{Tok: token.IMPORT, Specs: []ast.Spec{
-				&ast.ImportSpec{Path: initStringLit("os")},
-				&ast.ImportSpec{Path: initStringLit("os/exec")},
-				&ast.ImportSpec{Path: initStringLit("path/filepath")},
-				&ast.ImportSpec{Path: initStringLit("testing")},
-			}},
-			&ast.FuncDecl{
-				Name: ast.NewIdent("TestGOWDKBuildSmoke"),
-				Type: &ast.FuncType{Params: &ast.FieldList{List: []*ast.Field{{
-					Names: []*ast.Ident{ast.NewIdent("t")},
-					Type:  &ast.StarExpr{X: initSel("testing", "T")},
-				}}}},
-				Body: initBlock(
-					initDefine([]ast.Expr{ast.NewIdent("gowdkBin")}, initCall(initSel("os", "Getenv"), initStringLit("GOWDK_BIN"))),
-					&ast.IfStmt{
-						Cond: &ast.BinaryExpr{X: ast.NewIdent("gowdkBin"), Op: token.EQL, Y: initStringLit("")},
-						Body: initBlock(initExprStmt(initCall(initSel("t", "Skip"), initStringLit("set GOWDK_BIN=/path/to/gowdk to run generated app smoke tests")))),
-					},
-					initDefine([]ast.Expr{ast.NewIdent("cwd"), ast.NewIdent("err")}, initCall(initSel("os", "Getwd"))),
-					&ast.IfStmt{
-						Cond: initNotNil("err"),
-						Body: initBlock(initExprStmt(initCall(initSel("t", "Fatal"), ast.NewIdent("err")))),
-					},
-					initDefine([]ast.Expr{ast.NewIdent("projectRoot")}, initCall(initSel("filepath", "Dir"), ast.NewIdent("cwd"))),
-					initDefine([]ast.Expr{ast.NewIdent("cmd")}, initCall(initSel("exec", "Command"), ast.NewIdent("gowdkBin"), initStringLit("build"))),
-					initAssign([]ast.Expr{initSel("cmd", "Dir")}, ast.NewIdent("projectRoot")),
-					initDefine([]ast.Expr{ast.NewIdent("payload"), ast.NewIdent("err")}, initCall(initSel("cmd", "CombinedOutput"))),
-					&ast.IfStmt{
-						Cond: initNotNil("err"),
-						Body: initBlock(initExprStmt(initCall(initSel("t", "Fatalf"), initStringLit("gowdk build failed: %v\n%s"), ast.NewIdent("err"), ast.NewIdent("payload")))),
-					},
-					&ast.IfStmt{
-						Init: initDefine([]ast.Expr{ast.NewIdent("_"), ast.NewIdent("err")}, initCall(initSel("os", "Stat"), initCall(initSel("filepath", "Join"), ast.NewIdent("projectRoot"), initStringLit(".gowdk"), initStringLit("output"), initStringLit("site"), initStringLit("index.html")))),
-						Cond: initNotNil("err"),
-						Body: initBlock(initExprStmt(initCall(initSel("t", "Fatalf"), initStringLit("expected generated index.html: %v"), ast.NewIdent("err")))),
-					},
-					&ast.IfStmt{
-						Init: initDefine([]ast.Expr{ast.NewIdent("_"), ast.NewIdent("err")}, initCall(initSel("os", "Stat"), initCall(initSel("filepath", "Join"), ast.NewIdent("projectRoot"), initStringLit("bin"), initStringLit("site")))),
-						Cond: initNotNil("err"),
-						Body: initBlock(initExprStmt(initCall(initSel("t", "Fatalf"), initStringLit("expected generated app binary: %v"), ast.NewIdent("err")))),
-					},
-				),
-			},
-		},
+	source := []byte(`package gowdktest
+
+import (
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestGOWDKGeneratedApp(t *testing.T) {
+	outputDir := requiredEnv(t, "GOWDK_TEST_OUTPUT_DIR")
+	appDir := requiredEnv(t, "GOWDK_TEST_APP_DIR")
+	binaryPath := requiredEnv(t, "GOWDK_TEST_BINARY")
+	baseURL := requiredEnv(t, "GOWDK_TEST_BASE_URL")
+
+	assertFile(t, filepath.Join(outputDir, "index.html"))
+	assertFile(t, filepath.Join(outputDir, "gowdk-routes.json"))
+	assertFile(t, filepath.Join(outputDir, "gowdk-assets.json"))
+	assertDir(t, appDir)
+	assertFile(t, binaryPath)
+
+	assertGET(t, baseURL+"/_gowdk/health", http.StatusOK, "\"status\":\"ok\"")
+	assertGET(t, baseURL+"/", http.StatusOK, "<main")
+	assertGET(t, baseURL+"/missing", http.StatusNotFound, "")
+}
+
+func requiredEnv(t *testing.T, name string) string {
+	t.Helper()
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
+		t.Fatalf("%s is not set; run generated app tests with gowdk test", name)
 	}
-	var buffer bytes.Buffer
-	if err := printer.Fprint(&buffer, token.NewFileSet(), file); err != nil {
-		panic(err)
+	return value
+}
+
+func assertFile(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("expected file %s: %v", path, err)
 	}
-	formatted, err := goformat.Source(buffer.Bytes())
+	if info.IsDir() {
+		t.Fatalf("expected file %s, got directory", path)
+	}
+}
+
+func assertDir(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("expected directory %s: %v", path, err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected directory %s, got file", path)
+	}
+}
+
+func assertGET(t *testing.T, target string, status int, contains string) {
+	t.Helper()
+	client := http.Client{Timeout: 2 * time.Second}
+	response, err := client.Get(target)
+	if err != nil {
+		t.Fatalf("GET %s: %v", target, err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read %s response body: %v", target, err)
+	}
+	if response.StatusCode != status {
+		t.Fatalf("GET %s status = %d, want %d with body %s", target, response.StatusCode, status, string(body))
+	}
+	if contains != "" && !strings.Contains(string(body), contains) {
+		t.Fatalf("GET %s body does not contain %q: %s", target, contains, string(body))
+	}
+}
+`)
+	formatted, err := goformat.Source(source)
 	if err != nil {
 		panic(err)
 	}

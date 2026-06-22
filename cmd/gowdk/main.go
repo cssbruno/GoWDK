@@ -89,6 +89,8 @@ func run(args []string) error {
 		return explainDiagnostic(args[1:])
 	case "doctor":
 		return doctor(args[1:])
+	case "test":
+		return gowdkTest(args[1:])
 	case "audit":
 		return audit(args[1:])
 	case "contracts":
@@ -183,6 +185,8 @@ func commandUsage(command string) (string, bool) {
 		return "usage: gowdk explain [--json] <diagnostic-code>", true
 	case "doctor":
 		return doctorUsage, true
+	case "test":
+		return testUsage, true
 	case "audit":
 		return auditUsage, true
 	case "contracts":
@@ -250,6 +254,7 @@ func usage() {
 	fmt.Println("  generate stubs [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] write missing action/API Go handler stubs")
 	fmt.Println("  explain [--json] <diagnostic-code> explain a diagnostic code and next steps")
 	fmt.Println("  doctor [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...] check local GOWDK environment and project health")
+	fmt.Println("  test [--config <file>] [--env-file <file>] [--module <name>] [--target <name>] [--stage <unit|app|binary|browser>] [--run <pattern>] [--timeout <duration>] [--count <n>] [--cover] [--json] [--keep-workdir] [--update] [--browser-command <command>] [--ssr] [files...] run Go tests against generated app artifacts")
 	fmt.Println("  audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--sarif[=<file>]] [--diff <previous-report>] [--schema[=report|security]] [--emit-tests[=<file>]] [--force] [--run] [files...] check security posture, emit SARIF/JSON-Schema, diff against a previous report, and run optional runtime tests")
 	fmt.Println("  contracts [--json] [dir]  print Go contract registration metadata")
 	fmt.Println("  graph [--json] [dir]      print command/event contract graph")

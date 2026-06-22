@@ -79,10 +79,14 @@ type Handler struct {
 	// user Go (actions, contracts, SSR) sees ctx.Done() instead of running
 	// unbounded and pinning a goroutine. Zero disables the deadline.
 	RequestTimeout time.Duration
-
-	middlewareOnce    sync.Once
-	middlewareHandler http.Handler
 }
+
+type middlewareChainCache struct {
+	once    sync.Once
+	handler http.Handler
+}
+
+var handlerMiddlewareChains sync.Map
 
 // DefaultRequestTimeout is the per-request handler deadline applied to
 // generated apps. It sits below the server WriteTimeout (30s) so handler
@@ -157,14 +161,16 @@ func (handler *Handler) ServeHTTP(response http.ResponseWriter, request *http.Re
 }
 
 func (handler *Handler) middlewareChain() http.Handler {
-	handler.middlewareOnce.Do(func() {
+	value, _ := handlerMiddlewareChains.LoadOrStore(handler, &middlewareChainCache{})
+	cache := value.(*middlewareChainCache)
+	cache.once.Do(func() {
 		next := http.Handler(http.HandlerFunc(handler.serveHTTP))
 		if len(handler.Middlewares) > 0 {
 			next = ApplyMiddlewares(next, handler.Middlewares...)
 		}
-		handler.middlewareHandler = next
+		cache.handler = next
 	})
-	return handler.middlewareHandler
+	return cache.handler
 }
 
 func (handler *Handler) serveHTTP(response http.ResponseWriter, request *http.Request) {

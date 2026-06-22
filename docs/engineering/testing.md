@@ -24,8 +24,10 @@ node --test editors/vscode/*.test.js
 scripts/test-parser-fuzz.sh
 scripts/test-generated-app-integration.sh
 scripts/test-generated-output-determinism.sh
+scripts/test-runtime-race.sh
 go build -o /tmp/gowdk-cli ./cmd/gowdk
 rm -rf /tmp/gowdk-init && /tmp/gowdk-cli init /tmp/gowdk-init && (cd /tmp/gowdk-init && /tmp/gowdk-cli build)
+rm -rf /tmp/gowdk-init-tested && /tmp/gowdk-cli init --tests /tmp/gowdk-init-tested && (cd /tmp/gowdk-init-tested && /tmp/gowdk-cli test --count=1 --timeout=2m)
 go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
 test -f /tmp/gowdk-build/gowdk-routes.json
 test -f /tmp/gowdk-build/gowdk-assets.json
@@ -53,10 +55,12 @@ must pass `--config <file>`.
 | Parser fuzz smoke | `scripts/test-parser-fuzz.sh` | Parser, tokenizer, syntax recovery, and diagnostic recovery changes. |
 | Generated app integration | `scripts/test-generated-app-integration.sh` | Generated binary, SSR, action, fragment, CSRF, and contract adapter changes. |
 | Generated output determinism | `scripts/test-generated-output-determinism.sh` | Generated HTML, manifest, report, inspect, or route/sitemap output changes. |
+| Runtime race detector | `scripts/test-runtime-race.sh` | Shared-state runtime packages, lifecycle, contracts, SSE, rate limiting, trace, or testkit changes. |
 | VS Code extension syntax | `node --check editors/vscode/extension.js` | Editor extension changes and broad verification. |
 | VS Code extension behavior | `node --test editors/vscode/*.test.js` | Editor extension pure helper changes and broad verification. |
 | SPA/action examples | `go run ./cmd/gowdk check examples/pages/home.page.gwdk examples/actions/newsletter.page.gwdk` | Language/tooling changes. |
 | Init project smoke | `go build -o /tmp/gowdk-cli ./cmd/gowdk && rm -rf /tmp/gowdk-init && /tmp/gowdk-cli init /tmp/gowdk-init && (cd /tmp/gowdk-init && /tmp/gowdk-cli build)` | CLI scaffold changes. |
+| Init project tests | `go build -o /tmp/gowdk-cli ./cmd/gowdk && rm -rf /tmp/gowdk-init-tested && /tmp/gowdk-cli init --tests /tmp/gowdk-init-tested && (cd /tmp/gowdk-init-tested && /tmp/gowdk-cli test --count=1 --timeout=2m)` | CLI scaffold or `gowdk test` changes. |
 | SSR example | `go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk` | SSR validation or example changes. |
 | Manifest smoke | `go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk` | Manifest, parser, or CLI output changes. |
 | SPA build smoke | `go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk && test -f /tmp/gowdk-build/gowdk-routes.json && test -f /tmp/gowdk-build/gowdk-assets.json && test -f /tmp/gowdk-build/openapi.json && test -f /tmp/gowdk-build/asyncapi.json` | Parser, view, buildgen, component, or CLI build changes. |
@@ -76,9 +80,12 @@ must pass `--config <file>`.
 - `scripts/test-generated-output-determinism.sh` is the generated output and
   report determinism slice. It compares two clean builds plus manifest, sitemap,
   routes, and asset-graph report output.
+- `scripts/test-runtime-race.sh` is the focused race-detector slice. It runs an
+  explicit package list under `go test -race -count=1` and fails preflight when
+  a selected package has no tests.
 
 Keep these as separate commands so CI can show whether a failure is fuzz input,
-runtime integration, or nondeterministic output.
+runtime integration, race detection, or nondeterministic output.
 
 ## Coverage Priorities
 
@@ -121,6 +128,12 @@ runtime integration, or nondeterministic output.
 - `cmd/gowdk` and `internal/appgen` tests cover generated embedded app
   source, binary compilation, WASM artifact compilation, live binary HTTP
   serving, and first-slice action redirect routing.
+- `cmd/gowdk` tests cover `gowdk test` building temporary generated artifacts,
+  starting the generated binary on an ephemeral address, and running scaffolded
+  generated app tests through ordinary `go test`.
+- `runtime/testkit` tests cover scenario helpers, cookie-preserving direct and
+  `httptest.Server` clients, JSON/form request helpers, response assertions,
+  and redacted failure summaries.
 - Update the generated app golden with
   `go test ./internal/appgen -run TestGeneratedGoMatchesGoldenFixture -update`
   when an intentional generated Go change lands.

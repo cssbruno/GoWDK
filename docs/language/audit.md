@@ -75,7 +75,8 @@ Raw HTML allowlist values match either the exact source reference reported by
 ## Tests
 
 `test {}` blocks become generated Go tests. `gowdk audit --emit-tests` writes a
-readable standalone `gowdk_audit_test.go`; `gowdk audit --run` builds a
+readable standalone `gowdk_audit_test.go`; it refreshes only files with the
+GOWDK generated-audit marker unless `--force` is passed. `gowdk audit --run` builds a
 temporary generated app and runs its generated `gowdkapp/gowdk_audit_test.go`
 with `go test ./gowdkapp`. The run is bounded: a default 2m deadline
 (`--run-timeout=<duration>` overrides it), truncated combined output, and a
@@ -104,7 +105,10 @@ than pass or fail them for the wrong reason.
 For `gowdk audit --run`, native RBAC actor expectations use a test-only provider
 inside the temporary generated app. Production generated apps use `auth.Addon`
 defaults when configured, or the app-owned `GOWDKAuthProvider` /
-`GOWDKGuardRegistry` hooks documented for guarded routes.
+`GOWDKGuardRegistry` hooks documented for guarded routes. The audit runner does
+not synthesize app-owned custom guard callbacks; custom guard IDs are reported
+as `audit_guard_unverified` unless explicit generated-app guard fixtures are
+provided.
 
 ## Built-In Baseline
 

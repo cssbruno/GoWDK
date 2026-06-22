@@ -253,6 +253,11 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		printBuildgenBuildErrorReport(err, options.Debug)
 		return err
 	}
+	if err := timings.measure("final_security_audit", func() error {
+		return enforceFinalBuildArtifactSecurityAudit(options, result)
+	}); err != nil {
+		return err
+	}
 	timings.counter("artifacts", len(result.Artifacts))
 	timings.counter("css_artifacts", len(result.CSSArtifacts))
 	timings.counter("asset_artifacts", len(result.AssetArtifacts))

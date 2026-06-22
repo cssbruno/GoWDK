@@ -1,6 +1,7 @@
 package buildgen
 
 import (
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -22,13 +23,22 @@ const (
 	buildValueNumber
 	buildValueBool
 	buildValueNil
+	buildValueList
+	buildValueObject
 )
 
+// buildValue is one evaluated build-time value. Scalars carry their canonical
+// string form in text (used directly as interpolation data); list and object
+// values carry their items/fields and serialize text to canonical JSON so they
+// flow through the map[string]string build-data contract unchanged.
 type buildValue struct {
 	kind    buildValueKind
 	text    string
 	number  float64
 	boolean bool
+	items   []buildValue
+	fields  map[string]buildValue
+	order   []string
 }
 
 func buildStringValue(value string) buildValue {
@@ -45,6 +55,110 @@ func buildBoolValue(value bool) buildValue {
 
 func buildNilValue() buildValue {
 	return buildValue{kind: buildValueNil}
+}
+
+func buildListValue(items []buildValue) buildValue {
+	value := buildValue{kind: buildValueList, items: items}
+	value.text = value.jsonText()
+	return value
+}
+
+func buildObjectValue(order []string, fields map[string]buildValue) buildValue {
+	value := buildValue{kind: buildValueObject, order: order, fields: fields}
+	value.text = value.jsonText()
+	return value
+}
+
+// jsonText renders a build value as canonical, deterministic JSON. Object keys
+// follow the declared field order and list items follow their declared order, so
+// re-running the build over the same inputs always produces byte-identical data.
+func (v buildValue) jsonText() string {
+	switch v.kind {
+	case buildValueString:
+		encoded, _ := json.Marshal(v.text)
+		return string(encoded)
+	case buildValueNumber:
+		return canonicalJSONNumber(v.text, v.number)
+	case buildValueBool:
+		return v.text
+	case buildValueNil:
+		return "null"
+	case buildValueList:
+		parts := make([]string, len(v.items))
+		for index, item := range v.items {
+			parts[index] = item.jsonText()
+		}
+		return "[" + strings.Join(parts, ",") + "]"
+	case buildValueObject:
+		parts := make([]string, 0, len(v.order))
+		for _, name := range v.order {
+			key, _ := json.Marshal(name)
+			parts = append(parts, string(key)+":"+v.fields[name].jsonText())
+		}
+		return "{" + strings.Join(parts, ",") + "}"
+	default:
+		return "null"
+	}
+}
+
+// canonicalJSONNumber returns a JSON-valid spelling of a number value. A scalar's
+// text is the author's literal form, which can be valid Go but invalid JSON (for
+// example the octal-style `01`). When the literal is already canonical JSON it is
+// preserved verbatim so wide integer literals keep full precision; otherwise it
+// is reformatted from the parsed float.
+func canonicalJSONNumber(text string, number float64) string {
+	if isCanonicalJSONNumber(text) {
+		return text
+	}
+	return strconv.FormatFloat(number, 'f', -1, 64)
+}
+
+// isCanonicalJSONNumber reports whether text is a JSON number literal: an
+// optional minus, an integer part with no redundant leading zero, and optional
+// fraction and exponent.
+func isCanonicalJSONNumber(text string) bool {
+	if text == "" {
+		return false
+	}
+	index := 0
+	if text[index] == '-' {
+		index++
+	}
+	intStart := index
+	for index < len(text) && text[index] >= '0' && text[index] <= '9' {
+		index++
+	}
+	intLen := index - intStart
+	if intLen == 0 {
+		return false
+	}
+	if intLen > 1 && text[intStart] == '0' {
+		return false
+	}
+	if index < len(text) && text[index] == '.' {
+		index++
+		fracStart := index
+		for index < len(text) && text[index] >= '0' && text[index] <= '9' {
+			index++
+		}
+		if index == fracStart {
+			return false
+		}
+	}
+	if index < len(text) && (text[index] == 'e' || text[index] == 'E') {
+		index++
+		if index < len(text) && (text[index] == '+' || text[index] == '-') {
+			index++
+		}
+		expStart := index
+		for index < len(text) && text[index] >= '0' && text[index] <= '9' {
+			index++
+		}
+		if index == expStart {
+			return false
+		}
+	}
+	return index == len(text)
 }
 
 func buildValueStrings(data map[string]buildValue) map[string]string {
@@ -86,50 +200,31 @@ func parseBuildDataCallLine(line string) (buildCallRef, bool, error) {
 	}
 }
 
-func parseBuildLiteralLine(line string) (*ast.CompositeLit, bool, error) {
-	body, ok := strings.CutPrefix(strings.TrimSpace(line), "=>")
-	if !ok {
-		return nil, false, nil
-	}
-	body = strings.TrimSpace(body)
-	if !strings.HasPrefix(body, "{") || !strings.HasSuffix(body, "}") {
-		return nil, false, nil
-	}
-	expr, err := parser.ParseExpr("struct{}" + body)
-	if err != nil {
-		return nil, true, fmt.Errorf("parse build literal: %w", err)
-	}
-	literal, ok := expr.(*ast.CompositeLit)
-	if !ok {
-		return nil, true, fmt.Errorf("build literal must be an object")
-	}
-	return literal, true, nil
-}
-
-func buildFieldValue(expr ast.Expr, routeParams map[string]string, data map[string]buildValue) (string, buildValue, error) {
-	kv, ok := expr.(*ast.KeyValueExpr)
-	if !ok {
-		return "", buildValue{}, fmt.Errorf("build field must use name: value")
-	}
-	key, ok := kv.Key.(*ast.Ident)
-	if !ok || !isLiteralName(key.Name) {
-		return "", buildValue{}, fmt.Errorf("invalid build field name")
-	}
-	return buildFieldValueFromParts(key.Name, kv.Value, routeParams, data)
-}
-
-func buildFieldValueFromParts(name string, expr ast.Expr, routeParams map[string]string, data map[string]buildValue) (string, buildValue, error) {
+// buildFieldValueFromString evaluates one build field value expression in env.
+// The string form (rather than a pre-parsed Go AST) is the entry point because
+// build-time iteration adds comprehension and list/object literal syntax that is
+// not valid Go and must be recognized before the Go expression parser runs.
+func buildFieldValueFromString(name string, exprStr string, env *buildEnv) (string, buildValue, error) {
 	if !isLiteralName(name) {
 		return "", buildValue{}, fmt.Errorf("invalid build field name")
 	}
-	value, err := buildValueFromExpr(expr, routeParams, data)
+	value, err := buildEvalExprString(exprStr, env)
 	if err != nil {
 		return "", buildValue{}, fmt.Errorf("build field %s: %w", name, err)
+	}
+	// A build field must carry meaningful data: reject a value that resolves to an
+	// empty or whitespace-only string. Empty strings remain valid inside
+	// expressions (for example a list element or a join separator).
+	if value.kind == buildValueString && strings.TrimSpace(value.text) == "" {
+		return "", buildValue{}, fmt.Errorf("build field %s: value must not be empty", name)
 	}
 	return name, value, nil
 }
 
-func buildValueFromExpr(expr ast.Expr, routeParams map[string]string, data map[string]buildValue) (buildValue, error) {
+func buildEvalAST(expr ast.Expr, env *buildEnv) (buildValue, error) {
+	if env.depth > buildValueMaxDepth {
+		return buildValue{}, fmt.Errorf("build expression nested too deeply (limit %d)", buildValueMaxDepth)
+	}
 	switch typed := expr.(type) {
 	case *ast.BasicLit:
 		switch typed.Kind {
@@ -138,10 +233,7 @@ func buildValueFromExpr(expr ast.Expr, routeParams map[string]string, data map[s
 			if err != nil {
 				return buildValue{}, err
 			}
-			if strings.TrimSpace(value) == "" {
-				return buildValue{}, fmt.Errorf("value must not be empty")
-			}
-			interpolated, err := interpolateBuildValue(value, routeParams, buildValueStrings(data))
+			interpolated, err := interpolateBuildValue(value, env.routeParams, env.interpolationValues())
 			if err != nil {
 				return buildValue{}, err
 			}
@@ -168,66 +260,306 @@ func buildValueFromExpr(expr ast.Expr, routeParams map[string]string, data map[s
 		case "nil", "null":
 			return buildNilValue(), nil
 		default:
-			value, ok := data[typed.Name]
+			if value, ok := env.scope[typed.Name]; ok {
+				return value, nil
+			}
+			value, ok := env.data[typed.Name]
 			if !ok {
 				return buildValue{}, fmt.Errorf("unknown build field reference %q", typed.Name)
 			}
 			return value, nil
 		}
+	case *ast.SelectorExpr:
+		return buildSelectorValue(typed, env.deeper())
+	case *ast.IndexExpr:
+		return buildIndexValue(typed, env.deeper())
 	case *ast.CallExpr:
-		return buildCallValue(typed, routeParams, data)
+		return buildCallValue(typed, env.deeper())
 	case *ast.ParenExpr:
-		return buildValueFromExpr(typed.X, routeParams, data)
+		return buildEvalAST(typed.X, env.deeper())
 	case *ast.UnaryExpr:
-		value, err := buildValueFromExpr(typed.X, routeParams, data)
+		value, err := buildEvalAST(typed.X, env.deeper())
 		if err != nil {
 			return buildValue{}, err
 		}
 		return buildUnaryValue(typed.Op, value)
 	case *ast.BinaryExpr:
-		left, err := buildValueFromExpr(typed.X, routeParams, data)
+		left, err := buildEvalAST(typed.X, env.deeper())
 		if err != nil {
 			return buildValue{}, err
 		}
-		right, err := buildValueFromExpr(typed.Y, routeParams, data)
+		right, err := buildEvalAST(typed.Y, env.deeper())
 		if err != nil {
 			return buildValue{}, err
 		}
 		return buildBinaryValue(typed.Op, left, right)
 	default:
-		return buildValue{}, fmt.Errorf("value must be a string, number, boolean, nil, expression, param(), field(), or earlier field reference")
+		return buildValue{}, fmt.Errorf("value must be a string, number, boolean, nil, expression, list, object, comprehension, builtin, param(), field(), or earlier field reference")
 	}
 }
 
-func buildCallValue(call *ast.CallExpr, routeParams map[string]string, data map[string]buildValue) (buildValue, error) {
+func buildSelectorValue(selector *ast.SelectorExpr, env *buildEnv) (buildValue, error) {
+	receiver, err := buildEvalAST(selector.X, env)
+	if err != nil {
+		return buildValue{}, err
+	}
+	if receiver.kind != buildValueObject {
+		return buildValue{}, fmt.Errorf("cannot read field %q from a non-object value", selector.Sel.Name)
+	}
+	value, ok := receiver.fields[selector.Sel.Name]
+	if !ok {
+		return buildValue{}, fmt.Errorf("unknown object field %q", selector.Sel.Name)
+	}
+	return value, nil
+}
+
+func buildIndexValue(index *ast.IndexExpr, env *buildEnv) (buildValue, error) {
+	receiver, err := buildEvalAST(index.X, env)
+	if err != nil {
+		return buildValue{}, err
+	}
+	if receiver.kind != buildValueList {
+		return buildValue{}, fmt.Errorf("cannot index a non-list value")
+	}
+	position, err := buildEvalAST(index.Index, env)
+	if err != nil {
+		return buildValue{}, err
+	}
+	offset, err := buildIntFromValue(position, "list index")
+	if err != nil {
+		return buildValue{}, err
+	}
+	if offset < 0 || offset >= len(receiver.items) {
+		return buildValue{}, fmt.Errorf("list index %d out of range (length %d)", offset, len(receiver.items))
+	}
+	return receiver.items[offset], nil
+}
+
+func buildCallValue(call *ast.CallExpr, env *buildEnv) (buildValue, error) {
 	name, ok := call.Fun.(*ast.Ident)
-	if !ok || len(call.Args) != 1 {
+	if !ok {
 		return buildValue{}, fmt.Errorf("unsupported build value call")
+	}
+	switch name.Name {
+	case "param", "field":
+		return buildLookupCall(name.Name, call, env)
+	case "seq":
+		return buildSeqCall(call, env)
+	case "count":
+		return buildCountCall(call, env)
+	case "sum":
+		return buildSumCall(call, env)
+	case "join":
+		return buildJoinCall(call, env)
+	case "first", "last":
+		return buildEndCall(name.Name, call, env)
+	case "take":
+		return buildTakeCall(call, env)
+	case "reverse":
+		return buildReverseCall(call, env)
+	default:
+		return buildValue{}, fmt.Errorf("unsupported build value call %s", name.Name)
+	}
+}
+
+func buildLookupCall(name string, call *ast.CallExpr, env *buildEnv) (buildValue, error) {
+	if len(call.Args) != 1 {
+		return buildValue{}, fmt.Errorf("%s expects 1 argument", name)
 	}
 	arg, ok := call.Args[0].(*ast.BasicLit)
 	if !ok || arg.Kind != token.STRING {
-		return buildValue{}, fmt.Errorf("%s argument must be a string literal", name.Name)
+		return buildValue{}, fmt.Errorf("%s argument must be a string literal", name)
 	}
 	key, err := strconv.Unquote(arg.Value)
 	if err != nil {
 		return buildValue{}, err
 	}
-	switch name.Name {
+	switch name {
 	case "param":
-		value, ok := routeParams[key]
+		value, ok := env.routeParams[key]
 		if !ok {
 			return buildValue{}, fmt.Errorf("unknown route param %q", key)
 		}
 		return buildStringValue(value), nil
-	case "field":
-		value, ok := data[key]
+	default: // field
+		value, ok := env.data[key]
 		if !ok {
 			return buildValue{}, fmt.Errorf("unknown build field %q", key)
 		}
 		return value, nil
-	default:
-		return buildValue{}, fmt.Errorf("unsupported build value call %s", name.Name)
 	}
+}
+
+func buildSeqCall(call *ast.CallExpr, env *buildEnv) (buildValue, error) {
+	if len(call.Args) < 1 || len(call.Args) > 2 {
+		return buildValue{}, fmt.Errorf("seq expects 1 or 2 arguments")
+	}
+	bounds := make([]int, len(call.Args))
+	for index, arg := range call.Args {
+		value, err := buildEvalAST(arg, env)
+		if err != nil {
+			return buildValue{}, err
+		}
+		bounds[index], err = buildIntFromValue(value, "seq argument")
+		if err != nil {
+			return buildValue{}, err
+		}
+	}
+	start, end := 0, bounds[0]
+	if len(bounds) == 2 {
+		start, end = bounds[0], bounds[1]
+	}
+	if end < start {
+		return buildValue{}, fmt.Errorf("seq end %d must be >= start %d", end, start)
+	}
+	// Bound the operands so end-start cannot overflow int before the budget check;
+	// a valid seq produces at most the per-block budget anyway.
+	if start < -buildSeqBound || start > buildSeqBound || end < -buildSeqBound || end > buildSeqBound {
+		return buildValue{}, fmt.Errorf("seq bounds must be within [-%d, %d]", buildSeqBound, buildSeqBound)
+	}
+	if err := env.consume(end - start); err != nil {
+		return buildValue{}, err
+	}
+	items := make([]buildValue, 0, end-start)
+	for value := start; value < end; value++ {
+		items = append(items, buildNumberValue(float64(value)))
+	}
+	return buildListValue(items), nil
+}
+
+func buildCountCall(call *ast.CallExpr, env *buildEnv) (buildValue, error) {
+	list, err := buildSingleListArg("count", call, env)
+	if err != nil {
+		return buildValue{}, err
+	}
+	return buildNumberValue(float64(len(list.items))), nil
+}
+
+func buildSumCall(call *ast.CallExpr, env *buildEnv) (buildValue, error) {
+	list, err := buildSingleListArg("sum", call, env)
+	if err != nil {
+		return buildValue{}, err
+	}
+	total := 0.0
+	for _, item := range list.items {
+		if item.kind != buildValueNumber {
+			return buildValue{}, fmt.Errorf("sum requires a list of numbers")
+		}
+		total += item.number
+	}
+	return buildNumberValue(total), nil
+}
+
+func buildJoinCall(call *ast.CallExpr, env *buildEnv) (buildValue, error) {
+	if len(call.Args) != 2 {
+		return buildValue{}, fmt.Errorf("join expects 2 arguments")
+	}
+	list, err := buildEvalAST(call.Args[0], env)
+	if err != nil {
+		return buildValue{}, err
+	}
+	if list.kind != buildValueList {
+		return buildValue{}, fmt.Errorf("join requires a list as its first argument")
+	}
+	separator, err := buildEvalAST(call.Args[1], env)
+	if err != nil {
+		return buildValue{}, err
+	}
+	if separator.kind != buildValueString {
+		return buildValue{}, fmt.Errorf("join requires a string separator")
+	}
+	parts := make([]string, len(list.items))
+	for index, item := range list.items {
+		if item.kind == buildValueList || item.kind == buildValueObject {
+			return buildValue{}, fmt.Errorf("join requires a list of scalars")
+		}
+		parts[index] = item.text
+	}
+	return buildStringValue(strings.Join(parts, separator.text)), nil
+}
+
+func buildEndCall(name string, call *ast.CallExpr, env *buildEnv) (buildValue, error) {
+	list, err := buildSingleListArg(name, call, env)
+	if err != nil {
+		return buildValue{}, err
+	}
+	if len(list.items) == 0 {
+		return buildNilValue(), nil
+	}
+	if name == "first" {
+		return list.items[0], nil
+	}
+	return list.items[len(list.items)-1], nil
+}
+
+func buildTakeCall(call *ast.CallExpr, env *buildEnv) (buildValue, error) {
+	if len(call.Args) != 2 {
+		return buildValue{}, fmt.Errorf("take expects 2 arguments")
+	}
+	list, err := buildEvalAST(call.Args[0], env)
+	if err != nil {
+		return buildValue{}, err
+	}
+	if list.kind != buildValueList {
+		return buildValue{}, fmt.Errorf("take requires a list as its first argument")
+	}
+	count, err := buildEvalAST(call.Args[1], env)
+	if err != nil {
+		return buildValue{}, err
+	}
+	limit, err := buildIntFromValue(count, "take count")
+	if err != nil {
+		return buildValue{}, err
+	}
+	if limit < 0 {
+		return buildValue{}, fmt.Errorf("take count must not be negative")
+	}
+	if limit > len(list.items) {
+		limit = len(list.items)
+	}
+	if err := env.consume(limit); err != nil {
+		return buildValue{}, err
+	}
+	return buildListValue(append([]buildValue(nil), list.items[:limit]...)), nil
+}
+
+func buildReverseCall(call *ast.CallExpr, env *buildEnv) (buildValue, error) {
+	list, err := buildSingleListArg("reverse", call, env)
+	if err != nil {
+		return buildValue{}, err
+	}
+	if err := env.consume(len(list.items)); err != nil {
+		return buildValue{}, err
+	}
+	reversed := make([]buildValue, len(list.items))
+	for index, item := range list.items {
+		reversed[len(list.items)-1-index] = item
+	}
+	return buildListValue(reversed), nil
+}
+
+func buildSingleListArg(name string, call *ast.CallExpr, env *buildEnv) (buildValue, error) {
+	if len(call.Args) != 1 {
+		return buildValue{}, fmt.Errorf("%s expects 1 argument", name)
+	}
+	value, err := buildEvalAST(call.Args[0], env)
+	if err != nil {
+		return buildValue{}, err
+	}
+	if value.kind != buildValueList {
+		return buildValue{}, fmt.Errorf("%s requires a list argument", name)
+	}
+	return value, nil
+}
+
+func buildIntFromValue(value buildValue, label string) (int, error) {
+	if value.kind != buildValueNumber {
+		return 0, fmt.Errorf("%s must be a number", label)
+	}
+	if value.number != math.Trunc(value.number) {
+		return 0, fmt.Errorf("%s must be an integer", label)
+	}
+	return int(value.number), nil
 }
 
 func buildUnaryValue(op token.Token, value buildValue) (buildValue, error) {
@@ -322,6 +654,8 @@ func buildValuesEqual(left, right buildValue) (bool, error) {
 		return left.number == right.number, nil
 	case buildValueBool:
 		return left.boolean == right.boolean, nil
+	case buildValueList, buildValueObject:
+		return left.text == right.text, nil
 	default:
 		return false, fmt.Errorf("unsupported equality operands")
 	}

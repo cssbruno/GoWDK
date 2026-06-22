@@ -194,7 +194,12 @@ Implemented today:
   `move(Items, from, to)`.
 - Client expressions support first-slice compiler-owned built-ins:
   `len(value)`, `lower(value)`, `upper(value)`, `contains(value, query)`,
-  `string(value)`, `int(value)`, and `float(value)`.
+  `string(value)`, `int(value)`, and `float(value)`, plus deterministic
+  formatting/date built-ins `fixed(number, digits)`, `round(number, digits)`,
+  `percent(number, digits)`, and `formatTime(unixSeconds, layout)` whose Go and
+  browser evaluators produce byte-identical output.
+- Client handlers can call text-input DOM ref methods: `Ref.Focus()`,
+  `Ref.Blur()`, `Ref.Select()`, and `Ref.ScrollIntoView()`.
 - Component-level `wasm` declarations make normal calls to that component use
   WASM island assets. `g:island="wasm"` remains a call-site override. Unknown
   `g:island` values are compile/render errors. Without `wasm` or `g:island`,

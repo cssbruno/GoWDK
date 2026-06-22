@@ -2,9 +2,9 @@ package buildgen
 
 import (
 	"fmt"
-	"go/parser"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
@@ -55,9 +55,10 @@ func parseBuildData(body string, routeParams map[string]string, locale string, i
 		}
 	}
 	data := map[string]buildValue{}
+	env := newBuildEnv(routeParams, data)
 	declarations := 0
 	for index, line := range lines {
-		declaration, ok, err := parseBuildLiteralLine(line)
+		fields, ok, err := buildLiteralRecordFields(line)
 		if err != nil {
 			return nil, fmt.Errorf("build line %d: %w", index+1, err)
 		}
@@ -65,11 +66,11 @@ func parseBuildData(body string, routeParams map[string]string, locale string, i
 			return nil, fmt.Errorf("build line %d must use `=> { name: value }` or `=> BuildData()`", index+1)
 		}
 		declarations++
-		if len(declaration.Elts) == 0 && index == 0 {
+		if len(fields) == 0 && index == 0 {
 			return nil, fmt.Errorf("build {} declaration must not be empty")
 		}
-		for _, element := range declaration.Elts {
-			key, value, err := buildFieldValue(element, routeParams, data)
+		for _, field := range fields {
+			key, value, err := buildFieldValueFromString(field.name, field.expr, env)
 			if err != nil {
 				return nil, fmt.Errorf("build line %d: %w", index+1, err)
 			}
@@ -85,6 +86,50 @@ func parseBuildData(body string, routeParams map[string]string, locale string, i
 	return buildValueStrings(data), nil
 }
 
+// buildLiteralField is one parsed "name: value" entry from a `=> { ... }` build
+// declaration line, keeping the value in source form so build-time iteration
+// syntax survives to the evaluator.
+type buildLiteralField struct {
+	name string
+	expr string
+}
+
+// buildLiteralRecordFields splits a `=> { name: value, ... }` build line into its
+// ordered fields. ok reports whether the line is a literal declaration at all;
+// when ok is true an empty inner body yields no fields (an empty declaration the
+// caller diagnoses).
+func buildLiteralRecordFields(line string) ([]buildLiteralField, bool, error) {
+	body, ok := strings.CutPrefix(strings.TrimSpace(line), "=>")
+	if !ok {
+		return nil, false, nil
+	}
+	body = strings.TrimSpace(body)
+	if !strings.HasPrefix(body, "{") || !strings.HasSuffix(body, "}") {
+		return nil, false, nil
+	}
+	elements, err := splitLiteralElements(strings.TrimSpace(body[1 : len(body)-1]))
+	if err != nil {
+		return nil, true, fmt.Errorf("build field must use name: value")
+	}
+	fields := make([]buildLiteralField, 0, len(elements))
+	for _, element := range elements {
+		colon := indexTopLevelByte(element, ':')
+		if colon < 0 {
+			return nil, true, fmt.Errorf("build field must use name: value")
+		}
+		name := strings.TrimSpace(element[:colon])
+		expr := strings.TrimSpace(element[colon+1:])
+		if !isLiteralName(name) {
+			return nil, true, fmt.Errorf("invalid build field name %q", name)
+		}
+		if expr == "" {
+			return nil, true, fmt.Errorf("build field %s: value must not be empty", name)
+		}
+		fields = append(fields, buildLiteralField{name: name, expr: expr})
+	}
+	return fields, true, nil
+}
+
 func parseBuildDataFromBlocks(blocks gwdkir.Blocks, routeParams map[string]string, locale string, imports []gwdkir.Import, source string) (map[string]string, error) {
 	if blocks.BuildCall != nil {
 		return runBuildDataCallRef(buildCallRef{Alias: blocks.BuildCall.Alias, Function: blocks.BuildCall.Function}, imports, blocks.GoBlocks, source, routeParams, locale)
@@ -93,6 +138,7 @@ func parseBuildDataFromBlocks(blocks gwdkir.Blocks, routeParams map[string]strin
 		return parseBuildData(blocks.BuildBody, routeParams, locale, imports, blocks.GoBlocks, source)
 	}
 	data := map[string]buildValue{}
+	env := newBuildEnv(routeParams, data)
 	for index, record := range blocks.BuildRecords {
 		names := literalRecordFieldOrder(record)
 		if len(names) == 0 && index == 0 {
@@ -100,11 +146,7 @@ func parseBuildDataFromBlocks(blocks gwdkir.Blocks, routeParams map[string]strin
 		}
 		for _, name := range names {
 			valueExpr := literalRecordExpression(record, name)
-			expr, err := parser.ParseExpr(valueExpr)
-			if err != nil {
-				return nil, fmt.Errorf("build line %d: parse build field %s: %w", index+1, name, err)
-			}
-			key, value, err := buildFieldValueFromParts(name, expr, routeParams, data)
+			key, value, err := buildFieldValueFromString(name, valueExpr, env)
 			if err != nil {
 				return nil, fmt.Errorf("build line %d: %w", index+1, err)
 			}

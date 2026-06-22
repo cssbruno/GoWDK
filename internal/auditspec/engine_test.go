@@ -1,6 +1,7 @@
 package auditspec
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cssbruno/gowdk/internal/diagnostics"
@@ -46,19 +47,77 @@ func TestBaselineFlagsMissingCSRFAndPublicAPI(t *testing.T) {
 	}
 }
 
+func soundLimits(kind string) securitymanifest.RequestLimitPosture {
+	return securitymanifest.RequestLimitPosture{
+		EndpointKind:           kind,
+		RawBodyBytes:           1 << 20,
+		CompressedBodyHandling: "raw-bytes-bounded",
+		InstalledBeforeParse:   true,
+		Phase:                  "before-body-parse-and-csrf",
+		Origin:                 "default:gowdk.DefaultRequestBodyLimitBytes",
+	}
+}
+
 func TestBaselinePassesWhenPostureIsSound(t *testing.T) {
 	manifest := securitymanifest.SecurityManifest{
 		Endpoints: []securitymanifest.EndpointEntry{
-			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", Guards: []string{"auth.required"}, CSRF: true},
-			{ID: "List", Kind: "api", Method: "GET", Path: "/api/list", Guards: []string{"permission:list.read"}},
-			{ID: "Update", Kind: "api", Method: "POST", Path: "/api/status", Guards: []string{"permission:status.write"}, CSRF: true},
-			{ID: "patients.CreatePatient", Kind: "command", Method: "POST", Path: "/patients", Guards: []string{"auth.required"}, CSRF: true},
-			{ID: "patients.GetPatientPage", Kind: "query", Method: "GET", Path: "/patients", Guards: []string{"auth.required"}},
+			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", Guards: []string{"auth.required"}, CSRF: true, RequestLimits: soundLimits("action")},
+			{ID: "List", Kind: "api", Method: "GET", Path: "/api/list", Guards: []string{"permission:list.read"}, RequestLimits: soundLimits("api")},
+			{ID: "Update", Kind: "api", Method: "POST", Path: "/api/status", Guards: []string{"permission:status.write"}, CSRF: true, RequestLimits: soundLimits("api")},
+			{ID: "patients.CreatePatient", Kind: "command", Method: "POST", Path: "/patients", Guards: []string{"auth.required"}, CSRF: true, RequestLimits: soundLimits("command")},
+			{ID: "patients.GetPatientPage", Kind: "query", Method: "GET", Path: "/patients", Guards: []string{"auth.required"}, RequestLimits: soundLimits("query")},
 		},
 	}
 	findings := Evaluate(manifest, Baseline())
 	if len(findings) != 0 {
 		t.Fatalf("expected no findings for a sound posture, got %#v", findings)
+	}
+}
+
+func TestBaselineFlagsMissingAndUnsafeRequestLimits(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Endpoints: []securitymanifest.EndpointEntry{
+			// No raw cap recorded at all -> missing.
+			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", Guards: []string{"auth.required"}, CSRF: true},
+			// Cap recorded but installed after parse -> phase unsafe.
+			{ID: "Ingest", Kind: "api", Method: "POST", Path: "/api/ingest", Guards: []string{"permission:x"}, CSRF: true,
+				RequestLimits: securitymanifest.RequestLimitPosture{EndpointKind: "api", RawBodyBytes: 1 << 20, InstalledBeforeParse: false}},
+			// Multipart accepted without a multipart cap -> unbounded multipart.
+			{ID: "Upload", Kind: "action", Method: "POST", Path: "/upload", Guards: []string{"auth.required"}, CSRF: true,
+				RequestLimits: securitymanifest.RequestLimitPosture{EndpointKind: "action", RawBodyBytes: 1 << 20, InstalledBeforeParse: true, MultipartEnabled: true}},
+		},
+	}
+	got := codes(Evaluate(manifest, Baseline()))
+	if got["audit_request_limit_missing"] != 1 {
+		t.Fatalf("expected one missing-limit finding, got %#v", got)
+	}
+	if got["audit_request_limit_phase_unsafe"] != 1 {
+		t.Fatalf("expected one phase-unsafe finding, got %#v", got)
+	}
+	if got["audit_request_limit_unbounded_multipart"] != 1 {
+		t.Fatalf("expected one unbounded-multipart finding, got %#v", got)
+	}
+}
+
+func TestRequestLimitsPerEndpointAndKindSplit(t *testing.T) {
+	// The same selector family can carry different effective caps per endpoint,
+	// and command/query/action/API caps are evaluated independently.
+	manifest := securitymanifest.SecurityManifest{
+		Endpoints: []securitymanifest.EndpointEntry{
+			{ID: "Small", Kind: "api", Method: "POST", Path: "/api/a", Guards: []string{"permission:x"}, CSRF: true, BodyLimitBytes: 256 << 10, RequestLimits: securitymanifest.RequestLimitPosture{EndpointKind: "api", RawBodyBytes: 256 << 10, InstalledBeforeParse: true}},
+			{ID: "Big", Kind: "api", Method: "POST", Path: "/api/b", Guards: []string{"permission:x"}, CSRF: true, BodyLimitBytes: 4 << 20, RequestLimits: securitymanifest.RequestLimitPosture{EndpointKind: "api", RawBodyBytes: 4 << 20, InstalledBeforeParse: true}},
+		},
+	}
+	// A declared policy caps only API endpoints at 1mb; the per-endpoint posture
+	// means only the oversized endpoint is flagged.
+	policies := ComposeBaseline([]Policy{{
+		Name:      "api_tight",
+		Source:    "x.audit.gwdk:1",
+		Selectors: []Selector{{Raw: "api:*", Kind: SelectorEndpoint}},
+		Rules:     []Rule{{Kind: RuleMaxBody, Value: "1mb", Code: "audit_max_body_exceeds_policy"}},
+	}})
+	if got := codes(Evaluate(manifest, policies)); got["audit_max_body_exceeds_policy"] != 1 {
+		t.Fatalf("expected only the oversized API endpoint to be flagged, got %#v", got)
 	}
 }
 
@@ -101,6 +160,33 @@ func TestBaselineFlagsUnverifiedGuardEvidence(t *testing.T) {
 	}
 	if findings[0].Target != "route:/admin#guard:auth.required" || findings[0].Evidence != "inferred-static" || findings[0].Fingerprint == "" {
 		t.Fatalf("expected targeted guard metadata, got %#v", findings[0])
+	}
+}
+
+func TestBaselineFlagsUnverifiedEndpointGuardEvidence(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Endpoints: []securitymanifest.EndpointEntry{{
+			ID:     "Health",
+			Kind:   "api",
+			Method: "POST",
+			Path:   "/api/health",
+			Guards: []string{"app.guard"},
+			CSRF:   true,
+			GuardEvidence: []securitymanifest.GuardEvidence{{
+				ID:                 "app.guard",
+				BindingStatus:      "unverified-app-owned",
+				RuntimeTestFixture: "unverified-app-owned",
+			}},
+			RequestLimits: soundLimits("api"),
+			Source:        "api.page.gwdk:8",
+		}},
+	}
+	findings := Evaluate(manifest, Baseline())
+	if got := codes(findings); got["audit_guard_unverified"] != 1 {
+		t.Fatalf("expected one endpoint guard finding, got %#v", got)
+	}
+	if findings[0].Target != "api:Health#guard:app.guard" {
+		t.Fatalf("expected endpoint-targeted guard finding, got %#v", findings[0])
 	}
 }
 
@@ -186,6 +272,186 @@ func TestPolicyRequireHeaderUsesConfiguredHeaders(t *testing.T) {
 	}
 }
 
+func headerManifest(buildMode string, headers ...securitymanifest.ConfiguredHeader) securitymanifest.SecurityManifest {
+	return securitymanifest.SecurityManifest{
+		BuildMode: buildMode,
+		Frontend:  securitymanifest.FrontendSurface{ConfiguredHeaders: headers},
+	}
+}
+
+func TestBaselineFlagsWeakSecurityHeaders(t *testing.T) {
+	manifest := headerManifest("production",
+		securitymanifest.ConfiguredHeader{Name: "Content-Security-Policy", Value: "default-src 'self'; script-src 'unsafe-inline'"},
+		securitymanifest.ConfiguredHeader{Name: "Referrer-Policy", Value: "unsafe-url"},
+		securitymanifest.ConfiguredHeader{Name: "Strict-Transport-Security", Value: "max-age=600"},
+		securitymanifest.ConfiguredHeader{Name: "X-Frame-Options", Value: "DENY"},
+		securitymanifest.ConfiguredHeader{Name: "Content-Security-Policy-2", Value: ""}, // ignored, distinct name
+	)
+	got := codes(Evaluate(manifest, Baseline()))
+	for _, code := range []string{
+		"audit_header_csp_weak",
+		"audit_header_nosniff_missing",
+		"audit_header_referrer_weak",
+		"audit_header_hsts_weak",
+	} {
+		if got[code] != 1 {
+			t.Fatalf("expected one %s finding, got %#v", code, got)
+		}
+	}
+	for _, finding := range Evaluate(manifest, Baseline()) {
+		if strings.HasPrefix(finding.Code, "audit_header_") {
+			if finding.Source != "config:Build.SecurityHeaders" || finding.Remediation == "" {
+				t.Fatalf("header finding missing source/remediation: %#v", finding)
+			}
+		}
+	}
+}
+
+func TestBaselineAcceptsStrongSecurityHeaders(t *testing.T) {
+	manifest := headerManifest("production",
+		securitymanifest.ConfiguredHeader{Name: "Content-Security-Policy", Value: "default-src 'self'; frame-ancestors 'none'; object-src 'none'"},
+		securitymanifest.ConfiguredHeader{Name: "X-Content-Type-Options", Value: "nosniff"},
+		securitymanifest.ConfiguredHeader{Name: "Referrer-Policy", Value: "strict-origin-when-cross-origin"},
+		securitymanifest.ConfiguredHeader{Name: "Strict-Transport-Security", Value: "max-age=31536000; includeSubDomains"},
+		securitymanifest.ConfiguredHeader{Name: "X-Frame-Options", Value: "DENY"},
+	)
+	for _, finding := range Evaluate(manifest, Baseline()) {
+		if strings.HasPrefix(finding.Code, "audit_header_") {
+			t.Fatalf("strong headers should not produce a header finding: %#v", finding)
+		}
+	}
+}
+
+func TestBaselineFlagsMissingNosniff(t *testing.T) {
+	manifest := headerManifest("development",
+		securitymanifest.ConfiguredHeader{Name: "Content-Security-Policy", Value: "default-src 'self'"},
+	)
+	if got := codes(Evaluate(manifest, Baseline())); got["audit_header_nosniff_missing"] != 1 {
+		t.Fatalf("expected missing nosniff finding, got %#v", got)
+	}
+}
+
+func TestBaselineFlagsConflictingFramePolicy(t *testing.T) {
+	manifest := headerManifest("development",
+		securitymanifest.ConfiguredHeader{Name: "X-Content-Type-Options", Value: "nosniff"},
+		securitymanifest.ConfiguredHeader{Name: "X-Frame-Options", Value: "DENY"},
+		securitymanifest.ConfiguredHeader{Name: "Content-Security-Policy", Value: "default-src 'self'; frame-ancestors https://embed.example.com"},
+	)
+	if got := codes(Evaluate(manifest, Baseline())); got["audit_header_frame_conflict"] != 1 {
+		t.Fatalf("expected one frame-conflict finding, got %#v", got)
+	}
+}
+
+func TestBaselineDistinguishesFramePolicyStrength(t *testing.T) {
+	cases := []struct {
+		name string
+		xfo  string
+		csp  string
+		want int
+	}{
+		{name: "deny-none", xfo: "DENY", csp: "default-src 'self'; frame-ancestors 'none'"},
+		{name: "sameorigin-self", xfo: "SAMEORIGIN", csp: "default-src 'self'; frame-ancestors 'self'"},
+		{name: "deny-self-conflict", xfo: "DENY", csp: "default-src 'self'; frame-ancestors 'self'", want: 1},
+		{name: "sameorigin-none-conflict", xfo: "SAMEORIGIN", csp: "default-src 'self'; frame-ancestors 'none'", want: 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			manifest := headerManifest("development",
+				securitymanifest.ConfiguredHeader{Name: "X-Content-Type-Options", Value: "nosniff"},
+				securitymanifest.ConfiguredHeader{Name: "X-Frame-Options", Value: tc.xfo},
+				securitymanifest.ConfiguredHeader{Name: "Content-Security-Policy", Value: tc.csp},
+			)
+			if got := codes(Evaluate(manifest, Baseline()))["audit_header_frame_conflict"]; got != tc.want {
+				t.Fatalf("frame conflict count = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBaselineHSTSAllowedInDevelopmentWithShortMaxAge(t *testing.T) {
+	manifest := headerManifest("development",
+		securitymanifest.ConfiguredHeader{Name: "X-Content-Type-Options", Value: "nosniff"},
+		securitymanifest.ConfiguredHeader{Name: "Strict-Transport-Security", Value: "max-age=600"},
+	)
+	if got := codes(Evaluate(manifest, Baseline())); got["audit_header_hsts_weak"] != 0 {
+		t.Fatalf("short max-age should be tolerated outside production, got %#v", got)
+	}
+}
+
+func TestBaselineFlagsWildcardCORS(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		CORS: securitymanifest.CORSPosture{Enabled: true, AllowsAnyOrigin: true, Origin: "config:Build.CORS"},
+	}
+	if got := codes(Evaluate(manifest, Baseline())); got["audit_cors_wildcard_origin"] != 1 {
+		t.Fatalf("expected wildcard CORS warning, got %#v", got)
+	}
+
+	credentialed := securitymanifest.SecurityManifest{
+		CORS: securitymanifest.CORSPosture{Enabled: true, AllowsAnyOrigin: true, AllowCredentials: true, Origin: "config:Build.CORS"},
+	}
+	if got := codes(Evaluate(credentialed, Baseline())); got["audit_cors_credentialed_wildcard"] != 1 {
+		t.Fatalf("expected credentialed wildcard CORS error, got %#v", got)
+	}
+
+	scoped := securitymanifest.SecurityManifest{
+		CORS: securitymanifest.CORSPosture{Enabled: true, AllowedOrigins: []string{"https://app.example.com"}, AllowCredentials: true},
+	}
+	if got := codes(Evaluate(scoped, Baseline())); got["audit_cors_wildcard_origin"]+got["audit_cors_credentialed_wildcard"] != 0 {
+		t.Fatalf("a scoped origin allowlist should not be flagged, got %#v", got)
+	}
+}
+
+// TestBaselinePoliciesMapToImplementedChecks proves every built-in baseline
+// policy maps to an implemented engine check: a manifest that violates every
+// gate produces at least one finding attributed to each baseline policy.
+func TestBaselinePoliciesMapToImplementedChecks(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		BuildMode: "production",
+		Endpoints: []securitymanifest.EndpointEntry{
+			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", DefaultDeny: true, CSRF: false},
+			{ID: "Frag", Kind: "fragment", Method: "GET", Path: "/frag", DefaultDeny: true},
+			{ID: "Api", Kind: "api", Method: "POST", Path: "/api/x", DefaultDeny: true, CSRF: false},
+			{ID: "Cmd", Kind: "command", Method: "POST", Path: "/cmd", DefaultDeny: true, CSRF: false},
+			{ID: "Qry", Kind: "query", Method: "GET", Path: "/qry", DefaultDeny: true},
+		},
+		Contracts: []securitymanifest.ContractEntry{{Name: "patients.Create", Kind: "command"}},
+		Observability: []securitymanifest.ObservabilityEntry{{
+			ID: "trace.browser", Kind: "browser-ingest", Path: "/_gowdk/traces/browser", Mounted: true, BuildMode: "production", AccessPolicy: "public",
+		}},
+		CORS: securitymanifest.CORSPosture{Enabled: true, AllowsAnyOrigin: true},
+		Frontend: securitymanifest.FrontendSurface{
+			UnguardedRoutes:   []securitymanifest.UnguardedRoute{{Route: "/draft", Source: "draft.page.gwdk:4"}},
+			BundleSecrets:     []securitymanifest.BundleLeak{{Kind: "unsafe-asset:.env", Source: "card.cmp.gwdk:4"}},
+			RawHTMLSinks:      []securitymanifest.RawHTMLSink{{OwnerKind: "page", OwnerID: "home", Field: "{X}", Source: "home.page.gwdk:12", Fingerprint: "fp"}},
+			ConfiguredHeaders: []securitymanifest.ConfiguredHeader{{Name: "Content-Security-Policy", Value: "default-src *"}},
+		},
+		Routes: []securitymanifest.RouteEntry{{
+			PageID: "admin", Route: "/admin", Kind: "ssr", Guards: []string{"auth.required"},
+			GuardEvidence: []securitymanifest.GuardEvidence{{ID: "auth.required", BindingStatus: "unverified-app-owned", RuntimeTestFixture: "unverified-app-owned"}},
+		}},
+	}
+	policies := codesByPolicy(Evaluate(manifest, Baseline()))
+	for _, name := range []string{
+		"baseline.actions", "baseline.fragments", "baseline.api", "baseline.contract_commands",
+		"baseline.contract_queries", "baseline.contracts", "baseline.guards", "baseline.observability",
+		"baseline.frontend", "baseline.headers", "baseline.request_limits", "baseline.cors",
+	} {
+		if policies[name] == 0 {
+			t.Fatalf("baseline policy %q produced no finding, so it has no implemented check: %#v", name, policies)
+		}
+	}
+}
+
+func codesByPolicy(findings []Finding) map[string]int {
+	counts := map[string]int{}
+	for _, finding := range findings {
+		if finding.Policy != "" {
+			counts[finding.Policy]++
+		}
+	}
+	return counts
+}
+
 func TestDeclaredRequireCSRFResolvesCodeByEndpointKind(t *testing.T) {
 	manifest := securitymanifest.SecurityManifest{
 		Endpoints: []securitymanifest.EndpointEntry{
@@ -211,6 +477,99 @@ func TestDeclaredRequireCSRFResolvesCodeByEndpointKind(t *testing.T) {
 	}
 	if got["audit_api_missing_csrf"] != 1 {
 		t.Fatalf("expected one API CSRF finding, got %#v", got)
+	}
+}
+
+func TestRuleCodeOverrideValidation(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Routes: []securitymanifest.RouteEntry{
+			{PageID: "admin", Route: "/admin", Kind: "ssr", Guards: []string{"auth.required"}},
+		},
+	}
+	base := func(code string) []Policy {
+		return []Policy{{
+			Name:      "guards",
+			Source:    "security.audit.gwdk:3",
+			Selectors: []Selector{{Raw: "/admin/**", Kind: SelectorRoute}},
+			Rules:     []Rule{{Kind: RuleRequireGuard, Value: "role:admin", Code: code, Source: "security.audit.gwdk:4"}},
+		}}
+	}
+
+	// Valid override within the rule family.
+	got := codes(Evaluate(manifest, base("audit_required_guard_missing")))
+	if got["audit_required_guard_missing"] != 1 || got["policy_rule_code_incompatible"] != 0 {
+		t.Fatalf("valid in-family override should be accepted, got %#v", got)
+	}
+
+	// Unrelated code from a different family.
+	got = codes(Evaluate(manifest, base("audit_bundle_secret")))
+	if got["policy_rule_code_incompatible"] != 1 {
+		t.Fatalf("unrelated code should be incompatible, got %#v", got)
+	}
+	// Neutralized back to the default code so the rule still fires correctly.
+	if got["audit_required_guard_missing"] != 1 {
+		t.Fatalf("neutralized override should still emit the default-coded finding, got %#v", got)
+	}
+
+	// Unknown / unregistered code.
+	got = codes(Evaluate(manifest, base("audit_made_up_code")))
+	if got["policy_rule_code_unknown"] != 1 {
+		t.Fatalf("unknown code should be reported, got %#v", got)
+	}
+
+	// No override at all.
+	noOverride := []Policy{{
+		Name:      "guards",
+		Source:    "security.audit.gwdk:3",
+		Selectors: []Selector{{Raw: "/admin/**", Kind: SelectorRoute}},
+		Rules:     []Rule{{Kind: RuleRequireGuard, Value: "role:admin", Code: "audit_required_guard_missing"}},
+	}}
+	got = codes(Evaluate(manifest, noOverride))
+	if got["policy_rule_code_incompatible"]+got["policy_rule_code_unknown"]+got["policy_rule_code_severity_lowered"] != 0 {
+		t.Fatalf("no override should not raise a code-validation finding, got %#v", got)
+	}
+}
+
+func TestRuleCodeOverrideCannotLowerSeverity(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Endpoints: []securitymanifest.EndpointEntry{
+			{ID: "Refresh", Kind: "fragment", Method: "GET", Path: "/frag", DefaultDeny: true, RequestLimits: soundLimits("fragment")},
+		},
+	}
+	// require_any_guard defaults to an error code; audit_client_route_unguarded is
+	// in the same family but only a warning, so the override must be rejected.
+	policies := []Policy{{
+		Name:      "downgrade",
+		Source:    "security.audit.gwdk:1",
+		Selectors: []Selector{{Raw: "fragment:*", Kind: SelectorEndpoint}},
+		Rules:     []Rule{{Kind: RuleRequireAnyGuard, Code: "audit_client_route_unguarded", Source: "security.audit.gwdk:2"}},
+	}}
+	findings := Evaluate(manifest, policies)
+	got := codes(findings)
+	if got["policy_rule_code_severity_lowered"] != 1 {
+		t.Fatalf("expected a severity-lowered finding, got %#v", got)
+	}
+	// The downgraded code must not appear; the rule fires at full severity instead.
+	if got["audit_client_route_unguarded"] != 0 || got["audit_guardless_endpoint_page"] != 1 {
+		t.Fatalf("severity-lowering override should be neutralized to the default code, got %#v", got)
+	}
+	for _, finding := range findings {
+		if finding.Code == "policy_rule_code_severity_lowered" && finding.Source != "security.audit.gwdk:2" {
+			t.Fatalf("validation finding should carry the rule source span, got %#v", finding)
+		}
+	}
+}
+
+func TestFindingsRecordCodeSource(t *testing.T) {
+	manifest := securitymanifest.SecurityManifest{
+		Endpoints: []securitymanifest.EndpointEntry{
+			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", Guards: []string{"public"}, CSRF: false, Public: true, RequestLimits: soundLimits("action")},
+		},
+	}
+	for _, finding := range Evaluate(manifest, Baseline()) {
+		if finding.CodeSource != "baseline-default" {
+			t.Fatalf("baseline finding should record baseline-default code source, got %#v", finding)
+		}
 	}
 }
 
@@ -253,6 +612,104 @@ func TestFrontendRawHTMLAllowlistSuppressesBaselineFinding(t *testing.T) {
 	}}
 	if got := codes(Evaluate(manifest, ComposeBaseline(declared)))["audit_raw_html_sink"]; got != 0 {
 		t.Fatalf("expected declared allowlist to suppress baseline raw HTML finding, got %d", got)
+	}
+}
+
+func rawHTMLSinkManifest(field, source string) securitymanifest.SecurityManifest {
+	fingerprint := securitymanifest.RawHTMLFingerprint("page", "home", field, source, 0)
+	return securitymanifest.SecurityManifest{
+		Frontend: securitymanifest.FrontendSurface{
+			RawHTMLSinks: []securitymanifest.RawHTMLSink{
+				{OwnerKind: "page", OwnerID: "home", Field: field, Source: source, Ordinal: 0, Fingerprint: fingerprint},
+			},
+		},
+	}
+}
+
+func exceptionPolicy(fingerprint string, attrs map[string]string) []Policy {
+	return ComposeBaseline([]Policy{{
+		Name:      "raw_html_waivers",
+		Source:    "security.audit.gwdk:3",
+		Extends:   []string{"baseline.frontend"},
+		Selectors: []Selector{{Raw: "frontend", Kind: SelectorFrontend}},
+		Rules:     []Rule{{Kind: RuleExceptRawHTML, Value: fingerprint, Source: "security.audit.gwdk:4", Attrs: attrs}},
+	}})
+}
+
+func goodExceptionAttrs() map[string]string {
+	return map[string]string{
+		"owner":         "team-content",
+		"justification": "server-sanitized markdown",
+		"expires":       "2999-12-31",
+		"sanitizer":     "bluemonday",
+	}
+}
+
+func TestRawHTMLExceptionExactFingerprintSuppresses(t *testing.T) {
+	manifest := rawHTMLSinkManifest("{Body}", "home.page.gwdk:12")
+	fingerprint := manifest.Frontend.RawHTMLSinks[0].Fingerprint
+	got := codes(Evaluate(manifest, exceptionPolicy(fingerprint, goodExceptionAttrs())))
+	if got["audit_raw_html_sink"] != 0 {
+		t.Fatalf("an exact active exception should suppress the sink, got %#v", got)
+	}
+	if got["audit_raw_html_exception_unmatched"]+got["audit_raw_html_exception_expired"]+got["audit_raw_html_exception_malformed"] != 0 {
+		t.Fatalf("active exception should not produce a state finding, got %#v", got)
+	}
+}
+
+func TestRawHTMLExceptionStaleSourceMovementIsUnmatched(t *testing.T) {
+	// Exception was pinned to the sink at its old line; the sink has since moved.
+	oldFingerprint := securitymanifest.RawHTMLFingerprint("page", "home", "{Body}", "home.page.gwdk:12", 0)
+	manifest := rawHTMLSinkManifest("{Body}", "home.page.gwdk:40")
+	got := codes(Evaluate(manifest, exceptionPolicy(oldFingerprint, goodExceptionAttrs())))
+	if got["audit_raw_html_exception_unmatched"] != 1 {
+		t.Fatalf("moved sink should leave the exception unmatched, got %#v", got)
+	}
+	if got["audit_raw_html_sink"] != 1 {
+		t.Fatalf("moved sink should be reported as unallowlisted, got %#v", got)
+	}
+}
+
+func TestRawHTMLExceptionChangedExpressionIsUnmatched(t *testing.T) {
+	oldFingerprint := securitymanifest.RawHTMLFingerprint("page", "home", "{Body}", "home.page.gwdk:12", 0)
+	manifest := rawHTMLSinkManifest("{RenderedBody}", "home.page.gwdk:12")
+	got := codes(Evaluate(manifest, exceptionPolicy(oldFingerprint, goodExceptionAttrs())))
+	if got["audit_raw_html_exception_unmatched"] != 1 || got["audit_raw_html_sink"] != 1 {
+		t.Fatalf("changed expression should unmatch the exception and report the sink, got %#v", got)
+	}
+}
+
+func TestRawHTMLExceptionExpired(t *testing.T) {
+	manifest := rawHTMLSinkManifest("{Body}", "home.page.gwdk:12")
+	fingerprint := manifest.Frontend.RawHTMLSinks[0].Fingerprint
+	attrs := goodExceptionAttrs()
+	attrs["expires"] = "2000-01-01"
+	got := codes(Evaluate(manifest, exceptionPolicy(fingerprint, attrs)))
+	if got["audit_raw_html_exception_expired"] != 1 {
+		t.Fatalf("expired exception should be reported, got %#v", got)
+	}
+	if got["audit_raw_html_sink"] != 1 {
+		t.Fatalf("expired exception should no longer suppress the sink, got %#v", got)
+	}
+}
+
+func TestRawHTMLExceptionMalformedRequiresEvidence(t *testing.T) {
+	manifest := rawHTMLSinkManifest("{Body}", "home.page.gwdk:12")
+	fingerprint := manifest.Frontend.RawHTMLSinks[0].Fingerprint
+	attrs := goodExceptionAttrs()
+	delete(attrs, "sanitizer") // missing sanitizer/trusted-type evidence
+	findings := Evaluate(manifest, exceptionPolicy(fingerprint, attrs))
+	got := codes(findings)
+	if got["audit_raw_html_exception_malformed"] != 1 {
+		t.Fatalf("missing sanitizer should make the exception malformed, got %#v", got)
+	}
+	if got["audit_raw_html_sink"] != 1 {
+		t.Fatalf("malformed exception must not suppress the sink, got %#v", got)
+	}
+	for _, finding := range findings {
+		if finding.Code == "audit_raw_html_exception_malformed" && finding.Source != "security.audit.gwdk:4" {
+			t.Fatalf("exception finding should carry the rule source, got %#v", finding)
+		}
 	}
 }
 

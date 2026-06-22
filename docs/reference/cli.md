@@ -23,7 +23,7 @@ gowdk inspect ir|tree|endpoint-graph|asset-graph|go-bindings [--config <file>] [
 gowdk generate stubs [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
 gowdk doctor [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...]
-gowdk audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--run] [--run-timeout=<duration>] [files...]
+gowdk audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--emit-tests[=<file>]] [--force] [--run] [--run-timeout=<duration>] [files...]
 gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
@@ -42,7 +42,7 @@ gowdk lsp [--ssr]
 ## Flags
 
 - `--ssr`: enables SSR validation by adding the SSR addon to the in-memory config.
-- `--force`: supported by `init`; overwrites starter files that already exist.
+- `--force`: supported by `init` and `audit --emit-tests`; overwrites starter files or a user-owned emitted audit test target.
 - `--tests`: supported by `init`; adds `tests/gowdk_smoke_test.go`, an optional generated app smoke test that runs only when `GOWDK_BIN` points at a built `gowdk` CLI.
 - `--template`: supported by `init`; selects `site` or `minimal`. Defaults to `site`.
 - `--list`: supported by `add`; prints addable built-in addon names the command can wire.
@@ -68,7 +68,9 @@ gowdk lsp [--ssr]
   carries a diagnostic code; run `gowdk explain <code>` for details.
   `--emit-tests` writes a readable standalone `gowdk_audit_test.go` file (or the
   path from `--emit-tests=<file>`) that drives a `runtime/app` posture harness
-  through `runtime/testkit`. `--run` builds a temporary generated app from the
+  through `runtime/testkit`. Existing files are refreshed only when they carry
+  the GOWDK generated-audit marker; use `--force` to replace a user-owned file.
+  `--run` builds a temporary generated app from the
   same validated IR and runs the generated app's audit test with
   `go test ./gowdkapp` under a strict execution boundary: a default 2m deadline
   (override with `--run-timeout=<duration>`), bounded combined output truncated
@@ -77,8 +79,10 @@ gowdk lsp [--ssr]
   (`GOPROXY=off`, `GOTOOLCHAIN=local`). A failed expectation is reported as
   `audit_test_failed`; exceeding the deadline is reported distinctly as
   `audit_test_timeout`.
-  `gowdk build` runs the same baseline gate, blocks production builds on
-  error-severity findings unless `--allow-insecure` is set, and writes the
+  `gowdk build` runs the same baseline gate before writing output, scans the
+  final emitted artifact files for bundled secrets after generation, blocks
+  production builds on error-severity findings unless `--allow-insecure` is set,
+  and writes the
   posture alone to a non-served `.gowdk/reports/<output-name>/gowdk-security.json`
   path outside the selected output directory.
 - `--write`: supported by `fmt`; overwrites formatted files.

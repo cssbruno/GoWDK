@@ -175,11 +175,11 @@ func TestBoundedBufferTruncates(t *testing.T) {
 }
 
 func TestParseAuditCommandOptionsRunTimeout(t *testing.T) {
-	options, _, err := parseAuditCommandOptions([]string{"--run", "--run-timeout=90s"})
+	options, _, err := parseAuditCommandOptions([]string{"--run", "--force", "--run-timeout=90s"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !options.RunTests || options.RunTimeout != 90*time.Second {
+	if !options.RunTests || !options.Force || options.RunTimeout != 90*time.Second {
 		t.Fatalf("unexpected options: %#v", options)
 	}
 	if _, _, err := parseAuditCommandOptions([]string{"--run-timeout=nonsense"}); err == nil {

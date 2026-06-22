@@ -65,7 +65,8 @@ CSRF, and APIs must not be public by omission. Findings carry a stable
 diagnostic code, a `file:line`, and remediation; run `gowdk explain <code>` for
 details.
 
-`gowdk build` evaluates the same static baseline before writing output.
+`gowdk build` evaluates the same static baseline before writing output and scans
+the final emitted artifact files for bundled secrets after generation.
 Production builds fail on error-severity findings unless `--allow-insecure` is
 set; non-production builds print a prominent warning summary without blocking
 local iteration. `gowdk audit` remains the explicit report and CI surface: it

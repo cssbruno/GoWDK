@@ -38,9 +38,19 @@ const (
 	RuleDenyPublic RuleKind = "deny_public"
 	// RuleMaxBody caps a matched endpoint's request body limit.
 	RuleMaxBody RuleKind = "max_body"
+	// RuleRequireRequestLimits requires a matched endpoint to declare an effective
+	// request-limit posture: a positive raw body cap installed before the body is
+	// parsed, and a multipart cap when multipart bodies are accepted.
+	RuleRequireRequestLimits RuleKind = "require_request_limits"
 	// RuleRequireHeader requires the app to be configured to emit a response
 	// header.
 	RuleRequireHeader RuleKind = "require_header"
+	// RuleCheckSecurityHeaders audits the semantic strength of configured
+	// security response headers (CSP, nosniff, Referrer-Policy, HSTS, framing).
+	RuleCheckSecurityHeaders RuleKind = "check_security_headers"
+	// RuleCheckCORS audits the generated cross-origin policy for risky
+	// combinations such as a wildcard origin (optionally with credentials).
+	RuleCheckCORS RuleKind = "check_cors"
 	// RuleRequireClientRouteGuards reports client-visible routes that rely on
 	// default-deny because the source declared no guard.
 	RuleRequireClientRouteGuards RuleKind = "require_client_route_guards"
@@ -50,8 +60,13 @@ const (
 	// RuleAllowRawHTML rule in any resolved frontend policy.
 	RuleDenyRawHTMLSinks RuleKind = "deny_raw_html_sinks"
 	// RuleAllowRawHTML allowlists one raw-HTML sink (source:field); every sink
-	// not allowlisted is reported.
+	// not allowlisted is reported. This is the legacy coarse allowlist; prefer
+	// RuleExceptRawHTML for an exact, justified, expiring exception.
 	RuleAllowRawHTML RuleKind = "allow_raw_html"
+	// RuleExceptRawHTML suppresses exactly one raw-HTML sink by its fingerprint,
+	// and only when the exception carries an owner, justification, unexpired
+	// expiry, and sanitizer/trusted-type contract.
+	RuleExceptRawHTML RuleKind = "except_raw_html"
 	// RuleDenyRolelessContract reports a web-exposed command or query contract
 	// that declares no roles, so the data-layer authorization gate has no role to
 	// admit. The contract must declare at least one role (or RoleAny to be
@@ -72,11 +87,14 @@ type Selector struct {
 
 // Rule is one policy constraint. Code is the diagnostic code emitted when the
 // rule is violated; Value carries the rule argument (a guard ID, header name,
-// byte size, or allowlist entry) when the rule kind needs one.
+// byte size, or allowlist entry) when the rule kind needs one. Source records
+// where a declared rule originated so code-override validation can point at it.
 type Rule struct {
-	Kind  RuleKind
-	Value string
-	Code  string
+	Kind   RuleKind
+	Value  string
+	Code   string
+	Source string
+	Attrs  map[string]string
 }
 
 // Policy is a named, composable set of rules applied to selected targets.
@@ -93,6 +111,7 @@ type Policy struct {
 type Finding struct {
 	Code        string               `json:"code"`
 	Severity    diagnostics.Severity `json:"severity"`
+	CodeSource  string               `json:"codeSource,omitempty"`
 	Fingerprint string               `json:"fingerprint,omitempty"`
 	Target      string               `json:"target,omitempty"`
 	Policy      string               `json:"policy,omitempty"`

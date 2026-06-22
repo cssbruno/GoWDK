@@ -28,6 +28,7 @@ type Span struct {
 	traceID      TraceID
 	spanID       SpanID
 	parentSpanID SpanID
+	traceState   string
 	name         string
 	surface      Surface
 	lane         Lane
@@ -142,11 +143,15 @@ func (span *Span) Set(key string, value any) {
 	}
 	for index := range span.attributes {
 		if span.attributes[index].Key == key {
-			span.attributes[index].Value = value
+			if normalized, ok := normalizeAttribute(Attribute{Key: key, Value: value}); ok {
+				span.attributes[index] = normalized
+			}
 			return
 		}
 	}
-	span.attributes = append(span.attributes, Attribute{Key: key, Value: value})
+	if normalized, ok := normalizeAttribute(Attribute{Key: key, Value: value}); ok {
+		span.attributes = append(span.attributes, normalized)
+	}
 }
 
 // SetStatus records the final span status.
@@ -169,7 +174,7 @@ func (span *Span) TraceContext() TraceContext {
 	}
 	span.mu.Lock()
 	defer span.mu.Unlock()
-	return TraceContext{TraceID: span.traceID, SpanID: span.spanID, Sampled: true}
+	return TraceContext{TraceID: span.traceID, SpanID: span.spanID, Sampled: true, TraceState: span.traceState}
 }
 
 func (span *Span) tracerRef() *Tracer {
@@ -203,7 +208,7 @@ func (span *Span) snapshotLocked() Snapshot {
 	// Normalize the source path here, the single point every completed-span
 	// snapshot is created, so the viewer, JSON/SSE, console, and OTLP surfaces
 	// never observe an absolute local filesystem path by default.
-	return normalizeSnapshotSource(Snapshot{
+	return cloneSnapshot(Snapshot{
 		TraceID:      span.traceID,
 		SpanID:       span.spanID,
 		ParentSpanID: span.parentSpanID,
@@ -211,8 +216,8 @@ func (span *Span) snapshotLocked() Snapshot {
 		Surface:      span.surface,
 		Lane:         span.lane,
 		Source:       span.source,
-		Attributes:   append([]Attribute(nil), span.attributes...),
-		Events:       append([]Event(nil), span.events...),
+		Attributes:   span.attributes,
+		Events:       span.events,
 		Status:       span.status,
 		StartTime:    span.start,
 		EndTime:      end,
@@ -231,5 +236,5 @@ func attributesFromMap(attrs map[string]any) []Attribute {
 		}
 		out = append(out, Attribute{Key: key, Value: value})
 	}
-	return out
+	return cloneAttributes(out)
 }

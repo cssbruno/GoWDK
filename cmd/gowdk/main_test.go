@@ -6927,6 +6927,57 @@ view {
 	}
 }
 
+func TestBuildCommandProductionScansFinalArtifactsForSecrets(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "home.page.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	config := filepath.Join(root, "gowdk.config.go")
+	writeCLIFile(t, config, `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		Mode: gowdk.Production,
+		SecurityHeaders: gowdk.SecurityHeadersConfig{
+			Enabled: true,
+			Headers: map[string]string{
+				"X-Content-Type-Options": "nosniff",
+			},
+		},
+	},
+}
+`)
+	writeCLIFile(t, page, `package app
+
+page home
+route "/"
+guard public
+
+view {
+  <main data-token="token=live_secret_1234567890">Home</main>
+}
+`)
+
+	_, stderr, err := captureCLIOutput(t, func() error {
+		return run([]string{"build", "--config", config, "--out", outputDir, page})
+	})
+	if err == nil {
+		t.Fatal("expected production build to be blocked by final artifact secret scan")
+	}
+	if !strings.Contains(err.Error(), "build blocked by") {
+		t.Fatalf("unexpected build audit error: %v", err)
+	}
+	if !strings.Contains(stderr, "final emitted artifact carries a secret-shaped value") ||
+		!strings.Contains(stderr, "audit_bundle_secret") {
+		t.Fatalf("expected final artifact secret finding, got stderr:\n%s", stderr)
+	}
+
+	if err := run([]string{"build", "--config", config, "--allow-insecure", "--out", outputDir, page}); err != nil {
+		t.Fatalf("expected --allow-insecure to override the final artifact security gate: %v", err)
+	}
+}
+
 func TestBuildCommandBuildsBinaryWithFeatureBoundActionAndAPI(t *testing.T) {
 	root := t.TempDir()
 	moduleRoot, err := filepath.Abs("../..")

@@ -3,6 +3,7 @@ package clientlang
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -37,9 +38,69 @@ func checkBuiltinCall(expr CallExpr, symbols map[string]ValueType, functions map
 		return checkConversionBuiltin(expr, symbols, functions, fields, TypeInt)
 	case "float":
 		return checkConversionBuiltin(expr, symbols, functions, fields, TypeFloat)
+	case "fixed", "percent":
+		if err := checkNumberDigitsBuiltinArgs(expr, symbols, functions, fields); err != nil {
+			return TypeUnknown, true, err
+		}
+		return TypeString, true, nil
+	case "round":
+		if err := checkNumberDigitsBuiltinArgs(expr, symbols, functions, fields); err != nil {
+			return TypeUnknown, true, err
+		}
+		return TypeFloat, true, nil
+	case "formatTime":
+		if err := checkFormatTimeBuiltinArgs(expr, symbols, functions, fields); err != nil {
+			return TypeUnknown, true, err
+		}
+		return TypeString, true, nil
 	default:
 		return TypeUnknown, false, nil
 	}
+}
+
+// checkNumberDigitsBuiltinArgs validates the (number, digits) signature shared by
+// fixed, round, and percent. The digit count's value range is enforced at
+// evaluation time because it is not known at check time.
+func checkNumberDigitsBuiltinArgs(expr CallExpr, symbols map[string]ValueType, functions map[string]ExprFunction, fields map[string]bool) error {
+	if len(expr.Args) != 2 {
+		return fmt.Errorf("built-in %s expects 2 arguments, got %d", expr.Name, len(expr.Args))
+	}
+	value, err := checkExpr(expr.Args[0], symbols, functions, fields)
+	if err != nil {
+		return err
+	}
+	if value != TypeUnknown && !isNumericType(value) {
+		return fmt.Errorf("built-in %s argument 1 expects a number, got %s", expr.Name, value)
+	}
+	digits, err := checkExpr(expr.Args[1], symbols, functions, fields)
+	if err != nil {
+		return err
+	}
+	if digits != TypeUnknown && digits != TypeInt {
+		return fmt.Errorf("built-in %s argument 2 expects an int, got %s", expr.Name, digits)
+	}
+	return nil
+}
+
+func checkFormatTimeBuiltinArgs(expr CallExpr, symbols map[string]ValueType, functions map[string]ExprFunction, fields map[string]bool) error {
+	if len(expr.Args) != 2 {
+		return fmt.Errorf("built-in formatTime expects 2 arguments, got %d", len(expr.Args))
+	}
+	timestamp, err := checkExpr(expr.Args[0], symbols, functions, fields)
+	if err != nil {
+		return err
+	}
+	if timestamp != TypeUnknown && !isNumericType(timestamp) {
+		return fmt.Errorf("built-in formatTime argument 1 expects a unix timestamp, got %s", timestamp)
+	}
+	layout, err := checkExpr(expr.Args[1], symbols, functions, fields)
+	if err != nil {
+		return err
+	}
+	if layout != TypeUnknown && layout != TypeString {
+		return fmt.Errorf("built-in formatTime argument 2 expects a string layout, got %s", layout)
+	}
+	return nil
 }
 
 func checkStringBuiltinArgs(expr CallExpr, symbols map[string]ValueType, functions map[string]ExprFunction, fields map[string]bool, count int) error {
@@ -119,9 +180,89 @@ func evalBuiltinCall(expr CallExpr, values map[string]string) (any, bool, error)
 		return evalNumericBuiltin(expr, values, TypeInt)
 	case "float":
 		return evalNumericBuiltin(expr, values, TypeFloat)
+	case "fixed":
+		number, digits, err := evalNumberDigitsArgs(expr, values)
+		if err != nil {
+			return nil, true, err
+		}
+		formatted, err := formatFixed(number, digits)
+		return formatted, true, err
+	case "round":
+		number, digits, err := evalNumberDigitsArgs(expr, values)
+		if err != nil {
+			return nil, true, err
+		}
+		rounded, err := roundTo(number, digits)
+		return rounded, true, err
+	case "percent":
+		number, digits, err := evalNumberDigitsArgs(expr, values)
+		if err != nil {
+			return nil, true, err
+		}
+		formatted, err := formatPercent(number, digits)
+		return formatted, true, err
+	case "formatTime":
+		return evalFormatTimeBuiltin(expr, values)
 	default:
 		return nil, false, nil
 	}
+}
+
+func evalNumberDigitsArgs(expr CallExpr, values map[string]string) (float64, int, error) {
+	if len(expr.Args) != 2 {
+		return 0, 0, fmt.Errorf("built-in %s expects 2 arguments, got %d", expr.Name, len(expr.Args))
+	}
+	first, err := evalExpr(expr.Args[0], values)
+	if err != nil {
+		return 0, 0, err
+	}
+	number, ok := numericFloat(first)
+	if !ok {
+		return 0, 0, fmt.Errorf("built-in %s argument 1 expects a number", expr.Name)
+	}
+	second, err := evalExpr(expr.Args[1], values)
+	if err != nil {
+		return 0, 0, err
+	}
+	digits, ok := numericInt(second)
+	if !ok {
+		return 0, 0, fmt.Errorf("built-in %s argument 2 expects an int", expr.Name)
+	}
+	return number, digits, nil
+}
+
+func evalFormatTimeBuiltin(expr CallExpr, values map[string]string) (any, bool, error) {
+	if len(expr.Args) != 2 {
+		return nil, true, fmt.Errorf("built-in formatTime expects 2 arguments, got %d", len(expr.Args))
+	}
+	first, err := evalExpr(expr.Args[0], values)
+	if err != nil {
+		return nil, true, err
+	}
+	timestamp, ok := numericFloat(first)
+	if !ok {
+		return nil, true, fmt.Errorf("built-in formatTime argument 1 expects a unix timestamp")
+	}
+	second, err := evalExpr(expr.Args[1], values)
+	if err != nil {
+		return nil, true, err
+	}
+	layout, ok := second.(string)
+	if !ok {
+		return nil, true, fmt.Errorf("built-in formatTime argument 2 expects a string layout")
+	}
+	formatted, err := formatUnixTime(timestamp, layout)
+	return formatted, true, err
+}
+
+// numericInt coerces a numeric runtime value to an int, rejecting fractional
+// numbers so digit counts and timestamps stay whole.
+func numericInt(value any) (int, bool) {
+	number, ok := numericFloat(value)
+	if !ok || number != math.Trunc(number) {
+		return 0, false
+	}
+	return int(number), true
 }
 
 func evalCaseBuiltin(expr CallExpr, values map[string]string, fn func(string) string) (any, bool, error) {

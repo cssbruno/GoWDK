@@ -58,9 +58,16 @@ same-package Go handlers. `gowdk build` parses the first literal `paths {}` and
 
 ```text
 literalReturn = "=>" whitespace* "{" literalField ("," literalField)* "}"
-literalField  = ident ":" string
+literalField  = ident ":" buildExpr
 buildCall     = "=>" whitespace* ident "." ident "()"
 ```
+
+A `build {}` field value is a `buildExpr` whose raw text is captured at parse
+time and evaluated by the deterministic build-time evaluator. Beyond scalar
+literals it covers expressions, list/object literals, `seq` ranges,
+comprehensions, list reductions, and field/index access; see the
+[build-time iteration and transforms](syntax.md#build-time-iteration-and-transforms)
+section for the full contract.
 
 The current `view {}` parser accepts the supported markup subset documented in
 [Markup](markup.md). Contract and realtime directives use package-qualified Go

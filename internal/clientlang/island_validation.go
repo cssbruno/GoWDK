@@ -737,7 +737,7 @@ func parseIslandRefCall(source string) (string, bool) {
 		return "", false
 	}
 	switch method {
-	case "Focus", "Blur", "ScrollIntoView":
+	case "Focus", "Blur", "ScrollIntoView", "Select":
 		return name, true
 	default:
 		return "", false

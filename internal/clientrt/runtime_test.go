@@ -235,6 +235,8 @@ func TestIslandRuntimeClonesTemplateDOM(t *testing.T) {
 	for _, expected := range []string{
 		`const expressionSpec = Object.freeze({`,
 		`"builtins":[{"name":"len","args":1}`,
+		`{"name":"fixed","args":2}`,
+		`{"name":"formatTime","args":2}`,
 		`const builtinSpecByName = Object.freeze(Object.fromEntries`,
 		`expressionOperators.equality.has`,
 		`function cloneListTemplate(marker, state, scope, helpers)`,

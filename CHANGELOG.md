@@ -7,6 +7,13 @@ packages, and tooling contracts may change before 1.0.
 
 ### Added
 
+- Deterministic client expression built-ins for formatting and date/time:
+  `fixed(number, digits)`, `round(number, digits)`, `percent(number, digits)`,
+  and `formatTime(unixSeconds, layout)` (UTC, token layout). They use only
+  IEEE-754 and integer arithmetic — no `Intl`/`Date` — so the Go evaluator and
+  the browser runtime produce byte-identical output, cross-checked by the
+  expression conformance test. Text inputs also gain a `Ref.Select()` DOM ref
+  method alongside `Focus`/`Blur`/`ScrollIntoView`.
 - Bounded `{#await fetchJSON[T](urlExpr)}` blocks in JS client islands for
   pending, resolved, and error placeholder UI.
 

@@ -67,6 +67,106 @@
     return valueOf(helper.return || "", state, nextScope, helpers, stack.concat([name]));
   }
 
+  // Deterministic formatting/date helpers mirrored byte-for-byte from the Go
+  // evaluator (internal/clientlang/expr_format.go). They use only IEEE-754
+  // floor/abs and integer math so both evaluators agree; see the expression
+  // conformance test.
+  const maxFormatDigits = 20;
+  function formatScale(digits) {
+    let scale = 1;
+    for (let index = 0; index < digits; index++) scale *= 10;
+    return scale;
+  }
+  function roundHalfAway(value) {
+    if (value < 0) return -Math.floor(-value + 0.5);
+    return Math.floor(value + 0.5);
+  }
+  function isAllZeroDigits(value) {
+    for (let index = 0; index < value.length; index++) {
+      if (value[index] !== "0" && value[index] !== ".") return false;
+    }
+    return true;
+  }
+  function requireFormatDigits(name, digits) {
+    if (typeof digits !== "number" || digits !== Math.trunc(digits)) {
+      throw new Error("built-in " + name + " argument 2 expects an int");
+    }
+    if (digits < 0 || digits > maxFormatDigits) {
+      throw new Error("built-in " + name + " expects digits in [0, " + maxFormatDigits + "]");
+    }
+  }
+  function formatFixedValue(name, value, digits) {
+    if (typeof value !== "number") throw new Error("built-in " + name + " argument 1 expects a number");
+    requireFormatDigits(name, digits);
+    if (!Number.isFinite(value)) throw new Error("built-in " + name + " expects a finite number");
+    const scale = formatScale(digits);
+    const negative = value < 0;
+    const scaled = roundHalfAway(Math.abs(value) * scale);
+    let rawDigits = scaled.toFixed(0);
+    let out;
+    if (digits === 0) {
+      out = rawDigits;
+    } else {
+      while (rawDigits.length <= digits) rawDigits = "0" + rawDigits;
+      const split = rawDigits.length - digits;
+      out = rawDigits.slice(0, split) + "." + rawDigits.slice(split);
+    }
+    if (negative && !isAllZeroDigits(out)) out = "-" + out;
+    return out;
+  }
+  function roundToValue(value, digits) {
+    if (typeof value !== "number") throw new Error("built-in round argument 1 expects a number");
+    requireFormatDigits("round", digits);
+    if (!Number.isFinite(value)) throw new Error("built-in round expects a finite number");
+    const scale = formatScale(digits);
+    return roundHalfAway(value * scale) / scale;
+  }
+  function civilFromDays(days) {
+    const z = days + 719468;
+    const era = Math.floor(z / 146097);
+    const doe = z - era * 146097;
+    const yoe = Math.floor((doe - Math.floor(doe / 1460) + Math.floor(doe / 36524) - Math.floor(doe / 146096)) / 365);
+    const y = yoe + era * 400;
+    const doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100));
+    const mp = Math.floor((5 * doy + 2) / 153);
+    const day = doy - Math.floor((153 * mp + 2) / 5) + 1;
+    const month = mp < 10 ? mp + 3 : mp - 9;
+    let year = y;
+    if (month <= 2) year += 1;
+    return { year, month, day };
+  }
+  function padNumber(value, width) {
+    const negative = value < 0;
+    let digits = String(negative ? -value : value);
+    while (digits.length < width) digits = "0" + digits;
+    return negative ? "-" + digits : digits;
+  }
+  function expandTimeLayout(layout, parts) {
+    let out = "";
+    for (let index = 0; index < layout.length;) {
+      if (layout.startsWith("YYYY", index)) { out += padNumber(parts.year, 4); index += 4; }
+      else if (layout.startsWith("MM", index)) { out += padNumber(parts.month, 2); index += 2; }
+      else if (layout.startsWith("DD", index)) { out += padNumber(parts.day, 2); index += 2; }
+      else if (layout.startsWith("HH", index)) { out += padNumber(parts.hour, 2); index += 2; }
+      else if (layout.startsWith("mm", index)) { out += padNumber(parts.minute, 2); index += 2; }
+      else if (layout.startsWith("ss", index)) { out += padNumber(parts.second, 2); index += 2; }
+      else { out += layout[index]; index += 1; }
+    }
+    return out;
+  }
+  function formatUnixTimeValue(value, layout) {
+    if (typeof value !== "number") throw new Error("built-in formatTime argument 1 expects a unix timestamp");
+    if (typeof layout !== "string") throw new Error("built-in formatTime argument 2 expects a string layout");
+    if (!Number.isFinite(value) || value !== Math.floor(value)) throw new Error("built-in formatTime expects an integer unix timestamp");
+    const days = Math.floor(value / 86400);
+    const secondOfDay = value - days * 86400;
+    const hour = Math.floor(secondOfDay / 3600);
+    const minute = Math.floor(secondOfDay / 60) % 60;
+    const second = secondOfDay % 60;
+    const civil = civilFromDays(days);
+    return expandTimeLayout(layout, { year: civil.year, month: civil.month, day: civil.day, hour, minute, second });
+  }
+
   const builtinImpls = Object.freeze({
     len(value) {
       if (typeof value === "string" || Array.isArray(value)) return value.length;
@@ -96,6 +196,18 @@
     },
     float(value) {
       return conversionNumber("float", value);
+    },
+    fixed(value, digits) {
+      return formatFixedValue("fixed", value, digits);
+    },
+    round(value, digits) {
+      return roundToValue(value, digits);
+    },
+    percent(value, digits) {
+      return formatFixedValue("percent", value * 100, digits) + "%";
+    },
+    formatTime(value, layout) {
+      return formatUnixTimeValue(value, layout);
     }
   });
   const builtins = Object.freeze(Object.fromEntries(Object.keys(builtinSpecByName).map((name) => {
@@ -741,13 +853,14 @@
       if (registry && typeof registry.clear === "function") registry.clear(storeName);
       return;
     }
-    let refCall = expr.match(/^([A-Za-z_][A-Za-z0-9_]*)\.(Focus|Blur|ScrollIntoView)\(\)$/);
+    let refCall = expr.match(/^([A-Za-z_][A-Za-z0-9_]*)\.(Focus|Blur|ScrollIntoView|Select)\(\)$/);
     if (refCall) {
       const node = refs && refs[refCall[1]];
       if (!node) return;
       if (refCall[2] === "Focus" && typeof node.focus === "function") node.focus();
       else if (refCall[2] === "Blur" && typeof node.blur === "function") node.blur();
       else if (refCall[2] === "ScrollIntoView" && typeof node.scrollIntoView === "function") node.scrollIntoView();
+      else if (refCall[2] === "Select" && typeof node.select === "function") node.select();
       return;
     }
     let match = expr.match(/^([A-Za-z_][A-Za-z0-9_]*)(\+\+|--)$/);

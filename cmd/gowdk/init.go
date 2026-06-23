@@ -378,30 +378,6 @@ func initStringLit(value string) *ast.BasicLit {
 	return &ast.BasicLit{Kind: token.STRING, Value: strconv.Quote(value)}
 }
 
-func initBlock(stmts ...ast.Stmt) *ast.BlockStmt {
-	return &ast.BlockStmt{List: stmts}
-}
-
-func initExprStmt(expr ast.Expr) ast.Stmt {
-	return &ast.ExprStmt{X: expr}
-}
-
-func initCall(fun ast.Expr, args ...ast.Expr) *ast.CallExpr {
-	return &ast.CallExpr{Fun: fun, Args: args}
-}
-
-func initDefine(names []ast.Expr, values ...ast.Expr) ast.Stmt {
-	return &ast.AssignStmt{Lhs: names, Tok: token.DEFINE, Rhs: values}
-}
-
-func initAssign(names []ast.Expr, values ...ast.Expr) ast.Stmt {
-	return &ast.AssignStmt{Lhs: names, Tok: token.ASSIGN, Rhs: values}
-}
-
-func initNotNil(name string) ast.Expr {
-	return &ast.BinaryExpr{X: ast.NewIdent(name), Op: token.NEQ, Y: ast.NewIdent("nil")}
-}
-
 func parseInitOptions(args []string) (initOptions, error) {
 	options := initOptions{Dir: ".", Template: "site"}
 	for index := 0; index < len(args); index++ {

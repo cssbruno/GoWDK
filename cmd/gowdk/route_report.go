@@ -169,11 +169,6 @@ func endpointMetadataJSON(metadata compiler.RouteMetadata) endpointMetadataRepor
 	}
 }
 
-func endpointsJSON(bindings []compiler.EndpointBinding) []endpointBindingJSON {
-	endpoints, _ := endpointReportsJSON(bindings)
-	return endpoints
-}
-
 func endpointReportsJSON(bindings []compiler.EndpointBinding) ([]endpointBindingJSON, []routeBindingJSON) {
 	endpoints := make([]endpointBindingJSON, 0, len(bindings))
 	routes := make([]routeBindingJSON, 0, len(bindings))

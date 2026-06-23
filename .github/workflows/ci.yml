@@ -89,6 +89,23 @@ jobs:
       - name: Build CLI
         run: go build ./cmd/gowdk
 
+  dead-code:
+    name: Dead code
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: true
+
+      - name: Check focused dead code
+        run: scripts/check-dead-code.sh
+
   vscode-extension:
     name: VS Code extension
     runs-on: ubuntu-latest

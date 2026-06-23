@@ -39,8 +39,6 @@ type syncPatientsJob struct {
 	Limit int
 }
 
-type commandDispatchContextKey struct{}
-
 type recordingOutbox struct {
 	events []EventEnvelope
 	err    error

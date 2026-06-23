@@ -13,6 +13,9 @@ Required pull-request lanes:
 - `Runtime race detector`: `scripts/test-runtime-race.sh` on Linux for the
   explicit shared-state runtime package list.
 - `CLI build`: `go build ./cmd/gowdk`.
+- `Dead code`: `scripts/check-dead-code.sh` runs pinned Staticcheck `U1000`
+  and x/tools `deadcode` analyzers over the focused compiler, CLI, and
+  runtime-contract package sets documented below.
 - `VS Code extension`: extension version sync, Node syntax checks, and unit
   tests.
 - `Documentation links`: `scripts/check-docs-links.sh`.
@@ -53,6 +56,7 @@ Run the same local checks before handoff when relevant:
   scripts/test-go-modules.sh
   scripts/vulncheck-go-modules.sh
   go build ./cmd/gowdk
+  scripts/check-dead-code.sh
   ```
 
 - VS Code extension checks:
@@ -139,6 +143,35 @@ multiplied by generated-binary work:
 If one of these reveals nondeterministic output, either fix the generator in
 the same change or open a narrower issue naming the unstable file/report.
 
+## Dead Code
+
+`scripts/check-dead-code.sh` runs two pinned analyzers over reviewed starter
+package sets:
+
+```sh
+scripts/check-dead-code.sh
+```
+
+Staticcheck is pinned to `honnef.co/go/tools/cmd/staticcheck@v0.7.0` and runs
+`-checks=U1000` over `cmd/gowdk`, `internal/source`, `internal/gwdkir`,
+`internal/gwdkanalysis`, and `runtime/contracts`. This catches unused private
+declarations and unread private fields where a clean baseline is currently
+actionable.
+
+The x/tools dead-code analyzer is pinned to
+`golang.org/x/tools/cmd/deadcode@v0.45.0` and runs with `-test` over
+`cmd/gowdk`, `internal/source`, `internal/gwdkir`, and
+`internal/gwdkanalysis`. Its report is filtered to those packages so exported
+compiler-private wrapper functions are covered without turning public runtime
+APIs into false positives.
+
+Public runtime/addon APIs, optional nested modules, generated app fixtures,
+generated docs-site output, examples, and build-tag-specific platform
+implementations are intentionally outside the first gate. Add packages only
+after confirming a clean baseline without broad suppressions; if an intentional
+entry point needs a suppression, keep it local to the declaration and document
+why external reachability is expected.
+
 ## Release Smoke
 
 After publishing a tag, verify the current machine's release artifact locally:
@@ -166,6 +199,7 @@ Require these checks before merging to `main`:
 - `Reachable vulnerabilities`
 - `Runtime race detector`
 - `CLI build`
+- `Dead code`
 - `VS Code extension`
 - `Documentation links`
 - `Example reports`

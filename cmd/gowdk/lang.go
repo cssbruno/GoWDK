@@ -100,6 +100,9 @@ func check(args []string) error {
 	if err != nil {
 		return err
 	}
+	if options.Standalone {
+		return checkStandalone(options, paths)
+	}
 
 	if options.JSON {
 		payload, diagnostics := lang.CheckJSONWithOptions(options.Config, paths, lang.CheckOptions{ProjectRoot: options.ProjectRoot})
@@ -117,6 +120,33 @@ func check(args []string) error {
 		fmt.Println("ok")
 		return nil
 	}
+	for _, diagnostic := range diagnostics {
+		fmt.Fprintln(os.Stderr, diagnostic.String())
+	}
+	if checkShouldFail(options, diagnostics) {
+		return fmt.Errorf("check failed")
+	}
+	return nil
+}
+
+func checkStandalone(options cliOptions, paths []string) error {
+	if options.JSON {
+		payload, diagnostics := lang.CheckStandaloneJSON(paths)
+		if len(payload) > 0 {
+			fmt.Print(string(payload))
+		}
+		if checkShouldFail(options, diagnostics) {
+			return fmt.Errorf("check failed")
+		}
+		return nil
+	}
+
+	diagnostics := lang.CheckStandaloneFiles(paths)
+	if len(diagnostics) == 0 {
+		fmt.Println("ok (standalone)")
+		return nil
+	}
+	fmt.Fprintln(os.Stderr, "info: standalone mode; project-wide config, addon, binding, and hook validation was not run")
 	for _, diagnostic := range diagnostics {
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}

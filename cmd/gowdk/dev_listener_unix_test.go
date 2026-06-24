@@ -16,6 +16,8 @@ func TestDevServeStateHandsListenerToRuntimeChild(t *testing.T) {
 	root := t.TempDir()
 	appDir := filepath.Join(root, "app")
 	writeCLIFile(t, filepath.Join(appDir, "go.mod"), "module example.com/devapp\n\ngo 1.24\n")
+	// Sleep instead of blocking on a bare select so the helper stays alive
+	// without tripping Go's deadlock detector before the test observes it.
 	writeCLIFile(t, filepath.Join(appDir, "cmd", "server", "main.go"), `package main
 
 import "time"

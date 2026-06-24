@@ -1855,8 +1855,10 @@ func TestDevRuntimeProcessRestartWaitsForPreviousAppExit(t *testing.T) {
 	source := filepath.Join(root, "main.go")
 	writeCLIFile(t, source, `package main
 
+import "time"
+
 func main() {
-	select {}
+	time.Sleep(time.Minute)
 }
 `)
 	binary := filepath.Join(root, "app")
@@ -1953,8 +1955,10 @@ func TestDevServeStateStartsRuntimeAfterStaticMode(t *testing.T) {
 	writeCLIFile(t, filepath.Join(appDir, "go.mod"), "module example.com/devapp\n\ngo 1.24\n")
 	writeCLIFile(t, filepath.Join(appDir, "cmd", "server", "main.go"), `package main
 
+import "time"
+
 func main() {
-	select {}
+	time.Sleep(time.Minute)
 }
 `)
 	binaryPath := filepath.Join(root, "bin", "devapp")

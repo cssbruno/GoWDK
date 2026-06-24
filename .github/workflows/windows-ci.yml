@@ -34,8 +34,22 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $true
-          go test ./runtime/app
+          $stdout = Join-Path $env:RUNNER_TEMP 'gowdk-runtime-app-test.json'
+          $stderr = Join-Path $env:RUNNER_TEMP 'gowdk-runtime-app-test.stderr'
+          $process = Start-Process go -ArgumentList @('test', '-json', './runtime/app') -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          Get-Content $stdout | Select-Object -Last 120
+          if (Test-Path $stderr) { Get-Content $stderr | Select-Object -Last 120 }
+          if ($process.ExitCode -ne 0) { exit $process.ExitCode }
+
+      - name: Upload runtime app failure log
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-runtime-app-test-log
+          path: |
+            ${{ runner.temp }}/gowdk-runtime-app-test.json
+            ${{ runner.temp }}/gowdk-runtime-app-test.stderr
+          retention-days: 3
 
       - name: Test project config loading
         shell: pwsh

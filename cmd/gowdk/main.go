@@ -83,6 +83,10 @@ func nestedCommandUsage(args []string) (string, bool) {
 		if args[1] == "stubs" {
 			return generateUsage, true
 		}
+	case "env":
+		if args[1] == "check" {
+			return envUsage, true
+		}
 	case "list":
 		switch args[1] {
 		case "commands", "queries", "events", "jobs":
@@ -121,7 +125,8 @@ var topLevelCommands = []topLevelCommandDescriptor{
 	{Name: "add", Handler: addAddon, Usage: staticCommandUsage(addUsage), ListSuffix: " <addon> [--config <file>] [--base-url <url>] | add --list [--registry] [--json]  wire or list addons"},
 	{Name: "tokens", Handler: tokens, Usage: staticCommandUsage("usage: gowdk tokens <file.gwdk>"), ListSuffix: " <file.gwdk>       print language tokens"},
 	{Name: "fmt", Handler: format, Usage: staticCommandUsage("usage: gowdk fmt [--write] [--check] <files>"), ListSuffix: " [--write] [--check] <files>  format .gwdk files (--check reports files that need formatting)"},
-	{Name: "check", Handler: check, Usage: func() string { return projectCommandUsage("check", true) }, ListSuffix: " [--config <file>] [--env-file <file>] [--module <name>] [--json] [--warnings-as-errors] [--ssr] [files...] parse and validate .gwdk files"},
+	{Name: "check", Handler: check, Usage: func() string { return projectCommandUsage("check", true) }, ListSuffix: " [--config <file>] [--env-file <file>] [--module <name>] [--json] [--warnings-as-errors] [--standalone] [--ssr] [files...] parse and validate .gwdk files"},
+	{Name: "env", Handler: envCommand, Usage: staticCommandUsage(envUsage), ListSuffix: " check [--config <file>] [--env-file <file>] [--json] validate deployment environment values"},
 	{Name: "fix", Handler: fixCommand, Usage: staticCommandUsage(fixUsage), ListSuffix: " [--dry-run] [--code <diagnostic-code>] [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] apply registered safe diagnostic fixes"},
 	{Name: "manifest", Handler: manifestJSON, Usage: func() string { return projectCommandUsage("manifest", false) }, ListSuffix: " [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON"},
 	{Name: "sitemap", Handler: siteMapJSON, Usage: func() string { return projectCommandUsage("sitemap", false) }, ListSuffix: " [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON"},
@@ -187,6 +192,7 @@ type cliOptions struct {
 	Config              gowdk.Config
 	ProjectRoot         string
 	JSON                bool
+	Standalone          bool
 	Debug               bool
 	AllowMissingBackend bool
 	// AllowInsecure downgrades every production security error to a warning. It is

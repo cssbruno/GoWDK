@@ -28,7 +28,7 @@ func loadProjectConfig(options *cliOptions, configPath string) error {
 	if err := loadProjectEnvFile(options, projectRoot); err != nil {
 		return err
 	}
-	config, err := project.LoadConfig(configPath)
+	config, err := project.LoadConfigStructural(configPath)
 	if err != nil {
 		return err
 	}
@@ -138,6 +138,16 @@ func loadCommandInputs(args []string, command string, allowJSON bool) (cliOption
 	if err != nil {
 		return options, nil, err
 	}
+	if command == "check" {
+		standalone, standaloneErr := shouldRunStandaloneCheck(options, configPath, moduleNames, paths)
+		if standaloneErr != nil {
+			return options, nil, standaloneErr
+		}
+		if standalone {
+			options.Standalone = true
+			return options, paths, nil
+		}
+	}
 	if err := loadProjectConfig(&options, configPath); err != nil {
 		return options, nil, err
 	}
@@ -152,6 +162,45 @@ func loadCommandInputs(args []string, command string, allowJSON bool) (cliOption
 		paths = discovered
 	}
 	return options, paths, nil
+}
+
+func shouldRunStandaloneCheck(options cliOptions, configPath string, moduleNames []string, paths []string) (bool, error) {
+	if options.Standalone {
+		if err := validateStandaloneCheckOptions(options, configPath, moduleNames, paths); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	if configPath != "" || len(paths) == 0 {
+		return false, nil
+	}
+	_, err := os.Stat(project.DefaultConfigFile)
+	if err == nil {
+		return false, nil
+	}
+	if !os.IsNotExist(err) {
+		return false, err
+	}
+	if err := validateStandaloneCheckOptions(options, configPath, moduleNames, paths); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func validateStandaloneCheckOptions(options cliOptions, configPath string, moduleNames []string, paths []string) error {
+	switch {
+	case len(paths) == 0:
+		return fmt.Errorf("standalone check requires at least one explicit .gwdk file")
+	case configPath != "":
+		return fmt.Errorf("--standalone cannot be combined with --config")
+	case options.EnvFilePath != "":
+		return fmt.Errorf("--standalone cannot be combined with --env-file")
+	case len(moduleNames) > 0:
+		return fmt.Errorf("--standalone cannot be combined with --module")
+	case len(options.Config.Addons) > 0:
+		return fmt.Errorf("--standalone cannot be combined with --ssr")
+	}
+	return nil
 }
 
 func buildModules(modules []gowdk.ModuleConfig, moduleNames []string) ([]gowdk.ModuleConfig, error) {
@@ -291,6 +340,11 @@ func parseProjectOptions(args []string, command string, allowJSON bool) (cliOpti
 		switch {
 		case arg == "-h" || arg == "--help":
 			return options, "", nil, nil, errors.New(usage)
+		case arg == "--standalone":
+			if command != "check" {
+				return options, "", nil, nil, fmt.Errorf("unknown %s flag %q", command, arg)
+			}
+			options.Standalone = true
 		case arg == "--ssr":
 			options.Config.Addons = append(options.Config.Addons, ssr.Addon())
 		case arg == "--json" && allowJSON:
@@ -313,12 +367,16 @@ func parseProjectOptions(args []string, command string, allowJSON bool) (cliOpti
 }
 
 func projectCommandUsage(command string, allowJSON bool) string {
+	standaloneFlag := ""
+	if command == "check" {
+		standaloneFlag = " [--standalone]"
+	}
 	if allowJSON {
 		warningsFlag := ""
 		if command == "check" {
 			warningsFlag = " [--warnings-as-errors]"
 		}
-		return fmt.Sprintf("usage: gowdk %s [--config <file>] [--env-file <file>] [--module <name>] [--json]%s [--ssr] [files...]", command, warningsFlag)
+		return fmt.Sprintf("usage: gowdk %s [--config <file>] [--env-file <file>] [--module <name>] [--json]%s%s [--ssr] [files...]", command, warningsFlag, standaloneFlag)
 	}
-	return fmt.Sprintf("usage: gowdk %s [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]", command)
+	return fmt.Sprintf("usage: gowdk %s [--config <file>] [--env-file <file>] [--module <name>]%s [--ssr] [files...]", command, standaloneFlag)
 }

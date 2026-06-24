@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -214,36 +213,7 @@ func devRuntimeProxyHandler(targetAddr string, reload *liveReloadBroker) http.Ha
 		request.Header.Del("Accept-Encoding")
 	}
 	proxy.ModifyResponse = func(response *http.Response) error {
-		runtimeErrorPayload := ""
-		if response.StatusCode >= http.StatusInternalServerError {
-			runtimeErrorPayload = devRuntimeErrorEventData(response.StatusCode)
-			reload.notifyData("runtime-error", runtimeErrorPayload)
-		}
-		if response.Request == nil ||
-			response.Request.Method != http.MethodGet ||
-			response.Header.Get("Content-Encoding") != "" ||
-			!strings.Contains(strings.ToLower(response.Header.Get("Content-Type")), "text/html") {
-			return nil
-		}
-		if response.StatusCode != http.StatusOK && runtimeErrorPayload == "" {
-			return nil
-		}
-		body, err := io.ReadAll(response.Body)
-		if closeErr := response.Body.Close(); err == nil {
-			err = closeErr
-		}
-		if err != nil {
-			return err
-		}
-		if runtimeErrorPayload != "" {
-			body = injectLiveReloadScriptWithInitialOverlay(body, []byte(runtimeErrorPayload))
-		} else {
-			body = injectLiveReloadScript(body)
-		}
-		response.Body = io.NopCloser(bytes.NewReader(body))
-		response.ContentLength = int64(len(body))
-		response.Header.Set("Content-Length", fmt.Sprint(len(body)))
-		return nil
+		return modifyDevRuntimeProxyResponse(response, reload)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path == "/__gowdk/reload" {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -74,15 +75,15 @@ func modifyDevRuntimeProxyResponse(response *http.Response, reload *liveReloadBr
 	if response.Header == nil {
 		response.Header = http.Header{}
 	}
-	response.Header.Set("Content-Length", stringInt(len(body)))
+	response.Header.Set("Content-Length", strconv.Itoa(len(body)))
 	return nil
 }
 
 type devProxyInjectionSkipEvent struct {
-	Reason         string `json:"reason"`
-	Status         int    `json:"status"`
-	LimitBytes     int64  `json:"limitBytes"`
-	DeclaredBytes  int64  `json:"declaredBytes"`
+	Reason        string `json:"reason"`
+	Status        int    `json:"status"`
+	LimitBytes    int64  `json:"limitBytes"`
+	DeclaredBytes int64  `json:"declaredBytes"`
 }
 
 func notifyDevProxyInjectionSkipped(reload *liveReloadBroker, response *http.Response, reason string) {
@@ -99,8 +100,4 @@ func notifyDevProxyInjectionSkipped(reload *liveReloadBroker, response *http.Res
 		return
 	}
 	reload.notifyData("proxy-injection-skipped", string(payload))
-}
-
-func stringInt(value int) string {
-	return strconv.Itoa(value)
 }

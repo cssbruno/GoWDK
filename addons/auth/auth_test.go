@@ -232,6 +232,25 @@ func issuedSessionID(t *testing.T, sessions *Sessions, cookie http.Cookie) strin
 	return payload.SessionID
 }
 
+func decodedSessionPayloadJSON(t *testing.T, cookie http.Cookie) string {
+	t.Helper()
+	parts := strings.Split(cookie.Value, ".")
+	var body string
+	switch len(parts) {
+	case 2:
+		body = parts[0]
+	case 3:
+		body = parts[1]
+	default:
+		t.Fatalf("unexpected session token parts: %q", cookie.Value)
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(body)
+	if err != nil {
+		t.Fatalf("decode session payload: %v", err)
+	}
+	return string(payload)
+}
+
 type failingLookupSessionStore struct {
 	*InMemorySessionStore
 	err error
@@ -239,6 +258,26 @@ type failingLookupSessionStore struct {
 
 func (store *failingLookupSessionStore) LookupSession(context.Context, string) (SessionRecord, error) {
 	return SessionRecord{}, store.err
+}
+
+type sessionStoreWithoutTouch struct {
+	inner *InMemorySessionStore
+}
+
+func (store *sessionStoreWithoutTouch) CreateSession(ctx context.Context, record SessionRecord) error {
+	return store.inner.CreateSession(ctx, record)
+}
+
+func (store *sessionStoreWithoutTouch) LookupSession(ctx context.Context, id string) (SessionRecord, error) {
+	return store.inner.LookupSession(ctx, id)
+}
+
+func (store *sessionStoreWithoutTouch) RevokeSession(ctx context.Context, id string) error {
+	return store.inner.RevokeSession(ctx, id)
+}
+
+func (store *sessionStoreWithoutTouch) RevokePrincipal(ctx context.Context, principalID string) error {
+	return store.inner.RevokePrincipal(ctx, principalID)
 }
 
 func TestSessionIssueAndResolve(t *testing.T) {
@@ -303,6 +342,36 @@ func TestRevocableSessionResolvesCurrentStorePrincipal(t *testing.T) {
 	}
 }
 
+func TestRevocableSessionCookieDoesNotExposePrincipalID(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	store := NewInMemorySessionStore()
+	sessions := newTestRevocableSessions(t, now, store)
+
+	cookie, err := sessions.Cookie(Principal{ID: "user-secret-id", Roles: []string{"user"}, AuthorizationVersion: "v1"})
+	if err != nil {
+		t.Fatalf("Cookie: %v", err)
+	}
+	payload, err := sessions.verify(cookie.Value)
+	if err != nil {
+		t.Fatalf("verify cookie: %v", err)
+	}
+	if payload.ID != "" {
+		t.Fatalf("revocable cookie exposed principal id %q", payload.ID)
+	}
+	raw := decodedSessionPayloadJSON(t, cookie)
+	if strings.Contains(raw, "user-secret-id") || strings.Contains(raw, `"id"`) {
+		t.Fatalf("revocable cookie payload exposed principal id: %s", raw)
+	}
+
+	principal, err := sessions.Principal(requestWithCookie(cookie))
+	if err != nil {
+		t.Fatalf("Principal: %v", err)
+	}
+	if principal == nil || principal.ID != "user-secret-id" || !principal.HasRole("user") {
+		t.Fatalf("expected store principal, got %+v", principal)
+	}
+}
+
 func TestRevocableSessionRejectsStaleAuthorizationVersion(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	store := NewInMemorySessionStore()
@@ -327,6 +396,32 @@ func TestRevocableSessionRejectsStaleAuthorizationVersion(t *testing.T) {
 	}
 	if principal != nil {
 		t.Fatalf("expected stale authorization version to reject session, got %+v", principal)
+	}
+}
+
+func TestRevocableSessionRejectsPrincipalAuthorizationVersionChange(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	store := NewInMemorySessionStore()
+	sessions := newTestRevocableSessions(t, now, store)
+
+	cookie, err := sessions.Cookie(Principal{ID: "user-1", Roles: []string{"admin"}, AuthorizationVersion: "v1"})
+	if err != nil {
+		t.Fatalf("Cookie: %v", err)
+	}
+	sessionID := issuedSessionID(t, sessions, cookie)
+	if err := store.UpdateSession(context.Background(), sessionID, func(record *SessionRecord) {
+		record.Principal.AuthorizationVersion = "v2"
+		record.Principal.Roles = []string{"user"}
+	}); err != nil {
+		t.Fatalf("UpdateSession: %v", err)
+	}
+
+	principal, err := sessions.Principal(requestWithCookie(cookie))
+	if err != nil {
+		t.Fatalf("Principal: %v", err)
+	}
+	if principal != nil {
+		t.Fatalf("expected principal authorization version change to reject session, got %+v", principal)
 	}
 }
 
@@ -434,6 +529,51 @@ func TestRevocableSessionKeyRotationAndRetirement(t *testing.T) {
 	rotated.now = fixedClock(now.Add(2 * time.Hour))
 	if principal, err := rotated.Principal(requestWithCookie(cookie)); err != nil || principal != nil {
 		t.Fatalf("expected retired previous key to reject cookie, principal=%+v err=%v", principal, err)
+	}
+}
+
+func TestRevocableSessionAcceptsUnnamedPreviousSigningKey(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	oldSecret := []byte(strings.Repeat("o", MinSessionSecretBytes))
+	newSecret := []byte(strings.Repeat("n", MinSessionSecretBytes))
+	store := NewInMemorySessionStore()
+
+	oldSessions, err := New(Options{
+		Secret:   oldSecret,
+		Mode:     SessionModeRevocable,
+		Store:    store,
+		Insecure: true,
+		Now:      fixedClock(now),
+	})
+	if err != nil {
+		t.Fatalf("old New: %v", err)
+	}
+	cookie, err := oldSessions.Cookie(Principal{ID: "user-1"})
+	if err != nil {
+		t.Fatalf("old Cookie: %v", err)
+	}
+
+	rotated, err := New(Options{
+		Secret:   newSecret,
+		KeyID:    "new",
+		Mode:     SessionModeRevocable,
+		Store:    store,
+		Insecure: true,
+		Now:      fixedClock(now.Add(time.Minute)),
+		PreviousKeys: []SigningKey{{
+			Secret:      oldSecret,
+			AcceptUntil: now.Add(time.Hour),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("rotated New: %v", err)
+	}
+	if principal, err := rotated.Principal(requestWithCookie(cookie)); err != nil || principal == nil {
+		t.Fatalf("expected rotated manager to accept unnamed previous key, principal=%+v err=%v", principal, err)
+	}
+	rotated.now = fixedClock(now.Add(2 * time.Hour))
+	if principal, err := rotated.Principal(requestWithCookie(cookie)); err != nil || principal != nil {
+		t.Fatalf("expected retired unnamed previous key to reject cookie, principal=%+v err=%v", principal, err)
 	}
 }
 
@@ -804,6 +944,18 @@ func TestNewRejectsInvalidIdleSessionTTL(t *testing.T) {
 	}
 }
 
+func TestNewRejectsIdleSessionTTLWithoutTouchSupport(t *testing.T) {
+	_, err := New(Options{
+		Secret:  []byte(strings.Repeat("s", MinSessionSecretBytes)),
+		Mode:    SessionModeRevocable,
+		Store:   &sessionStoreWithoutTouch{inner: NewInMemorySessionStore()},
+		IdleTTL: time.Minute,
+	})
+	if err == nil || !strings.Contains(err.Error(), "SessionToucher") {
+		t.Fatalf("expected missing SessionToucher error, got %v", err)
+	}
+}
+
 func TestNewRejectsRevocableModeWithoutStore(t *testing.T) {
 	_, err := New(Options{
 		Secret: []byte(strings.Repeat("s", MinSessionSecretBytes)),
@@ -834,6 +986,27 @@ func TestNewRejectsInvalidPreviousSigningKey(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "previous signing key") {
 		t.Fatalf("expected invalid previous signing key error, got %v", err)
+	}
+}
+
+func TestNewRejectsDottedSigningKeyIDs(t *testing.T) {
+	_, err := New(Options{
+		Secret: []byte(strings.Repeat("s", MinSessionSecretBytes)),
+		KeyID:  "current.v1",
+	})
+	if err == nil || !strings.Contains(err.Error(), "must not contain") {
+		t.Fatalf("expected dotted current key id error, got %v", err)
+	}
+
+	_, err = New(Options{
+		Secret: []byte(strings.Repeat("s", MinSessionSecretBytes)),
+		PreviousKeys: []SigningKey{{
+			ID:     "old.v1",
+			Secret: []byte(strings.Repeat("o", MinSessionSecretBytes)),
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "must not contain") {
+		t.Fatalf("expected dotted previous key id error, got %v", err)
 	}
 }
 

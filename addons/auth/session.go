@@ -116,7 +116,7 @@ type Sessions struct {
 
 // sessionPayload is the JSON body carried inside the signed cookie.
 type sessionPayload struct {
-	ID                   string   `json:"id"`
+	ID                   string   `json:"id,omitempty"`
 	SessionID            string   `json:"sid,omitempty"`
 	Roles                []string `json:"roles,omitempty"`
 	Permissions          []string `json:"perms,omitempty"`
@@ -168,6 +168,11 @@ func New(options Options) (*Sessions, error) {
 	}
 	if idleTTL > 0 && idleTTL < time.Second {
 		return nil, fmt.Errorf("gowdk auth: idle session ttl must be at least 1s")
+	}
+	if mode == SessionModeRevocable && idleTTL > 0 {
+		if _, ok := options.Store.(SessionToucher); !ok {
+			return nil, fmt.Errorf("gowdk auth: idle session ttl requires Store to implement SessionToucher")
+		}
 	}
 	now := options.Now
 	if now == nil {
@@ -236,11 +241,14 @@ func sessionSigningKeys(options Options) (SigningKey, map[string]SigningKey, err
 		ID:     strings.TrimSpace(options.KeyID),
 		Secret: secret,
 	}
+	if err := validateSigningKeyID("signing key", current.ID); err != nil {
+		return SigningKey{}, nil, err
+	}
 	previous := map[string]SigningKey{}
 	for _, key := range options.PreviousKeys {
 		key.ID = strings.TrimSpace(key.ID)
-		if key.ID == "" {
-			return SigningKey{}, nil, fmt.Errorf("gowdk auth: previous signing key id is required")
+		if err := validateSigningKeyID("previous signing key", key.ID); err != nil {
+			return SigningKey{}, nil, err
 		}
 		if len(key.Secret) < MinSessionSecretBytes {
 			return SigningKey{}, nil, fmt.Errorf("gowdk auth: previous signing key %q must be at least %d bytes", key.ID, MinSessionSecretBytes)
@@ -251,6 +259,13 @@ func sessionSigningKeys(options Options) (SigningKey, map[string]SigningKey, err
 		previous[key.ID] = key
 	}
 	return current, previous, nil
+}
+
+func validateSigningKeyID(label string, id string) error {
+	if strings.Contains(id, ".") {
+		return fmt.Errorf("gowdk auth: %s id %q must not contain .", label, id)
+	}
+	return nil
 }
 
 func sessionSecret(options Options) ([]byte, error) {
@@ -312,6 +327,7 @@ func (sessions *Sessions) Cookie(principal Principal) (http.Cookie, error) {
 			return http.Cookie{}, err
 		}
 		payload.SessionID = sessionID
+		payload.ID = ""
 		payload.Roles = nil
 		payload.Permissions = nil
 		record := SessionRecord{
@@ -453,11 +469,11 @@ func (sessions *Sessions) Principal(request *http.Request) (*Principal, error) {
 	if sessions.now().Unix() >= payload.Expires {
 		return nil, nil
 	}
-	if strings.TrimSpace(payload.ID) == "" {
-		return nil, nil
-	}
 	if sessions.mode == SessionModeRevocable {
 		return sessions.revocablePrincipal(request.Context(), payload)
+	}
+	if strings.TrimSpace(payload.ID) == "" {
+		return nil, nil
 	}
 	return &Principal{
 		ID:                   payload.ID,
@@ -482,10 +498,7 @@ func (sessions *Sessions) revocablePrincipal(ctx context.Context, payload sessio
 	if record.Revoked || record.expired(now) || strings.TrimSpace(record.Principal.ID) == "" {
 		return nil, nil
 	}
-	if record.Principal.ID != payload.ID {
-		return nil, nil
-	}
-	if record.AuthorizationVersion != payload.AuthorizationVersion {
+	if sessionRecordAuthorizationVersion(record) != payload.AuthorizationVersion {
 		return nil, nil
 	}
 	if sessions.idleTTL > 0 {
@@ -501,6 +514,13 @@ func (sessions *Sessions) revocablePrincipal(ctx context.Context, payload sessio
 		principal.AuthorizationVersion = record.AuthorizationVersion
 	}
 	return &principal, nil
+}
+
+func sessionRecordAuthorizationVersion(record SessionRecord) string {
+	if record.Principal.AuthorizationVersion != "" {
+		return record.Principal.AuthorizationVersion
+	}
+	return record.AuthorizationVersion
 }
 
 // Provider returns sessions typed as a Provider for registration with the
@@ -533,32 +553,27 @@ func (sessions *Sessions) sign(payload []byte) string {
 // verify checks the HMAC tag in constant time and returns the decoded payload.
 func (sessions *Sessions) verify(token string) (sessionPayload, error) {
 	parts := strings.Split(token, ".")
-	var key SigningKey
 	var body string
 	var tag string
+	var keys []SigningKey
 	switch len(parts) {
 	case 2:
-		key = sessions.currentKey
 		body = parts[0]
 		tag = parts[1]
+		keys = sessions.unnamedSigningKeys()
 	case 3:
-		var ok bool
 		keyID := strings.TrimSpace(parts[0])
-		if keyID != "" && keyID == sessions.currentKey.ID {
-			key = sessions.currentKey
-			ok = true
-		} else {
-			key, ok = sessions.previousKey[keyID]
-			if ok && !key.AcceptUntil.IsZero() && !sessions.now().Before(key.AcceptUntil) {
-				ok = false
-			}
-		}
+		key, ok := sessions.namedSigningKey(keyID)
 		if !ok {
 			return sessionPayload{}, errBadSession
 		}
 		body = parts[1]
 		tag = parts[2]
+		keys = []SigningKey{key}
 	default:
+		return sessionPayload{}, errBadSession
+	}
+	if len(keys) == 0 {
 		return sessionPayload{}, errBadSession
 	}
 	payload, err := base64.RawURLEncoding.DecodeString(body)
@@ -569,17 +584,49 @@ func (sessions *Sessions) verify(token string) (sessionPayload, error) {
 	if err != nil {
 		return sessionPayload{}, errBadSession
 	}
-	mac := hmac.New(sha256.New, key.Secret)
-	mac.Write(payload)
-	wantTag := mac.Sum(nil)
-	if subtle.ConstantTimeCompare(gotTag, wantTag) != 1 {
-		return sessionPayload{}, errBadSession
+	for _, key := range keys {
+		mac := hmac.New(sha256.New, key.Secret)
+		mac.Write(payload)
+		wantTag := mac.Sum(nil)
+		if subtle.ConstantTimeCompare(gotTag, wantTag) != 1 {
+			continue
+		}
+		var decoded sessionPayload
+		if err := json.Unmarshal(payload, &decoded); err != nil {
+			return sessionPayload{}, errBadSession
+		}
+		return decoded, nil
 	}
-	var decoded sessionPayload
-	if err := json.Unmarshal(payload, &decoded); err != nil {
-		return sessionPayload{}, errBadSession
+	return sessionPayload{}, errBadSession
+}
+
+func (sessions *Sessions) namedSigningKey(keyID string) (SigningKey, bool) {
+	if keyID == "" {
+		return SigningKey{}, false
 	}
-	return decoded, nil
+	if keyID == sessions.currentKey.ID {
+		return sessions.currentKey, true
+	}
+	key, ok := sessions.previousKey[keyID]
+	if !ok || !sessions.previousSigningKeyAccepted(key) {
+		return SigningKey{}, false
+	}
+	return key, true
+}
+
+func (sessions *Sessions) unnamedSigningKeys() []SigningKey {
+	var keys []SigningKey
+	if sessions.currentKey.ID == "" {
+		keys = append(keys, sessions.currentKey)
+	}
+	if key, ok := sessions.previousKey[""]; ok && sessions.previousSigningKeyAccepted(key) {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+func (sessions *Sessions) previousSigningKeyAccepted(key SigningKey) bool {
+	return key.AcceptUntil.IsZero() || sessions.now().Before(key.AcceptUntil)
 }
 
 func randomSessionID() (string, error) {

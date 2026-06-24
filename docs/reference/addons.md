@@ -379,18 +379,23 @@ if err != nil {
 }
 ```
 
-Revocable cookies carry a signed session pointer. `Principal` is resolved from
-the store on every request, so applications can update the store record after
-role removal or account disablement. `AuthorizationVersion` is compared with the
-version issued into the cookie; a mismatch rejects the request and forces a new
-session. `ClearRequest` revokes the current session before clearing the browser
+Revocable cookies carry a signed session pointer, expiry, and optional
+authorization version, but not the principal ID, roles, or permissions.
+`Principal` is resolved from the store on every request, so applications can
+update the store record after role removal or account disablement.
+`AuthorizationVersion` is compared with the principal version in the store; a
+mismatch rejects the request and forces a new session. `IdleTTL` requires a
+store that implements `SessionToucher` so successful lookups can slide idle
+expiry. `ClearRequest` revokes the current session before clearing the browser
 cookie, `RevokeSession` invalidates one session, `RevokePrincipal` invalidates
 all current sessions for one principal, and `Rotate` revokes the current
 session before issuing a fresh one after authentication or sensitive changes.
 
 Signing-key rotation is explicit. Set `KeyID` for the current key and put
 bounded previous keys in `PreviousKeys`; a previous key stops verifying after
-its `AcceptUntil` time. Keep previous-key windows short and remove retired keys.
+its `AcceptUntil` time. Key IDs cannot contain dots. To accept legacy cookies
+issued before key IDs were configured, add the old secret as a previous key with
+an empty ID. Keep previous-key windows short and remove retired keys.
 
 In generated apps, configure the addon instead of writing guard hook files:
 

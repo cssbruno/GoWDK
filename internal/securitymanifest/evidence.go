@@ -171,6 +171,7 @@ func obligations(config gowdk.Config, manifest SecurityManifest) []ObligationEnt
 		Claim:    "Session rotation, fixation defense, and secure session storage are correct.",
 		Owner:    ownerAppOwned,
 		Evidence: EvidenceUnverifiedAppOwned,
+		Detail:   sessionManagementDetail(config),
 	})
 	out = append(out, ObligationEntry{
 		ID:       "authz.resource",
@@ -188,6 +189,13 @@ func obligations(config gowdk.Config, manifest SecurityManifest) []ObligationEnt
 	})
 
 	return out
+}
+
+func sessionManagementDetail(config gowdk.Config) string {
+	if !config.HasFeature(gowdk.FeatureAuth) {
+		return "no auth addon is configured; session management is entirely app-owned"
+	}
+	return "generated auth addon wiring uses signed-cookie mode; server-side revocation, authorization-version checks, durable storage, and concurrent-session policy require the addons/auth revocable runtime contract or an app-owned Provider"
 }
 
 func csrfObligationEvidence(manifest SecurityManifest) EvidenceState {

@@ -48,10 +48,22 @@ type SecurityManifest struct {
 	Endpoints     []EndpointEntry      `json:"endpoints,omitempty"`
 	Contracts     []ContractEntry      `json:"contracts,omitempty"`
 	Observability []ObservabilityEntry `json:"observability,omitempty"`
+	Auth          *AuthPosture         `json:"auth,omitempty"`
 	CORS          CORSPosture          `json:"cors"`
 	Frontend      FrontendSurface      `json:"frontend"`
 	Obligations   []ObligationEntry    `json:"obligations,omitempty"`
 	Waivers       []WaiverDeclaration  `json:"waivers,omitempty"`
+}
+
+// AuthPosture records what the compiler can infer from configured auth addon
+// wiring. Application-owned providers may provide stronger guarantees at
+// runtime, but they are not statically proven here.
+type AuthPosture struct {
+	AddonConfigured      bool   `json:"addonConfigured"`
+	SessionMode          string `json:"sessionMode"`
+	Revocation           string `json:"revocation"`
+	AuthorizationVersion string `json:"authorizationVersion"`
+	Origin               string `json:"origin"`
 }
 
 // WaiverDeclaration records one declared `waive` rule from a *.audit.gwdk file,
@@ -291,6 +303,7 @@ func Build(config gowdk.Config, ir gwdkir.Program) SecurityManifest {
 	}
 
 	manifest.Observability = observabilityEntries(config, ir)
+	manifest.Auth = authPosture(config)
 	manifest.CORS = corsPosture(config, manifest.Endpoints)
 	manifest.Frontend.UnguardedRoutes = unguarded
 	manifest.Frontend.BundleSecrets = bundleLeaks(ir)
@@ -561,6 +574,19 @@ func buildMode(config gowdk.Config) string {
 		return string(gowdk.Development)
 	}
 	return mode
+}
+
+func authPosture(config gowdk.Config) *AuthPosture {
+	if !config.HasFeature(gowdk.FeatureAuth) {
+		return nil
+	}
+	return &AuthPosture{
+		AddonConfigured:      true,
+		SessionMode:          "signed-cookie",
+		Revocation:           "not server-revocable in generated addon wiring; use addons/auth revocable mode with an app-owned store or a custom Provider for production revocation",
+		AuthorizationVersion: "not checked in generated signed-cookie mode; app-owned revocable stores can reject stale authorization versions",
+		Origin:               "config:Addons.auth",
+	}
 }
 
 func configuredHeaders(config gowdk.Config) []ConfiguredHeader {

@@ -27,22 +27,36 @@ as the current source of truth.
 
 ## Install
 
+High-assurance install with the Go checksum database (replace `<version>` with a
+published tag):
+
 ```sh
-go install github.com/cssbruno/gowdk/cmd/gowdk@latest
+go install github.com/cssbruno/gowdk/cmd/gowdk@<version>
 ```
 
-Or use the install script:
+Convenience install for the latest visible GitHub release:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh | sh
 ```
 
-Pin a specific CLI release (replace `<version>` with a tag from the
-[releases page](https://github.com/cssbruno/GoWDK/releases)):
+The convenience script is fetched from the mutable `main` branch before it runs.
+For a reviewable release-asset install, download from an exact release tag and
+verify the published checksum before executing the binary:
 
 ```sh
-GOWDK_VERSION=<version> GOWDK_INSTALL_DIR="$HOME/.local/bin" \
-  sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
+version=<version>
+asset=gowdk-linux-amd64
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/${version}/${asset}"
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/${version}/checksums.txt"
+grep " ${asset}$" checksums.txt | sha256sum -c -
+install -m 0755 "$asset" "$HOME/.local/bin/gowdk"
+```
+
+For local development, `@latest` is also supported:
+
+```sh
+go install github.com/cssbruno/gowdk/cmd/gowdk@latest
 ```
 
 Build from source:

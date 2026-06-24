@@ -118,16 +118,33 @@ gh workflow run release-smoke.yml -f version=vX.Y.Z
 default. It selects the current operating system and architecture, downloads
 `checksums.txt`, verifies that the matching CLI artifact exists for the current
 platform before binary download, verifies the binary SHA-256, and writes
-`gowdk` into `GOWDK_INSTALL_DIR` or `/usr/local/bin`.
+`gowdk` into `GOWDK_INSTALL_DIR` or `/usr/local/bin`. This is a convenience
+path: when fetched with `curl` from `main`, the bootstrap script itself runs
+before it has been authenticated.
 
-Pinned install (replace `<version>` with a published release tag):
+High-assurance installs should avoid executing mutable bootstrap code. Use an
+exact module version with the Go checksum database:
 
 ```sh
-GOWDK_VERSION=<version> GOWDK_INSTALL_DIR="$HOME/.local/bin" \
-  sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
+go install github.com/cssbruno/gowdk/cmd/gowdk@<version>
+```
+
+Or download an exact release artifact and verify it before executing:
+
+```sh
+version=<version>
+asset=gowdk-linux-amd64
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/${version}/${asset}"
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/${version}/checksums.txt"
+grep " ${asset}$" checksums.txt | sha256sum -c -
 ```
 
 ## Supply-Chain Metadata
+
+Privileged workflows pin third-party actions to full commit SHAs with readable
+version comments. `scripts/check-supply-chain-pins.sh` rejects mutable action
+refs, unversioned release/security gate tools, global `@vscode/vsce` installs,
+and unpinned `govulncheck` tooling.
 
 The release workflow uses GitHub artifact attestations for files in `dist/`.
 It uploads the same `dist/*` set as a workflow artifact for run-level downloads
@@ -166,8 +183,9 @@ Manual publish:
 gh workflow run vscode-extension-publish.yml
 ```
 
-The workflow verifies the extension, packages a `.vsix`, uploads that package as
-a workflow artifact, then runs `vsce publish --pat "$VSCE_PAT"`. Use the
+The workflow installs locked local npm tooling with `npm ci`, verifies the
+extension, packages a `.vsix`, uploads that package as a workflow artifact, then
+runs the repository-local `vsce publish --pat "$VSCE_PAT"`. Use the
 workflow's `pre_release` input for Marketplace pre-release publishing. The CLI
 and extension versions can differ; release notes should say whether the `.vsix`
 is bundled only as a release artifact, manually published to the Marketplace, or

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
+	authaddon "github.com/cssbruno/gowdk/addons/auth"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -58,7 +59,7 @@ func TestRelativizeLeavesNonFileAndRelativeRefsUntouched(t *testing.T) {
 			{PageID: "b", Route: "/b", Source: "already/relative.page.gwdk:3"},
 		},
 	}
-	out := manifest.Relativize(filepath.Join(string(filepath.Separator)+"root"))
+	out := manifest.Relativize(filepath.Join(string(filepath.Separator) + "root"))
 	if out.Routes[0].Source != "config:Build.SecurityHeaders" {
 		t.Fatalf("non-file source must pass through, got %q", out.Routes[0].Source)
 	}
@@ -184,6 +185,21 @@ func TestBuildPopulatesFrontendAuditSurface(t *testing.T) {
 	}
 	if got := manifest.Frontend.RawHTMLSinks; len(got) != 1 || got[0].OwnerID != "home" || got[0].Field != "TrustedHTML" || got[0].Source != "home.page.gwdk:12" {
 		t.Fatalf("expected raw HTML sink source, got %#v", got)
+	}
+}
+
+func TestBuildPopulatesAuthAddonPosture(t *testing.T) {
+	manifest := Build(gowdk.Config{Addons: []gowdk.Addon{authaddon.Addon()}}, gwdkir.Program{
+		Pages: []gwdkir.Page{{ID: "home", Route: "/", Guards: []string{"auth.required"}}},
+	})
+	if manifest.Auth == nil {
+		t.Fatal("expected auth posture when auth addon is configured")
+	}
+	if manifest.Auth.SessionMode != "signed-cookie" || !manifest.Auth.AddonConfigured {
+		t.Fatalf("unexpected auth posture: %#v", manifest.Auth)
+	}
+	if manifest.Auth.Revocation == "" || manifest.Auth.AuthorizationVersion == "" {
+		t.Fatalf("expected revocation and authorization-version details: %#v", manifest.Auth)
 	}
 }
 

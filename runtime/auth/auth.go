@@ -23,11 +23,14 @@ var (
 )
 
 // Principal is the current application-owned identity visible to native RBAC
-// guards. GOWDK does not own users, sessions, OAuth, tenants, or persistence.
+// guards. AuthorizationVersion is optional metadata that revocable session
+// providers can compare against current server-side authorization state. GOWDK
+// does not own users, sessions, OAuth, tenants, or persistence.
 type Principal struct {
-	ID          string
-	Roles       []string
-	Permissions []string
+	ID                   string
+	Roles                []string
+	Permissions          []string
+	AuthorizationVersion string
 }
 
 // HasRole reports whether the principal has role.

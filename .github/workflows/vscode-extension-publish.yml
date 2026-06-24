@@ -27,15 +27,15 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '24'
 
-      - name: Install vsce
-        run: npm install -g @vscode/vsce
+      - name: Install locked extension tooling
+        run: npm ci
 
       - name: Verify extension
         run: |
@@ -48,7 +48,7 @@ jobs:
         run: |
           rm -f *.vsix
           node scripts/sync-version.js
-          vsce package \
+          npx --no-install vsce package \
             --no-dependencies \
             --baseContentUrl https://github.com/${{ github.repository }}/blob/${{ github.ref_name }} \
             --baseImagesUrl https://github.com/${{ github.repository }}/raw/${{ github.ref_name }}
@@ -56,7 +56,7 @@ jobs:
           test -f "gowdk-vscode-${version}.vsix"
 
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gowdk-vscode-vsix
           path: editors/vscode/*.vsix
@@ -86,4 +86,4 @@ jobs:
           fi
 
           node scripts/sync-version.js
-          vsce "${publish_args[@]}"
+          npx --no-install vsce "${publish_args[@]}"

@@ -40,6 +40,14 @@ func collectInputStructs(files []*ast.File, importMaps []map[string]string) map[
 }
 
 func backendInputStruct(typeName string, structType *ast.StructType, imports map[string]string) inputStruct {
+	return backendTaggedInputStruct("typed action input", typeName, structType, imports, "form", true)
+}
+
+func backendAPIInputStruct(typeName string, structType *ast.StructType, imports map[string]string) inputStruct {
+	return backendTaggedInputStruct("typed API input", typeName, structType, imports, "json", false)
+}
+
+func backendTaggedInputStruct(label string, typeName string, structType *ast.StructType, imports map[string]string, tagKey string, allowFiles bool) inputStruct {
 	if structType == nil || structType.Fields == nil {
 		return inputStruct{}
 	}
@@ -47,11 +55,11 @@ func backendInputStruct(typeName string, structType *ast.StructType, imports map
 	var fields []source.BackendInputField
 	for _, field := range structType.Fields.List {
 		if len(field.Names) == 0 {
-			return inputStruct{Message: fmt.Sprintf("typed action input %s cannot use embedded fields", typeName)}
+			return inputStruct{Message: fmt.Sprintf("%s %s cannot use embedded fields", label, typeName)}
 		}
-		formName, skip, explicit, err := formTagName(field)
+		formName, skip, explicit, err := inputTagName(field, tagKey)
 		if err != nil {
-			return inputStruct{Message: fmt.Sprintf("typed action input %s has invalid form tag: %v", typeName, err)}
+			return inputStruct{Message: fmt.Sprintf("%s %s has invalid %s tag: %v", label, typeName, tagKey, err)}
 		}
 		var exportedNames []*ast.Ident
 		for _, name := range field.Names {
@@ -63,11 +71,11 @@ func backendInputStruct(typeName string, structType *ast.StructType, imports map
 			continue
 		}
 		if explicit && len(exportedNames) > 1 {
-			return inputStruct{Message: fmt.Sprintf("typed action input %s cannot reuse one explicit form tag across multiple fields", typeName)}
+			return inputStruct{Message: fmt.Sprintf("%s %s cannot reuse one explicit %s tag across multiple fields", label, typeName, tagKey)}
 		}
 		fieldType, ok := backendInputFieldType(field.Type, imports)
-		if !ok {
-			return inputStruct{Message: fmt.Sprintf("typed action input %s uses unsupported field type", typeName)}
+		if !ok || (!allowFiles && backendInputFieldTypeIsFile(fieldType)) {
+			return inputStruct{Message: fmt.Sprintf("%s %s uses unsupported field type", label, typeName)}
 		}
 		for _, name := range exportedNames {
 			nameFormName := formName
@@ -75,7 +83,7 @@ func backendInputStruct(typeName string, structType *ast.StructType, imports map
 				nameFormName = name.Name
 			}
 			if seen[nameFormName] {
-				return inputStruct{Message: fmt.Sprintf("typed action input %s maps multiple fields to form field %q", typeName, nameFormName)}
+				return inputStruct{Message: fmt.Sprintf("%s %s maps multiple fields to input field %q", label, typeName, nameFormName)}
 			}
 			seen[nameFormName] = true
 			fields = append(fields, source.BackendInputField{
@@ -89,33 +97,41 @@ func backendInputStruct(typeName string, structType *ast.StructType, imports map
 }
 
 func backendTypedInputStruct(typeName string, typ types.Type) inputStruct {
+	return backendTypedTaggedInputStruct("typed action input", typeName, typ, "form", true)
+}
+
+func backendTypedAPIInputStruct(typeName string, typ types.Type) inputStruct {
+	return backendTypedTaggedInputStruct("typed API input", typeName, typ, "json", false)
+}
+
+func backendTypedTaggedInputStruct(label string, typeName string, typ types.Type, tagKey string, allowFiles bool) inputStruct {
 	structType, ok := types.Unalias(typ).Underlying().(*types.Struct)
 	if !ok {
-		return inputStruct{Message: fmt.Sprintf("typed action input %s must be an exported struct in the same package", typeName)}
+		return inputStruct{Message: fmt.Sprintf("%s %s must be an exported struct in the same package", label, typeName)}
 	}
 	seen := map[string]bool{}
 	var fields []source.BackendInputField
 	for index := 0; index < structType.NumFields(); index++ {
 		field := structType.Field(index)
 		if field.Embedded() {
-			return inputStruct{Message: fmt.Sprintf("typed action input %s cannot use embedded fields", typeName)}
+			return inputStruct{Message: fmt.Sprintf("%s %s cannot use embedded fields", label, typeName)}
 		}
-		formName, skip, _, err := formTagNameValue(structType.Tag(index))
+		formName, skip, _, err := inputTagNameValue(structType.Tag(index), tagKey)
 		if err != nil {
-			return inputStruct{Message: fmt.Sprintf("typed action input %s has invalid form tag: %v", typeName, err)}
+			return inputStruct{Message: fmt.Sprintf("%s %s has invalid %s tag: %v", label, typeName, tagKey, err)}
 		}
 		if !field.Exported() || skip {
 			continue
 		}
 		fieldType, ok := backendTypedInputFieldType(field.Type())
-		if !ok {
-			return inputStruct{Message: fmt.Sprintf("typed action input %s uses unsupported field type", typeName)}
+		if !ok || (!allowFiles && backendInputFieldTypeIsFile(fieldType)) {
+			return inputStruct{Message: fmt.Sprintf("%s %s uses unsupported field type", label, typeName)}
 		}
 		if formName == "" {
 			formName = field.Name()
 		}
 		if seen[formName] {
-			return inputStruct{Message: fmt.Sprintf("typed action input %s maps multiple fields to form field %q", typeName, formName)}
+			return inputStruct{Message: fmt.Sprintf("%s %s maps multiple fields to input field %q", label, typeName, formName)}
 		}
 		seen[formName] = true
 		fields = append(fields, source.BackendInputField{
@@ -128,6 +144,10 @@ func backendTypedInputStruct(typeName string, typ types.Type) inputStruct {
 }
 
 func formTagName(field *ast.Field) (string, bool, bool, error) {
+	return inputTagName(field, "form")
+}
+
+func inputTagName(field *ast.Field, key string) (string, bool, bool, error) {
 	if field == nil || field.Tag == nil {
 		return "", false, false, nil
 	}
@@ -135,11 +155,15 @@ func formTagName(field *ast.Field) (string, bool, bool, error) {
 	if err != nil {
 		return "", false, false, err
 	}
-	return formTagNameValue(tag)
+	return inputTagNameValue(tag, key)
 }
 
 func formTagNameValue(tag string) (string, bool, bool, error) {
-	value, ok, err := structTagValue(tag, "form")
+	return inputTagNameValue(tag, "form")
+}
+
+func inputTagNameValue(tag string, key string) (string, bool, bool, error) {
+	value, ok, err := structTagValue(tag, key)
 	if err != nil || !ok {
 		return "", false, ok, err
 	}
@@ -213,6 +237,11 @@ func backendInputFieldType(expression ast.Expr, imports map[string]string) (stri
 		return source.BackendInputTypeFileSlice, true
 	}
 	return "", false
+}
+
+func backendInputFieldTypeIsFile(fieldType string) bool {
+	info, ok := source.LookupBackendInputFieldType(fieldType)
+	return ok && (info.Kind == source.BackendInputFieldKindFile || info.Kind == source.BackendInputFieldKindFileSlice)
 }
 
 func backendTypedInputFieldType(typ types.Type) (string, bool) {

@@ -92,6 +92,12 @@ func runtimeImportMap(options Options) map[string]string {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 		imports["path"] = "path"
 	}
+	if apisUseTypedJSONInput(apis) || apisUseTypedResult(apis) {
+		imports["gowdkapi"] = "github.com/cssbruno/gowdk/runtime/api"
+	}
+	if apisUseTypedQueryInput(apis) {
+		imports["gowdkform"] = "github.com/cssbruno/gowdk/runtime/form"
+	}
 	if len(routableContracts) > 0 {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 	}
@@ -156,7 +162,7 @@ func runtimeImportMap(options Options) map[string]string {
 	if ssrUsesLoad(ssr) {
 		imports["gowdkssr"] = "github.com/cssbruno/gowdk/runtime/ssr"
 	}
-	if commandPatchRenderingEnabled(options) {
+	if commandPatchRenderingEnabled(options) || generatedRealtimeQueryRefreshEnabled(options) {
 		imports["gowdkssr"] = "github.com/cssbruno/gowdk/runtime/ssr"
 	}
 	if generatedUsesGuards(options) {
@@ -310,13 +316,16 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 		csrfOptions = full
 	}
 	decls := actionHandlerDecls(adapter.Actions, csrfEnabled(direct), generatedUsesRateLimit(direct))
-	decls = append(decls, apiFuncDecl(adapter.APIs, csrfEnabled(direct), generatedUsesRateLimit(direct)))
+	decls = append(decls, apiHandlerDecls(adapter.APIs, csrfEnabled(direct), generatedUsesRateLimit(direct))...)
 	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(direct)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(direct), generatedUsesRateLimit(direct), generatedRealtimeQueryInvalidationsEnabled(direct), commandPatchRenderingEnabled(direct))...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
 	decls = append(decls, contractEventSinkDecls(adapter.ContractExposures, generatedRealtimeEnabled(direct), generatedRealtimeQueryInvalidationsEnabled(direct))...)
 	decls = append(decls, contractRegistryDecls(adapter.ContractExposures)...)
 	decls = append(decls, realtimeDecls(direct)...)
+	if generatedRealtimeQueryRefreshEnabled(full) {
+		decls = append(decls, realtimeQueryRefreshPathDecl(), realtimeQueryRefreshHandlerDecl())
+	}
 	decls = append(decls, observabilityDecls(full)...)
 	switch {
 	case adapter.HasRegistrations():
@@ -347,7 +356,7 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 func backendGeneratedDecls(options Options) []ast.Decl {
 	adapter := backendAdapterIR(options)
 	decls := actionHandlerDecls(adapter.Actions, csrfEnabled(options), generatedUsesRateLimit(options))
-	decls = append(decls, apiFuncDecl(adapter.APIs, csrfEnabled(options), generatedUsesRateLimit(options)))
+	decls = append(decls, apiHandlerDecls(adapter.APIs, csrfEnabled(options), generatedUsesRateLimit(options))...)
 	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(options)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(options), generatedUsesRateLimit(options), generatedRealtimeQueryInvalidationsEnabled(options), false)...)
 	decls = append(decls, contractDecoderDecls(adapter.ContractExposures)...)
@@ -376,6 +385,12 @@ func actionHandlerDecls(actions []BackendActionAdapter, csrf bool, rateLimit boo
 		decls = append(decls, actionRequestPathDecl())
 		decls = append(decls, actionDecoderDecls(sorted)...)
 	}
+	return decls
+}
+
+func apiHandlerDecls(apis []BackendAPIAdapter, csrf bool, rateLimit bool) []ast.Decl {
+	decls := []ast.Decl{apiFuncDecl(apis, csrf, rateLimit)}
+	decls = append(decls, apiDecoderDecls(apis)...)
 	return decls
 }
 
@@ -481,6 +496,9 @@ func newServeMuxDecl(options Options, embedded bool) ast.Decl {
 	}
 	if generatedRealtimeEnabled(options) {
 		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), id("RealtimeEventsPath"), call(id("realtimeEventsHandler")))))
+	}
+	if generatedRealtimeQueryRefreshEnabled(options) {
+		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), id("RealtimeQueryRefreshPath"), call(id("realtimeQueryRefreshHandler")))))
 	}
 	if embedded {
 		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), stringLit("/"), &ast.UnaryExpr{

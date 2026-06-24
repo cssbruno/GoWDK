@@ -16,7 +16,7 @@ func TestHubConcurrentSendAndDisconnect(t *testing.T) {
 	connected := make([]*sseClient, 0, clients)
 	for i := 0; i < clients; i++ {
 		client := &sseClient{
-			queue:      make(chan []byte, 2),
+			queue:      make(chan sseMessage, 2),
 			disconnect: make(chan struct{}),
 		}
 		hub.add(client)

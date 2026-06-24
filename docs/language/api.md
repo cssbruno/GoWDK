@@ -13,18 +13,42 @@ Supported methods are `GET`, `POST`, `PUT`, `PATCH`, and `DELETE`.
 The route must be a quoted absolute route path.
 Old `api health { ... }` blocks are rejected with a migration diagnostic.
 
-Generated apps bind same-package Go handlers for the first API slice. `api
-Health GET "/api/health"` maps exactly to exported Go function `Health` in a
-same-package `.go` file or default `go {}` block when the function has
-signature:
+Generated apps bind same-package Go handlers. `api Health GET "/api/health"`
+maps exactly to exported Go function `Health` in a same-package `.go` file or
+default `go {}` block.
+
+The raw escape-hatch signature is:
 
 ```go
 func Health(context.Context, *http.Request) (response.Response, error)
 ```
 
-Bound API handlers return `runtime/response.Response`. In development/default
-mode, missing or unsupported handlers are not build errors; generated apps
-return HTTP 501 for those routes with a clear message.
+Typed generated signatures are:
+
+```go
+func Health(context.Context) (HealthResult, error)
+func Search(context.Context, SearchInput) (SearchResult, error)
+func Search(context.Context, *SearchInput) (SearchResult, error)
+```
+
+Typed input and result values must be exported same-package structs. For
+`GET` and `HEAD`, generated adapters decode typed input from the query string.
+For other methods, generated adapters decode strict JSON object bodies without
+request-time reflection. Typed results are returned as no-store JSON using the
+result struct fields and OpenAPI schema generated from the same metadata.
+
+Typed result structs can choose a status code by implementing:
+
+```go
+func (result CreatePatientResult) APIStatus() int { return http.StatusCreated }
+```
+
+Non-positive values fall back to `200 OK`. Use the raw
+`response.Response` handler signature when an endpoint needs custom content
+types, redirects, empty responses, or fully app-owned response writing.
+
+In development/default mode, missing or unsupported handlers are not build
+errors; generated apps return HTTP 501 for those routes with a clear message.
 
 In production mode, explicitly declared APIs must bind to supported
 same-package Go handlers. Missing or unsupported handlers fail the build unless
@@ -92,6 +116,8 @@ Response helpers return `runtime/response.Response`:
 - `JSON(status, value)` marshals a JSON response.
 - `Error(status, code, message)` returns `{ "ok": false, "error": ... }`.
 - `NoContent()` returns a 204 response.
+- `ResultStatus(result, fallback)` returns the optional typed result
+  `APIStatus()` value when present.
 
 Generated bound API adapters attach endpoint metadata to the handler context.
 Handlers can call `app.Endpoint(ctx)` from `runtime/app` to read the generated
@@ -126,6 +152,21 @@ requests are answered before guards, rate limits, CSRF, and user handlers. CORS
 does not replace authentication or authorization. `AllowedOrigins: []string{"*"}`
 is allowed only when `AllowCredentials` is false.
 
+An individual `.gwdk` API endpoint can declare a narrower or overriding policy
+with a trailing `cors` clause:
+
+```gowdk
+api Health GET "/api/health" cors origins "https://app.example" headers "Content-Type,X-CSRF" credentials true maxAge 600
+```
+
+Supported options are `origins`, `methods`, `headers`, `expose`,
+`credentials`, and `maxAge`. List options use quoted comma-separated values.
+When `Build.CORS` is enabled, omitted endpoint options inherit from it; options
+declared on the endpoint override the inherited values. When `Build.CORS` is
+disabled, an endpoint `cors` clause must provide enough policy to validate, at
+minimum `origins`. Endpoint policies use the same safety rules as config-level
+CORS, including rejecting `origins "*"` with `credentials true`.
+
 ## Examples
 
 `examples/endpoints/src/endpoints/api.page.gwdk` declares session, search, JSON CRUD, and
@@ -147,11 +188,11 @@ rendering; build-time SPA HTML cannot enforce frontend page access.
 
 - API handlers own authentication, backend authorization, domain validation,
   storage, service calls, and response shape in normal Go.
-- `addons/api` helpers cover strict JSON body decoding, typed query access, and
-  JSON response envelopes without requiring framework-specific adapters.
-- Bound API handlers return `runtime/response.Response`; generated adapters
-  only dispatch by method/path, call the handler, and write the returned
-  response.
+- `addons/api` helpers cover strict JSON body decoding, typed query access,
+  typed result status selection, and JSON response envelopes without requiring
+  framework-specific adapters.
+- Bound raw API handlers return `runtime/response.Response`; typed API handlers
+  return exported structs that generated adapters encode as JSON.
 - Generated API responses and generated API error responses use
   `Cache-Control: no-store` in the current first slice.
 - Generated API adapters dispatch only the declared HTTP method/path pair;
@@ -163,9 +204,9 @@ rendering; build-time SPA HTML cannot enforce frontend page access.
 - Missing or unsupported generated API bindings return HTTP 501 only in
   development/default mode or when an explicit missing-backend migration flag is
   set.
-- Generated API/command/query endpoints are same-origin unless `Build.CORS`
-  enables a CORS policy. Preflight requests for matching endpoints fail closed
-  with HTTP 403 when no policy allows them.
+- Generated API/command/query endpoints are same-origin unless `Build.CORS` or
+  an endpoint-local `cors` clause enables a CORS policy. Preflight requests for
+  matching endpoints fail closed with HTTP 403 when no policy allows them.
 - Generated state-changing API endpoints validate the generated CSRF token by
   default. Browser clients must send the token in the configured CSRF header
   such as `X-GOWDK-CSRF`; non-browser API designs can opt out with
@@ -175,8 +216,6 @@ rendering; build-time SPA HTML cannot enforce frontend page access.
 Future API behavior must define:
 
 - Authentication and authorization hooks.
-- Generated typed handler signatures beyond
-  `func(context.Context, *http.Request) (response.Response, error)`.
-- Per-route body/query/result contracts and route-param accessors.
-- Per-endpoint CORS policy syntax and richer content negotiation.
+- Route-param, header, and richer endpoint-scoped typed input contracts.
+- Custom typed content negotiation.
 - Interaction with SPA pages that declare backend endpoints without full-page SSR.

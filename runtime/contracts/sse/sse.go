@@ -7,20 +7,29 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/cssbruno/gowdk/runtime/contracts"
 )
 
 const (
-	defaultBufferSize     = 16
-	defaultRetryDirective = "retry: 1000\n"
+	defaultBufferSize  = 16
+	defaultRetryMillis = 1000
 )
 
 // Hub fans presentation events out to connected server-sent events clients.
 type Hub struct {
 	mu                  sync.Mutex
 	bufferSize          int
+	retryMillis         int
+	replayLimit         int
+	replay              []sseMessage
+	droppedClients      int64
+	revokedClients      int64
+	replayedEvents      int64
+	replayMisses        int64
 	audienceFromRequest func(*http.Request) []string
 	clients             map[*sseClient]bool
 }
@@ -29,7 +38,7 @@ type Hub struct {
 // streaming goroutine to drop the connection so the browser's EventSource
 // reconnects and resynchronizes.
 type sseClient struct {
-	queue      chan []byte
+	queue      chan sseMessage
 	disconnect chan struct{}
 	once       sync.Once
 	audience   map[string]struct{}
@@ -52,6 +61,33 @@ func WithBufferSize(size int) Option {
 	}
 }
 
+// WithRetryMillis sets the browser EventSource reconnect delay advertised by
+// the stream. Non-positive values keep the default one-second delay.
+func WithRetryMillis(milliseconds int) Option {
+	return func(hub *Hub) {
+		if milliseconds > 0 {
+			hub.retryMillis = milliseconds
+		}
+	}
+}
+
+// WithReplayLimit keeps the last limit presentation events in memory and
+// replays events after the browser's Last-Event-ID on reconnect. Non-positive
+// values disable replay.
+func WithReplayLimit(limit int) Option {
+	return func(hub *Hub) {
+		if limit <= 0 {
+			hub.replayLimit = 0
+			hub.replay = nil
+			return
+		}
+		hub.replayLimit = limit
+		if len(hub.replay) > limit {
+			hub.replay = append([]sseMessage(nil), hub.replay[len(hub.replay)-limit:]...)
+		}
+	}
+}
+
 // WithAudienceFromRequest assigns one or more server-owned audience labels to a
 // connecting client. Empty labels make the client receive broadcast events
 // only. Do not read audience labels from client-controlled query parameters
@@ -65,8 +101,9 @@ func WithAudienceFromRequest(fn func(*http.Request) []string) Option {
 // New creates an SSE hub.
 func New(options ...Option) *Hub {
 	hub := &Hub{
-		bufferSize: defaultBufferSize,
-		clients:    map[*sseClient]bool{},
+		bufferSize:  defaultBufferSize,
+		retryMillis: defaultRetryMillis,
+		clients:     map[*sseClient]bool{},
 	}
 	for _, option := range options {
 		if option != nil {
@@ -90,15 +127,21 @@ func (hub *Hub) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("X-Accel-Buffering", "no")
 
 	client := &sseClient{
-		queue:      make(chan []byte, hub.bufferSize),
+		queue:      make(chan sseMessage, hub.bufferSize),
 		disconnect: make(chan struct{}),
 		audience:   audienceSet(hub.clientAudience(request)),
 	}
 	hub.add(client)
 	defer hub.remove(client)
 
-	_, _ = response.Write([]byte(defaultRetryDirective + ": gowdk presentation stream\n\n"))
-	flusher.Flush()
+	if !writeRetry(response, flusher, hub.retryMillis) {
+		return
+	}
+	for _, message := range hub.replayAfter(request.Header.Get("Last-Event-ID"), client.audience) {
+		if !writeMessage(response, flusher, message) {
+			return
+		}
+	}
 
 	for {
 		select {
@@ -106,20 +149,10 @@ func (hub *Hub) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 			return
 		case <-client.disconnect:
 			return
-		case payload := <-client.queue:
-			if _, err := response.Write([]byte("event: gowdk-presentation\n")); err != nil {
+		case message := <-client.queue:
+			if !writeMessage(response, flusher, message) {
 				return
 			}
-			if _, err := response.Write([]byte("data: ")); err != nil {
-				return
-			}
-			if _, err := response.Write(payload); err != nil {
-				return
-			}
-			if _, err := response.Write([]byte("\n\n")); err != nil {
-				return
-			}
-			flusher.Flush()
 		}
 	}
 }
@@ -135,16 +168,20 @@ func (hub *Hub) SendPresentationEvents(ctx context.Context, events []contracts.E
 		if event.Category != contracts.PresentationEvent {
 			continue
 		}
+		event = contracts.EnsureEventID(event)
 		payload, err := json.Marshal(event)
 		if err != nil {
 			return err
 		}
-		payloads = append(payloads, payloadWithAudience{payload: payload, audience: event.AudienceLabels()})
+		payloads = append(payloads, payloadWithAudience{id: event.ID, payload: payload, audience: event.AudienceLabels()})
 	}
 	if len(payloads) == 0 {
 		return nil
 	}
 	hub.mu.Lock()
+	for _, payload := range payloads {
+		hub.recordReplayLocked(sseMessage(payload))
+	}
 	var slow []*sseClient
 	for client := range hub.clients {
 	queueLoop:
@@ -153,7 +190,7 @@ func (hub *Hub) SendPresentationEvents(ctx context.Context, events []contracts.E
 				continue
 			}
 			select {
-			case client.queue <- payload.payload:
+			case client.queue <- sseMessage(payload):
 			default:
 				// The client cannot keep up. Drop it so the browser reconnects
 				// and resynchronizes, rather than silently missing events (for
@@ -163,6 +200,7 @@ func (hub *Hub) SendPresentationEvents(ctx context.Context, events []contracts.E
 			}
 		}
 	}
+	hub.droppedClients += int64(len(slow))
 	hub.mu.Unlock()
 	for _, client := range slow {
 		client.drop()
@@ -170,9 +208,21 @@ func (hub *Hub) SendPresentationEvents(ctx context.Context, events []contracts.E
 	return nil
 }
 
-type payloadWithAudience struct {
+type sseMessage struct {
+	id       string
 	payload  []byte
 	audience []string
+}
+
+type payloadWithAudience sseMessage
+
+// Stats reports process-local SSE hub counters for app-owned metrics export.
+type Stats struct {
+	ClientCount    int
+	DroppedClients int64
+	RevokedClients int64
+	ReplayedEvents int64
+	ReplayMisses   int64
 }
 
 // ClientCount returns the number of currently connected clients.
@@ -182,11 +232,124 @@ func (hub *Hub) ClientCount() int {
 	return len(hub.clients)
 }
 
+// Stats returns current process-local hub counters.
+func (hub *Hub) Stats() Stats {
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+	return Stats{
+		ClientCount:    len(hub.clients),
+		DroppedClients: hub.droppedClients,
+		RevokedClients: hub.revokedClients,
+		ReplayedEvents: hub.replayedEvents,
+		ReplayMisses:   hub.replayMisses,
+	}
+}
+
+// RevokeAudience disconnects currently connected clients whose server-owned
+// audience label set includes every provided label. Include a session-specific
+// label in WithAudienceFromRequest to revoke one active browser session.
+func (hub *Hub) RevokeAudience(labels ...string) int {
+	audience := contracts.EventEnvelope{Audience: labels}.AudienceLabels()
+	if len(audience) == 0 {
+		return 0
+	}
+	hub.mu.Lock()
+	revoked := make([]*sseClient, 0)
+	for client := range hub.clients {
+		if audienceMatches(audience, client.audience) {
+			revoked = append(revoked, client)
+		}
+	}
+	hub.revokedClients += int64(len(revoked))
+	hub.mu.Unlock()
+	for _, client := range revoked {
+		client.drop()
+	}
+	return len(revoked)
+}
+
 func (hub *Hub) clientAudience(request *http.Request) []string {
 	if hub.audienceFromRequest == nil {
 		return nil
 	}
 	return contracts.EventEnvelope{Audience: hub.audienceFromRequest(request)}.AudienceLabels()
+}
+
+func (hub *Hub) recordReplayLocked(message sseMessage) {
+	if hub.replayLimit <= 0 || message.id == "" {
+		return
+	}
+	hub.replay = append(hub.replay, message)
+	if len(hub.replay) > hub.replayLimit {
+		hub.replay = append([]sseMessage(nil), hub.replay[len(hub.replay)-hub.replayLimit:]...)
+	}
+}
+
+func (hub *Hub) replayAfter(lastEventID string, clientAudience map[string]struct{}) []sseMessage {
+	lastEventID = strings.TrimSpace(lastEventID)
+	if lastEventID == "" || hub.replayLimit <= 0 {
+		return nil
+	}
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+	start := -1
+	for index, message := range hub.replay {
+		if message.id == lastEventID {
+			start = index + 1
+			break
+		}
+	}
+	if start < 0 || start >= len(hub.replay) {
+		hub.replayMisses++
+		return nil
+	}
+	out := make([]sseMessage, 0, len(hub.replay)-start)
+	for _, message := range hub.replay[start:] {
+		if audienceMatches(message.audience, clientAudience) {
+			out = append(out, message)
+		}
+	}
+	hub.replayedEvents += int64(len(out))
+	return out
+}
+
+func writeRetry(response http.ResponseWriter, flusher http.Flusher, retryMillis int) bool {
+	if retryMillis <= 0 {
+		retryMillis = defaultRetryMillis
+	}
+	if _, err := response.Write([]byte("retry: " + strconv.Itoa(retryMillis) + "\n: gowdk presentation stream\n\n")); err != nil {
+		return false
+	}
+	flusher.Flush()
+	return true
+}
+
+func writeMessage(response http.ResponseWriter, flusher http.Flusher, message sseMessage) bool {
+	if id := cleanSSEID(message.id); id != "" {
+		if _, err := response.Write([]byte("id: " + id + "\n")); err != nil {
+			return false
+		}
+	}
+	if _, err := response.Write([]byte("event: gowdk-presentation\n")); err != nil {
+		return false
+	}
+	if _, err := response.Write([]byte("data: ")); err != nil {
+		return false
+	}
+	if _, err := response.Write(message.payload); err != nil {
+		return false
+	}
+	if _, err := response.Write([]byte("\n\n")); err != nil {
+		return false
+	}
+	flusher.Flush()
+	return true
+}
+
+func cleanSSEID(id string) string {
+	id = strings.TrimSpace(id)
+	id = strings.ReplaceAll(id, "\r", "")
+	return strings.ReplaceAll(id, "\n", "")
 }
 
 func audienceSet(audience []string) map[string]struct{} {

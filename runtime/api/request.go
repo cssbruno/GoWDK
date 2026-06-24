@@ -48,7 +48,8 @@ func DecodeJSON[T any](request *http.Request) (T, error) {
 	return value, nil
 }
 
-func requireJSONContentType(request *http.Request) error {
+// RequireJSONContentType verifies that request declares a JSON media type.
+func RequireJSONContentType(request *http.Request) error {
 	contentType := strings.TrimSpace(request.Header.Get("Content-Type"))
 	if contentType == "" {
 		// Require an explicit JSON content type. A missing Content-Type is a
@@ -67,6 +68,197 @@ func requireJSONContentType(request *http.Request) error {
 		return nil
 	}
 	return fmt.Errorf("%w: %s", ErrUnsupportedContentType, mediaType)
+}
+
+func requireJSONContentType(request *http.Request) error {
+	return RequireJSONContentType(request)
+}
+
+// JSONFieldDecoder decodes one JSON object field at a time for generated API
+// adapters. It accepts only a top-level object, preserves json.Number for
+// integer parsing, and lets generated code reject unknown fields explicitly.
+type JSONFieldDecoder struct {
+	decoder *json.Decoder
+}
+
+// NewJSONFieldDecoder creates a field decoder for a strict JSON object body.
+func NewJSONFieldDecoder(request *http.Request) (*JSONFieldDecoder, error) {
+	if request == nil {
+		return nil, ErrNilRequest
+	}
+	if err := RequireJSONContentType(request); err != nil {
+		return nil, err
+	}
+	if request.Body == nil {
+		return nil, fmt.Errorf("decode API JSON body: %w", io.EOF)
+	}
+	decoder := json.NewDecoder(request.Body)
+	decoder.UseNumber()
+	token, err := decoder.Token()
+	if err != nil {
+		return nil, fmt.Errorf("decode API JSON body: %w", err)
+	}
+	if delim, ok := token.(json.Delim); !ok || delim != '{' {
+		return nil, fmt.Errorf("decode API JSON body: expected object")
+	}
+	return &JSONFieldDecoder{decoder: decoder}, nil
+}
+
+// More reports whether the current JSON object has another field.
+func (decoder *JSONFieldDecoder) More() bool {
+	return decoder != nil && decoder.decoder != nil && decoder.decoder.More()
+}
+
+// Field returns the next field name in the current JSON object.
+func (decoder *JSONFieldDecoder) Field() (string, error) {
+	if decoder == nil || decoder.decoder == nil {
+		return "", ErrNilRequest
+	}
+	token, err := decoder.decoder.Token()
+	if err != nil {
+		return "", fmt.Errorf("decode API JSON field name: %w", err)
+	}
+	name, ok := token.(string)
+	if !ok {
+		return "", fmt.Errorf("decode API JSON field name: expected string")
+	}
+	return name, nil
+}
+
+// UnknownField returns the generated adapter error for an unsupported JSON
+// object field. Generated adapters stop immediately, so no value is consumed.
+func (decoder *JSONFieldDecoder) UnknownField(name string) error {
+	return fmt.Errorf("decode API JSON body: unknown field %q", name)
+}
+
+// Finish consumes the object close token and rejects trailing JSON values.
+func (decoder *JSONFieldDecoder) Finish() error {
+	if decoder == nil || decoder.decoder == nil {
+		return ErrNilRequest
+	}
+	token, err := decoder.decoder.Token()
+	if err != nil {
+		return fmt.Errorf("decode API JSON body: %w", err)
+	}
+	if delim, ok := token.(json.Delim); !ok || delim != '}' {
+		return fmt.Errorf("decode API JSON body: expected object close")
+	}
+	extra, err := decoder.decoder.Token()
+	if err == io.EOF {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("decode API JSON body: %w", err)
+	}
+	if extra != nil {
+		return ErrMultipleJSONValues
+	}
+	return ErrMultipleJSONValues
+}
+
+// String decodes the next JSON field value as a string.
+func (decoder *JSONFieldDecoder) String(name string) (string, error) {
+	token, err := decoder.valueToken(name)
+	if err != nil {
+		return "", err
+	}
+	value, ok := token.(string)
+	if !ok {
+		return "", fmt.Errorf("decode API JSON field %q as string", name)
+	}
+	return value, nil
+}
+
+// Bool decodes the next JSON field value as a bool.
+func (decoder *JSONFieldDecoder) Bool(name string) (bool, error) {
+	token, err := decoder.valueToken(name)
+	if err != nil {
+		return false, err
+	}
+	value, ok := token.(bool)
+	if !ok {
+		return false, fmt.Errorf("decode API JSON field %q as bool", name)
+	}
+	return value, nil
+}
+
+// Int decodes the next JSON field value as a signed integer.
+func (decoder *JSONFieldDecoder) Int(name string, bitSize int) (int64, error) {
+	token, err := decoder.valueToken(name)
+	if err != nil {
+		return 0, err
+	}
+	number, ok := token.(json.Number)
+	if !ok {
+		return 0, fmt.Errorf("decode API JSON field %q as int", name)
+	}
+	parsed, err := strconv.ParseInt(number.String(), 10, bitSize)
+	if err != nil {
+		return 0, fmt.Errorf("decode API JSON field %q as int: %w", name, err)
+	}
+	return parsed, nil
+}
+
+// Uint decodes the next JSON field value as an unsigned integer.
+func (decoder *JSONFieldDecoder) Uint(name string, bitSize int) (uint64, error) {
+	token, err := decoder.valueToken(name)
+	if err != nil {
+		return 0, err
+	}
+	number, ok := token.(json.Number)
+	if !ok {
+		return 0, fmt.Errorf("decode API JSON field %q as uint", name)
+	}
+	parsed, err := strconv.ParseUint(number.String(), 10, bitSize)
+	if err != nil {
+		return 0, fmt.Errorf("decode API JSON field %q as uint: %w", name, err)
+	}
+	return parsed, nil
+}
+
+// Strings decodes the next JSON field value as an array of strings.
+func (decoder *JSONFieldDecoder) Strings(name string) ([]string, error) {
+	if decoder == nil || decoder.decoder == nil {
+		return nil, ErrNilRequest
+	}
+	token, err := decoder.decoder.Token()
+	if err != nil {
+		return nil, fmt.Errorf("decode API JSON field %q: %w", name, err)
+	}
+	if delim, ok := token.(json.Delim); !ok || delim != '[' {
+		return nil, fmt.Errorf("decode API JSON field %q as []string", name)
+	}
+	var values []string
+	for decoder.decoder.More() {
+		token, err := decoder.decoder.Token()
+		if err != nil {
+			return nil, fmt.Errorf("decode API JSON field %q: %w", name, err)
+		}
+		value, ok := token.(string)
+		if !ok {
+			return nil, fmt.Errorf("decode API JSON field %q as []string", name)
+		}
+		values = append(values, value)
+	}
+	token, err = decoder.decoder.Token()
+	if err != nil {
+		return nil, fmt.Errorf("decode API JSON field %q: %w", name, err)
+	}
+	if delim, ok := token.(json.Delim); !ok || delim != ']' {
+		return nil, fmt.Errorf("decode API JSON field %q as []string", name)
+	}
+	return values, nil
+}
+
+func (decoder *JSONFieldDecoder) valueToken(name string) (json.Token, error) {
+	if decoder == nil || decoder.decoder == nil {
+		return nil, ErrNilRequest
+	}
+	token, err := decoder.decoder.Token()
+	if err != nil {
+		return nil, fmt.Errorf("decode API JSON field %q: %w", name, err)
+	}
+	return token, nil
 }
 
 // QueryString returns the first query value for name.

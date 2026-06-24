@@ -70,6 +70,43 @@ func commandPatchRenderingEnabled(options Options) bool {
 	return len(executableCommandContractExposures(backendAdapterIR(options).ContractExposures)) > 0
 }
 
+func realtimeQueryRefreshHandlerDecl() ast.Decl {
+	return funcDecl("realtimeQueryRefreshHandler", nil, []*ast.Field{
+		{Type: sel("http", "Handler")},
+	}, []ast.Stmt{
+		&ast.ReturnStmt{Results: []ast.Expr{call(sel("http", "HandlerFunc"), &ast.FuncLit{
+			Type: &ast.FuncType{Params: &ast.FieldList{List: actionParams()}},
+			Body: block(
+				&ast.IfStmt{
+					Cond: &ast.BinaryExpr{X: selExpr(id("request"), "Method"), Op: token.NEQ, Y: sel("http", "MethodGet")},
+					Body: block(
+						writeNoStoreJSONErrorStmt(sel("http", "StatusMethodNotAllowed"), "method not allowed"),
+						&ast.ReturnStmt{},
+					),
+				},
+				define([]ast.Expr{id("queries")}, &ast.IndexExpr{
+					X:     call(selExpr(selExpr(id("request"), "URL"), "Query")),
+					Index: stringLit("query"),
+				}),
+				define([]ast.Expr{id("patches")}, call(sel("gowdkssr", "RenderInvalidatedRegions"), id("request"), id("queries"))),
+				&ast.IfStmt{
+					Cond: &ast.BinaryExpr{X: id("patches"), Op: token.EQL, Y: id("nil")},
+					Body: block(assign([]ast.Expr{id("patches")}, &ast.CompositeLit{Type: &ast.ArrayType{Elt: sel("gowdkssr", "RegionPatch")}})),
+				},
+				define([]ast.Expr{id("result"), id("err")}, call(sel("gowdkresponse", "JSONValue"), sel("http", "StatusOK"), id("patches"))),
+				&ast.IfStmt{
+					Cond: notNil("err"),
+					Body: block(
+						writeNoStoreHandlerJSONErrorExprStmt(id("err"), sel("http", "StatusInternalServerError")),
+						&ast.ReturnStmt{},
+					),
+				},
+				writeNoStoreHTTPStmt(id("result")),
+			),
+		})}},
+	})
+}
+
 func regionRendererExpr(route SSRRoute, region SSRQueryRegion) ast.Expr {
 	elts := []ast.Expr{
 		keyValue("QueryType", stringLit(region.QueryType)),

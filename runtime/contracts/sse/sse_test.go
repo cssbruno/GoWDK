@@ -32,8 +32,28 @@ func TestHubSendsRetryDirective(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read first SSE line: %v", err)
 	}
-	if line != defaultRetryDirective {
-		t.Fatalf("first SSE line = %q, want %q", line, defaultRetryDirective)
+	if line != "retry: 1000\n" {
+		t.Fatalf("first SSE line = %q, want default retry directive", line)
+	}
+}
+
+func TestHubSendsConfiguredRetryDirective(t *testing.T) {
+	hub := New(WithRetryMillis(2500))
+	server := httptest.NewServer(hub)
+	defer server.Close()
+
+	response, err := http.Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+
+	line, err := bufio.NewReader(response.Body).ReadString('\n')
+	if err != nil {
+		t.Fatalf("read first SSE line: %v", err)
+	}
+	if line != "retry: 2500\n" {
+		t.Fatalf("first SSE line = %q, want configured retry directive", line)
 	}
 }
 
@@ -137,7 +157,7 @@ func TestHubFiltersPresentationEventsByAudience(t *testing.T) {
 func TestHubDisconnectsSlowClient(t *testing.T) {
 	hub := New(WithBufferSize(1))
 	client := &sseClient{
-		queue:      make(chan []byte, 1),
+		queue:      make(chan sseMessage, 1),
 		disconnect: make(chan struct{}),
 	}
 	hub.add(client)
@@ -157,6 +177,128 @@ func TestHubDisconnectsSlowClient(t *testing.T) {
 	case <-client.disconnect:
 	default:
 		t.Fatal("expected the slow client to be disconnected on buffer overflow")
+	}
+	if stats := hub.Stats(); stats.DroppedClients != 1 {
+		t.Fatalf("dropped client stats = %#v, want one drop", stats)
+	}
+}
+
+func TestHubReplaysEventsAfterLastEventID(t *testing.T) {
+	hub := New(WithReplayLimit(4))
+	err := hub.SendPresentationEvents(context.Background(), []contracts.EventEnvelope{
+		{ID: "event-1", Category: contracts.PresentationEvent, Type: "PatientNotice", Value: patientNotice{ID: "patient-1"}},
+		{ID: "event-2", Category: contracts.PresentationEvent, Type: "PatientNotice", Value: patientNotice{ID: "patient-2"}},
+	})
+	if err != nil {
+		t.Fatalf("send presentation events: %v", err)
+	}
+
+	server := httptest.NewServer(hub)
+	defer server.Close()
+	request, err := http.NewRequest(http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Last-Event-ID", "event-1")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+
+	reader := bufio.NewReader(response.Body)
+	deadline := time.Now().Add(2 * time.Second)
+	var idLine, dataLine string
+	for time.Now().Before(deadline) {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatalf("read SSE line: %v", err)
+		}
+		if strings.HasPrefix(line, "id: ") {
+			idLine = line
+		}
+		if strings.HasPrefix(line, "data: ") {
+			dataLine = line
+			break
+		}
+	}
+	if idLine != "id: event-2\n" {
+		t.Fatalf("replayed id line = %q, want event-2", idLine)
+	}
+	if !strings.Contains(dataLine, `"ID":"event-2"`) || !strings.Contains(dataLine, `"id":"patient-2"`) {
+		t.Fatalf("unexpected replayed data line: %q", dataLine)
+	}
+	if stats := hub.Stats(); stats.ReplayedEvents != 1 || stats.ReplayMisses != 0 {
+		t.Fatalf("unexpected replay stats: %#v", stats)
+	}
+}
+
+func TestHubReplayKeepsAudienceScope(t *testing.T) {
+	hub := New(
+		WithReplayLimit(4),
+		WithAudienceFromRequest(func(request *http.Request) []string {
+			return []string{"tenant:clinic"}
+		}),
+	)
+	err := hub.SendPresentationEvents(context.Background(), []contracts.EventEnvelope{
+		{ID: "event-1", Category: contracts.PresentationEvent, Type: "PatientNotice", Audience: []string{"tenant:other"}, Value: patientNotice{ID: "private-other"}},
+		{ID: "event-2", Category: contracts.PresentationEvent, Type: "PatientNotice", Audience: []string{"tenant:clinic"}, Value: patientNotice{ID: "private-clinic"}},
+	})
+	if err != nil {
+		t.Fatalf("send presentation events: %v", err)
+	}
+
+	server := httptest.NewServer(hub)
+	defer server.Close()
+	request, err := http.NewRequest(http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Last-Event-ID", "event-1")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+
+	data := readSSEDataLines(t, response.Body, 1)[0]
+	if !strings.Contains(data, `"id":"private-clinic"`) || strings.Contains(data, "private-other") {
+		t.Fatalf("audience-scoped replay data = %q", data)
+	}
+}
+
+func TestHubRevokeAudienceDisconnectsMatchingClients(t *testing.T) {
+	hub := New()
+	ada := &sseClient{
+		queue:      make(chan sseMessage, 1),
+		disconnect: make(chan struct{}),
+		audience:   audienceSet([]string{"tenant:clinic", "session:ada"}),
+	}
+	bob := &sseClient{
+		queue:      make(chan sseMessage, 1),
+		disconnect: make(chan struct{}),
+		audience:   audienceSet([]string{"tenant:clinic", "session:bob"}),
+	}
+	hub.add(ada)
+	hub.add(bob)
+	defer hub.remove(ada)
+	defer hub.remove(bob)
+
+	if got := hub.RevokeAudience("session:ada"); got != 1 {
+		t.Fatalf("RevokeAudience disconnected %d clients, want 1", got)
+	}
+	if stats := hub.Stats(); stats.ClientCount != 2 || stats.RevokedClients != 1 {
+		t.Fatalf("unexpected revoke stats: %#v", stats)
+	}
+	select {
+	case <-ada.disconnect:
+	default:
+		t.Fatal("expected matching client to be disconnected")
+	}
+	select {
+	case <-bob.disconnect:
+		t.Fatal("did not expect non-matching client to be disconnected")
+	default:
 	}
 }
 

@@ -328,6 +328,7 @@ let fail = false;
 let reload = false;
 	let commandMode = 'success';
 	let refreshFail = false;
+	let routeRefreshMode = 'patch';
 	let holdRequests = false;
 	let heldFetchResolvers = [];
 	global.fetch = async function(url, options) {
@@ -379,6 +380,23 @@ let reload = false;
         'X-GOWDK-Queries': 'gowdk-generated-app/patients.GetPatientPage'
       }),
       text: async () => '{"id":"patient-1"}'
+    };
+  }
+  if (String(url).startsWith('http://example.test/_gowdk/realtime/query-refresh')) {
+    if (routeRefreshMode === 'missing') {
+      return {
+        ok: false,
+        status: 404,
+        headers: new Headers({ 'Content-Type': 'text/plain' }),
+        text: async () => 'not found'
+      };
+    }
+    return {
+      ok: true,
+      redirected: false,
+      status: 200,
+      headers: new Headers({ 'Content-Type': 'application/json; charset=utf-8' }),
+      text: async () => '[{"query":"gowdk-generated-app/patients.GetPatientPage","html":"<section id=\\"invalidated-patients\\" data-gowdk-query=\\"patients.GetPatientPage\\" data-gowdk-query-type=\\"gowdk-generated-app/patients.GetPatientPage\\"><p>Route patched</p></section>"}]'
     };
   }
   if (url === window.location.href && refreshFail) {
@@ -445,7 +463,7 @@ let reload = false;
 
 (async function() {
   assert.equal(eventSources.length, 1);
-  assert.equal(eventSources[0].url, '/_gowdk/realtime/events');
+  assert.equal(eventSources[0].url, '/_gowdk/realtime/events?path=%2Fnewsletter');
 
   let realtimePatch;
   liveRegion.addEventListener('gowdk:realtime-patch', event => {
@@ -477,6 +495,20 @@ let reload = false;
     Category: 'presentation',
     Type: 'gowdk-generated-app/patients.PatientNotice',
     Value: {
+      version: 2,
+      patch: {
+        op: 'replaceHTML',
+        html: '<p>Future</p>'
+      }
+    }
+  });
+  assert.equal(liveRegion.innerHTML, '<p>Live</p>');
+  assert.match(realtimeError.error.message, /unsupported realtime payload version/);
+  realtimeError = null;
+  eventSources[0].emit('gowdk-presentation', {
+    Category: 'presentation',
+    Type: 'gowdk-generated-app/patients.PatientNotice',
+    Value: {
       patch: {
         op: 'setText',
         text: 'Unsafe'
@@ -494,16 +526,18 @@ let reload = false;
     Category: 'presentation',
     Type: 'gowdk.query.invalidate',
     Value: {
+      version: 1,
       queries: ['gowdk-generated-app/patients.GetPatientPage']
     }
   });
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(request.url, 'http://example.test/newsletter');
+  assert.equal(request.url, 'http://example.test/_gowdk/realtime/query-refresh?path=%2Fnewsletter&query=gowdk-generated-app%2Fpatients.GetPatientPage');
   assert.equal(liveRegion.replacedWith, '');
-  assert.equal(invalidatedRegion.replacedWith, '<section id="invalidated-patients" data-gowdk-query="patients.GetPatientPage" data-gowdk-query-type="gowdk-generated-app/patients.GetPatientPage"><p>Refetched</p></section>');
+  assert.equal(invalidatedRegion.replacedWith, '<section id="invalidated-patients" data-gowdk-query="patients.GetPatientPage" data-gowdk-query-type="gowdk-generated-app/patients.GetPatientPage"><p>Route patched</p></section>');
   assert.deepEqual(islandLifecycle.shift(), ['destroy', 'invalidated-patients', true]);
   assert.deepEqual(islandLifecycle.shift(), ['mount']);
   assert.deepEqual(queryRefresh.queries, ['gowdk-generated-app/patients.GetPatientPage']);
+  assert.deepEqual(queryRefresh.patchedQueries, ['gowdk-generated-app/patients.GetPatientPage']);
   request = null;
   requests = [];
   requestCount = 0;
@@ -615,17 +649,19 @@ let reload = false;
   resetCommandHarness();
   commandMode = 'success';
   eventSources[0].close();
+  routeRefreshMode = 'missing';
   refreshFail = true;
   await submit(commandForm, commandSubmitter);
   await flushRuntime();
   assert.equal(commandSuccess.result.id, 'patient-1');
   assert.equal(commandError, null);
-  assert.deepEqual(requests.map(item => item.url), ['/commands/create', 'http://example.test/newsletter']);
+  assert.deepEqual(requests.map(item => item.url), ['/commands/create', 'http://example.test/_gowdk/realtime/query-refresh?path=%2Fnewsletter&query=gowdk-generated-app%2Fpatients.GetPatientPage', 'http://example.test/newsletter']);
   assert.match(realtimeError.error.message, /navigation request failed with status 500/);
   assert.deepEqual(realtimeError.queries, ['gowdk-generated-app/patients.GetPatientPage']);
   assert.equal(realtimeError.form, commandForm);
   assert.equal(commandForm.attributes['aria-busy'], undefined);
   refreshFail = false;
+  routeRefreshMode = 'patch';
   request = null;
   requests = [];
   requestCount = 0;

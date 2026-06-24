@@ -164,7 +164,7 @@ func addOpenAPIEndpointOperation(paths map[string]openAPIPath, components map[st
 		Summary:     endpointSummary(string(endpoint.Kind), endpoint.Symbol, endpoint.Path),
 		Tags:        []string{string(endpoint.Kind)},
 		Parameters:  pathParameters(openAPIPathFromGOWDK(endpoint.Path), endpoint.RouteParams),
-		Responses:   endpointResponses(components, string(endpoint.Kind), "", nil),
+		Responses:   endpointResponsesForEndpoint(components, endpoint),
 		XGOWDK: openAPIGOWDKExtension{
 			Kind:           string(endpoint.Kind),
 			Route:          endpoint.Path,
@@ -184,6 +184,26 @@ func addOpenAPIEndpointOperation(paths map[string]openAPIPath, components map[st
 		attachInputFields(&operation, components, method, endpoint.Binding.InputType, endpoint.Binding.InputFields, endpoint.Kind == gwdkir.EndpointAPI)
 	}
 	addOpenAPIOperation(paths, openAPIPathFromGOWDK(endpoint.Path), method, operation)
+}
+
+func endpointResponsesForEndpoint(components map[string]openAPISchema, endpoint gwdkir.Endpoint) map[string]openAPIResponse {
+	if endpoint.Binding.ResultType == "" {
+		return endpointResponses(components, string(endpoint.Kind), "", nil)
+	}
+	response := openAPIResponse{Description: "OK"}
+	name := schemaComponentName(endpoint.Binding.ResultType)
+	if _, ok := components[name]; !ok {
+		schema := openAPISchema{Type: "object", XGoType: endpoint.Binding.ResultType}
+		if len(endpoint.Binding.ResultFields) > 0 {
+			schema = objectSchemaFromResultFields(endpoint.Binding.ResultFields)
+			schema.XGoType = endpoint.Binding.ResultType
+		}
+		components[name] = schema
+	}
+	response.Content = map[string]openAPIMediaType{
+		"application/json": {Schema: openAPISchema{Ref: "#/components/schemas/" + name}},
+	}
+	return map[string]openAPIResponse{"200": response}
 }
 
 func addOpenAPIContractOperation(paths map[string]openAPIPath, components map[string]openAPISchema, seen map[string]int, config gowdk.Config, ref gwdkir.ContractReference) {
@@ -297,8 +317,27 @@ func objectSchemaFromFields(fields []source.BackendInputField) openAPISchema {
 	return openAPISchema{Type: "object", Properties: properties}
 }
 
+func objectSchemaFromResultFields(fields []source.BackendResultField) openAPISchema {
+	properties := map[string]openAPISchema{}
+	for _, field := range fields {
+		name := field.Path
+		if name == "" {
+			continue
+		}
+		properties[name] = schemaForOpenAPIGoType(field.Type)
+	}
+	return openAPISchema{Type: "object", Properties: properties}
+}
+
 func schemaForGoType(goType string) openAPISchema {
-	fieldType := source.MustBackendInputFieldType(goType)
+	return schemaForOpenAPIGoType(goType)
+}
+
+func schemaForOpenAPIGoType(goType string) openAPISchema {
+	fieldType, ok := source.LookupBackendInputFieldType(goType)
+	if !ok {
+		return openAPISchema{Type: "object", XGoType: goType}
+	}
 	switch fieldType.Kind {
 	case source.BackendInputFieldKindBool:
 		return openAPISchema{Type: "boolean"}

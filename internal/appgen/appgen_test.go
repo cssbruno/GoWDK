@@ -1296,6 +1296,11 @@ func TestGenerateRegistersSingleFlightRegionRenderers(t *testing.T) {
 		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "board", Method: "GET", Path: "/board", Render: "ssr", Guards: []string{"public"}, HasLoad: true})`,
 		`pageRequest.Method = http.MethodGet`,
 		`loadContext := gowdkssr.NewLoadContext(request, nil)`,
+		`const RealtimeQueryRefreshPath = "/_gowdk/realtime/query-refresh"`,
+		`mux.Handle(RealtimeQueryRefreshPath, realtimeQueryRefreshHandler())`,
+		`func realtimeQueryRefreshHandler() http.Handler`,
+		`queries := request.URL.Query()["query"]`,
+		`patches := gowdkssr.RenderInvalidatedRegions(request, queries)`,
 		`if request.Header.Get("X-GOWDK-Command") == "1"`,
 		`singleFlightPatches := gowdkssr.RenderInvalidatedRegions(request, invalidatedQueries)`,
 		`response.Header().Set("X-GOWDK-Patches", "1")`,
@@ -1486,6 +1491,8 @@ func TestGenerateSkipsSingleFlightRegionRenderersForGuardedRoutes(t *testing.T) 
 	for _, unexpected := range []string{
 		`gowdkssr.RegisterRegion`,
 		`gowdkssr.RenderInvalidatedRegions`,
+		`RealtimeQueryRefreshPath`,
+		`realtimeQueryRefreshHandler`,
 		`X-GOWDK-Patches`,
 	} {
 		if strings.Contains(source, unexpected) {
@@ -1944,6 +1951,42 @@ func TestGenerateWiresCORSForAPIRoutes(t *testing.T) {
 	}
 }
 
+func TestGenerateWiresEndpointCORSForAPIRoutes(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "status", "index.html"), "<main>Status</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		APIs: []APIEndpoint{{
+			Guards:  []string{"public"},
+			PageID:  "status",
+			APIName: "Health",
+			Method:  http.MethodGet,
+			Route:   "/api/health",
+			CORS: gwdkir.EndpointCORS{
+				Enabled:             true,
+				AllowedOrigins:      []string{"https://route.example"},
+				AllowedHeaders:      []string{"Content-Type"},
+				AllowCredentials:    true,
+				AllowCredentialsSet: true,
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	expected := `gowdkruntime.BackendRoute{Method: "GET", Path: "/api/health", Kind: "api", EndpointID: "status.Health", Handler: api, CORS: &gowdkruntime.CORSPolicy{AllowedOrigins: []string{"https://route.example"}, AllowedHeaders: []string{"Content-Type"}, AllowCredentials: true}}`
+	if !strings.Contains(source, expected) {
+		t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
+	}
+}
+
 func TestGenerateRejectsInvalidCORSConfig(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
@@ -1966,6 +2009,32 @@ func TestGenerateRejectsInvalidCORSConfig(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "wildcard origin") {
 		t.Fatalf("expected invalid CORS config error, got %v", err)
+	}
+}
+
+func TestGenerateRejectsInvalidEndpointCORSConfig(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "status", "index.html"), "<main>Status</main>")
+
+	_, err := GenerateWithOptions(outputDir, appDir, Options{
+		APIs: []APIEndpoint{{
+			Guards:  []string{"public"},
+			PageID:  "status",
+			APIName: "Health",
+			Method:  http.MethodGet,
+			Route:   "/api/health",
+			CORS: gwdkir.EndpointCORS{
+				Enabled:             true,
+				AllowedOrigins:      []string{"*"},
+				AllowCredentials:    true,
+				AllowCredentialsSet: true,
+			},
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "wildcard origin") {
+		t.Fatalf("expected invalid endpoint CORS config error, got %v", err)
 	}
 }
 
@@ -3174,6 +3243,103 @@ func TestGenerateWritesBoundAPIHandler(t *testing.T) {
 	} {
 		if strings.Contains(source, unexpected) {
 			t.Fatalf("safe API output should not emit CSRF validation %q:\n%s", unexpected, source)
+		}
+	}
+}
+
+func TestGenerateWritesTypedBoundAPIHandlers(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "status", "index.html"), "<main>Status</main>")
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{APIs: []APIEndpoint{
+		{
+			Guards:  []string{"public"},
+			PageID:  "status",
+			APIName: "Update",
+			Method:  http.MethodPost,
+			Route:   "/api/status",
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
+				ImportPath:   "example.com/app/status",
+				PackageName:  "status",
+				FunctionName: "Update",
+				Signature:    source.BackendSignatureAPIInput,
+				InputType:    "UpdateInput",
+				InputFields: []source.BackendInputField{
+					{FieldName: "Name", FormName: "name", Type: "string"},
+					{FieldName: "Count", FormName: "count", Type: "int"},
+					{FieldName: "Tags", FormName: "tags", Type: "[]string"},
+				},
+				ResultType: "UpdateResult",
+			},
+		},
+		{
+			Guards:  []string{"public"},
+			PageID:  "status",
+			APIName: "List",
+			Method:  http.MethodGet,
+			Route:   "/api/status",
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
+				ImportPath:   "example.com/app/status",
+				PackageName:  "status",
+				FunctionName: "List",
+				Signature:    source.BackendSignatureAPIInputPtr,
+				InputType:    "ListInput",
+				InputPointer: true,
+				InputFields: []source.BackendInputField{
+					{FieldName: "Filter", FormName: "filter", Type: "string"},
+				},
+				ResultType: "ListResult",
+			},
+		},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdkapi "github.com/cssbruno/gowdk/runtime/api"`,
+		`gowdkform "github.com/cssbruno/gowdk/runtime/form"`,
+		`func decodeStatusUpdateInput(request *http.Request) (status.UpdateInput, error)`,
+		`decoder, err := gowdkapi.NewJSONFieldDecoder(request)`,
+		`case "name":`,
+		`field0, err := decoder.String("name")`,
+		`input.Name = field0`,
+		`field1, err := decoder.Int("count", 0)`,
+		`input.Count = int(field1)`,
+		`field2, err := decoder.Strings("tags")`,
+		`input.Tags = field2`,
+		`return input, decoder.UnknownField(field)`,
+		`input, err := decodeStatusUpdateInput(request)`,
+		`result, err := status.Update(ctx, input)`,
+		`func decodeStatusListInput(request *http.Request) (status.ListInput, error)`,
+		`values := gowdkform.FromURLValues(request.URL.Query())`,
+		`field0, ok, err := gowdkform.String(values, "filter")`,
+		`input.Filter = field0`,
+		`result, err := status.List(ctx, &input)`,
+		`status := gowdkapi.ResultStatus(result, http.StatusOK)`,
+		`httpResult, err := gowdkresponse.JSONValue(status, result)`,
+		`gowdkresponse.WriteNoStoreHandlerJSONError(response, err, http.StatusInternalServerError)`,
+		`gowdkresponse.WriteNoStoreHTTP(response, httpResult)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated typed API source to contain %q:\n%s", expected, source)
+		}
+	}
+	for _, unexpected := range []string{
+		`gowdkapi.DecodeJSON`,
+		`status.Update(ctx, request)`,
+		`status.List(ctx, request)`,
+	} {
+		if strings.Contains(source, unexpected) {
+			t.Fatalf("did not expect generated typed API source to contain %q:\n%s", unexpected, source)
 		}
 	}
 }

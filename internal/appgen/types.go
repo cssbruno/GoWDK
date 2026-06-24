@@ -91,6 +91,7 @@ type APIEndpoint struct {
 	Route        string
 	Guards       []string
 	ErrorPage    string
+	CORS         gwdkir.EndpointCORS
 	Binding      source.BackendBinding
 	BackendAlias string
 	Source       string

@@ -73,7 +73,12 @@ func (function featureFunction) Action() bool {
 }
 
 func (function featureFunction) API() bool {
-	return function.Signature == source.BackendSignatureAPI
+	switch function.Signature {
+	case source.BackendSignatureAPI, source.BackendSignatureAPI0, source.BackendSignatureAPIInput, source.BackendSignatureAPIInputPtr:
+		return true
+	default:
+		return false
+	}
 }
 
 func (function featureFunction) Fragment() bool {

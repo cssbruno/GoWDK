@@ -265,6 +265,18 @@ policy. `AllowedMethods` is optional; when omitted, the matched route method is
 returned. `AllowedHeaders` must include non-simple request headers such as
 `Content-Type` for JSON APIs and any configured CSRF header.
 
+`.gwdk` API declarations can attach endpoint-local CORS with a trailing `cors`
+clause:
+
+```gowdk
+api Health GET "/api/health" cors origins "https://app.example" headers "Content-Type" credentials true
+```
+
+Endpoint-local policy options inherit omitted fields from `Build.CORS` when it
+is enabled and override declared fields for that route only. Without
+`Build.CORS`, the endpoint clause must include enough information to validate,
+including at least one origin.
+
 ## Lifecycle Services
 
 `Lifecycle.Services` declares app-owned service providers imported by the

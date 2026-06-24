@@ -278,8 +278,9 @@ adapter, scheduler, and supervision infrastructure stays app-owned.
 `addons/realtime` registers the browser presentation-event fanout feature. It
 does not import the optional WebSocket transport dependency or patch the DOM.
 Use dependency-free `runtime/contracts/sse` through `realtime.NewSSE` for
-one-way browser notifications, including server-owned audience scoping through
-`WithSSEAudienceFromRequest`, or opt into the nested
+one-way browser notifications, including buffer, retry, replay, server-owned
+audience scoping through `WithSSEAudienceFromRequest`, and audience-based
+stream revocation, or opt into the nested
 `runtime/contracts/websocketfanout` module when the app needs WebSocket
 sessions. See `docs/reference/realtime.md`.
 

@@ -46,6 +46,7 @@ func QueryInvalidationCommandEventSink(fanout PresentationFanout, invalidations 
 			Category: PresentationEvent,
 			Type:     QueryInvalidationPresentationEventType,
 			Value: QueryInvalidationNotice{
+				Version:  QueryInvalidationNoticeVersion,
 				Queries:  queries,
 				Events:   sourceEvents,
 				EventIDs: eventIDs,

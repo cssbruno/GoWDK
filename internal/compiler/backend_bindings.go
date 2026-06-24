@@ -215,10 +215,20 @@ func bindAPIEndpoint(binding source.BackendBinding, pkg featurePackage) source.B
 	}
 	if !function.API() {
 		binding.Status = source.BackendBindingUnsupportedSignature
-		binding.Message = fmt.Sprintf("GOWDK API handler %s.%s must have signature func(context.Context, *http.Request) (response.Response, error)", bindingPackageLabel(binding, pkg), binding.FunctionName)
+		if function.SupportMessage != "" {
+			binding.Message = fmt.Sprintf("GOWDK API handler %s.%s is unsupported: %s", bindingPackageLabel(binding, pkg), binding.FunctionName, function.SupportMessage)
+		} else {
+			binding.Message = fmt.Sprintf("GOWDK API handler %s.%s must have signature func(context.Context, *http.Request) (response.Response, error), func(context.Context) (Result, error), func(context.Context, Input) (Result, error), or func(context.Context, *Input) (Result, error)", bindingPackageLabel(binding, pkg), binding.FunctionName)
+		}
 		return binding
 	}
 	binding.Signature = function.Signature
+	binding.InputType = function.InputType
+	binding.InputPointer = function.InputPointer
+	binding.InputFields = append([]source.BackendInputField(nil), function.InputFields...)
+	binding.ResultType = function.ResultType
+	binding.ResultPointer = function.ResultPointer
+	binding.ResultFields = append([]source.BackendResultField(nil), function.ResultFields...)
 	binding.Status = source.BackendBindingBound
 	return binding
 }

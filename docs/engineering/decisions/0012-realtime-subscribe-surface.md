@@ -118,9 +118,9 @@ templates reference domain or integration events directly.
 - #132: implement compiler-owned client patch/refresh loop. Implemented for
   explicit `replaceHTML` patches on subscribed query regions.
 - #133: define reconnect, backpressure, and guard-gated stream behavior.
-  One-second SSE retry hints, drop-on-full client buffers, and guard rejection
-  before stream open are implemented; active session-change stream revocation
-  remains follow-up work.
+  Configurable SSE retry hints, bounded replay, drop-on-full client buffers,
+  audience revocation, process-local stats, and guard rejection before stream
+  open are implemented.
 - #134: add live-updating examples and docs. Implemented in
   `examples/contracts`.
 - #147: compiler-derived event-to-query invalidation. Implemented through

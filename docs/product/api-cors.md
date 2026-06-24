@@ -9,6 +9,7 @@ policy, preflight handling, and explicit credentials rules.
 ## Goals
 
 - Add config-level CORS policy for generated API, command, and query routes.
+- Add endpoint-level `.gwdk` CORS policy syntax for generated API routes.
 - Keep the default closed: no CORS headers are emitted unless enabled.
 - Handle browser `OPTIONS` preflight before guards, rate limiting, CSRF, or user
   handlers.
@@ -16,7 +17,6 @@ policy, preflight handling, and explicit credentials rules.
 
 ## Non-Goals
 
-- Per-endpoint `.gwdk` CORS syntax.
 - Treating CORS as authentication or authorization.
 - CORS for generated action, fragment, SSR, or static page routes.
 
@@ -26,6 +26,8 @@ policy, preflight handling, and explicit credentials rules.
 
 - `gowdk.BuildConfig.CORS` declares allowed origins, methods, headers, exposed
   headers, credential support, and preflight max-age.
+- `.gwdk` API declarations can add a trailing `cors` clause with `origins`,
+  `methods`, `headers`, `expose`, `credentials`, and `maxAge` options.
 - Generated embedded and backend-only apps install the policy when API or web
   contract routes exist.
 - Matching preflight requests return `204` with CORS headers.
@@ -46,6 +48,9 @@ policy, preflight handling, and explicit credentials rules.
 - [x] Actual generated API/contract responses include CORS headers for allowed
   origins.
 - [x] Wildcard origin plus credentials is rejected.
+- [x] Endpoint-level API CORS clauses are parsed, lowered into IR, generated as
+  route-local runtime policies, and validated with the same credentialed
+  wildcard safety rule.
 - [x] Runtime, appgen, and config tests cover the slice.
 
 ## Edge Cases
@@ -63,6 +68,5 @@ policy, preflight handling, and explicit credentials rules.
 
 ## Open Questions
 
-- Whether a later release should add per-endpoint policy syntax.
 - Whether split frontend proxy routes should optionally terminate CORS instead
   of leaving policy to the backend app.

@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -51,6 +52,14 @@ func validateCORSConfig(options Options) error {
 	if err := options.Config.Build.CORS.Validate(); err != nil {
 		return err
 	}
+	for _, registration := range backendAdapterIR(options).Registrations {
+		if registration.CORS == nil {
+			continue
+		}
+		if err := registration.CORS.Validate(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -61,7 +70,10 @@ func corsPolicyExpr(options Options) ast.Expr {
 	if !backendAdapterIR(options).HasCORSRoutes() {
 		return nil
 	}
-	config := options.Config.Build.CORS
+	return corsPolicyLiteral(options.Config.Build.CORS)
+}
+
+func corsPolicyLiteral(config gowdk.CORSConfig) ast.Expr {
 	elts := []ast.Expr{
 		keyValue("AllowedOrigins", stringSliceExpr(config.AllowedOrigins)),
 	}
@@ -84,6 +96,10 @@ func corsPolicyExpr(options Options) ast.Expr {
 		Type: sel("gowdkruntime", "CORSPolicy"),
 		Elts: elts,
 	}
+}
+
+func corsPolicyPtrExpr(config gowdk.CORSConfig) ast.Expr {
+	return &ast.UnaryExpr{Op: token.AND, X: corsPolicyLiteral(config)}
 }
 
 func backendRegistrationMethodExpr(registration BackendEndpointRegistration) ast.Expr {
@@ -128,6 +144,9 @@ func backendRouteExpr(registration BackendEndpointRegistration, method ast.Expr,
 		if source := traceSourceRefExpr(registration.Source, string(registration.Kind), registration.PageID, registration.Span); source != nil {
 			elts = append(elts, keyValue("Source", source))
 		}
+	}
+	if registration.CORS != nil {
+		elts = append(elts, keyValue("CORS", corsPolicyPtrExpr(*registration.CORS)))
 	}
 	return &ast.CompositeLit{
 		Type: sel("gowdkruntime", "BackendRoute"),

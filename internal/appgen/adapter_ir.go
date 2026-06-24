@@ -4,6 +4,7 @@ import (
 	"path"
 	"sort"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -38,6 +39,7 @@ type BackendEndpointRegistration struct {
 	PageID  string
 	Name    string
 	Guards  []string
+	CORS    *gowdk.CORSConfig
 	Dynamic bool
 	Source  string
 	Span    source.SourceSpan
@@ -228,6 +230,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 			PageID:  api.PageID,
 			Name:    api.APIName,
 			Guards:  append([]string(nil), api.Guards...),
+			CORS:    endpointCORSPolicy(options.Config.Build.CORS, api.CORS),
 			Dynamic: backendRouteIsDynamic(api.Route),
 			Source:  api.Source,
 			Span:    api.SourceSpan,
@@ -365,6 +368,36 @@ func cloneActionUploadFields(fields []ActionUploadField) []ActionUploadField {
 		out = append(out, field)
 	}
 	return out
+}
+
+func endpointCORSPolicy(base gowdk.CORSConfig, endpoint gwdkir.EndpointCORS) *gowdk.CORSConfig {
+	if !endpoint.Enabled {
+		return nil
+	}
+	policy := gowdk.CORSConfig{Enabled: true}
+	if base.Enabled {
+		policy = base
+		policy.Enabled = true
+	}
+	if len(endpoint.AllowedOrigins) > 0 {
+		policy.AllowedOrigins = append([]string(nil), endpoint.AllowedOrigins...)
+	}
+	if len(endpoint.AllowedMethods) > 0 {
+		policy.AllowedMethods = append([]string(nil), endpoint.AllowedMethods...)
+	}
+	if len(endpoint.AllowedHeaders) > 0 {
+		policy.AllowedHeaders = append([]string(nil), endpoint.AllowedHeaders...)
+	}
+	if len(endpoint.ExposedHeaders) > 0 {
+		policy.ExposedHeaders = append([]string(nil), endpoint.ExposedHeaders...)
+	}
+	if endpoint.AllowCredentialsSet {
+		policy.AllowCredentials = endpoint.AllowCredentials
+	}
+	if endpoint.MaxAgeSet {
+		policy.MaxAgeSeconds = endpoint.MaxAgeSeconds
+	}
+	return &policy
 }
 
 func reserveGeneratedBackendAdapterAliases(ir *BackendAdapterIR) {

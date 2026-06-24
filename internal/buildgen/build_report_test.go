@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
@@ -937,6 +938,33 @@ func TestBuildReportIncludesCachePolicySummary(t *testing.T) {
 	}
 	if got := manifest.SizeBytes(clientRuntimeAssetPath); got != runtimeAsset.SizeBytes {
 		t.Fatalf("expected manifest runtime asset size %d, got %d", runtimeAsset.SizeBytes, got)
+	}
+}
+
+func TestBuildReportIncludesHybridRequestTimeSkipMode(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	config := gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}
+	ir := gwdkanalysis.BuildProgram(config, gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		ID:     "hybrid",
+		Route:  "/hybrid",
+		Render: gowdk.Hybrid,
+		Blocks: gwdkir.Blocks{
+			View:     true,
+			ViewBody: `<main>Hybrid</main>`,
+		},
+	}}})
+
+	result, err := buildFromIR(config, ir, nil, outputDir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := findBuildReportEvent(result.Report, "plan", "request_time_page_skipped")
+	if event == nil {
+		t.Fatalf("missing request_time_page_skipped event in %#v", result.Report.Events)
+	}
+	if event.PageID != "hybrid" || event.Route != "/hybrid" || event.Data["mode"] != "hybrid" {
+		t.Fatalf("unexpected hybrid skip event: %#v", event)
 	}
 }
 

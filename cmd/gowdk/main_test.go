@@ -3658,6 +3658,102 @@ view {
 	}
 }
 
+func TestBuildCommandGeneratesContractRoleBinaries(t *testing.T) {
+	root := t.TempDir()
+	writeCLITestModule(t, root, "example.com/site")
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Build: gowdk.BuildConfig{
+		Worker: gowdk.ContractWorkerConfig{
+			EventSource: gowdk.ServiceRef{ImportPath: "example.com/site/providers", Function: "EventSource"},
+		},
+		Cron: gowdk.ContractCronConfig{Jobs: []gowdk.ContractCronJobConfig{{
+			Type: "patients.SyncPatients",
+			Schedule: "@once",
+			OverlapPolicy: "skip",
+			MissedRunPolicy: "skip",
+		}}},
+	},
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "patients", "contracts.go"), `package patients
+
+import (
+	"context"
+	"os"
+
+	"github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type PatientCreated struct{ ID string }
+type SyncPatients struct{}
+
+func Register(registry *contracts.Registry) {
+	contracts.RegisterDomainEvent[PatientCreated](registry, SendWelcomeEmail, contracts.RoleWorker)
+	contracts.RegisterJob[SyncPatients](registry, RunSyncPatients, contracts.RoleCron)
+}
+
+func SendWelcomeEmail(context.Context, PatientCreated) error { return nil }
+
+func RunSyncPatients(context.Context, SyncPatients) error {
+	if path := os.Getenv("GOWDK_TEST_CRON_MARKER"); path != "" {
+		return os.WriteFile(path, []byte("ran"), 0o644)
+	}
+	return nil
+}
+`)
+	writeCLIFile(t, filepath.Join(root, "providers", "providers.go"), `package providers
+
+import (
+	"context"
+
+	"github.com/cssbruno/gowdk/runtime/contracts"
+)
+
+type drainedSource struct{}
+
+func EventSource() (contracts.EventSource, error) {
+	return drainedSource{}, nil
+}
+
+func (drainedSource) ReceiveEventBatch(context.Context) (contracts.EventBatch, error) {
+	return contracts.EventBatch{}, contracts.ErrEventSourceClosed
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		if err := run([]string{"build", "--worker-app", ".gowdk/worker", "--worker-bin", "bin/worker", "--cron-app", ".gowdk/cron", "--cron-bin", "bin/cron"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	for _, path := range []string{
+		filepath.Join(root, ".gowdk", "worker", "cmd", "worker", "main.go"),
+		filepath.Join(root, ".gowdk", "cron", "cmd", "cron", "main.go"),
+		filepath.Join(root, "bin", "worker"),
+		filepath.Join(root, "bin", "cron"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected generated role artifact %s: %v", path, err)
+		}
+	}
+	if output, err := exec.Command(filepath.Join(root, "bin", "worker")).CombinedOutput(); err != nil {
+		t.Fatalf("generated worker failed: %v\n%s", err, output)
+	}
+	marker := filepath.Join(root, "cron-ran.txt")
+	command := exec.Command(filepath.Join(root, "bin", "cron"))
+	command.Env = append(os.Environ(), "GOWDK_TEST_CRON_MARKER="+marker)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("generated cron failed: %v\n%s", err, output)
+	}
+	if payload, err := os.ReadFile(marker); err != nil || string(payload) != "ran" {
+		t.Fatalf("unexpected cron marker payload %q, err=%v", payload, err)
+	}
+}
+
 func TestBuildCommandInfersConfiguredTargetOutput(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app

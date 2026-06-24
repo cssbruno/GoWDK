@@ -91,9 +91,69 @@ route that fails later.
 
 The supported milestone-14 path is local-first: one generated binary can serve
 the page, execute `g:command` and `g:query` web adapters through the web role,
-and replay captured backend events through local runtime helpers. User-owned
-worker and cron commands can run the same generated registry helpers; separate
-worker/cron binary generators remain future deployment tooling.
+and replay captured backend events through local runtime helpers. Worker and
+cron roles can run the same generated registry helpers from user-owned
+commands or generated standalone role binaries.
+
+## Standalone Worker And Cron Binaries
+
+`Build.Targets` can generate role-only Go apps and compile them to binaries
+without embedding the web output:
+
+```go
+Build: gowdk.BuildConfig{
+	Targets: []gowdk.BuildTargetConfig{
+		{
+			Name:         "contracts-worker",
+			WorkerApp:    ".gowdk/worker",
+			WorkerBinary: "bin/worker",
+			Worker: gowdk.ContractWorkerConfig{
+				EventSource: gowdk.ServiceRef{
+					ImportPath: "github.com/acme/clinic/workers",
+					Function:   "EventSource",
+				},
+			},
+		},
+		{
+			Name:       "contracts-cron",
+			CronApp:    ".gowdk/cron",
+			CronBinary: "bin/cron",
+			Cron: gowdk.ContractCronConfig{
+				Jobs: []gowdk.ContractCronJobConfig{{
+					Type:            "patients.SyncPatients",
+					Schedule:        "@every 15m",
+					OverlapPolicy:   "skip",
+					MissedRunPolicy: "skip",
+				}},
+			},
+		},
+	},
+}
+```
+
+`Worker.EventSource` is required and must name a provider function with
+signature `func() (contracts.EventSource, error)`. `Worker.SeenStore` and
+`Worker.Backoff` are optional providers for `contracts.SeenStore` and
+`contracts.EventWorkerBackoff`. Generated workers install SIGINT/SIGTERM
+context cancellation and run event subscribers with the `worker` role.
+
+Cron targets require explicit jobs. `Type` can be a scanned type name,
+`package.Type`, or full `import/path.Type` when needed to disambiguate.
+Schedules currently support `@once` and `@every <duration>`, and the supported
+overlap and missed-run policy is `skip`. Generated cron binaries run selected
+jobs with the `cron` role and zero-value job input.
+
+Ad hoc builds can use the same surface:
+
+```sh
+gowdk build --worker-app .gowdk/worker --worker-bin bin/worker
+gowdk build --cron-app .gowdk/cron --cron-bin bin/cron
+```
+
+Ad hoc worker builds still require `Build.Worker` provider configuration from
+`gowdk.config.go`, and ad hoc cron builds require configured
+`Build.Cron.Jobs`; the flags choose output locations only. `--worker-bin`
+requires `--worker-app`, and `--cron-bin` requires `--cron-app`.
 
 Minimal page:
 
@@ -558,10 +618,9 @@ duplicate event IDs through the provided `contracts.SeenStore`. The
 backoff, through to `runtime/contracts`.
 
 These helpers are deliberately local process APIs. Use them from the generated
-binary, a user-owned worker or cron command, or a test fixture. Generated
-worker/cron binaries, supervisor configs, queue topology, and deployment
-recipe starters are platform tooling, not part of the milestone-14 runtime
-contract.
+binary, a generated role binary, a user-owned worker or cron command, or a test
+fixture. Supervisor configs, queue topology, and deployment recipe starters are
+platform tooling, not part of the milestone-14 runtime contract.
 
 ## Worker Backoff
 
@@ -1101,10 +1160,7 @@ Use `g:on:*` for local UI/component events and `g:command` for backend intent.
 - Page-owned generated query routes use JSON/query request negotiation so they
   do not replace normal static, SPA, or SSR page responses.
 - Cross-package contract input field discovery remains planned.
-- Separate web/worker/cron binary generators remain planned platform tooling.
-  User-owned worker and cron commands can use
-  `NewContractRegistry`, `RunContractEventWorker*`, and
-  `contracts.ExecuteJobForRole` with the same registrations today. Schedule
-  ownership, overlap prevention, durable retry operations, failure reporting,
-  restart behavior, and production supervision stay app-owned until platform
-  tooling is designed.
+- Standalone worker and cron binary generators cover the first platform tooling
+  slice. Schedule ownership beyond `@once` / `@every`, overlap prevention
+  beyond `skip`, durable retry operations, failure reporting, restart behavior,
+  and production supervision stay app-owned.

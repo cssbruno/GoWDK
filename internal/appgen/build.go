@@ -10,11 +10,25 @@ import (
 
 // BuildBinary compiles the generated app into binaryPath.
 func BuildBinary(appDir, binaryPath string) (string, error) {
+	return buildGeneratedCommand(appDir, binaryPath, "./cmd/server", "generated app", "binary output path is required")
+}
+
+// BuildWorkerBinary compiles the generated contract worker app.
+func BuildWorkerBinary(appDir, binaryPath string) (string, error) {
+	return buildGeneratedCommand(appDir, binaryPath, "./cmd/worker", "generated worker app", "worker binary output path is required")
+}
+
+// BuildCronBinary compiles the generated contract cron app.
+func BuildCronBinary(appDir, binaryPath string) (string, error) {
+	return buildGeneratedCommand(appDir, binaryPath, "./cmd/cron", "generated cron app", "cron binary output path is required")
+}
+
+func buildGeneratedCommand(appDir, binaryPath string, packagePath string, label string, emptyBinaryMessage string) (string, error) {
 	if strings.TrimSpace(appDir) == "" {
-		return "", fmt.Errorf("generated app directory is required")
+		return "", fmt.Errorf("%s directory is required", label)
 	}
 	if strings.TrimSpace(binaryPath) == "" {
-		return "", fmt.Errorf("binary output path is required")
+		return "", fmt.Errorf("%s", emptyBinaryMessage)
 	}
 	absApp, err := filepath.Abs(appDir)
 	if err != nil {
@@ -32,12 +46,12 @@ func BuildBinary(appDir, binaryPath string) (string, error) {
 		return "", err
 	}
 
-	command := exec.Command("go", "build", "-buildvcs=false", "-o", absBinary, "./cmd/server")
+	command := exec.Command("go", "build", "-buildvcs=false", "-o", absBinary, packagePath)
 	command.Dir = absApp
 	command.Env = goEnv
 	output, err := command.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("go build generated app failed: %w\n%s", err, strings.TrimSpace(string(output)))
+		return "", fmt.Errorf("go build %s failed: %w\n%s", label, err, strings.TrimSpace(string(output)))
 	}
 	return absBinary, nil
 }

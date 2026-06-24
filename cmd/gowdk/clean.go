@@ -151,6 +151,10 @@ func cleanTargets(config gowdk.Config, targetNames []string, outDir string) ([]s
 		add(target.WASM)
 		add(target.BackendApp)
 		add(target.BackendBinary)
+		add(target.WorkerApp)
+		add(target.WorkerBinary)
+		add(target.CronApp)
+		add(target.CronBinary)
 	}
 
 	add(outDir)

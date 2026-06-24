@@ -2,7 +2,8 @@
 
 Generated output currently covers app-shell HTML, selected browser runtime assets,
 generated embedded app source, and optional local binary or Go `js/wasm`
-artifacts for the implemented compiler slice.
+artifacts for the implemented compiler slice. Contract role targets can also
+generate standalone worker and cron apps.
 
 Implemented today:
 
@@ -65,6 +66,10 @@ Implemented today:
   output under `<dir>/SPA`.
 - `gowdk build --bin <file>` requires `--app` and compiles that generated app
   into one local binary.
+- `gowdk build --worker-app <dir> --worker-bin <file>` writes and compiles a
+  standalone contract worker app.
+- `gowdk build --cron-app <dir> --cron-bin <file>` writes and compiles a
+  standalone contract cron app.
 - Generated apps include POST endpoint handlers for the first supported
   action subset on concrete SPA page paths.
 - Generated embedded and backend-only app packages expose
@@ -300,6 +305,7 @@ The target output can include:
 - CSS processor addon artifacts.
 - Embedded asset manifest.
 - A generated Go command for one-binary app serving.
+- Generated Go commands for contract worker and cron role binaries.
 
 ## Current Generated App
 
@@ -324,6 +330,34 @@ The target output can include:
 
 `gowdk build --out dist --app .gowdk/app --bin dist/site` then runs `go build`
 for `.gowdk/app/cmd/server` and writes `dist/site`.
+
+`gowdk build --worker-app .gowdk/worker` writes:
+
+```text
+.gowdk/worker/
+  go.mod
+  gowdkapp/
+    contracts.go
+  cmd/
+    worker/
+      main.go
+```
+
+`gowdk build --cron-app .gowdk/cron` writes:
+
+```text
+.gowdk/cron/
+  go.mod
+  gowdkapp/
+    contracts.go
+    cron.go
+  cmd/
+    cron/
+      main.go
+```
+
+`--worker-bin` and `--cron-bin` compile those generated commands with
+`go build`.
 
 The generated `gowdkapp` package exposes `App() (*runtime/app.Application,
 error)` for generated binary startup plus `Handler() (http.Handler, error)` and

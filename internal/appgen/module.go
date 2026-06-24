@@ -22,6 +22,10 @@ import (
 const gowdkRuntimeModulePath = "github.com/cssbruno/gowdk"
 
 func moduleSource(options Options) (string, error) {
+	return moduleSourceForImportPaths(appBackendImportPaths(options))
+}
+
+func moduleSourceForImportPaths(importPaths map[string]bool) (string, error) {
 	version := gowdkRuntimeModuleVersion()
 	if version == "" {
 		version = "v0.0.0"
@@ -49,10 +53,10 @@ func moduleSource(options Options) (string, error) {
 		// require/replace, so the generated app would otherwise fail to build
 		// later with an opaque "cannot find package" error. When the app imports
 		// nothing app-owned, the module is not needed and the failure is ignored.
-		if appHasLocalModuleImports(options) {
+		if importPathsHasLocalModuleImports(importPaths) {
 			return "", fmt.Errorf("cannot determine the app Go module for generated app imports: %w", err)
 		}
-	} else if appModule.Path != gowdkRuntimeModulePath && optionsUsesModuleImports(options, appModule.Path) {
+	} else if appModule.Path != gowdkRuntimeModulePath && importPathsUseModule(importPaths, appModule.Path) {
 		lines = append(lines,
 			"",
 			"require "+appModule.Path+" v0.0.0",
@@ -136,7 +140,11 @@ func goListModuleError(err error) error {
 // runtime module), which is exactly the case that needs the main module's
 // require/replace lines.
 func appHasLocalModuleImports(options Options) bool {
-	for path := range appBackendImportPaths(options) {
+	return importPathsHasLocalModuleImports(appBackendImportPaths(options))
+}
+
+func importPathsHasLocalModuleImports(importPaths map[string]bool) bool {
+	for path := range importPaths {
 		if isLocalModuleImportPath(path) {
 			return true
 		}
@@ -158,11 +166,15 @@ func isLocalModuleImportPath(path string) bool {
 }
 
 func optionsUsesModuleImports(options Options, modulePath string) bool {
+	return importPathsUseModule(appBackendImportPaths(options), modulePath)
+}
+
+func importPathsUseModule(importPaths map[string]bool, modulePath string) bool {
 	modulePath = strings.TrimRight(strings.TrimSpace(modulePath), "/")
 	if modulePath == "" {
 		return false
 	}
-	for importPath := range appBackendImportPaths(options) {
+	for importPath := range importPaths {
 		if importPath == modulePath || strings.HasPrefix(importPath, modulePath+"/") {
 			return true
 		}

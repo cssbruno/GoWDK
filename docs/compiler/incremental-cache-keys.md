@@ -61,8 +61,8 @@ The current implementation keeps the existing content-hash input snapshot for
   or transitively through another component;
 - changed layout sources render pages that use the layout or a child layout that
   inherits from it;
-- added, removed, config, generated app, binary, WASM, backend, and configured
-  target changes still fall back to the full build path.
+- added, removed, config, generated app, binary, WASM, backend, contract role,
+  and configured target changes still fall back to the full build path.
 
 When `--timings` is enabled, incremental rebuilds write the same timing sidecar
 as normal builds and include counters for input changes, affected pages,

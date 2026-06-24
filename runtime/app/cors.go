@@ -190,6 +190,7 @@ func (policy corsPolicy) writePreflight(writer http.ResponseWriter, request *htt
 		return false
 	}
 	policy.writeSharedHeaders(writer, origin)
+	addVaryHeader(writer.Header(), "Access-Control-Request-Method", "Access-Control-Request-Headers")
 	if len(policy.allowedMethods) > 0 {
 		writer.Header().Set("Access-Control-Allow-Methods", strings.Join(policy.allowedMethods, ", "))
 	} else {
@@ -263,13 +264,39 @@ func requestedCORSHeadersAllowed(header string, allowed map[string]bool) ([]stri
 	return requested, true
 }
 
-func addVaryHeader(header http.Header, value string) {
+func addVaryHeader(header http.Header, values ...string) {
+	if header == nil {
+		return
+	}
+	seen := map[string]bool{}
 	for _, existing := range header.Values("Vary") {
 		for _, part := range strings.Split(existing, ",") {
-			if strings.EqualFold(strings.TrimSpace(part), value) {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			if part == "*" {
 				return
 			}
+			seen[strings.ToLower(part)] = true
 		}
 	}
-	header.Add("Vary", value)
+	missing := make([]string, 0, len(values))
+	for _, value := range values {
+		for _, part := range strings.Split(value, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			key := strings.ToLower(part)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			missing = append(missing, textproto.CanonicalMIMEHeaderKey(part))
+		}
+	}
+	if len(missing) > 0 {
+		header.Add("Vary", strings.Join(missing, ", "))
+	}
 }

@@ -27,3 +27,24 @@ view {
 		t.Fatalf("unexpected edits: %#v", edits)
 	}
 }
+
+func TestEndpointHeaderFixQuotesRouteSafely(t *testing.T) {
+	edits, err := Edits(diagnostics.Fix{Title: "Replace endpoint", Rewriter: diagnostics.FixEndpointHeaderFromMessage}, `package app
+
+page home
+route "/quote\"here"
+
+act Submit {
+}
+`, Diagnostic{
+		Code:    "old_action_block_syntax",
+		Message: `line 6: old action block syntax is not supported; use ` + "`" + `act Submit POST "<path>"` + "`" + ` and move behavior to Go`,
+		Range:   Range{Start: Position{Line: 6, Column: 1}, End: Position{Line: 6, Column: 13}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(edits) != 1 || edits[0].NewText != `act Submit POST "/quote\"here"` {
+		t.Fatalf("unexpected edits: %#v", edits)
+	}
+}

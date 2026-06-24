@@ -2,6 +2,7 @@ package diagnosticfix
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/diagnostics"
@@ -124,7 +125,11 @@ func pageRoute(source string) (string, bool) {
 		}
 		route := strings.TrimSpace(routeText)
 		if len(route) >= 2 && route[0] == '"' && route[len(route)-1] == '"' {
-			return strings.Trim(route, `"`), true
+			unquoted, err := strconv.Unquote(route)
+			if err != nil {
+				return "", false
+			}
+			return unquoted, true
 		}
 	}
 	return "", false
@@ -134,7 +139,7 @@ func quoteRoute(route string) string {
 	if strings.TrimSpace(route) == "" {
 		route = "/"
 	}
-	return `"` + route + `"`
+	return strconv.Quote(route)
 }
 
 // MissingUseAlias extracts the missing GOWDK use alias from a diagnostic.

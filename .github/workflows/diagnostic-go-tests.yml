@@ -1,0 +1,40 @@
+name: Diagnostic Go tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  root-module:
+    name: Root module diagnostic
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go 1.26.4
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: true
+
+      - name: Run root module with concise failure output
+        shell: bash
+        run: |
+          set +e
+          go test ./... > "${RUNNER_TEMP}/gowdk-root-tests.log" 2>&1
+          status=$?
+          tail -n 300 "${RUNNER_TEMP}/gowdk-root-tests.log"
+          exit "$status"
+
+      - name: Upload failure log
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: root-module-test-log
+          path: ${{ runner.temp }}/gowdk-root-tests.log
+          retention-days: 3

@@ -1,5 +1,5 @@
 # Auto-applies existing repo labels to PRs based on changed paths.
-# Format: actions/labeler@v5. Labels must already exist in the repo (they do).
+# Format: actions/labeler@v6. Labels must already exist in the repo (they do).
 # Multiple labels may apply to one PR (e.g. a runtime/api change -> runtime + API).
 
 parser:

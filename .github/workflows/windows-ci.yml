@@ -1,0 +1,73 @@
+name: Windows CLI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-cli:
+    name: Windows CLI and focused tests
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go 1.26.4
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: true
+
+      - name: Run Windows-compatible focused tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          go version
+          go env GOVERSION
+          go test ./runtime/app ./internal/project ./internal/lang
+          go test ./cmd/gowdk -run 'Test(BuildCommandWritesIndexHTML|CheckCommandLoadsExplicitEnvFile|CheckDoesNotRequireRuntimeSecretsAndEnvCheckDoes|CheckAutomaticallyUsesStandaloneModeWithoutProjectConfig|ExplicitStandaloneCheckDoesNotExecuteProjectConfig|ModifyDevRuntimeProxyResponse.*|LiveReloadBrokerNotifyIsNoOpOnNilBroker)$'
+
+      - name: Build and smoke the CLI from a spaced temp path
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $smokeRoot = Join-Path $env:RUNNER_TEMP 'gowdk windows smoke'
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $smokeRoot
+          New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null
+
+          $cli = Join-Path $smokeRoot 'gowdk.exe'
+          go build -trimpath -o $cli ./cmd/gowdk
+          if (-not (Test-Path $cli)) { throw 'gowdk.exe was not created' }
+
+          & $cli version --json | Out-Null
+          $project = Join-Path $smokeRoot 'sample project'
+          & $cli init --template minimal $project
+
+          $env:GOWDK_WINDOWS_SMOKE = 'present'
+          Push-Location $project
+          try {
+            & $cli check
+            & $cli build
+            $manifest = Get-ChildItem -Path $project -Filter 'gowdk-routes.json' -Recurse | Select-Object -First 1
+            if ($null -eq $manifest) { throw 'build did not produce gowdk-routes.json' }
+          } finally {
+            Pop-Location
+          }
+
+      - name: Verify loopback listener allocation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+          $listener.Start()
+          try {
+            $port = ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
+            if ($port -le 0) { throw 'failed to allocate a loopback listener port' }
+            Write-Host "allocated loopback port $port"
+          } finally {
+            $listener.Stop()
+          }

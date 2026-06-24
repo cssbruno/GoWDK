@@ -33,14 +33,16 @@ supplied. It reads literal `Source.Include`, `Source.Exclude`, and
 patterns and module source patterns are additive when no module is selected; a
 name-only module defaults to `<module-name>/**/*.gwdk`.
 `Build.Targets` can declare selected modules, optional output dirs, generated
-app dirs, and binary paths for user-owned deployment workflows. Target `Output`
-defaults to `.gowdk/output/<target-name>` when omitted. With targets configured,
-`gowdk build` runs all targets and `gowdk build --target <name>` runs selected
-targets. `gowdk build --module <name>` remains available for ad hoc builds, and
-the flag may be repeated or comma-separated. The selected modules define what
-gets emitted to `--out`, copied into `--app`, and embedded into `--bin`. When
-the loaded config has no root or module include, discovery falls back to
-`**/*.gwdk` and an explicit `--out` directory.
+app dirs, binary paths, backend-only outputs, and contract worker/cron role
+outputs for user-owned deployment workflows. Target `Output` defaults to
+`.gowdk/output/<target-name>` when omitted. With targets configured, `gowdk
+build` runs all targets and `gowdk build --target <name>` runs selected targets.
+`gowdk build --module <name>` remains available for ad hoc builds, and the flag
+may be repeated or comma-separated. The selected modules define what gets
+emitted to `--out`, copied into `--app`, and embedded into `--bin`. Worker and
+cron role outputs are selected from scanned contract metadata and configured
+role settings. When the loaded config has no root or module include, discovery
+falls back to `**/*.gwdk` and an explicit `--out` directory.
 
 `.gwdk` files are selected by source discovery, explicit CLI paths, or selected
 modules. Go `import` declarations inside `.gwdk` files import normal Go

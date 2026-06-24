@@ -16,12 +16,11 @@ worker processes without turning browser UI events into trusted backend facts.
 - Let domain events explicitly invalidate bound queries for generated realtime
   refresh without inferring backend behavior from handler bodies.
 - Let worker and cron roles run the same registrations from user-owned Go
-  commands or generated helper APIs.
+  commands, generated helper APIs, or generated role binaries.
 - Provide CLI list, trace, and graph views over scanned contract metadata.
 
 ## Non-Goals
 
-- Generate separate worker or cron binaries as part of the runtime contract.
 - Treat browser UI events as backend events.
 - Add a mandatory broker, queue, database, or realtime dependency to the root
   module.
@@ -44,8 +43,9 @@ worker processes without turning browser UI events into trusted backend facts.
 3. Optionally register `RegisterInvalidation[event, query]` when a domain event
    should refresh query-owned UI regions.
 4. Build a generated app and optionally register a command event sink.
-5. Run subscribers locally, through an outbox/broker worker, or through cron
-   role job execution from user-owned Go.
+5. Run subscribers locally, through an outbox/broker worker, through cron role
+   job execution from user-owned Go, or through generated worker/cron role
+   binaries.
 6. Inspect registrations with `gowdk contracts`, `gowdk list`, `gowdk graph`,
    and `gowdk trace`.
 
@@ -62,6 +62,8 @@ worker processes without turning browser UI events into trusted backend facts.
   configurable nacked-batch backoff.
 - Generated app packages expose `RegisterContractEventSink`,
   `NewContractRegistry`, and worker replay helpers for event sources.
+- Build targets can emit standalone worker and cron role binaries without
+  adding broker or scheduler dependencies to the root module.
 - CLI contract reports scan registrations, roles, command emissions, event
   subscribers, jobs, diagnostics, graph, and trace output.
 - Contract scanning records explicit domain-event to query invalidation edges,
@@ -84,6 +86,7 @@ worker processes without turning browser UI events into trusted backend facts.
 - [x] `go test ./runtime/contracts`
 - [x] `go test ./internal/appgen`
 - [x] `go test ./internal/contractscan ./internal/buildgen ./internal/clientrt`
+- [x] `go test ./internal/appgen -run 'TestGenerateContract|TestBuildBinaryCompilesGeneratedApp'`
 - [x] `go run ./cmd/gowdk build --config examples/contracts/gowdk.config.go --out /tmp/gowdk-contracts-build --app /tmp/gowdk-contracts-app --bin /tmp/gowdk-contracts-site examples/contracts/patients.page.gwdk`
 
 ## Edge Cases

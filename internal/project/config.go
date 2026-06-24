@@ -649,6 +649,10 @@ func parseBuildConfig(expression ast.Expr) (gowdk.BuildConfig, bool) {
 			build.Stylesheets = parseStylesheets(field.Value)
 		case "Scripts":
 			build.Scripts = parseScripts(field.Value)
+		case "Worker":
+			build.Worker = parseContractWorkerConfig(field.Value)
+		case "Cron":
+			build.Cron = parseContractCronConfig(field.Value)
 		case "Targets":
 			build.Targets = parseBuildTargets(field.Value)
 		}
@@ -818,7 +822,7 @@ func parseBuildTargets(expression ast.Expr) []gowdk.BuildTargetConfig {
 	var targets []gowdk.BuildTargetConfig
 	for _, element := range literal.Elts {
 		target := parseBuildTarget(element)
-		if target.Name == "" && len(target.Modules) == 0 && target.Output == "" && target.App == "" && target.Binary == "" && target.WASM == "" && target.BackendApp == "" && target.BackendBinary == "" && len(target.DeployRecipes) == 0 {
+		if target.Name == "" && len(target.Modules) == 0 && target.Output == "" && target.App == "" && target.Binary == "" && target.WASM == "" && target.BackendApp == "" && target.BackendBinary == "" && target.WorkerApp == "" && target.WorkerBinary == "" && target.CronApp == "" && target.CronBinary == "" && len(target.DeployRecipes) == 0 {
 			continue
 		}
 		targets = append(targets, target)
@@ -851,11 +855,93 @@ func parseBuildTarget(expression ast.Expr) gowdk.BuildTargetConfig {
 			target.BackendApp = parseString(field.Value)
 		case "BackendBinary":
 			target.BackendBinary = parseString(field.Value)
+		case "WorkerApp":
+			target.WorkerApp = parseString(field.Value)
+		case "WorkerBinary":
+			target.WorkerBinary = parseString(field.Value)
+		case "Worker":
+			target.Worker = parseContractWorkerConfig(field.Value)
+		case "CronApp":
+			target.CronApp = parseString(field.Value)
+		case "CronBinary":
+			target.CronBinary = parseString(field.Value)
+		case "Cron":
+			target.Cron = parseContractCronConfig(field.Value)
 		case "DeployRecipes":
 			target.DeployRecipes = parseStringList(field.Value)
 		}
 	}
 	return target
+}
+
+func parseContractWorkerConfig(expression ast.Expr) gowdk.ContractWorkerConfig {
+	fields, ok := configLiteralFields(expression)
+	if !ok {
+		return gowdk.ContractWorkerConfig{}
+	}
+	var config gowdk.ContractWorkerConfig
+	for _, field := range fields {
+		switch field.Name {
+		case "EventSource":
+			config.EventSource, _ = parseServiceRef(field.Value)
+		case "SeenStore":
+			config.SeenStore, _ = parseServiceRef(field.Value)
+		case "Backoff":
+			config.Backoff, _ = parseServiceRef(field.Value)
+		}
+	}
+	return config
+}
+
+func parseContractCronConfig(expression ast.Expr) gowdk.ContractCronConfig {
+	fields, ok := configLiteralFields(expression)
+	if !ok {
+		return gowdk.ContractCronConfig{}
+	}
+	var config gowdk.ContractCronConfig
+	for _, field := range fields {
+		if field.Name == "Jobs" {
+			config.Jobs = parseContractCronJobs(field.Value)
+		}
+	}
+	return config
+}
+
+func parseContractCronJobs(expression ast.Expr) []gowdk.ContractCronJobConfig {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return nil
+	}
+	jobs := make([]gowdk.ContractCronJobConfig, 0, len(literal.Elts))
+	for _, element := range literal.Elts {
+		job := parseContractCronJob(element)
+		if job.Type == "" && job.Schedule == "" && job.OverlapPolicy == "" && job.MissedRunPolicy == "" {
+			continue
+		}
+		jobs = append(jobs, job)
+	}
+	return jobs
+}
+
+func parseContractCronJob(expression ast.Expr) gowdk.ContractCronJobConfig {
+	fields, ok := configLiteralFields(expression)
+	if !ok {
+		return gowdk.ContractCronJobConfig{}
+	}
+	var job gowdk.ContractCronJobConfig
+	for _, field := range fields {
+		switch field.Name {
+		case "Type":
+			job.Type = parseString(field.Value)
+		case "Schedule":
+			job.Schedule = parseString(field.Value)
+		case "OverlapPolicy":
+			job.OverlapPolicy = parseString(field.Value)
+		case "MissedRunPolicy":
+			job.MissedRunPolicy = parseString(field.Value)
+		}
+	}
+	return job
 }
 
 func parseStringMap(expression ast.Expr) map[string]string {

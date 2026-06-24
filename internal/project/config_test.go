@@ -116,6 +116,15 @@ var Config = gowdk.Config{
 			{Src: "/assets/app.js", Type: "module"},
 			{Src: "/assets/legacy.js"},
 		},
+		Worker: gowdk.ContractWorkerConfig{
+			EventSource: gowdk.ServiceRef{ImportPath: "example.com/site/defaults", Function: "EventSource"},
+		},
+		Cron: gowdk.ContractCronConfig{Jobs: []gowdk.ContractCronJobConfig{{
+			Type: "patients.DefaultSync",
+			Schedule: "@every 1h",
+			OverlapPolicy: "skip",
+			MissedRunPolicy: "skip",
+		}}},
 		Targets: []gowdk.BuildTargetConfig{
 			{
 				Name: "admin",
@@ -124,6 +133,21 @@ var Config = gowdk.Config{
 				App: ".gowdk/admin",
 				Binary: "bin/admin",
 				WASM: "bin/admin.wasm",
+				WorkerApp: ".gowdk/admin-worker",
+				WorkerBinary: "bin/admin-worker",
+				Worker: gowdk.ContractWorkerConfig{
+					EventSource: gowdk.ServiceRef{ImportPath: "example.com/site/workers", Function: "EventSource"},
+					SeenStore: gowdk.ServiceRef{ImportPath: "example.com/site/workers", Function: "SeenStore"},
+					Backoff: gowdk.ServiceRef{ImportPath: "example.com/site/workers", Function: "Backoff"},
+				},
+				CronApp: ".gowdk/admin-cron",
+				CronBinary: "bin/admin-cron",
+				Cron: gowdk.ContractCronConfig{Jobs: []gowdk.ContractCronJobConfig{{
+					Type: "patients.SyncPatients",
+					Schedule: "@once",
+					OverlapPolicy: "skip",
+					MissedRunPolicy: "skip",
+				}}},
 				DeployRecipes: []string{"systemd", "caddy"},
 			},
 			{
@@ -238,11 +262,23 @@ var Config = gowdk.Config{
 	if len(config.Build.Scripts) != 2 || config.Build.Scripts[0].Src != "/assets/app.js" || config.Build.Scripts[0].Type != "module" || config.Build.Scripts[1].Src != "/assets/legacy.js" || config.Build.Scripts[1].Type != "" {
 		t.Fatalf("unexpected scripts: %#v", config.Build.Scripts)
 	}
+	if config.Build.Worker.EventSource.ImportPath != "example.com/site/defaults" || config.Build.Worker.EventSource.Function != "EventSource" {
+		t.Fatalf("unexpected build worker config: %#v", config.Build.Worker)
+	}
+	if len(config.Build.Cron.Jobs) != 1 || config.Build.Cron.Jobs[0].Type != "patients.DefaultSync" || config.Build.Cron.Jobs[0].Schedule != "@every 1h" || config.Build.Cron.Jobs[0].OverlapPolicy != "skip" || config.Build.Cron.Jobs[0].MissedRunPolicy != "skip" {
+		t.Fatalf("unexpected build cron config: %#v", config.Build.Cron)
+	}
 	if len(config.Build.Targets) != 2 {
 		t.Fatalf("unexpected build targets: %#v", config.Build.Targets)
 	}
 	if config.Build.Targets[0].Name != "admin" || config.Build.Targets[0].Output != "dist/admin" || config.Build.Targets[0].App != ".gowdk/admin" || config.Build.Targets[0].Binary != "bin/admin" || config.Build.Targets[0].WASM != "bin/admin.wasm" {
 		t.Fatalf("unexpected admin build target: %#v", config.Build.Targets[0])
+	}
+	if config.Build.Targets[0].WorkerApp != ".gowdk/admin-worker" || config.Build.Targets[0].WorkerBinary != "bin/admin-worker" || config.Build.Targets[0].Worker.EventSource.ImportPath != "example.com/site/workers" || config.Build.Targets[0].Worker.EventSource.Function != "EventSource" || config.Build.Targets[0].Worker.SeenStore.Function != "SeenStore" || config.Build.Targets[0].Worker.Backoff.Function != "Backoff" {
+		t.Fatalf("unexpected admin worker target: %#v", config.Build.Targets[0])
+	}
+	if config.Build.Targets[0].CronApp != ".gowdk/admin-cron" || config.Build.Targets[0].CronBinary != "bin/admin-cron" || len(config.Build.Targets[0].Cron.Jobs) != 1 || config.Build.Targets[0].Cron.Jobs[0].Type != "patients.SyncPatients" || config.Build.Targets[0].Cron.Jobs[0].Schedule != "@once" || config.Build.Targets[0].Cron.Jobs[0].OverlapPolicy != "skip" || config.Build.Targets[0].Cron.Jobs[0].MissedRunPolicy != "skip" {
+		t.Fatalf("unexpected admin cron target: %#v", config.Build.Targets[0])
 	}
 	if len(config.Build.Targets[0].Modules) != 1 || config.Build.Targets[0].Modules[0] != "admin" {
 		t.Fatalf("unexpected admin target modules: %#v", config.Build.Targets[0].Modules)

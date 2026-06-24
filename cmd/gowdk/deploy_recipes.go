@@ -23,6 +23,8 @@ type deploymentRecipeRequest struct {
 	OutputDir         string
 	BinaryPath        string
 	BackendBinaryPath string
+	WorkerBinaryPath  string
+	CronBinaryPath    string
 	Recipes           []string
 }
 
@@ -105,7 +107,13 @@ func deploymentRecipeBinaryPath(request deploymentRecipeRequest) string {
 	if strings.TrimSpace(request.BinaryPath) != "" {
 		return request.BinaryPath
 	}
-	return request.BackendBinaryPath
+	if strings.TrimSpace(request.BackendBinaryPath) != "" {
+		return request.BackendBinaryPath
+	}
+	if strings.TrimSpace(request.WorkerBinaryPath) != "" {
+		return request.WorkerBinaryPath
+	}
+	return request.CronBinaryPath
 }
 
 func writeStaticRecipe(outputDir string) (deploymentRecipeArtifact, error) {
@@ -140,7 +148,7 @@ Local smoke test:
 
 func writeSystemdRecipe(binaryPath string) (deploymentRecipeArtifact, error) {
 	if strings.TrimSpace(binaryPath) == "" {
-		return deploymentRecipeArtifact{}, fmt.Errorf("deploy recipe systemd requires --bin <file> or --backend-bin <file>")
+		return deploymentRecipeArtifact{}, fmt.Errorf("deploy recipe systemd requires --bin <file>, --backend-bin <file>, --worker-bin <file>, or --cron-bin <file>")
 	}
 	absoluteBinaryPath, err := filepath.Abs(binaryPath)
 	if err != nil {

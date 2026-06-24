@@ -466,6 +466,8 @@ type BuildConfig struct {
 	AllowMissingBackend bool
 	Stylesheets         []Stylesheet
 	Scripts             []Script
+	Worker              ContractWorkerConfig
+	Cron                ContractCronConfig
 	Targets             []BuildTargetConfig
 }
 
@@ -654,7 +656,39 @@ type BuildTargetConfig struct {
 	WASM          string
 	BackendApp    string
 	BackendBinary string
+	WorkerApp     string
+	WorkerBinary  string
+	Worker        ContractWorkerConfig
+	CronApp       string
+	CronBinary    string
+	Cron          ContractCronConfig
 	DeployRecipes []string
+}
+
+// ContractWorkerConfig controls generated standalone contract worker targets.
+// EventSource is required and must name a function returning
+// (contracts.EventSource, error). SeenStore and Backoff are optional provider
+// hooks returning (contracts.SeenStore, error) and
+// (contracts.EventWorkerBackoff, error).
+type ContractWorkerConfig struct {
+	EventSource ServiceRef
+	SeenStore   ServiceRef
+	Backoff     ServiceRef
+}
+
+// ContractCronConfig controls generated standalone scheduled job targets.
+type ContractCronConfig struct {
+	Jobs []ContractCronJobConfig
+}
+
+// ContractCronJobConfig declares one generated cron role job. Type accepts the
+// scanned job type name, package-qualified name, or full import-path-qualified
+// name. Schedule currently supports @once and @every <duration>.
+type ContractCronJobConfig struct {
+	Type            string
+	Schedule        string
+	OverlapPolicy   string
+	MissedRunPolicy string
 }
 
 // CSSConfig controls discovered CSS inputs and page CSS output.

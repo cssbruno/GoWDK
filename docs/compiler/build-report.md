@@ -84,6 +84,12 @@ Current report events include:
   the generated app denies by default.
 - `structured_data`: emitted for each page that declares supported `jsonld`
   metadata. The event records the page, route, schema kind list, and count.
+- `contract_role_app_generated`: emitted when a worker or cron role app is
+  generated, including the role and generated main path.
+- `contract_role_included`: emitted once per contract included in a generated
+  role app.
+- `contract_role_binary_built`: emitted when a worker or cron role binary is
+  compiled.
 
 ## CLI Debug Output
 
@@ -128,7 +134,9 @@ a separate sidecar:
 Current phases include `config_load`, `source_discovery`, `parse_lower`,
 `ir_assembly`, `go_binding`, `ir_validation`, `contract_validation`,
 `output_plan_writes`, `app_generation`, `binary_build`, `wasm_build`,
-`backend_app_generation`, and `backend_binary_build` when those paths run.
+`backend_app_generation`, `backend_binary_build`, `worker_app_generation`,
+`worker_binary_build`, `cron_app_generation`, and `cron_binary_build` when
+those paths run.
 
 `gowdk dev` incremental SPA rebuilds reuse the same sidecar when `--timings` is
 forwarded in the build flags. Incremental counters include

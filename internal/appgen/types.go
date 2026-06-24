@@ -16,6 +16,9 @@ type Result struct {
 	OutputDir   string
 	Files       []string
 	BinaryPath  string
+	Role        string
+	Contracts   []string
+	Jobs        []string
 }
 
 // Options configures generated app output.

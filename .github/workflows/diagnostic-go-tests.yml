@@ -8,9 +8,21 @@ permissions:
   contents: read
 
 jobs:
-  root-module:
-    name: Root module diagnostic
+  changed-packages:
+    name: Diagnostic ${{ matrix.id }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: runtime-app
+            package: ./runtime/app
+          - id: project
+            package: ./internal/project
+          - id: language
+            package: ./internal/lang
+          - id: cli
+            package: ./cmd/gowdk
 
     steps:
       - name: Check out repository
@@ -22,19 +34,23 @@ jobs:
           go-version: '1.26.4'
           cache: true
 
-      - name: Run root module with concise failure output
+      - name: Run package with concise failure output
         shell: bash
+        env:
+          TEST_PACKAGE: ${{ matrix.package }}
+          TEST_ID: ${{ matrix.id }}
         run: |
           set +e
-          go test ./... > "${RUNNER_TEMP}/gowdk-root-tests.log" 2>&1
+          log="${RUNNER_TEMP}/gowdk-${TEST_ID}-tests.log"
+          go test -count=1 "${TEST_PACKAGE}" > "${log}" 2>&1
           status=$?
-          tail -n 300 "${RUNNER_TEMP}/gowdk-root-tests.log"
-          exit "$status"
+          tail -n 300 "${log}"
+          exit "${status}"
 
       - name: Upload failure log
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: root-module-test-log
-          path: ${{ runner.temp }}/gowdk-root-tests.log
+          name: ${{ matrix.id }}-test-log
+          path: ${{ runner.temp }}/gowdk-${{ matrix.id }}-tests.log
           retention-days: 3

@@ -153,6 +153,11 @@ Start with:
 
 Use Playwright assertions or an accessibility scanner in app tests. GOWDK
 compiler diagnostics are a first pass, not a replacement for browser checks.
+The compiler warns only on literal issues it can prove, such as missing image
+alt text, duplicate literal IDs, unresolved literal ARIA/label references,
+unsupported ARIA names, custom click targets without keyboard semantics,
+unnamed controls or explicit landmarks, positive `tabindex`, and focusable
+elements hidden with `aria-hidden="true"`.
 
 ## Performance Smoke
 

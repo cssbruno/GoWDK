@@ -228,7 +228,18 @@ default locale on the original page route while prefixing other locales.
 Localized build output passes the active locale to Go build helpers through
 `gowdk.BuildParams.Locale` and `BuildParams.LocaleCode()`. Generated
 request-time SSR route handlers attach the same locale to
-`runtime/app.Locale(ctx)`. Typed message catalogs live in `runtime/i18n`.
+`runtime/app.Locale(ctx)`. Backend endpoints keep their declared paths; pass
+locale explicitly through normal app-owned request data when an action, API,
+fragment, command, or query needs endpoint-local locale policy.
+
+Typed message catalogs live in `runtime/i18n`. The package provides:
+
+- `Catalog` and `Bundle` for typed key lookup and fallback.
+- `MessageReference`, `Bundle.Check`, and `Bundle.Template` for deterministic
+  catalog completeness reports and starter templates in Go tests.
+- `FormatPlural`, `FormatNumber`, `FormatDate`, and `FormatTime` for bounded,
+  dependency-free formatting. These helpers are deterministic core helpers, not
+  a CLDR or ICU MessageFormat replacement.
 
 ## Generated API CORS
 

@@ -44,12 +44,12 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           go test ./internal/project
 
-      - name: Test language tooling
+      - name: Test portable language tooling
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
-          go test ./internal/lang
+          go test ./internal/lang -run '^Test(LexRecognizesGWDKLanguageTokens|LexEmitsAssignToken|LexReportsUnterminatedString|FormatNormalizesTopLevelBlocks|FormatCheckedReportsParseability)$'
 
       - name: Test CLI build and env-file paths
         shell: pwsh

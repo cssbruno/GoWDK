@@ -40,6 +40,17 @@ func registerMiddlewareDecl() ast.Decl {
 	})
 }
 
+func applyRegisteredMiddlewaresExpr(handler ast.Expr) ast.Expr {
+	return &ast.CallExpr{
+		Fun: sel("gowdkruntime", "ApplyMiddlewares"),
+		Args: []ast.Expr{
+			handler,
+			call(id("registeredMiddlewares")),
+		},
+		Ellipsis: token.Pos(1),
+	}
+}
+
 func registeredMiddlewaresDecl() ast.Decl {
 	return funcDecl("registeredMiddlewares", nil, []*ast.Field{
 		{Type: &ast.ArrayType{Elt: sel("gowdkruntime", "Middleware")}},

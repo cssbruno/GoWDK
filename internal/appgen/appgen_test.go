@@ -105,7 +105,10 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 		"func configuredServices() ([]gowdkruntime.Service, error)",
 		"func RegisterMiddleware(middleware gowdkruntime.Middleware)",
 		`gowdkruntime "github.com/cssbruno/gowdk/runtime/app"`,
-		`mux.Handle("/", gowdkruntime.ApplyMiddlewares(&gowdkruntime.Handler{`,
+		`handler := gowdkruntime.ApplyMiddlewares(mux, registeredMiddlewares()...)`,
+		`Handler: handler, Mux: mux`,
+		`return gowdkruntime.ApplyMiddlewares(mux, registeredMiddlewares()...), nil`,
+		`mux.Handle("/", &gowdkruntime.Handler{`,
 		`Identity: identity,`,
 		`Assets: gowdkruntime.LoadAssetManifest(root),`,
 		`ErrorPages: gowdkruntime.LoadErrorPages(root),`,
@@ -181,8 +184,19 @@ func TestGenerateWritesDynamicSitemapRoute(t *testing.T) {
 	}
 	assertSourceOrder(t, source,
 		`mux.Handle("/sitemap.xml", gowdkseo.Handler`,
-		`mux.Handle("/", gowdkruntime.ApplyMiddlewares`,
+		`mux.Handle("/", &gowdkruntime.Handler`,
 	)
+	for _, want := range []string{
+		`handler := gowdkruntime.ApplyMiddlewares(mux, registeredMiddlewares()...)`,
+		`mux.Handle("/", gowdkruntime.ApplyMiddlewares(routes, registeredMiddlewares()...))`,
+	} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("expected generated middleware pipeline to contain %q:\n%s", want, source)
+		}
+	}
+	if strings.Contains(source, `mux.Handle("/", gowdkruntime.ApplyMiddlewares(&gowdkruntime.Handler`) {
+		t.Fatalf("generated root route must stay unwrapped until the final mux is composed:\n%s", source)
+	}
 }
 
 func TestGenerateWiresConfiguredLifecycleServices(t *testing.T) {

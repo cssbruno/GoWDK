@@ -21,6 +21,7 @@ func appDecl(options Options) ast.Decl {
 			Cond: notNil("err"),
 			Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil"), id("err")}}),
 		},
+		define([]ast.Expr{id("handler")}, applyRegisteredMiddlewaresExpr(id("mux"))),
 		define([]ast.Expr{id("values")}, &ast.CompositeLit{
 			Type: &ast.MapType{Key: id("string"), Value: id("any")},
 		}),
@@ -35,7 +36,7 @@ func appDecl(options Options) ast.Decl {
 		&ast.ReturnStmt{Results: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: &ast.CompositeLit{
 			Type: sel("gowdkruntime", "Application"),
 			Elts: []ast.Expr{
-				keyValue("Handler", id("mux")),
+				keyValue("Handler", id("handler")),
 				keyValue("Mux", id("mux")),
 				keyValue("Identity", id("identity")),
 				keyValue("Services", id("services")),

@@ -13,11 +13,16 @@ locale prefixes, manifests, SSR context, and typed message keys by hand.
 - Generate build-time and request-time page routes once per locale.
 - Pass the active locale into build helpers and SSR route contexts.
 - Provide dependency-free typed Go message catalog helpers.
+- Provide deterministic Go-owned catalog completeness checks and catalog
+  templates for CI.
+- Provide bounded plural, number, date, and time formatting helpers without a
+  mandatory JavaScript or npm runtime.
 - Keep inspection output and SEO sitemap generation locale-aware.
 
 ## Non-Goals
 
-- ICU message format, plural rules, date/number formatting, or extraction.
+- ICU MessageFormat or CLDR completeness.
+- Compiler extraction from arbitrary dynamic Go expressions.
 - Browser language negotiation or automatic redirects.
 - Translating compiler diagnostics.
 - Localizing action, API, fragment, command, or query endpoint paths.
@@ -51,6 +56,10 @@ locale prefixes, manifests, SSR context, and typed message keys by hand.
 - Build helpers must receive `gowdk.BuildParams.Locale`.
 - Generated SSR handlers must attach locale metadata to request contexts.
 - `runtime/i18n` must provide typed catalog and bundle lookup with fallback.
+- `runtime/i18n` must provide deterministic message-reference reports and
+  catalog templates so apps can fail CI on missing or stale translations.
+- `runtime/i18n` must provide bounded plural, number, date, and time helpers
+  for documented locale families with stable fallback behavior.
 
 ### Non-Functional
 
@@ -68,6 +77,9 @@ locale prefixes, manifests, SSR context, and typed message keys by hand.
 - [x] SSR auto-routes include localized paths and runtime locale context.
 - [x] Site-map JSON and SEO sitemap output include localized routes.
 - [x] Typed message catalog helpers are covered by runtime tests.
+- [x] Typed catalog reports/templates can detect missing and unused keys.
+- [x] Bounded plural, number, date, and time formatting helpers are covered by
+      runtime tests.
 - [x] Docs and examples cover the implemented contract.
 
 ## Edge Cases
@@ -75,7 +87,9 @@ locale prefixes, manifests, SSR context, and typed message keys by hand.
 - `OmitDefaultPrefix` keeps the default locale on the original route.
 - Custom `PathPrefix` values can shorten locale URLs, such as `/br`.
 - Dynamic route params are expanded after locale prefixes are chosen.
-- Endpoint routes keep their declared path and are not locale-prefixed.
+- Endpoint routes keep their declared path and are not locale-prefixed. Apps
+  that need endpoint-local locale policy should pass locale explicitly in
+  user-owned request data, headers, sessions, or normal Go handler context.
 
 ## Dependencies
 
@@ -85,6 +99,6 @@ locale prefixes, manifests, SSR context, and typed message keys by hand.
 
 ## Open Questions
 
-- Which message extraction format should be supported first?
+- Which `.gwdk` message-use syntax should feed compiler-owned extraction first?
 - Should a future runtime addon negotiate browser `Accept-Language`?
 - Should endpoint-local locale policies be declared in source or config?

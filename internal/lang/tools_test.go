@@ -494,6 +494,60 @@ view {
 	}
 }
 
+func TestCheckFilesWarnsForAdvancedAccessibilityIssues(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "bad-a11y.cmp.gwdk")
+	writeGWDK(t, path, `package app
+
+component BadA11y
+
+client {
+  fn Save() {
+  }
+}
+
+view {
+  <section>
+    <div id="duplicate">First</div>
+    <div id="duplicate">Second</div>
+    <p aria-describedby="missing-help">Help</p>
+    <label for="missing-input">Missing</label>
+    <div role="madeup">Bad role</div>
+    <div aria-cheked="true">Bad attr</div>
+    <div role="button" aria-checked="true">Bad combo</div>
+    <div g:on:click={Save()}>Custom click</div>
+    <button type="button"><span aria-hidden="true">*</span></button>
+    <section role="region"><p>Unnamed region</p></section>
+    <a href="/docs" tabindex="2">Docs</a>
+    <div tabindex="later">Bad focus</div>
+    <button type="button" aria-hidden="true">Hidden</button>
+  </section>
+}
+`)
+
+	_, diagnostics := CheckFiles(gowdk.Config{}, []string{path})
+	if diagnostics.HasErrors() {
+		t.Fatalf("expected warning-only diagnostics, got %v", diagnostics)
+	}
+	for _, code := range []string{
+		"duplicate_literal_id",
+		"unresolved_accessibility_reference",
+		"invalid_aria_role",
+		"invalid_aria_attribute",
+		"aria_role_attribute_mismatch",
+		"interactive_semantics_missing",
+		"missing_accessible_name",
+		"missing_landmark_name",
+		"positive_tabindex",
+		"invalid_tabindex",
+		"aria_hidden_focusable",
+	} {
+		if !hasDiagnosticCode(diagnostics, code) {
+			t.Fatalf("expected %s warning in %#v", code, diagnostics)
+		}
+	}
+}
+
 func TestCheckFilesAcceptsAccessibleFormAndLinkMarkup(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "signup.page.gwdk")
@@ -514,6 +568,38 @@ view {
     <h1>Sign up</h1>
     <h2>Details</h2>
   </main>
+}
+`)
+
+	_, diagnostics := CheckFiles(gowdk.Config{}, []string{path})
+	if len(diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %#v", diagnostics)
+	}
+}
+
+func TestCheckFilesAcceptsAdvancedAccessibleMarkup(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "good-a11y.cmp.gwdk")
+	writeGWDK(t, path, `package app
+
+component GoodA11y
+
+client {
+  fn Save() {
+  }
+  fn Key() {
+  }
+}
+
+view {
+  <section role="region" aria-label="Filters">
+    <p id="help">We only send updates you request.</p>
+    <label for="email">Email</label>
+    <input id="email" name="email" aria-describedby="help" />
+    <div role="button" tabindex="0" aria-pressed="false" g:on:click={Save()} g:on:keydown={Key()}>Save</div>
+    <button type="button" aria-label="Close"><span aria-hidden="true">*</span></button>
+    <a href="/docs" tabindex="0">Docs</a>
+  </section>
 }
 `)
 

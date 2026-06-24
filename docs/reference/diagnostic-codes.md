@@ -143,7 +143,12 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `page_store_persist_scope_invalid`, `page_store_persist_secret_field`,
   `unknown_component_store`, `view_parse_error`.
 - Accessibility: `missing_img_alt`, `missing_form_label`,
-  `empty_link_text`, `missing_button_type`, `heading_order_skip`.
+  `empty_link_text`, `missing_button_type`, `heading_order_skip`,
+  `duplicate_literal_id`, `unresolved_accessibility_reference`,
+  `invalid_aria_role`, `invalid_aria_attribute`,
+  `aria_role_attribute_mismatch`, `interactive_semantics_missing`,
+  `missing_accessible_name`, `missing_landmark_name`, `invalid_tabindex`,
+  `positive_tabindex`, and `aria_hidden_focusable`.
 - Go blocks and generated app wiring: `invalid_go_block`,
   `go_client_requires_page`, `go_ssr_requires_request_render`,
   `unknown_go_block_target`, `unknown_addon_go_block_target`,

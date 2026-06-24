@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -41,6 +42,33 @@ func TestRunMountsServicesBeforeRun(t *testing.T) {
 	}, RunOptions{ShutdownTimeout: time.Second})
 	if err != nil {
 		t.Fatalf("expected graceful lifecycle run, got %v", err)
+	}
+}
+
+func TestMiddlewareWrappedMuxIncludesRoutesMountedAfterComposition(t *testing.T) {
+	mux := http.NewServeMux()
+	var calls atomic.Int32
+	handler := ApplyMiddlewares(mux, func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			calls.Add(1)
+			response.Header().Set("X-GOWDK-Middleware", "applied")
+			next.ServeHTTP(response, request)
+		})
+	})
+	mux.HandleFunc("/service", func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusNoContent)
+	})
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/service", nil))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
+	}
+	if got := response.Header().Get("X-GOWDK-Middleware"); got != "applied" {
+		t.Fatalf("middleware header = %q, want applied", got)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("middleware calls = %d, want 1", got)
 	}
 }
 

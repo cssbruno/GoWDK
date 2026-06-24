@@ -105,7 +105,10 @@ func TestGenerateWritesEmbeddedSPAApp(t *testing.T) {
 		"func configuredServices() ([]gowdkruntime.Service, error)",
 		"func RegisterMiddleware(middleware gowdkruntime.Middleware)",
 		`gowdkruntime "github.com/cssbruno/gowdk/runtime/app"`,
-		`mux.Handle("/", gowdkruntime.ApplyMiddlewares(&gowdkruntime.Handler{`,
+		`handler := gowdkruntime.ApplyMiddlewares(mux, registeredMiddlewares()...)`,
+		`Handler: handler, Mux: mux`,
+		`return gowdkruntime.ApplyMiddlewares(mux, registeredMiddlewares()...), nil`,
+		`mux.Handle("/", &gowdkruntime.Handler{`,
 		`Identity: identity,`,
 		`Assets: gowdkruntime.LoadAssetManifest(root),`,
 		`ErrorPages: gowdkruntime.LoadErrorPages(root),`,
@@ -181,8 +184,19 @@ func TestGenerateWritesDynamicSitemapRoute(t *testing.T) {
 	}
 	assertSourceOrder(t, source,
 		`mux.Handle("/sitemap.xml", gowdkseo.Handler`,
-		`mux.Handle("/", gowdkruntime.ApplyMiddlewares`,
+		`mux.Handle("/", &gowdkruntime.Handler`,
 	)
+	for _, want := range []string{
+		`handler := gowdkruntime.ApplyMiddlewares(mux, registeredMiddlewares()...)`,
+		`mux.Handle("/", gowdkruntime.ApplyMiddlewares(routes, registeredMiddlewares()...))`,
+	} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("expected generated middleware pipeline to contain %q:\n%s", want, source)
+		}
+	}
+	if strings.Contains(source, `mux.Handle("/", gowdkruntime.ApplyMiddlewares(&gowdkruntime.Handler`) {
+		t.Fatalf("generated root route must stay unwrapped until the final mux is composed:\n%s", source)
+	}
 }
 
 func TestGenerateWiresConfiguredLifecycleServices(t *testing.T) {
@@ -1730,7 +1744,10 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 		`func RegisterMiddleware(middleware gowdkruntime.Middleware)`,
 		`if err := validateEnvContract(); err != nil {`,
 		`backendRouter, err := newBackendRouter()`,
-		`mux.Handle("/", gowdkruntime.ApplyMiddlewares(backendRouter, registeredMiddlewares()...))`,
+		`handler := gowdkruntime.ApplyMiddlewares(mux, registeredMiddlewares()...)`,
+		`return gowdkruntime.ApplyMiddlewares(mux, registeredMiddlewares()...), nil`,
+		`mux.Handle("/", backendRouter)`,
+		`mux.Handle("/", gowdkruntime.ApplyMiddlewares(routes, registeredMiddlewares()...))`,
 		`func validateEnvContract() error`,
 		`value := os.Getenv("GOWDK_TEST_DATABASE_URL")`,
 		`missing = append(missing, "GOWDK_TEST_DATABASE_URL is required but is not set")`,
@@ -1750,6 +1767,9 @@ func TestGenerateBackendAppRegistersBackendRoutes(t *testing.T) {
 	}
 	if strings.Contains(source, `func backend(response http.ResponseWriter, request *http.Request) bool`) {
 		t.Fatalf("expected backend-only app to use BackendRouter instead of generated backend dispatcher:\n%s", source)
+	}
+	if strings.Contains(source, `mux.Handle("/", gowdkruntime.ApplyMiddlewares(backendRouter`) {
+		t.Fatalf("backend-only route mux should stay raw and be wrapped after route graph construction:\n%s", source)
 	}
 }
 
@@ -1860,7 +1880,10 @@ func TestGenerateBackendAppWiresSecurityHeaders(t *testing.T) {
 	source := string(payload)
 	for _, expected := range []string{
 		`"strings"`,
-		`mux.Handle("/", gowdkruntime.ApplyMiddlewares(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {`,
+		`handler := gowdkruntime.ApplyMiddlewares(mux, registeredMiddlewares()...)`,
+		`return gowdkruntime.ApplyMiddlewares(mux, registeredMiddlewares()...), nil`,
+		`mux.Handle("/", http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {`,
+		`mux.Handle("/", gowdkruntime.ApplyMiddlewares(routes, registeredMiddlewares()...))`,
 		`for name, value := range map[string]string{"X-Frame-Options": "DENY"} {`,
 		`if strings.TrimSpace(name) == "" {`,
 		`response.Header().Set(name, value)`,
@@ -1872,6 +1895,9 @@ func TestGenerateBackendAppWiresSecurityHeaders(t *testing.T) {
 	}
 	if strings.Contains(source, `mux.Handle("/", backendRouter)`) {
 		t.Fatalf("backend-only app with configured security headers should wrap the router:\n%s", source)
+	}
+	if strings.Contains(source, `mux.Handle("/", gowdkruntime.ApplyMiddlewares(http.HandlerFunc`) {
+		t.Fatalf("security-header route mux should stay raw and be wrapped after route graph construction:\n%s", source)
 	}
 }
 

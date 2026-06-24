@@ -422,7 +422,15 @@ func handlerDecl() ast.Decl {
 		{Type: sel("http", "Handler")},
 		{Type: id("error")},
 	}, []ast.Stmt{
-		&ast.ReturnStmt{Results: []ast.Expr{call(sel("ServeMux"))}},
+		define([]ast.Expr{id("mux"), id("err")}, call(id("newServeMux"), call(sel("gowdkruntime", "InstanceIdentity")))),
+		&ast.IfStmt{
+			Cond: notNil("err"),
+			Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil"), id("err")}}),
+		},
+		&ast.ReturnStmt{Results: []ast.Expr{
+			applyRegisteredMiddlewaresExpr(id("mux")),
+			id("nil"),
+		}},
 	})
 }
 
@@ -431,7 +439,14 @@ func serveMuxDecl(options Options, embedded bool) ast.Decl {
 		{Type: &ast.StarExpr{X: sel("http", "ServeMux")}},
 		{Type: id("error")},
 	}, []ast.Stmt{
-		&ast.ReturnStmt{Results: []ast.Expr{call(id("newServeMux"), call(sel("gowdkruntime", "InstanceIdentity")))}},
+		define([]ast.Expr{id("routes"), id("err")}, call(id("newServeMux"), call(sel("gowdkruntime", "InstanceIdentity")))),
+		&ast.IfStmt{
+			Cond: notNil("err"),
+			Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil"), id("err")}}),
+		},
+		define([]ast.Expr{id("mux")}, call(sel("http", "NewServeMux"))),
+		exprStmt(call(selExpr(id("mux"), "Handle"), stringLit("/"), applyRegisteredMiddlewaresExpr(id("routes")))),
+		&ast.ReturnStmt{Results: []ast.Expr{id("mux"), id("nil")}},
 	})
 }
 
@@ -468,13 +483,12 @@ func newServeMuxDecl(options Options, embedded bool) ast.Decl {
 		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), id("RealtimeEventsPath"), call(id("realtimeEventsHandler")))))
 	}
 	if embedded {
-		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), stringLit("/"), &ast.CallExpr{
-			Fun: sel("gowdkruntime", "ApplyMiddlewares"),
-			Args: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: &ast.CompositeLit{
+		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), stringLit("/"), &ast.UnaryExpr{
+			Op: token.AND,
+			X: &ast.CompositeLit{
 				Type: sel("gowdkruntime", "Handler"),
 				Elts: embeddedHandlerFields(options, id("identity")),
-			}}, call(id("registeredMiddlewares"))},
-			Ellipsis: token.Pos(1),
+			},
 		})))
 	} else {
 		stmts = append(stmts, exprStmt(call(selExpr(id("mux"), "Handle"), stringLit("/"), backendOnlyHandlerExpr(options))))
@@ -801,11 +815,7 @@ func backendOnlyHandlerExpr(options Options) ast.Expr {
 	if headers := securityHeadersExpr(options); headers != nil {
 		handler = call(sel("http", "HandlerFunc"), backendOnlySecurityHeadersHandlerFunc(handler, headers))
 	}
-	return &ast.CallExpr{
-		Fun:      sel("gowdkruntime", "ApplyMiddlewares"),
-		Args:     []ast.Expr{handler, call(id("registeredMiddlewares"))},
-		Ellipsis: token.Pos(1),
-	}
+	return handler
 }
 
 func backendOnlyBaseHandlerExpr(options Options) ast.Expr {

@@ -32,11 +32,20 @@ if err != nil {
 http.ListenAndServe(":8080", handler)
 ```
 
-Register middleware before calling `Handler()` or `ServeMux()`. Middleware runs
-in registration order; a middleware that does not call `next` owns the response
-and skips generated headers, metrics, static serving, and request-time route
-dispatch for that request. App-owned startup code can still wrap the returned
-handler with ordinary middleware:
+Register middleware before calling `App()`, `Handler()`, or `ServeMux()`.
+Middleware runs in registration order; a middleware that does not call `next`
+owns the response and skips generated headers, metrics, static serving, and
+request-time route dispatch for that request.
+
+`App()` snapshots the registered chain around its raw application mux. Routes
+mounted by lifecycle services before server startup therefore pass through the
+same middleware as health, static, backend, dynamic sitemap, and realtime
+routes. `ServeMux()` mounts the generated route graph behind the same finalized
+wrapper; routes added directly to that returned mux afterward are caller-owned
+and need their own middleware policy.
+
+App-owned startup code can still wrap the returned handler with ordinary
+middleware:
 
 ```go
 handler, err := gowdkapp.Handler()

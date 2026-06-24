@@ -49,16 +49,21 @@ func App() (*gowdkruntime.Application, error) {
 	if err != nil {
 		return nil, err
 	}
+	handler := gowdkruntime.ApplyMiddlewares(mux, registeredMiddlewares()...)
 	values := map[string]any{}
 	values[gowdkruntime.ServiceValueContractRegistry] = ContractRegistry()
 	services, err := configuredServices()
 	if err != nil {
 		return nil, err
 	}
-	return &gowdkruntime.Application{Handler: mux, Mux: mux, Identity: identity, Services: services, Values: values}, nil
+	return &gowdkruntime.Application{Handler: handler, Mux: mux, Identity: identity, Services: services, Values: values}, nil
 }
 func Handler() (http.Handler, error) {
-	return ServeMux()
+	mux, err := newServeMux(gowdkruntime.InstanceIdentity())
+	if err != nil {
+		return nil, err
+	}
+	return gowdkruntime.ApplyMiddlewares(mux, registeredMiddlewares()...), nil
 }
 func newServeMux(identity gowdkruntime.Identity) (*http.ServeMux, error) {
 	if err := loadEnvFile(); err != nil {
@@ -79,11 +84,17 @@ func newServeMux(identity gowdkruntime.Identity) (*http.ServeMux, error) {
 		return nil, err
 	}
 	mux := http.NewServeMux()
-	mux.Handle("/", gowdkruntime.ApplyMiddlewares(&gowdkruntime.Handler{Root: root, Identity: identity, Assets: gowdkruntime.LoadAssetManifest(root), ErrorPages: gowdkruntime.LoadErrorPages(root), Backend: backendRouter.HandlerFunc(), CSRF: csrfTokenSource, SSRExact: ssrExact, SSRDynamic: ssrDynamic, RequestTimeout: gowdkruntime.DefaultRequestTimeout}, registeredMiddlewares()...))
+	mux.Handle("/", &gowdkruntime.Handler{Root: root, Identity: identity, Assets: gowdkruntime.LoadAssetManifest(root), ErrorPages: gowdkruntime.LoadErrorPages(root), Backend: backendRouter.HandlerFunc(), CSRF: csrfTokenSource, SSRExact: ssrExact, SSRDynamic: ssrDynamic, RequestTimeout: gowdkruntime.DefaultRequestTimeout})
 	return mux, nil
 }
 func ServeMux() (*http.ServeMux, error) {
-	return newServeMux(gowdkruntime.InstanceIdentity())
+	routes, err := newServeMux(gowdkruntime.InstanceIdentity())
+	if err != nil {
+		return nil, err
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/", gowdkruntime.ApplyMiddlewares(routes, registeredMiddlewares()...))
+	return mux, nil
 }
 func configuredServices() ([]gowdkruntime.Service, error) {
 	return nil, nil

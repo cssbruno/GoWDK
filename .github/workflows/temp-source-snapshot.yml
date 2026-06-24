@@ -1,0 +1,22 @@
+name: Temporary source snapshot
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Archive source tree
+        run: tar -czf "$RUNNER_TEMP/gowdk-source.tar.gz" --exclude=.git .
+      - name: Upload source tree
+        uses: actions/upload-artifact@v6
+        with:
+          name: gowdk-source-snapshot
+          path: ${{ runner.temp }}/gowdk-source.tar.gz
+          retention-days: 1

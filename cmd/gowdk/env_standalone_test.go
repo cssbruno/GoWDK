@@ -113,7 +113,9 @@ var Config = gowdk.Config{
 func TestCheckAutomaticallyUsesStandaloneModeWithoutProjectConfig(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "home.page.gwdk")
-	writeCLIFile(t, source, `page home
+	writeCLIFile(t, source, `package app
+
+page home
 route "/"
 guard public
 
@@ -154,7 +156,9 @@ view {
 func TestExplicitStandaloneCheckDoesNotExecuteProjectConfig(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "home.page.gwdk")
-	writeCLIFile(t, source, `page home
+	writeCLIFile(t, source, `package app
+
+page home
 route "/"
 guard public
 

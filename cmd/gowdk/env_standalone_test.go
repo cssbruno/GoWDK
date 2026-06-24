@@ -153,6 +153,64 @@ view {
 	})
 }
 
+func TestStandaloneCheckDoesNotFailSSRAddonDiagnostic(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "dashboard.page.gwdk")
+	writeCLIFile(t, source, `package app
+
+page dashboard
+route "/dashboard"
+guard public
+
+server {
+}
+
+view {
+  <main>Dashboard</main>
+}
+`)
+
+	withWorkingDir(t, root, func() {
+		stdout, stderr, err := captureCLIOutput(t, func() error {
+			return run([]string{"check", source})
+		})
+		if err != nil {
+			t.Fatalf("standalone SSR check: err=%v stdout=%q stderr=%q", err, stdout, stderr)
+		}
+		if stdout != "" || !strings.Contains(stderr, "project context required") || !strings.Contains(stderr, "server or Go-block configuration") {
+			t.Fatalf("unexpected standalone SSR output: stdout=%q stderr=%q", stdout, stderr)
+		}
+
+		stdout, stderr, err = captureCLIOutput(t, func() error {
+			return run([]string{"check", "--json", source})
+		})
+		if err != nil || stderr != "" {
+			t.Fatalf("standalone SSR JSON check: err=%v stderr=%q", err, stderr)
+		}
+		var report struct {
+			Mode        string `json:"mode"`
+			Diagnostics []struct {
+				Code     string `json:"code"`
+				Severity string `json:"severity"`
+			} `json:"diagnostics"`
+		}
+		if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+			t.Fatal(err)
+		}
+		if report.Mode != "standalone" {
+			t.Fatalf("unexpected standalone JSON mode: %q", report.Mode)
+		}
+		for _, diagnostic := range report.Diagnostics {
+			if diagnostic.Code == "missing_ssr_addon" {
+				t.Fatalf("standalone JSON still reported missing_ssr_addon: %s", stdout)
+			}
+			if diagnostic.Severity == "error" {
+				t.Fatalf("standalone JSON reported an error diagnostic: %s", stdout)
+			}
+		}
+	})
+}
+
 func TestExplicitStandaloneCheckDoesNotExecuteProjectConfig(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "home.page.gwdk")

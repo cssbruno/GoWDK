@@ -24,6 +24,7 @@ func CheckStandaloneFiles(paths []string) Diagnostics {
 			continue
 		}
 		_, fileDiagnostics := CheckSourceWithOptions(gowdk.Config{}, path, source, CheckOptions{})
+		fileDiagnostics = standaloneSourceDiagnostics(fileDiagnostics)
 		diagnostics = append(diagnostics, fileDiagnostics...)
 
 		sources, parseDiagnostics := ParseBuildFiles([]string{path})
@@ -36,6 +37,25 @@ func CheckStandaloneFiles(paths []string) Diagnostics {
 		}
 	}
 	return diagnostics
+}
+
+func standaloneSourceDiagnostics(input Diagnostics) Diagnostics {
+	if len(input) == 0 {
+		return input
+	}
+	filtered := make(Diagnostics, 0, len(input))
+	for _, diagnostic := range input {
+		switch diagnostic.Code {
+		case "missing_ssr_addon", "missing_realtime_addon":
+			continue
+		default:
+			filtered = append(filtered, diagnostic)
+		}
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	return filtered
 }
 
 // CheckStandaloneJSON returns detached-file diagnostics and explicitly records

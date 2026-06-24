@@ -1,0 +1,59 @@
+name: Apply middleware patch in PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.head_ref == 'codex/generated-middleware-pipeline'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Execute the reviewed patch body
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path('.github/workflows/codex-generated-middleware-patch.yml').read_text().splitlines()
+          start = next(index for index, line in enumerate(source) if line == "          python3 - <<'PY'")
+          end = next(index for index in range(start + 1, len(source)) if source[index] == "          PY")
+          block = [line[10:] if line.startswith('          ') else line for line in source[start:end + 1]]
+
+          gofmt_start = next(index for index in range(end + 1, len(source)) if source[index] == '          gofmt -w \\')
+          gofmt_end = gofmt_start
+          while gofmt_end + 1 < len(source) and source[gofmt_end].rstrip().endswith('\\'):
+              gofmt_end += 1
+          block.extend(line[10:] if line.startswith('          ') else line for line in source[gofmt_start:gofmt_end + 1])
+          Path('/tmp/apply-generated-middleware-patch.sh').write_text('\n'.join(block) + '\n')
+          PY
+          bash /tmp/apply-generated-middleware-patch.sh
+      - name: Regenerate appgen golden output
+        run: go test ./internal/appgen -update
+      - name: Run focused tests
+        run: go test ./internal/appgen ./runtime/app
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git diff --check
+          rm -f \
+            .github/workflows/codex-generated-middleware-patch.yml \
+            .github/workflows/codex-pr-patch.yml \
+            .codex-generated-middleware-trigger
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(appgen): wrap the finalized route graph with middleware"
+          git push origin HEAD:codex/generated-middleware-pipeline

@@ -82,7 +82,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null
 
           $cli = Join-Path $smokeRoot 'gowdk.exe'
-          go build -trimpath -o $cli ./cmd/gowdk
+          go build -buildvcs=false -o $cli ./cmd/gowdk
           if (-not (Test-Path $cli)) { throw 'gowdk.exe was not created' }
 
           & $cli version --json | Out-Null

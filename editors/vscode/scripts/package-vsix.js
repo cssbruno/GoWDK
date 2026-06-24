@@ -12,7 +12,7 @@ for (const file of fs.readdirSync(extensionRoot)) {
   }
 }
 
-const args = ['--yes', '@vscode/vsce', 'package', '--no-dependencies'];
+const args = ['--no-install', 'vsce', 'package', '--no-dependencies'];
 const repository = process.env.GITHUB_REPOSITORY;
 const refName = process.env.GITHUB_REF_NAME;
 

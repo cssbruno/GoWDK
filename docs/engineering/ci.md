@@ -53,6 +53,7 @@ Run the same local checks before handoff when relevant:
 
   ```sh
   scripts/check-root-deps.sh
+  scripts/check-supply-chain-pins.sh
   scripts/test-go-modules.sh
   scripts/vulncheck-go-modules.sh
   go build ./cmd/gowdk

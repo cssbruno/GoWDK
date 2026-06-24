@@ -1,6 +1,7 @@
 package securitymanifest
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cssbruno/gowdk"
@@ -69,6 +70,9 @@ func TestObligationsClassifyStaticAndAppOwned(t *testing.T) {
 		if obligation.Evidence != EvidenceUnverifiedAppOwned || obligation.Owner != ownerAppOwned {
 			t.Fatalf("expected %q unverified app-owned, got %#v", id, obligation)
 		}
+	}
+	if !strings.Contains(sessionManagementDetail(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("auth", gowdk.FeatureAuth)}}), "signed-cookie mode") {
+		t.Fatalf("expected auth addon session detail to name signed-cookie mode")
 	}
 }
 

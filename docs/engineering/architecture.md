@@ -343,7 +343,9 @@ Guard metadata declarations are parsed and exposed in manifest/site-map output.
 redirect/custom-response helpers, and native RBAC resolution for generated
 action, API, fragment, and SSR routes.
 `runtime/auth` defines the thin native RBAC principal/provider contract used for
-generated route access gates. `runtime/ssr` owns guard type aliases for new code; `addons/ssr` re-exports them for existing
+generated route access gates. `addons/auth` adds signed-cookie sessions plus an
+app-owned revocable session-store contract with authorization-version checks;
+generated auth-addon startup remains the signed-cookie convenience baseline. `runtime/ssr` owns guard type aliases for new code; `addons/ssr` re-exports them for existing
 SSR-facing code, but generated action/API/fragment output does not import SSR
 only to run guards. Generated handlers enforce declared guard IDs before
 request-time user logic. Generated app packages with guarded routes use auth

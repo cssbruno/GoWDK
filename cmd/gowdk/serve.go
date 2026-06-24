@@ -18,6 +18,10 @@ import (
 	gowdkroute "github.com/cssbruno/gowdk/runtime/route"
 )
 
+// maxDevRuntimeProxyHTMLInjectionBytes bounds the dev-only reverse-proxy body
+// buffering used to inject live reload and runtime-error overlay scripts.
+const maxDevRuntimeProxyHTMLInjectionBytes int64 = 1 << 20
+
 func serve(args []string) error {
 	dir, addr, err := parseServeOptions(args)
 	if err != nil {
@@ -214,36 +218,7 @@ func devRuntimeProxyHandler(targetAddr string, reload *liveReloadBroker) http.Ha
 		request.Header.Del("Accept-Encoding")
 	}
 	proxy.ModifyResponse = func(response *http.Response) error {
-		runtimeErrorPayload := ""
-		if response.StatusCode >= http.StatusInternalServerError {
-			runtimeErrorPayload = devRuntimeErrorEventData(response.StatusCode)
-			reload.notifyData("runtime-error", runtimeErrorPayload)
-		}
-		if response.Request == nil ||
-			response.Request.Method != http.MethodGet ||
-			response.Header.Get("Content-Encoding") != "" ||
-			!strings.Contains(strings.ToLower(response.Header.Get("Content-Type")), "text/html") {
-			return nil
-		}
-		if response.StatusCode != http.StatusOK && runtimeErrorPayload == "" {
-			return nil
-		}
-		body, err := io.ReadAll(response.Body)
-		if closeErr := response.Body.Close(); err == nil {
-			err = closeErr
-		}
-		if err != nil {
-			return err
-		}
-		if runtimeErrorPayload != "" {
-			body = injectLiveReloadScriptWithInitialOverlay(body, []byte(runtimeErrorPayload))
-		} else {
-			body = injectLiveReloadScript(body)
-		}
-		response.Body = io.NopCloser(bytes.NewReader(body))
-		response.ContentLength = int64(len(body))
-		response.Header.Set("Content-Length", fmt.Sprint(len(body)))
-		return nil
+		return modifyDevRuntimeProxyResponse(response, reload)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path == "/__gowdk/reload" {
@@ -252,6 +227,91 @@ func devRuntimeProxyHandler(targetAddr string, reload *liveReloadBroker) http.Ha
 		}
 		proxy.ServeHTTP(w, request)
 	})
+}
+
+func modifyDevRuntimeProxyResponse(response *http.Response, reload *liveReloadBroker) error {
+	runtimeErrorPayload := ""
+	if response.StatusCode >= http.StatusInternalServerError {
+		runtimeErrorPayload = devRuntimeErrorEventData(response.StatusCode)
+		reload.notifyData("runtime-error", runtimeErrorPayload)
+	}
+	if !devRuntimeProxyCanInject(response, runtimeErrorPayload) {
+		return nil
+	}
+	if response.ContentLength > maxDevRuntimeProxyHTMLInjectionBytes {
+		devRuntimeProxyLogSkippedInjection(response, "content-length")
+		return nil
+	}
+	originalBody := response.Body
+	body, oversized, err := readDevRuntimeProxyHTMLPrefix(originalBody, maxDevRuntimeProxyHTMLInjectionBytes)
+	if err != nil {
+		_ = originalBody.Close()
+		return err
+	}
+	if oversized {
+		response.Body = replayReadCloser{
+			reader: io.MultiReader(bytes.NewReader(body), originalBody),
+			close:  originalBody.Close,
+		}
+		devRuntimeProxyLogSkippedInjection(response, "body-size")
+		return nil
+	}
+	if closeErr := originalBody.Close(); closeErr != nil {
+		return closeErr
+	}
+	if runtimeErrorPayload != "" {
+		body = injectLiveReloadScriptWithInitialOverlay(body, []byte(runtimeErrorPayload))
+	} else {
+		body = injectLiveReloadScript(body)
+	}
+	response.Body = io.NopCloser(bytes.NewReader(body))
+	response.ContentLength = int64(len(body))
+	response.Header.Set("Content-Length", fmt.Sprint(len(body)))
+	return nil
+}
+
+func devRuntimeProxyCanInject(response *http.Response, runtimeErrorPayload string) bool {
+	if response == nil ||
+		response.Body == nil ||
+		response.Request == nil ||
+		response.Request.Method != http.MethodGet ||
+		response.Header.Get("Content-Encoding") != "" ||
+		!strings.Contains(strings.ToLower(response.Header.Get("Content-Type")), "text/html") {
+		return false
+	}
+	return response.StatusCode == http.StatusOK || runtimeErrorPayload != ""
+}
+
+func readDevRuntimeProxyHTMLPrefix(body io.Reader, limit int64) ([]byte, bool, error) {
+	if limit < 0 {
+		limit = 0
+	}
+	payload, err := io.ReadAll(io.LimitReader(body, limit+1))
+	if err != nil {
+		return nil, false, err
+	}
+	return payload, int64(len(payload)) > limit, nil
+}
+
+func devRuntimeProxyLogSkippedInjection(response *http.Response, reason string) {
+	contentLength := response.ContentLength
+	fmt.Fprintf(os.Stderr, "Dev runtime proxy skipped live-reload injection: %s exceeded %d bytes (status %d, content-length %d)\n", reason, maxDevRuntimeProxyHTMLInjectionBytes, response.StatusCode, contentLength)
+}
+
+type replayReadCloser struct {
+	reader io.Reader
+	close  func() error
+}
+
+func (body replayReadCloser) Read(payload []byte) (int, error) {
+	return body.reader.Read(payload)
+}
+
+func (body replayReadCloser) Close() error {
+	if body.close == nil {
+		return nil
+	}
+	return body.close()
 }
 
 func injectLiveReloadScript(html []byte) []byte {

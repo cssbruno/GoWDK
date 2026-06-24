@@ -7534,6 +7534,193 @@ func TestDevRuntimeProxyHandlerInjectsRuntimeErrorOverlay(t *testing.T) {
 	}
 }
 
+func TestDevRuntimeProxyResponseInjectsKnownSmallHTML(t *testing.T) {
+	html := `<!doctype html><html><body><main>Known small</main></body></html>`
+	response := newDevRuntimeProxyTestResponse(http.MethodGet, http.StatusOK, int64(len(html)), "text/html; charset=utf-8", newTrackingReadCloser(strings.NewReader(html), nil))
+
+	if err := modifyDevRuntimeProxyResponse(response, newLiveReloadBroker()); err != nil {
+		t.Fatalf("modifyDevRuntimeProxyResponse: %v", err)
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	if !strings.Contains(text, `<main>Known small</main>`) || !strings.Contains(text, `new EventSource("/__gowdk/reload")`) {
+		t.Fatalf("expected live reload injection in known-small HTML:\n%s", text)
+	}
+	if response.ContentLength != int64(len(body)) || response.Header.Get("Content-Length") != strconv.Itoa(len(body)) {
+		t.Fatalf("expected recomputed content length, got field=%d header=%q body=%d", response.ContentLength, response.Header.Get("Content-Length"), len(body))
+	}
+}
+
+func TestDevRuntimeProxyResponseSkipsKnownOversizedHTML(t *testing.T) {
+	html := `<!doctype html><html><body><main>oversized by header</main></body></html>`
+	body := newTrackingReadCloser(strings.NewReader(html), nil)
+	response := newDevRuntimeProxyTestResponse(http.MethodGet, http.StatusOK, maxDevRuntimeProxyHTMLInjectionBytes+1, "text/html; charset=utf-8", body)
+	response.Header.Set("Content-Length", strconv.FormatInt(maxDevRuntimeProxyHTMLInjectionBytes+1, 10))
+
+	if err := modifyDevRuntimeProxyResponse(response, newLiveReloadBroker()); err != nil {
+		t.Fatalf("modifyDevRuntimeProxyResponse: %v", err)
+	}
+	if body.closed {
+		t.Fatal("expected known-oversized pass-through not to close the original body")
+	}
+	payload, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(payload) != html {
+		t.Fatalf("pass-through body changed:\n%s", payload)
+	}
+	if strings.Contains(string(payload), `new EventSource("/__gowdk/reload")`) {
+		t.Fatalf("oversized HTML should not be modified:\n%s", payload)
+	}
+	if response.ContentLength != maxDevRuntimeProxyHTMLInjectionBytes+1 || response.Header.Get("Content-Length") != strconv.FormatInt(maxDevRuntimeProxyHTMLInjectionBytes+1, 10) {
+		t.Fatalf("content length changed on pass-through: field=%d header=%q", response.ContentLength, response.Header.Get("Content-Length"))
+	}
+}
+
+func TestDevRuntimeProxyResponseInjectsChunkedSmallHTML(t *testing.T) {
+	html := `<!doctype html><html><body><main>Chunked small</main></body></html>`
+	response := newDevRuntimeProxyTestResponse(http.MethodGet, http.StatusOK, -1, "text/html; charset=utf-8", newTrackingReadCloser(strings.NewReader(html), nil))
+
+	if err := modifyDevRuntimeProxyResponse(response, newLiveReloadBroker()); err != nil {
+		t.Fatalf("modifyDevRuntimeProxyResponse: %v", err)
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), `new EventSource("/__gowdk/reload")`) {
+		t.Fatalf("expected injection for chunked-small HTML:\n%s", body)
+	}
+	if response.ContentLength != int64(len(body)) || response.Header.Get("Content-Length") != strconv.Itoa(len(body)) {
+		t.Fatalf("expected content length for modified chunked response, got field=%d header=%q body=%d", response.ContentLength, response.Header.Get("Content-Length"), len(body))
+	}
+}
+
+func TestDevRuntimeProxyResponseSkipsChunkedOversizedHTML(t *testing.T) {
+	html := strings.Repeat("x", int(maxDevRuntimeProxyHTMLInjectionBytes)+1)
+	body := newTrackingReadCloser(strings.NewReader(html), nil)
+	response := newDevRuntimeProxyTestResponse(http.MethodGet, http.StatusOK, -1, "text/html; charset=utf-8", body)
+
+	if err := modifyDevRuntimeProxyResponse(response, newLiveReloadBroker()); err != nil {
+		t.Fatalf("modifyDevRuntimeProxyResponse: %v", err)
+	}
+	if body.closed {
+		t.Fatal("expected chunked-oversized pass-through not to close the original body before streaming")
+	}
+	payload, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(payload) != html {
+		t.Fatalf("chunked pass-through body changed: got %d bytes want %d", len(payload), len(html))
+	}
+	if response.ContentLength != -1 || response.Header.Get("Content-Length") != "" {
+		t.Fatalf("chunked pass-through content length changed: field=%d header=%q", response.ContentLength, response.Header.Get("Content-Length"))
+	}
+	if err := response.Body.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if !body.closed {
+		t.Fatal("expected replay body close to close the original body")
+	}
+}
+
+func TestDevRuntimeProxyResponsePassesThroughCompressedNonHTMLAndHEAD(t *testing.T) {
+	tests := []struct {
+		name     string
+		method   string
+		encoding string
+		typ      string
+	}{
+		{name: "compressed", method: http.MethodGet, encoding: "gzip", typ: "text/html"},
+		{name: "non-html", method: http.MethodGet, typ: "application/json"},
+		{name: "head", method: http.MethodHead, typ: "text/html"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := newTrackingReadCloser(strings.NewReader("pass-through"), nil)
+			response := newDevRuntimeProxyTestResponse(tt.method, http.StatusOK, -1, tt.typ, body)
+			if tt.encoding != "" {
+				response.Header.Set("Content-Encoding", tt.encoding)
+			}
+			if err := modifyDevRuntimeProxyResponse(response, newLiveReloadBroker()); err != nil {
+				t.Fatalf("modifyDevRuntimeProxyResponse: %v", err)
+			}
+			if body.closed {
+				t.Fatal("expected pass-through response not to close body")
+			}
+			payload, err := io.ReadAll(response.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(payload) != "pass-through" {
+				t.Fatalf("pass-through body changed: %q", payload)
+			}
+		})
+	}
+}
+
+func TestDevRuntimeProxyResponsePropagatesReadAndCloseErrors(t *testing.T) {
+	readErr := fmt.Errorf("read failed")
+	readBody := newTrackingReadCloser(errorReader{err: readErr}, nil)
+	readResponse := newDevRuntimeProxyTestResponse(http.MethodGet, http.StatusOK, -1, "text/html", readBody)
+	if err := modifyDevRuntimeProxyResponse(readResponse, newLiveReloadBroker()); err == nil || !strings.Contains(err.Error(), readErr.Error()) {
+		t.Fatalf("expected read error, got %v", err)
+	}
+	if !readBody.closed {
+		t.Fatal("expected read-error path to close the original body")
+	}
+
+	closeErr := fmt.Errorf("close failed")
+	closeBody := newTrackingReadCloser(strings.NewReader("<html><body>close</body></html>"), closeErr)
+	closeResponse := newDevRuntimeProxyTestResponse(http.MethodGet, http.StatusOK, -1, "text/html", closeBody)
+	if err := modifyDevRuntimeProxyResponse(closeResponse, newLiveReloadBroker()); err == nil || !strings.Contains(err.Error(), closeErr.Error()) {
+		t.Fatalf("expected close error, got %v", err)
+	}
+}
+
+func newDevRuntimeProxyTestResponse(method string, status int, contentLength int64, contentType string, body io.ReadCloser) *http.Response {
+	return &http.Response{
+		StatusCode:    status,
+		Header:        http.Header{"Content-Type": []string{contentType}},
+		Body:          body,
+		ContentLength: contentLength,
+		Request:       httptest.NewRequest(method, "/", nil),
+		Trailer:       http.Header{"X-GOWDK-Trailer": []string{"preserved"}},
+	}
+}
+
+type trackingReadCloser struct {
+	reader   io.Reader
+	closeErr error
+	closed   bool
+}
+
+func newTrackingReadCloser(reader io.Reader, closeErr error) *trackingReadCloser {
+	return &trackingReadCloser{reader: reader, closeErr: closeErr}
+}
+
+func (body *trackingReadCloser) Read(payload []byte) (int, error) {
+	return body.reader.Read(payload)
+}
+
+func (body *trackingReadCloser) Close() error {
+	body.closed = true
+	return body.closeErr
+}
+
+type errorReader struct {
+	err error
+}
+
+func (reader errorReader) Read([]byte) (int, error) {
+	return 0, reader.err
+}
+
 func TestLiveReloadScriptCapacityHintAvoidsOverflow(t *testing.T) {
 	maxInt := int(^uint(0) >> 1)
 	if got := liveReloadScriptCapacityHint(10, 5); got != 15 {

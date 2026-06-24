@@ -21,6 +21,7 @@ Run these gates before release packaging.
 go list -m all
 go list -m -json all
 scripts/check-root-deps.sh
+scripts/check-supply-chain-pins.sh
 scripts/test-go-modules.sh
 scripts/vulncheck-go-modules.sh
 ```
@@ -28,7 +29,9 @@ scripts/vulncheck-go-modules.sh
 Review the `go list` output for unexpected new modules and record any
 production dependency decision in an ADR. Review module licenses from the
 `go list -m -json all` output and each module's repository metadata before
-publishing release notes. `govulncheck` must complete without reachable
+publishing release notes. `govulncheck` runs from the pinned
+`golang.org/x/vuln` version in `tools/govulncheck/go.mod`; Dependabot updates
+that tools module weekly. `govulncheck` must complete without reachable
 vulnerability findings, or the release notes must document the finding,
 exploitability, and mitigation.
 

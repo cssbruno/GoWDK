@@ -24,16 +24,19 @@ func TestEditorReleaseWorkflowCoverage(t *testing.T) {
 	if !strings.Contains(releaseText, "node scripts/package-vsix.js") {
 		t.Fatalf("expected local VSIX packager in release.yml:\n%s", releaseText)
 	}
-	for _, forbidden := range []string{"npm install", "vsce package", "npx "} {
+	if !strings.Contains(releaseText, "npm ci") {
+		t.Fatalf("expected locked npm install in release.yml:\n%s", releaseText)
+	}
+	for _, forbidden := range []string{"npm install -g", "vsce package", "npx --yes"} {
 		if strings.Contains(releaseText, forbidden) {
 			t.Fatalf("did not expect %q in release workflow:\n%s", forbidden, releaseText)
 		}
 	}
 	for _, expected := range []string{
-		"npm install -g @vscode/vsce",
-		"vsce package",
+		"npm ci",
+		"npx --no-install vsce package",
 		"--packagePath",
-		"vsce \"${publish_args[@]}\"",
+		"npx --no-install vsce \"${publish_args[@]}\"",
 		"--pre-release",
 	} {
 		if !strings.Contains(publishText, expected) {
@@ -52,6 +55,7 @@ func TestReleaseTrustWorkflowCoverage(t *testing.T) {
 		"go version",
 		"go env GOVERSION",
 		"version --json",
+		"scripts/check-supply-chain-pins.sh",
 		"sha256sum -c checksums.txt",
 		"actions/upload-artifact",
 		"if-no-files-found: error",

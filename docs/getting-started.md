@@ -11,26 +11,26 @@ app binary, and run it locally.
 
 ## Install The CLI
 
-Install the latest visible GitHub release:
+High-assurance install with the Go checksum database (replace `<version>` with a
+published tag):
+
+```sh
+go install github.com/cssbruno/gowdk/cmd/gowdk@<version>
+gowdk version
+```
+
+Convenience install for the latest visible GitHub release:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh | sh
 gowdk version
 ```
 
-Pin a specific CLI release (replace `<version>` with a tag from the
-[releases page](https://github.com/cssbruno/GoWDK/releases)) or install into a
-user-writable directory:
-
-```sh
-GOWDK_VERSION=<version> GOWDK_INSTALL_DIR="$HOME/.local/bin" \
-  sh -c "$(curl -fsSL https://raw.githubusercontent.com/cssbruno/GoWDK/main/scripts/install.sh)"
-```
-
-The installer resolves `latest` from published GitHub releases, downloads the
-matching binary for the current OS/architecture, verifies it against the
-published `checksums.txt`, and fails before binary download if that release
-does not publish the matching artifact.
+The convenience installer is fetched from the mutable `main` branch before it
+runs. It verifies the downloaded release binary against the published
+`checksums.txt`, but the bootstrap script itself is not authenticated before
+execution. For a reviewable artifact install, use an exact release tag in the
+manual checksum steps below.
 
 ## Add `gowdk` To Your Shell
 
@@ -98,8 +98,9 @@ Direct artifact names:
 Manual Linux install:
 
 ```sh
-curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/latest/download/gowdk-linux-amd64"
-curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/latest/download/checksums.txt"
+version=<version>
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/${version}/gowdk-linux-amd64"
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/${version}/checksums.txt"
 grep ' gowdk-linux-amd64$' checksums.txt | sha256sum -c -
 chmod 0755 gowdk-linux-amd64
 mkdir -p "$HOME/.local/bin"
@@ -110,8 +111,9 @@ gowdk version
 Manual macOS Intel install:
 
 ```sh
-curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/latest/download/gowdk-darwin-amd64"
-curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/latest/download/checksums.txt"
+version=<version>
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/${version}/gowdk-darwin-amd64"
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/${version}/checksums.txt"
 expected="$(awk '$2 == "gowdk-darwin-amd64" { print $1 }' checksums.txt)"
 actual="$(shasum -a 256 gowdk-darwin-amd64 | awk '{ print $1 }')"
 test "$expected" = "$actual"
@@ -124,8 +126,9 @@ gowdk version
 Manual macOS ARM install:
 
 ```sh
-curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/latest/download/gowdk-darwin-arm64"
-curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/latest/download/checksums.txt"
+version=<version>
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/${version}/gowdk-darwin-arm64"
+curl -fsSLO "https://github.com/cssbruno/GoWDK/releases/download/${version}/checksums.txt"
 expected="$(awk '$2 == "gowdk-darwin-arm64" { print $1 }' checksums.txt)"
 actual="$(shasum -a 256 gowdk-darwin-arm64 | awk '{ print $1 }')"
 test "$expected" = "$actual"
@@ -138,8 +141,9 @@ gowdk version
 Manual Windows install from PowerShell:
 
 ```powershell
-Invoke-WebRequest "https://github.com/cssbruno/GoWDK/releases/latest/download/gowdk-windows-amd64.exe" -OutFile "gowdk.exe"
-Invoke-WebRequest "https://github.com/cssbruno/GoWDK/releases/latest/download/checksums.txt" -OutFile "checksums.txt"
+$version = "<version>"
+Invoke-WebRequest "https://github.com/cssbruno/GoWDK/releases/download/$version/gowdk-windows-amd64.exe" -OutFile "gowdk.exe"
+Invoke-WebRequest "https://github.com/cssbruno/GoWDK/releases/download/$version/checksums.txt" -OutFile "checksums.txt"
 $expected = (Select-String -Path checksums.txt -Pattern "gowdk-windows-amd64.exe").Line.Split(" ")[0]
 $actual = (Get-FileHash .\gowdk.exe -Algorithm SHA256).Hash.ToLower()
 if ($expected -ne $actual) { throw "checksum mismatch" }

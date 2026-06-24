@@ -297,10 +297,14 @@ nested `runtime/trace/otel` module. See `docs/reference/observability.md`.
 - `PasswordHasher`, with `PBKDF2Hasher` as the default.
 - `HashPassword`, `HashPasswordWithIterations`, and `VerifyPassword` helpers
   backed by Go standard-library PBKDF2-HMAC-SHA256.
-- Signed-cookie `Sessions` that implement `runtime/auth.Provider` for native
-  `role:` and `permission:` guards.
+- Signed-cookie and revocable `Sessions` that implement
+  `runtime/auth.Provider` for native `role:` and `permission:` guards.
+- A minimal `SessionStore` boundary plus `InMemorySessionStore` for tests and
+  single-process development.
 - Generated app startup wiring for `auth.required`, `role:`, and
-  `permission:` guards when `auth.Addon` is enabled.
+  `permission:` guards when `auth.Addon` is enabled. Generated startup uses the
+  signed-cookie baseline because real revocable stores are application runtime
+  objects, not build-time config values.
 
 The cryptography and dependency stance is recorded in
 [ADR 0011](../engineering/decisions/0011-auth-addon-cryptography.md).
@@ -349,7 +353,43 @@ if err != nil {
 `CookieName` must be a valid HTTP cookie name. A zero `TTL` uses
 `DefaultSessionTTL`; explicit positive values must be at least one second, and
 negative values are rejected. Issued sessions require a non-empty
-`Principal.ID`.
+`Principal.ID`. The default mode is `SessionModeSignedCookie`; the cookie
+carries the principal ID, roles, permissions, optional authorization version,
+and expiry. It is dependency-free and useful for development or bounded simple
+deployments, but it is not server-revocable.
+
+Use `SessionModeRevocable` when the next protected request must observe logout,
+session revocation, account disablement, role/permission changes, or
+authorization-version changes:
+
+```go
+store := auth.NewInMemorySessionStore() // replace with app-owned durable store
+sessions, err := auth.New(auth.Options{
+	SecretEnv:  auth.DefaultSessionSecretEnv,
+	Mode:       auth.SessionModeRevocable,
+	Store:      store,
+	TTL:        12 * time.Hour,
+	IdleTTL:    30 * time.Minute,
+	KeyID:      "2026-06",
+	Insecure:   true, // local HTTP development only
+})
+if err != nil {
+	return err
+}
+```
+
+Revocable cookies carry a signed session pointer. `Principal` is resolved from
+the store on every request, so applications can update the store record after
+role removal or account disablement. `AuthorizationVersion` is compared with the
+version issued into the cookie; a mismatch rejects the request and forces a new
+session. `ClearRequest` revokes the current session before clearing the browser
+cookie, `RevokeSession` invalidates one session, `RevokePrincipal` invalidates
+all current sessions for one principal, and `Rotate` revokes the current
+session before issuing a fresh one after authentication or sensitive changes.
+
+Signing-key rotation is explicit. Set `KeyID` for the current key and put
+bounded previous keys in `PreviousKeys`; a previous key stops verifying after
+its `AcceptUntil` time. Keep previous-key windows short and remove retired keys.
 
 In generated apps, configure the addon instead of writing guard hook files:
 
@@ -362,9 +402,10 @@ auth.Addon(auth.Options{
 })
 ```
 
-Generated startup constructs the session manager, registers it as the native
-RBAC provider, and adds the default `auth.required` guard. Login/logout handlers
-can issue or clear the same cookie through the configured manager:
+Generated startup constructs the signed-cookie session manager, registers it as
+the native RBAC provider, and adds the default `auth.required` guard.
+Login/logout handlers can issue or clear the same cookie through the configured
+manager:
 
 ```go
 sessions, err := auth.DefaultSessions()
@@ -379,9 +420,10 @@ Custom guard IDs still require `GOWDKGuardRegistry`. Native `role:` and
 configured.
 
 GOWDK owns generated guard dispatch, CSRF validation, signed session cookie
-helpers, and native RBAC checks. Application Go owns user lookup, credential
-policy, MFA, OAuth, account recovery, durable storage, session lifetime,
-custom guard decisions, and backend resource authorization.
+helpers, the revocable session interface, and native RBAC checks. Application Go
+owns user lookup, credential policy, MFA, OAuth, account recovery, durable
+storage, concurrent-session policy, custom guard decisions, and backend resource
+authorization.
 
 For generated actions, ordering matters:
 

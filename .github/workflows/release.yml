@@ -23,16 +23,16 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version: '1.26.4'
           cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '24'
 
@@ -41,6 +41,7 @@ jobs:
           go version
           go env GOVERSION
           scripts/check-root-deps.sh
+          scripts/check-supply-chain-pins.sh
           scripts/test-go-modules.sh
           scripts/vulncheck-go-modules.sh
           go build ./cmd/gowdk
@@ -108,6 +109,7 @@ jobs:
 
       - name: Package VS Code extension
         run: |
+          npm ci
           node scripts/sync-version.js
           node scripts/package-vsix.js
         working-directory: editors/vscode
@@ -122,7 +124,7 @@ jobs:
           (cd dist && sha256sum -c checksums.txt)
 
       - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gowdk-release-${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
           path: dist/*
@@ -130,7 +132,7 @@ jobs:
           retention-days: 30
 
       - name: Attest release artifacts
-        uses: actions/attest@v4
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
         with:
           subject-path: dist/*
 
@@ -146,7 +148,7 @@ jobs:
           echo "path=$notes" >> "$GITHUB_OUTPUT"
 
       - name: Upload release artifacts
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
           target_commitish: ${{ github.sha }}

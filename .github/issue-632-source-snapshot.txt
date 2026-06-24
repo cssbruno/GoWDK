@@ -1,0 +1,1 @@
+Temporary branch marker used to obtain the exact source snapshot for issue #632 implementation. This file will be removed before review.

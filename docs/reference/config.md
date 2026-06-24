@@ -493,6 +493,8 @@ type BuildConfig struct {
 	AllowMissingBackend bool
 	Stylesheets         []gowdk.Stylesheet
 	Scripts             []gowdk.Script
+	Worker              gowdk.ContractWorkerConfig
+	Cron                gowdk.ContractCronConfig
 	Targets             []gowdk.BuildTargetConfig
 }
 
@@ -537,9 +539,41 @@ type BuildTargetConfig struct {
 	WASM          string
 	BackendApp    string
 	BackendBinary string
+	WorkerApp     string
+	WorkerBinary  string
+	Worker        ContractWorkerConfig
+	CronApp       string
+	CronBinary    string
+	Cron          ContractCronConfig
 	DeployRecipes []string
 }
+
+type ContractWorkerConfig struct {
+	EventSource ServiceRef
+	SeenStore   ServiceRef
+	Backoff     ServiceRef
+}
+
+type ContractCronConfig struct {
+	Jobs []ContractCronJobConfig
+}
+
+type ContractCronJobConfig struct {
+	Type            string
+	Schedule        string
+	OverlapPolicy   string
+	MissedRunPolicy string
+}
 ```
+
+`Build.Worker` and `Build.Cron` provide defaults for ad hoc role builds.
+`WorkerApp` / `WorkerBinary` and `CronApp` / `CronBinary` generate standalone
+contract role apps and binaries from configured targets, with target-level
+`Worker` and `Cron` overriding the build defaults. Worker targets require an
+`EventSource` provider function returning `(contracts.EventSource, error)` and
+may provide `SeenStore` and `Backoff` providers. Cron targets require explicit
+job types and schedules; the first scheduler slice supports `@once` and
+`@every <duration>` with `skip` overlap and missed-run policies.
 
 `Mode` controls development metadata in generated frontend artifacts. The
 default omitted mode behaves like `gowdk.Development` and emits JavaScript

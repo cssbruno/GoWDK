@@ -272,7 +272,8 @@ Redis Streams, NATS, and WebSocket adapter modules. The addon enables compiler
 integration and generated route plumbing; apps still choose their sink in Go
 with `RegisterContractEventSink`. See `docs/reference/contracts.md` for Redis,
 NATS, SSE, WebSocket, outbox, worker backoff, and composite sink examples.
-Separate worker/cron binary generators remain planned deployment tooling.
+Standalone worker and cron binary generation is available through build targets;
+adapter, scheduler, and supervision infrastructure stays app-owned.
 
 `addons/realtime` registers the browser presentation-event fanout feature. It
 does not import the optional WebSocket transport dependency or patch the DOM.

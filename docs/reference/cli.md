@@ -29,7 +29,7 @@ gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
 gowdk list commands|queries|events|jobs [--json] [dir]
-gowdk build [--config <file>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]
+gowdk build [--config <file>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [--worker-app <dir>] [--worker-bin <file>] [--cron-app <dir>] [--cron-bin <file>] [files...]
 gowdk clean [--config <file>] [--target <name>] [--out <dir>] [--dry-run] [--json]
 gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
 gowdk preview [--addr <addr>] [--hot] [build flags...]
@@ -196,6 +196,10 @@ gowdk lsp [--ssr]
 - `--wasm`: supported by `build`; requires `--app` and compiles the generated app with `GOOS=js GOARCH=wasm go build -o <file>`.
 - `--backend-app`: supported by `build`; writes generated backend-only Go app source for feature-bound action/API endpoints.
 - `--backend-bin`: supported by `build`; requires `--backend-app` and compiles the generated backend app with `go build -o <file>`.
+- `--worker-app`: supported by `build`; writes generated contract worker app source using configured `Build.Worker` or target worker settings.
+- `--worker-bin`: supported by `build`; requires `--worker-app` and compiles the generated worker app with `go build -o <file>`.
+- `--cron-app`: supported by `build`; writes generated contract cron app source using configured `Build.Cron` or target cron settings.
+- `--cron-bin`: supported by `build`; requires `--cron-app` and compiles the generated cron app with `go build -o <file>`.
 - `--addr`: supported by `dev`, `preview`, and `serve`; selects the listen address and defaults to `127.0.0.1:8080`.
 - `--interval`: supported by `dev`; sets the polling interval, such as `500ms`, `1s`, or `2s`.
 - `--hot`: supported by `preview`; runs the dev loop against the preview output instead of serving a one-shot build.

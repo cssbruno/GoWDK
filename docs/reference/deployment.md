@@ -1,10 +1,11 @@
 # Deployment
 
-GOWDK currently supports three practical output shapes:
+GOWDK currently supports these practical output shapes:
 
 - Build output files from `gowdk build --out`.
 - A generated Go app from `gowdk build --out --app`.
 - A local-platform binary or Go `js/wasm` artifact from the generated app.
+- Standalone contract worker and cron binaries.
 
 Deployment orchestration is user-owned. GOWDK can emit a minimal Docker context
 for one-binary deploys and optional starter recipes for common static, process,
@@ -18,6 +19,8 @@ backups, incident response, rollout logic, or CDN configuration.
 | Single binary | Static output and generated request-time handlers ship together. | `gowdk build --out <dir> --app <dir> --bin <file>` |
 | Split frontend/backend | Static frontend and generated backend routes deploy separately. | `gowdk build --out <dir> --app <dir> --bin <file> --backend-app <dir> --backend-bin <file>` |
 | Backend-only | A generated backend route app is deployed behind another frontend. | `gowdk build --backend-app <dir> --backend-bin <file>` |
+| Contract worker | A generated worker runs worker-role event subscribers from an app-owned source. | `gowdk build --worker-app <dir> --worker-bin <file>` |
+| Contract cron | A generated cron runner executes selected cron-role jobs. | `gowdk build --cron-app <dir> --cron-bin <file>` |
 | Go WASM artifact | A host can execute a Go `js/wasm` generated app artifact. | `gowdk build --out <dir> --app <dir> --wasm <file>` |
 
 ## Optional Recipes
@@ -30,6 +33,7 @@ comma-separated:
 gowdk build --out dist/site --deploy-recipe static
 gowdk build --out dist/site --app .gowdk/app --bin bin/site --deploy-recipe systemd,caddy
 gowdk build --out dist/site --backend-app .gowdk/backend --backend-bin bin/backend --deploy-recipe split
+gowdk build --worker-app .gowdk/worker --worker-bin bin/worker --deploy-recipe systemd
 ```
 
 Supported recipes:
@@ -37,7 +41,7 @@ Supported recipes:
 | Recipe | Requires | Output |
 | --- | --- | --- |
 | `static` | `--out` | `<out>/deploy/static-host.md` |
-| `systemd` | `--bin` or `--backend-bin` | `<binary-dir>/gowdk-<binary>.service` |
+| `systemd` | `--bin`, `--backend-bin`, `--worker-bin`, or `--cron-bin` | `<binary-dir>/gowdk-<binary>.service` |
 | `caddy` | `--bin` or `--backend-bin` | `<binary-dir>/Caddyfile` |
 | `nginx` | `--bin` or `--backend-bin` | `<binary-dir>/nginx.gowdk.conf` |
 | `split` | `--out` and `--backend-bin` | `<out>/deploy/split-frontend-backend.md` |
@@ -157,6 +161,28 @@ dispatch.
 Backend-only output does not serve static pages. Pair it with static output, a
 frontend binary, or a non-GOWDK frontend only when route ownership is explicit
 and the frontend knows where generated endpoints live.
+
+## Contract Worker And Cron Binaries
+
+Worker and cron outputs are generated role apps. They do not embed static
+frontend output and they do not add broker, queue, or scheduler dependencies to
+the GOWDK root module.
+
+```sh
+gowdk build --worker-app .gowdk/worker --worker-bin bin/worker
+gowdk build --cron-app .gowdk/cron --cron-bin bin/cron
+```
+
+Worker binaries call the configured `Build.Worker.EventSource` provider and
+replay matching worker-role event subscribers with SIGINT/SIGTERM
+cancellation. Optional `SeenStore` and `Backoff` providers wire runtime
+deduplication and nacked-batch backoff hooks.
+
+Cron binaries execute configured cron-role jobs with zero-value job input.
+Schedules support `@once` and `@every <duration>` in the dependency-free first
+slice. Use `skip` for overlap and missed-run policy. Durable queue retry,
+dead-letter handling, external scheduler integration, alerting, and rollout
+policy remain app-owned.
 
 ## Process Lifecycle And Logs
 
@@ -548,6 +574,17 @@ Build: gowdk.BuildConfig{
 			Output: "dist/admin",
 			App: ".gowdk/admin",
 			Binary: "bin/admin",
+		},
+		{
+			Name: "worker",
+			WorkerApp: ".gowdk/worker",
+			WorkerBinary: "bin/worker",
+			Worker: gowdk.ContractWorkerConfig{
+				EventSource: gowdk.ServiceRef{
+					ImportPath: "github.com/acme/app/workers",
+					Function: "EventSource",
+				},
+			},
 		},
 	},
 }

@@ -21,7 +21,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-const buildUsage = "usage: gowdk build [--config <file>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...]"
+const buildUsage = "usage: gowdk build [--config <file>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [--worker-app <dir>] [--worker-bin <file>] [--cron-app <dir>] [--cron-bin <file>] [files...]"
 
 func build(args []string) error {
 	started := time.Now()
@@ -48,6 +48,12 @@ type buildRequest struct {
 	WASMPath          string
 	BackendAppDir     string
 	BackendBinaryPath string
+	WorkerAppDir      string
+	WorkerBinaryPath  string
+	Worker            gowdk.ContractWorkerConfig
+	CronAppDir        string
+	CronBinaryPath    string
+	Cron              gowdk.ContractCronConfig
 	Docker            bool
 	DockerBase        string
 	DeployRecipes     []string
@@ -64,6 +70,10 @@ type buildOptions struct {
 	WASMPath          string
 	BackendAppDir     string
 	BackendBinaryPath string
+	WorkerAppDir      string
+	WorkerBinaryPath  string
+	CronAppDir        string
+	CronBinaryPath    string
 	Docker            bool
 	DockerBase        string
 	DeployRecipes     []string
@@ -84,7 +94,7 @@ func loadBuildOptions(args []string) (buildOptions, error) {
 		return buildOptions{}, err
 	}
 	if len(plan.TargetNames) > 0 && plan.hasAdHocArgs() {
-		return buildOptions{}, fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --docker, --docker-base, --deploy-recipe, --wasm, --backend-app, --backend-bin, or explicit files")
+		return buildOptions{}, fmt.Errorf("--target cannot be combined with --module, --out, --app, --bin, --docker, --docker-base, --deploy-recipe, --wasm, --backend-app, --backend-bin, --worker-app, --worker-bin, --cron-app, --cron-bin, or explicit files")
 	}
 	return plan, nil
 }
@@ -97,6 +107,12 @@ func (plan buildOptions) request() buildRequest {
 		WASMPath:          plan.WASMPath,
 		BackendAppDir:     plan.BackendAppDir,
 		BackendBinaryPath: plan.BackendBinaryPath,
+		WorkerAppDir:      plan.WorkerAppDir,
+		WorkerBinaryPath:  plan.WorkerBinaryPath,
+		Worker:            plan.Options.Config.Build.Worker,
+		CronAppDir:        plan.CronAppDir,
+		CronBinaryPath:    plan.CronBinaryPath,
+		Cron:              plan.Options.Config.Build.Cron,
 		Docker:            plan.Docker,
 		DockerBase:        plan.DockerBase,
 		DeployRecipes:     plan.DeployRecipes,
@@ -127,11 +143,39 @@ func (request buildRequest) hasAdHocArgs() bool {
 		strings.TrimSpace(request.WASMPath) != "" ||
 		strings.TrimSpace(request.BackendAppDir) != "" ||
 		strings.TrimSpace(request.BackendBinaryPath) != "" ||
+		strings.TrimSpace(request.WorkerAppDir) != "" ||
+		strings.TrimSpace(request.WorkerBinaryPath) != "" ||
+		strings.TrimSpace(request.CronAppDir) != "" ||
+		strings.TrimSpace(request.CronBinaryPath) != "" ||
 		request.Docker ||
 		strings.TrimSpace(request.DockerBase) != "" ||
 		len(request.DeployRecipes) > 0 ||
 		len(request.Modules) > 0 ||
 		len(request.Paths) > 0
+}
+
+func (request buildRequest) hasRoleArtifacts() bool {
+	return strings.TrimSpace(request.WorkerAppDir) != "" ||
+		strings.TrimSpace(request.WorkerBinaryPath) != "" ||
+		strings.TrimSpace(request.CronAppDir) != "" ||
+		strings.TrimSpace(request.CronBinaryPath) != ""
+}
+
+func mergeContractWorkerConfig(defaults, override gowdk.ContractWorkerConfig) gowdk.ContractWorkerConfig {
+	if !roleServiceRefConfigured(override.EventSource) {
+		override.EventSource = defaults.EventSource
+	}
+	if !roleServiceRefConfigured(override.SeenStore) {
+		override.SeenStore = defaults.SeenStore
+	}
+	if !roleServiceRefConfigured(override.Backoff) {
+		override.Backoff = defaults.Backoff
+	}
+	return override
+}
+
+func roleServiceRefConfigured(ref gowdk.ServiceRef) bool {
+	return strings.TrimSpace(ref.ImportPath) != "" || strings.TrimSpace(ref.Function) != ""
 }
 
 func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRecorder) error {
@@ -163,11 +207,21 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	if strings.TrimSpace(request.BackendBinaryPath) != "" && strings.TrimSpace(request.BackendAppDir) == "" {
 		return fmt.Errorf("gowdk build --backend-bin requires --backend-app <dir>")
 	}
+	if strings.TrimSpace(request.WorkerBinaryPath) != "" && strings.TrimSpace(request.WorkerAppDir) == "" {
+		return fmt.Errorf("gowdk build --worker-bin requires --worker-app <dir>")
+	}
+	if strings.TrimSpace(request.CronBinaryPath) != "" && strings.TrimSpace(request.CronAppDir) == "" {
+		return fmt.Errorf("gowdk build --cron-bin requires --cron-app <dir>")
+	}
 	if outputDir == "" {
 		outputDir = options.Config.Build.Output
 	}
 	if outputDir == "" {
-		return fmt.Errorf(buildUsage)
+		if request.hasRoleArtifacts() {
+			outputDir = filepath.ToSlash(filepath.Join("gowdk_cache", "roles"))
+		} else {
+			return fmt.Errorf(buildUsage)
+		}
 	}
 	options.Config.Build.Output = outputDir
 	paths := append([]string(nil), request.Paths...)
@@ -180,7 +234,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		}); err != nil {
 			return err
 		}
-		if len(discovered) == 0 {
+		if len(discovered) == 0 && !request.hasRoleArtifacts() {
 			return fmt.Errorf("no .gwdk files found")
 		}
 		paths = discovered
@@ -329,6 +383,10 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	wasmPath := request.WASMPath
 	backendAppDir := request.BackendAppDir
 	backendBinaryPath := request.BackendBinaryPath
+	workerAppDir := request.WorkerAppDir
+	workerBinaryPath := request.WorkerBinaryPath
+	cronAppDir := request.CronAppDir
+	cronBinaryPath := request.CronBinaryPath
 	var buildReportEvents []buildgen.BuildEvent
 	if strings.TrimSpace(appDir) != "" {
 		var app appgen.Result
@@ -430,6 +488,76 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			fmt.Println(built)
 		}
 	}
+	if strings.TrimSpace(workerAppDir) != "" {
+		var app appgen.Result
+		if err := timings.measure("worker_app_generation", func() error {
+			var appErr error
+			app, appErr = appgen.GenerateContractWorker(workerAppDir, contractReport, request.Worker)
+			return appErr
+		}); err != nil {
+			return err
+		}
+		fmt.Println(app.ModulePath)
+		fmt.Println(app.PackagePath)
+		fmt.Println(app.MainPath)
+		buildReportEvents = append(buildReportEvents, contractRoleBuildEvents("worker", app.Contracts, nil, app.MainPath)...)
+		if strings.TrimSpace(workerBinaryPath) != "" {
+			var built string
+			if err := timings.measure("worker_binary_build", func() error {
+				var buildErr error
+				built, buildErr = appgen.BuildWorkerBinary(app.AppDir, workerBinaryPath)
+				return buildErr
+			}); err != nil {
+				return err
+			}
+			fmt.Println(built)
+			buildReportEvents = append(buildReportEvents, buildgen.BuildEvent{
+				Level:   buildgen.BuildEventInfo,
+				Stage:   "package",
+				Kind:    "contract_role_binary_built",
+				Message: "compiled generated contract worker binary",
+				Path:    filepath.ToSlash(built),
+				Data: map[string]string{
+					"role": "worker",
+				},
+			})
+		}
+	}
+	if strings.TrimSpace(cronAppDir) != "" {
+		var app appgen.Result
+		if err := timings.measure("cron_app_generation", func() error {
+			var appErr error
+			app, appErr = appgen.GenerateContractCron(cronAppDir, contractReport, request.Cron)
+			return appErr
+		}); err != nil {
+			return err
+		}
+		fmt.Println(app.ModulePath)
+		fmt.Println(app.PackagePath)
+		fmt.Println(app.MainPath)
+		buildReportEvents = append(buildReportEvents, contractRoleBuildEvents("cron", nil, app.Jobs, app.MainPath)...)
+		if strings.TrimSpace(cronBinaryPath) != "" {
+			var built string
+			if err := timings.measure("cron_binary_build", func() error {
+				var buildErr error
+				built, buildErr = appgen.BuildCronBinary(app.AppDir, cronBinaryPath)
+				return buildErr
+			}); err != nil {
+				return err
+			}
+			fmt.Println(built)
+			buildReportEvents = append(buildReportEvents, buildgen.BuildEvent{
+				Level:   buildgen.BuildEventInfo,
+				Stage:   "package",
+				Kind:    "contract_role_binary_built",
+				Message: "compiled generated contract cron binary",
+				Path:    filepath.ToSlash(built),
+				Data: map[string]string{
+					"role": "cron",
+				},
+			})
+		}
+	}
 	if len(request.DeployRecipes) > 0 {
 		var recipeArtifacts []deploymentRecipeArtifact
 		if err := timings.measure("deploy_recipes", func() error {
@@ -438,6 +566,8 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 				OutputDir:         outputDir,
 				BinaryPath:        binaryPath,
 				BackendBinaryPath: backendBinaryPath,
+				WorkerBinaryPath:  workerBinaryPath,
+				CronBinaryPath:    cronBinaryPath,
 				Recipes:           request.DeployRecipes,
 			})
 			return recipeErr
@@ -469,6 +599,11 @@ func buildConfiguredTargets(plan buildOptions, timings *buildTimingRecorder) err
 	for _, target := range targets {
 		targetOptions := plan.Options
 		targetOptions.Config.Build.Output = target.Output
+		worker := mergeContractWorkerConfig(plan.Options.Config.Build.Worker, target.Worker)
+		cron := target.Cron
+		if len(cron.Jobs) == 0 {
+			cron = plan.Options.Config.Build.Cron
+		}
 		if err := buildOnce(targetOptions, buildRequest{
 			OutputDir:         target.Output,
 			AppDir:            target.App,
@@ -476,6 +611,12 @@ func buildConfiguredTargets(plan buildOptions, timings *buildTimingRecorder) err
 			WASMPath:          target.WASM,
 			BackendAppDir:     target.BackendApp,
 			BackendBinaryPath: target.BackendBinary,
+			WorkerAppDir:      target.WorkerApp,
+			WorkerBinaryPath:  target.WorkerBinary,
+			Worker:            worker,
+			CronAppDir:        target.CronApp,
+			CronBinaryPath:    target.CronBinary,
+			Cron:              cron,
 			DeployRecipes:     target.DeployRecipes,
 			Modules:           target.Modules,
 			TimingsPath:       plan.TimingsPath,
@@ -511,12 +652,22 @@ func selectBuildTargets(targets []gowdk.BuildTargetConfig, targetNames []string)
 		if strings.TrimSpace(target.BackendBinary) != "" && strings.TrimSpace(target.BackendApp) == "" {
 			return nil, fmt.Errorf("build target %q backend binary requires backend app", target.Name)
 		}
+		if strings.TrimSpace(target.WorkerBinary) != "" && strings.TrimSpace(target.WorkerApp) == "" {
+			return nil, fmt.Errorf("build target %q worker binary requires worker app", target.Name)
+		}
+		if strings.TrimSpace(target.CronBinary) != "" && strings.TrimSpace(target.CronApp) == "" {
+			return nil, fmt.Errorf("build target %q cron binary requires cron app", target.Name)
+		}
 		target.Output = strings.TrimSpace(target.Output)
 		target.App = strings.TrimSpace(target.App)
 		target.Binary = strings.TrimSpace(target.Binary)
 		target.WASM = strings.TrimSpace(target.WASM)
 		target.BackendApp = strings.TrimSpace(target.BackendApp)
 		target.BackendBinary = strings.TrimSpace(target.BackendBinary)
+		target.WorkerApp = strings.TrimSpace(target.WorkerApp)
+		target.WorkerBinary = strings.TrimSpace(target.WorkerBinary)
+		target.CronApp = strings.TrimSpace(target.CronApp)
+		target.CronBinary = strings.TrimSpace(target.CronBinary)
 		normalized = append(normalized, target)
 	}
 	return normalized, nil
@@ -611,6 +762,45 @@ func buildgenBuildEventDetails(event buildgen.BuildEvent) string {
 	return strings.Join(details, ", ")
 }
 
+func contractRoleBuildEvents(role string, contracts []string, jobs []string, mainPath string) []buildgen.BuildEvent {
+	var events []buildgen.BuildEvent
+	events = append(events, buildgen.BuildEvent{
+		Level:   buildgen.BuildEventInfo,
+		Stage:   "package",
+		Kind:    "contract_role_app_generated",
+		Message: "generated standalone contract " + role + " app",
+		Path:    filepath.ToSlash(mainPath),
+		Data: map[string]string{
+			"role": role,
+		},
+	})
+	for _, contract := range contracts {
+		events = append(events, buildgen.BuildEvent{
+			Level:   buildgen.BuildEventInfo,
+			Stage:   "package",
+			Kind:    "contract_role_included",
+			Message: "included contract in generated " + role + " role",
+			Data: map[string]string{
+				"role":     role,
+				"contract": contract,
+			},
+		})
+	}
+	for _, job := range jobs {
+		events = append(events, buildgen.BuildEvent{
+			Level:   buildgen.BuildEventInfo,
+			Stage:   "package",
+			Kind:    "contract_role_included",
+			Message: "included job in generated " + role + " role",
+			Data: map[string]string{
+				"role": role,
+				"job":  job,
+			},
+		})
+	}
+	return events
+}
+
 func parseBuildOptions(args []string) (buildOptions, error) {
 	var plan buildOptions
 	for i := 0; i < len(args); i++ {
@@ -693,6 +883,50 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 			plan.BackendBinaryPath = value
 			if strings.TrimSpace(plan.BackendBinaryPath) == "" {
 				return buildOptions{}, fmt.Errorf("backend binary output path is required")
+			}
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--worker-app", false); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.WorkerAppDir = value
+			if strings.TrimSpace(plan.WorkerAppDir) == "" {
+				return buildOptions{}, fmt.Errorf("generated worker app directory is required")
+			}
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--worker-bin", false); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.WorkerBinaryPath = value
+			if strings.TrimSpace(plan.WorkerBinaryPath) == "" {
+				return buildOptions{}, fmt.Errorf("worker binary output path is required")
+			}
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--cron-app", false); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.CronAppDir = value
+			if strings.TrimSpace(plan.CronAppDir) == "" {
+				return buildOptions{}, fmt.Errorf("generated cron app directory is required")
+			}
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--cron-bin", false); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.CronBinaryPath = value
+			if strings.TrimSpace(plan.CronBinaryPath) == "" {
+				return buildOptions{}, fmt.Errorf("cron binary output path is required")
 			}
 			i = next
 			continue

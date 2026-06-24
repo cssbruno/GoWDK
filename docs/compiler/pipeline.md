@@ -16,17 +16,19 @@ The current CLI accepts explicit `.gwdk` files, but explicit paths still require
 a loaded config. `gowdk build` can also discover source files from literal
 `Source.Include` and `Source.Exclude` settings plus configured module sources
 when no explicit files are supplied. Configured `Build.Targets` can declare
-selected modules, output dirs, generated app dirs, and binary paths; `gowdk
-build` runs all configured targets and `gowdk build --target <name>` runs
-selected targets. `gowdk build --module <name>` remains available for ad hoc
+selected modules, output dirs, generated app dirs, binary paths, backend-only
+outputs, and contract worker/cron role outputs; `gowdk build` runs all
+configured targets and `gowdk build --target <name>` runs selected targets.
+`gowdk build --module <name>` remains available for ad hoc
 builds, and the flag may be repeated or comma-separated. Discovery uses
 `**/*.gwdk` defaults when no root/module source is configured in the loaded
 config.
 
-`gowdk build [--config <file>] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [files...]` currently
-emits app-shell HTML, `gowdk-routes.json`, `gowdk-assets.json`, generated embedded
-app source, and an optional binary for the selected
-source set. The current rendered page subset covers simple `spa` and
+`gowdk build [--config <file>] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--worker-app <dir>] [--worker-bin <file>] [--cron-app <dir>] [--cron-bin <file>] [files...]` currently
+emits app-shell HTML, `gowdk-routes.json`, `gowdk-assets.json`, generated
+embedded app source, optional web/backend binaries, and optional contract
+worker/cron binaries for the selected source set. The current rendered page
+subset covers simple `spa` and
 `action` pages with non-dynamic routes or literal `paths {}` dynamic routes,
 literal `build {}` data, imported or same-package Go build data functions with
 optional `gowdk.BuildParams`, lowercase HTML markup in `view {}`, and

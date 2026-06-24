@@ -21,6 +21,10 @@ func TestBuildRequestHasAdHocArgs(t *testing.T) {
 		{name: "wasm", request: buildRequest{WASMPath: "bin/site.wasm"}, want: true},
 		{name: "backend app", request: buildRequest{BackendAppDir: "backend"}, want: true},
 		{name: "backend binary", request: buildRequest{BackendBinaryPath: "bin/backend"}, want: true},
+		{name: "worker app", request: buildRequest{WorkerAppDir: "worker"}, want: true},
+		{name: "worker binary", request: buildRequest{WorkerBinaryPath: "bin/worker"}, want: true},
+		{name: "cron app", request: buildRequest{CronAppDir: "cron"}, want: true},
+		{name: "cron binary", request: buildRequest{CronBinaryPath: "bin/cron"}, want: true},
 		{name: "docker", request: buildRequest{Docker: true}, want: true},
 		{name: "docker base", request: buildRequest{DockerBase: "scratch"}, want: true},
 		{name: "deploy recipe", request: buildRequest{DeployRecipes: []string{"caddy"}}, want: true},
@@ -55,6 +59,47 @@ func TestBuildOptionsShouldBuildConfiguredTargets(t *testing.T) {
 				t.Fatalf("shouldBuildConfiguredTargets() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBuildRequestUsesBuildRoleDefaults(t *testing.T) {
+	config := gowdk.Config{Build: gowdk.BuildConfig{
+		Worker: gowdk.ContractWorkerConfig{
+			EventSource: gowdk.ServiceRef{ImportPath: "example.com/site/workers", Function: "EventSource"},
+		},
+		Cron: gowdk.ContractCronConfig{Jobs: []gowdk.ContractCronJobConfig{{
+			Type:            "patients.SyncPatients",
+			Schedule:        "@once",
+			OverlapPolicy:   "skip",
+			MissedRunPolicy: "skip",
+		}}},
+	}}
+	request := buildOptions{Options: cliOptions{Config: config}, WorkerAppDir: ".gowdk/worker", CronAppDir: ".gowdk/cron"}.request()
+	if request.Worker.EventSource.ImportPath != "example.com/site/workers" || request.Worker.EventSource.Function != "EventSource" {
+		t.Fatalf("worker default not copied to request: %#v", request.Worker)
+	}
+	if len(request.Cron.Jobs) != 1 || request.Cron.Jobs[0].Type != "patients.SyncPatients" {
+		t.Fatalf("cron default not copied to request: %#v", request.Cron)
+	}
+}
+
+func TestMergeContractWorkerConfigUsesDefaultsPerProvider(t *testing.T) {
+	defaults := gowdk.ContractWorkerConfig{
+		EventSource: gowdk.ServiceRef{ImportPath: "example.com/site/defaults", Function: "EventSource"},
+		SeenStore:   gowdk.ServiceRef{ImportPath: "example.com/site/defaults", Function: "SeenStore"},
+		Backoff:     gowdk.ServiceRef{ImportPath: "example.com/site/defaults", Function: "Backoff"},
+	}
+	merged := mergeContractWorkerConfig(defaults, gowdk.ContractWorkerConfig{
+		SeenStore: gowdk.ServiceRef{ImportPath: "example.com/site/worker", Function: "SeenStore"},
+	})
+	if merged.EventSource != defaults.EventSource {
+		t.Fatalf("event source default was not preserved: %#v", merged)
+	}
+	if merged.SeenStore.ImportPath != "example.com/site/worker" || merged.SeenStore.Function != "SeenStore" {
+		t.Fatalf("seen store override was not preserved: %#v", merged)
+	}
+	if merged.Backoff != defaults.Backoff {
+		t.Fatalf("backoff default was not preserved: %#v", merged)
 	}
 }
 
@@ -109,6 +154,12 @@ func TestSelectBuildTargetsAppliesBuildOnlyDefaultsAndValidation(t *testing.T) {
 	}
 	if _, err := selectBuildTargets([]gowdk.BuildTargetConfig{{Name: "site", Binary: "bin/site"}}, nil); err == nil || !strings.Contains(err.Error(), "binary requires app") {
 		t.Fatalf("binary without app error = %v", err)
+	}
+	if _, err := selectBuildTargets([]gowdk.BuildTargetConfig{{Name: "site", WorkerBinary: "bin/worker"}}, nil); err == nil || !strings.Contains(err.Error(), "worker binary requires worker app") {
+		t.Fatalf("worker binary without app error = %v", err)
+	}
+	if _, err := selectBuildTargets([]gowdk.BuildTargetConfig{{Name: "site", CronBinary: "bin/cron"}}, nil); err == nil || !strings.Contains(err.Error(), "cron binary requires cron app") {
+		t.Fatalf("cron binary without app error = %v", err)
 	}
 }
 

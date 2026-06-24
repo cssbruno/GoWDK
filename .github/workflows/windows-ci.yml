@@ -22,19 +22,61 @@ jobs:
           go-version: '1.26.4'
           cache: true
 
-      - name: Run Windows-compatible focused tests
+      - name: Report Windows toolchain
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
           go version
-          go env GOVERSION
-          go test ./runtime/app ./internal/project ./internal/lang
-          go test ./cmd/gowdk -run 'Test(BuildCommandWritesIndexHTML|CheckCommandLoadsExplicitEnvFile|CheckDoesNotRequireRuntimeSecretsAndEnvCheckDoes|CheckAutomaticallyUsesStandaloneModeWithoutProjectConfig|ExplicitStandaloneCheckDoesNotExecuteProjectConfig|ModifyDevRuntimeProxyResponse.*|LiveReloadBrokerNotifyIsNoOpOnNilBroker)$'
+          go env GOVERSION GOOS GOARCH
+
+      - name: Test runtime app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          go test ./runtime/app
+
+      - name: Test project config loading
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          go test ./internal/project
+
+      - name: Test language tooling
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          go test ./internal/lang
+
+      - name: Test CLI build and env-file paths
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          go test ./cmd/gowdk -run '^Test(BuildCommandWritesIndexHTML|CheckCommandLoadsExplicitEnvFile)$'
+
+      - name: Test CLI validation modes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          go test ./cmd/gowdk -run '^Test(CheckDoesNotRequireRuntimeSecretsAndEnvCheckDoes|CheckAutomaticallyUsesStandaloneModeWithoutProjectConfig|ExplicitStandaloneCheckDoesNotExecuteProjectConfig)$'
+
+      - name: Test bounded development proxy
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          go test ./cmd/gowdk -run '^Test(ModifyDevRuntimeProxyResponse.*|LiveReloadBrokerNotifyIsNoOpOnNilBroker)$'
 
       - name: Build and smoke the CLI from a spaced temp path
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
           $smokeRoot = Join-Path $env:RUNNER_TEMP 'gowdk windows smoke'
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $smokeRoot
           New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null

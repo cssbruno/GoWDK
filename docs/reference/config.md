@@ -26,7 +26,7 @@ or serve a development loop for `.gwdk` code: `check`, `manifest`, `sitemap`,
 with `--config <file>`.
 
 `SourceConfig` has include and exclude patterns. Discovery support exists in
-`internal/discover`, and `gowdk build` reads literal `Source.Include` and
+`internal/discover`, and `gowdk build` reads `Source.Include` and
 `Source.Exclude` fields from the loaded config when no explicit files are
 supplied. Explicit file paths still require a loaded config.
 
@@ -136,14 +136,15 @@ var Config = gowdk.Config{
 }
 ```
 
-The CLI first parses this file as a literal config subset. Unknown top-level
-`gowdk.Config` fields are rejected instead of silently ignored. When a supported
-field contains non-literal Go that the subset cannot reduce safely, the loader
-falls back to the executable config bridge described below.
+For project-aware `build`, `check`, and `dev`, the CLI builds a cached helper
+inside `.gowdk/helper/`. The helper imports the config package, reads
+`var Config`, and runs the requested operation with the native `*gowdk.Config`
+value. `gowdk.Config` is not serialized across the CLI/helper boundary; only
+argv, protocol/version environment variables, stdout/stderr, and the exit code
+cross processes.
 
-Addon constructors outside the built-in AST subset are loaded through a small
-Go helper that imports the config package. That means addon packages are normal
-Go modules:
+Importable config packages must be normal Go packages inside a Go module, not
+`package main`. That means addon packages are normal Go modules:
 
 ```go
 import brand "github.com/example/gowdk-brand"
@@ -158,6 +159,11 @@ var Config = gowdk.Config{
 The addon module may import other GitHub/private/local modules. The project
 `go.mod` remains the source of truth for resolving those imports, including
 `require`, `replace`, `GOPRIVATE`, and module proxy configuration.
+
+Tooling commands that edit or inspect config syntax can still parse the
+`gowdk.Config` literal through the Go AST. Non-importable legacy configs, such
+as no-module temporary fixtures or build-tagged repository configs, keep the
+structural AST loader as a compatibility fallback.
 
 ## SEO Addon Options
 
@@ -729,8 +735,9 @@ constructor into `gowdk.config.go`. `gowdk add seo` requires
 command rewrites literal `Config.Addons` lists only; if `Addons` is computed by
 Go code, edit the config manually.
 
-The literal config loader recognizes built-in addon constructors when they are
-imported from their canonical package paths. Most are no-argument constructors;
+The config helper executes addon constructors as normal Go. Tooling that edits
+`Config.Addons` recognizes built-in addon constructors when they are imported
+from their canonical package paths. Most are no-argument constructors;
 `addons/auth` accepts the generated-app-safe session options subset
 (`SecretEnv`, `CookieName`, `TTL`, `Insecure`), and `addons/seo` accepts the
 literal SEO options subset:
@@ -778,13 +785,10 @@ var Config = gowdk.Config{
 }
 ```
 
-If `Addons` contains a constructor outside that AST-only subset, the loader
-uses an executable config bridge: it creates a temporary helper inside the
-project module, imports the config package as normal Go, and reads the resulting
-`gowdk.Config`. That allows addons from other modules, including GitHub-hosted
-addons, to participate through the regular `gowdk.Addon`,
-`gowdk.CSSProcessor`, `gowdk.SEOProvider`, and `gowdk.GoBlockConsumer`
-interfaces:
+Because project-aware commands execute the native config package, addons from
+other modules, including GitHub-hosted addons, can participate through the
+regular `gowdk.Addon`, `gowdk.CSSProcessor`, `gowdk.SEOProvider`, and
+`gowdk.GoBlockConsumer` interfaces:
 
 ```go
 import (
@@ -800,11 +804,11 @@ var Config = gowdk.Config{
 ```
 
 External addon dependencies must already be resolvable by the project module,
-for example with `go get github.com/example/gowdk-brand`. Config packages must
-be importable Go packages, not `package main`.
+for example with `go get github.com/example/gowdk-brand`. The helper build uses
+the project module, including `replace`, `GOPRIVATE`, and module proxy settings.
 
-The literal loader also recognizes the known literal Tailwind addon options
-subset without needing the executable bridge:
+The AST tooling fallback also recognizes the known literal Tailwind addon
+options subset:
 
 ```go
 import "github.com/cssbruno/gowdk/addons/tailwind"
@@ -820,9 +824,7 @@ var Config = gowdk.Config{
 ```
 
 When `Command` is omitted, the Tailwind addon uses `tailwindcss` from `PATH`.
-If the executable is missing, builds fail with an install-required error. The
-executable bridge runs project config code only when the AST-only loader finds
-addon constructors it cannot reduce safely.
+If the executable is missing, builds fail with an install-required error.
 
 When `ratelimit.Addon()` is enabled, generated apps with request-time action,
 API, fragment, SSR, or split-backend proxy routes expose

@@ -13,7 +13,7 @@ project config plus explicit file paths or configured discovery
 
 Project-level compiler commands require `gowdk.config.go` or `--config <file>`.
 The current CLI accepts explicit `.gwdk` files, but explicit paths still require
-a loaded config. `gowdk build` can also discover source files from literal
+a loaded config. `gowdk build` can also discover source files from
 `Source.Include` and `Source.Exclude` settings plus configured module sources
 when no explicit files are supplied. Configured `Build.Targets` can declare
 selected modules, output dirs, generated app dirs, binary paths, backend-only

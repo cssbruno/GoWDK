@@ -42,7 +42,7 @@ language contract.
    - Diagnostics/validation: `go test ./internal/compiler ./internal/diagnostics`.
    - Generated output: `go test ./internal/buildgen ./internal/appgen`.
    - LSP/editor: `go test ./internal/lsp` plus editor checks when touched.
-   - CLI report changes: update `cmd/gowdk/testdata/*_golden` and run
+   - CLI report changes: update `internal/gowdkcmd/testdata/*_golden` and run
      `go test ./cmd/gowdk`.
 8. Add a conformance corpus case:
    - Accepted syntax: an `accept/` file under

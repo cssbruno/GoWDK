@@ -145,8 +145,9 @@ gowdk lsp [--ssr]
   a registered fix.
 - `--config`: supported by `add`, `check`, `doctor`, `test`, `audit`, `manifest`, `sitemap`,
   `routes`, `endpoints`, `inspect`, `generate stubs`, and `build`; selects the
-  config file. Compile commands load a literal config subset from the given
-  path instead of the required default `gowdk.config.go`.
+  config file. Project-aware `build`, `check`, and `dev` execute importable
+  configs through the generated native helper instead of the required default
+  `gowdk.config.go`.
 - `--env-file`: supported by project-aware compile/report commands that load
   `gowdk.config.go`, including `check`, `doctor`, `test`, `audit`, `manifest`,
   `sitemap`, `routes`, `endpoints`, `inspect`, `generate stubs`, and `build`;

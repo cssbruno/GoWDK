@@ -13,7 +13,7 @@ decisions.
 | Code boundaries | [Code quality](code-quality.md), [generated code policy](generated-code-policy.md), and [dependency policy](dependency-policy.md) |
 | Security | [Security](security.md) and [threat model](security-threat-model.md) |
 | Operations | [Operations](operations.md), [testing](testing.md), [CI](ci.md), and [Windows CI](windows-ci.md) |
-| Releases | [Release process](release.md) and [release planning](release-plan.md) |
+| Releases | [Release process](release.md) and [changelog](../../CHANGELOG.md) |
 | Decisions | [Architecture Decision Records](decisions/README.md) |
 
 Use [Product Requirements](../product/requirements.md) for capability status.

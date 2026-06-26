@@ -4,8 +4,9 @@
 event fanout. Current support covers delivery of
 `contracts.PresentationEvent` envelopes to browser clients, compiler metadata
 for `g:subscribe` query regions, generated SSE fanout for bound subscriptions,
-bounded generated client patches for query-owned regions, and explicit
-domain-event to query invalidation refresh.
+bounded generated client patches for query-owned regions, explicit
+domain-event to query invalidation refresh, configurable SSE reconnect/replay
+policy, and audience-based active stream revocation.
 
 Use it with contract web adapters when commands emit presentation events:
 
@@ -64,8 +65,11 @@ Current behavior:
   an SSE response. They choose page guards from `?path=...` or the request
   referer path when available; if no page path can be identified, guarded
   subscriptions fail closed by requiring the union of subscribed guard IDs.
-- Generated `gowdk.js` connects pages with subscribed regions to the SSE stream
-  and applies explicit `replaceHTML` patches to matching query-owned elements.
+- Generated `gowdk.js` connects pages with subscribed or invalidated query
+  regions to the SSE stream with `?path=<current path>` so guarded stream
+  reconnects use the current route rather than relying on the referer fallback.
+  It applies explicit versioned `replaceHTML` patches to matching query-owned
+  elements.
 - Generated apps expose `RealtimeEventsPath` and
   `RegisterRealtimeFanout(realtime.PresentationFanout)` so app startup code can
   replace the default fanout with an audience-scoped hub or another transport.
@@ -76,9 +80,11 @@ Current limits:
   rejected.
 - Only explicit `replaceHTML` patches are supported in the generated client
   runtime; richer patch shapes are deferred.
-- Custom retry/backoff/replay, active server-side session-change stream
-  revocation, richer patch shapes, fragment/API-specific query execution, and
-  route-specific refresh endpoints remain follow-up work.
+- Fragment/API-specific query execution remains follow-up work. Query
+  invalidation refresh first asks the generated route/query refresh endpoint
+  for standalone region patches when eligible route-matched renderers exist,
+  then falls back to refetching the current document for any remaining query
+  regions.
 
 ## Query Invalidations
 
@@ -108,16 +114,23 @@ Current behavior:
 - Generated command adapters send a `gowdk.query.invalidate` presentation event
   after successful command event dispatch when captured domain events invalidate
   bound queries.
-- Generated `gowdk.js` refetches the current document and replaces matching
-  non-subscribed query regions. Regions with `g:subscribe` are left to explicit
-  presentation patches so a document refetch does not overwrite a patch.
+- Generated apps with eligible standalone public SSR/hybrid query regions mount
+  `/_gowdk/realtime/query-refresh`. Generated `gowdk.js` calls it with the
+  current route path and invalidated query types, applies any returned
+  `{query, html}` patches, and refetches the current document only for query
+  regions that were not patched. The endpoint uses both `path` and `query`
+  values; a query region registered for another route is not rendered. Regions
+  with `g:subscribe` are left to explicit presentation patches so a refresh
+  does not overwrite a patch.
 
 The generated invalidation event value is:
 
 ```json
 {
+  "version": 1,
   "queries": ["github.com/acme/clinic/patients.GetPatientPage"],
-  "events": ["domain:github.com/acme/clinic/patients.PatientCreated"]
+  "events": ["domain:github.com/acme/clinic/patients.PatientCreated"],
+  "eventIDs": ["01H..."]
 }
 ```
 
@@ -150,8 +163,10 @@ generated runtime opens `/_gowdk/realtime/events`; submitting the form runs the
 Go command, emits `patients.PatientNotice`, and replaces the subscribed status
 region with the patch HTML from user Go. The same command emits
 `patients.PatientCreated`, which triggers a generated query invalidation event
-for the non-subscribed query region. Without JavaScript, the page still renders
-the static query regions and the form posts to the generated command endpoint.
+for the non-subscribed query region. The browser tries
+`/_gowdk/realtime/query-refresh` for targeted region patches before falling back
+to a current-document refetch. Without JavaScript, the page still renders the
+static query regions and the form posts to the generated command endpoint.
 
 Useful smoke checks:
 
@@ -172,6 +187,7 @@ Generated clients consume `gowdk-presentation` SSE messages whose envelope
 
 ```json
 {
+  "version": 1,
   "patch": {
     "op": "replaceHTML",
     "html": "<p>Updated</p>",
@@ -182,6 +198,8 @@ Generated clients consume `gowdk-presentation` SSE messages whose envelope
 
 Supported patch fields:
 
+- `version`: optional; when present, must be `1`. It can appear on the value
+  envelope or each patch object.
 - `op`: must be `replaceHTML`.
 - `html`: replacement HTML string.
 - `swap`: optional, `innerHTML` by default; `outerHTML` is also accepted.
@@ -218,18 +236,29 @@ hub := realtime.NewSSE(
 		if tenantID == "" || userID == "" {
 			return nil
 		}
-		return []string{"tenant:" + tenantID, "user:" + userID}
+		sessionID := sessionIDFromRequest(request)
+		return []string{"tenant:" + tenantID, "user:" + userID, "session:" + sessionID}
 	}),
 )
 
 gowdkapp.RegisterRealtimeFanout(hub)
 ```
 
-`tenantAndUserFromSession` is app-owned code. Empty event audience means
-broadcast to every guard-authorized and subscription-matched client. Non-empty
-event audience uses AND matching: every event label must be present in the
-client label set. Clients with no audience labels receive broadcast events
-only.
+`tenantAndUserFromSession` and `sessionIDFromRequest` are app-owned code. Empty
+event audience means broadcast to every guard-authorized and
+subscription-matched client. Non-empty event audience uses AND matching: every
+event label must be present in the client label set. Clients with no audience
+labels receive broadcast events only.
+
+To force already-open streams to reconnect after a session change, revoke the
+server-owned audience label:
+
+```go
+hub.RevokeAudience("session:" + sessionID)
+```
+
+The next browser reconnect re-runs generated guards and audience assignment
+before any new presentation events are delivered.
 
 ## Stream Failure And Backpressure
 
@@ -239,9 +268,21 @@ regions. Guard failures return the existing no-store guard failure response
 instead of an SSE stream, so browsers do not receive protected events after
 access is denied.
 
-The dependency-free SSE adapter sends `retry: 1000`, so browser EventSource
-clients use a one-second reconnect delay for ordinary transport failures. GOWDK
-does not add custom browser retry state in this slice.
+The dependency-free SSE adapter sends `retry: 1000` by default, so browser
+EventSource clients use a one-second reconnect delay for ordinary transport
+failures. Set `realtime.WithSSERetryMillis(ms)` when an app needs a different
+server-advertised reconnect delay.
+
+Set `realtime.WithSSEReplayLimit(n)` to keep the last `n` presentation events
+in memory. The hub writes SSE `id:` lines from `contracts.EventEnvelope.ID`, and
+browsers reconnect with `Last-Event-ID`; the hub then replays only later events
+whose audience labels still match the reconnecting request. This is an
+in-memory convenience for short disconnects, not durable delivery across
+process restarts.
+
+`hub.Stats()` returns process-local counters for current clients, slow-client
+drops, audience revocations, replayed events, and replay misses. Export these
+through app-owned metrics infrastructure when production operations need them.
 
 Each SSE client has a bounded queue (`16` messages by default, configurable
 with `realtime.WithSSEBufferSize`). When a client queue is full, new events for
@@ -250,8 +291,8 @@ Use a broker/outbox/replay path for applications that require guaranteed
 delivery after disconnects or slow clients.
 
 Active server-side session changes are enforced on the next stream open or
-reconnect. Immediate revocation of already-open streams remains app-owned or
-future GOWDK runtime work.
+reconnect. Use `RevokeAudience` with a session label to disconnect already-open
+streams immediately.
 
 ## Transport Choice
 
@@ -272,6 +313,8 @@ import (
 
 hub := realtime.NewSSE(
 	realtime.WithSSEBufferSize(32),
+	realtime.WithSSERetryMillis(2000),
+	realtime.WithSSEReplayLimit(128),
 	realtime.WithSSEAudienceFromRequest(func(request *http.Request) []string {
 		tenantID, userID := tenantAndUserFromSession(request)
 		if tenantID == "" || userID == "" {
@@ -334,6 +377,8 @@ Each presentation event is written as one text JSON `contracts.EventEnvelope`.
   user-, session-, or tenant-specific presentation payloads. Without an
   audience-scoped fanout, scoped events are not delivered to generated SSE
   clients.
+- `WithSSEReplayLimit` is process-local. Multi-instance deployments still need
+  a broker/outbox path for durable cross-process replay.
 - SSE responses set `X-Accel-Buffering: no`; reverse proxies may still need
   explicit buffering and timeout settings for long-lived streams.
 - WebSocket deployments should set origin checks and proxy upgrade headers.
@@ -346,6 +391,7 @@ Each presentation event is written as one text JSON `contracts.EventEnvelope`.
 go run ./cmd/gowdk add --list
 go run ./cmd/gowdk add --list --registry
 go test ./runtime/contracts/sse
+go test ./addons/realtime
 go test ./internal/appgen -run 'TestGenerateGuardsRealtimeStreamForSubscribedPages|TestGeneratedBinaryRealtimeStreamGuardDenialClosesStream'
 (cd runtime/contracts/websocketfanout && go test ./...)
 ```

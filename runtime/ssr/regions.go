@@ -50,6 +50,9 @@ type RegionRenderer struct {
 	// QueryType is the fully-qualified query type that names this region, matching
 	// the X-GOWDK-Queries header and the region's data-gowdk-query-type attribute.
 	QueryType string
+	// Route is the concrete page route this region belongs to. Route refresh
+	// requests that name a different current path do not use this renderer.
+	Route string
 	// Template is the region element's outer HTML with its region and scalar
 	// placeholders intact, ready for RenderRegions.
 	Template string
@@ -87,33 +90,22 @@ func (renderer RegionRenderer) render(request *http.Request) (string, bool) {
 	return html, true
 }
 
-type regionEntry struct {
-	renderer  RegionRenderer
-	ambiguous bool
-}
-
 var (
 	regionMu        sync.RWMutex
-	regionRenderers = map[string]regionEntry{}
+	regionRenderers = map[string][]RegionRenderer{}
 )
 
 // RegisterRegion records a region renderer by query type. When two renderers
-// register the same query type (the same query backs regions on more than one
-// parameterless page), the type is marked ambiguous and single-flight falls back
-// to the client refetch for it, since the command request cannot tell which
-// page's region the submitter is viewing.
+// register the same query type, query-only command single-flight rendering falls
+// back to the client refresh path unless a route-scoped refresh asks for one
+// concrete route.
 func RegisterRegion(renderer RegionRenderer) {
 	if renderer.QueryType == "" || renderer.Load == nil {
 		return
 	}
 	regionMu.Lock()
 	defer regionMu.Unlock()
-	if existing, ok := regionRenderers[renderer.QueryType]; ok {
-		existing.ambiguous = true
-		regionRenderers[renderer.QueryType] = existing
-		return
-	}
-	regionRenderers[renderer.QueryType] = regionEntry{renderer: renderer}
+	regionRenderers[renderer.QueryType] = append(regionRenderers[renderer.QueryType], renderer)
 }
 
 // RenderInvalidatedRegions renders the registered g:query regions for the given
@@ -125,14 +117,13 @@ func RenderInvalidatedRegions(request *http.Request, queries []string) []RegionP
 		return nil
 	}
 	var patches []RegionPatch
+	requestPath := RegionRequestPath(request)
 	for _, query := range queries {
-		regionMu.RLock()
-		entry, ok := regionRenderers[query]
-		regionMu.RUnlock()
-		if !ok || entry.ambiguous {
+		renderer, ok := lookupRegionRenderer(query, requestPath)
+		if !ok {
 			continue
 		}
-		html, rendered := entry.renderer.render(request)
+		html, rendered := renderer.render(request)
 		if !rendered {
 			continue
 		}
@@ -142,6 +133,64 @@ func RenderInvalidatedRegions(request *http.Request, queries []string) []RegionP
 		patches = append(patches, RegionPatch{Query: query, HTML: html})
 	}
 	return patches
+}
+
+func lookupRegionRenderer(query, requestPath string) (RegionRenderer, bool) {
+	regionMu.RLock()
+	defer regionMu.RUnlock()
+	renderers := regionRenderers[query]
+	if len(renderers) == 0 {
+		return RegionRenderer{}, false
+	}
+	if requestPath == "" {
+		if len(renderers) == 1 {
+			return renderers[0], true
+		}
+		return RegionRenderer{}, false
+	}
+	var match RegionRenderer
+	matches := 0
+	for _, renderer := range renderers {
+		if renderer.Route != requestPath {
+			continue
+		}
+		match = renderer
+		matches++
+	}
+	return match, matches == 1
+}
+
+// RegionRequestPath returns the current page path carried by a route-refresh
+// request. Empty means the request did not provide route context, so callers may
+// use the legacy query-type renderer fallback.
+func RegionRequestPath(request *http.Request) string {
+	path, _ := regionRequestPathAndQuery(request)
+	return path
+}
+
+// RegionRequestRawQuery returns the current page query string carried by a
+// route-refresh request, without the leading "?".
+func RegionRequestRawQuery(request *http.Request) string {
+	_, query := regionRequestPathAndQuery(request)
+	return query
+}
+
+func regionRequestPathAndQuery(request *http.Request) (string, string) {
+	if request == nil || request.URL == nil {
+		return "", ""
+	}
+	value := strings.TrimSpace(request.URL.Query().Get("path"))
+	if value == "" || !strings.HasPrefix(value, "/") {
+		return "", ""
+	}
+	if before, _, ok := strings.Cut(value, "#"); ok {
+		value = before
+	}
+	path, rawQuery, _ := strings.Cut(value, "?")
+	if path == "" || !strings.HasPrefix(path, "/") {
+		return "", ""
+	}
+	return path, rawQuery
 }
 
 func htmlContainsPostForm(html string) bool {
@@ -363,5 +412,5 @@ func isHTMLSpace(char byte) bool {
 func resetRegions() {
 	regionMu.Lock()
 	defer regionMu.Unlock()
-	regionRenderers = map[string]regionEntry{}
+	regionRenderers = map[string][]RegionRenderer{}
 }

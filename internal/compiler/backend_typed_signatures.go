@@ -13,6 +13,9 @@ func backendTypedSignature(function *types.Signature, pkg *types.Package) (sourc
 	if isTypedAPISignature(function) {
 		return source.BackendSignatureAPI, "", false, nil, "", false, nil, ""
 	}
+	if kind, inputType, inputPointer, inputFields, resultType, resultPointer, resultFields, supportMessage, ok := typedAPISignature(function, pkg); ok {
+		return kind, inputType, inputPointer, inputFields, resultType, resultPointer, resultFields, supportMessage
+	}
 	if signature, resultType, resultPointer, resultFields, supportMessage, ok := typedLoadSignature(function, pkg); ok {
 		return signature, "", false, nil, resultType, resultPointer, resultFields, supportMessage
 	}
@@ -75,6 +78,47 @@ func isTypedAPISignature(function *types.Signature) bool {
 		isTypedPointerToNamed(params.At(1).Type(), httpImportPath, "Request") &&
 		isTypedNamed(results.At(0).Type(), responseImportPath, "Response") &&
 		isTypedError(results.At(1).Type())
+}
+
+func typedAPISignature(function *types.Signature, pkg *types.Package) (source.BackendSignatureKind, string, bool, []source.BackendInputField, string, bool, []source.BackendResultField, string, bool) {
+	if function == nil || function.Params() == nil || function.Results() == nil {
+		return "", "", false, nil, "", false, nil, "", false
+	}
+	params := function.Params()
+	results := function.Results()
+	if params.Len() != 1 && params.Len() != 2 {
+		return "", "", false, nil, "", false, nil, "", false
+	}
+	if !isTypedNamed(params.At(0).Type(), contextImportPath, "Context") {
+		return "", "", false, nil, "", false, nil, "", false
+	}
+	if results.Len() != 2 || !isTypedError(results.At(1).Type()) {
+		return "", "", false, nil, "", false, nil, "", false
+	}
+	resultType, resultPointer, resultNamed, ok := typedLocalResultType(results.At(0).Type(), pkg)
+	if !ok {
+		return "", "", false, nil, "", false, nil, "", false
+	}
+	resultStruct := backendTypedAPIResultStruct(resultType, resultNamed)
+	if resultStruct.Message != "" {
+		return "", "", false, nil, resultType, resultPointer, nil, resultStruct.Message, true
+	}
+	if params.Len() == 1 {
+		return source.BackendSignatureAPI0, "", false, nil, resultType, resultPointer, append([]source.BackendResultField(nil), resultStruct.Fields...), "", true
+	}
+	inputName, inputPointer, inputType, ok := typedLocalInputType(params.At(1).Type(), pkg)
+	if !ok {
+		return "", "", false, nil, "", false, nil, "", false
+	}
+	inputStruct := backendTypedAPIInputStruct(inputName, inputType)
+	if inputStruct.Message != "" {
+		return "", inputName, inputPointer, nil, resultType, resultPointer, nil, inputStruct.Message, true
+	}
+	kind := source.BackendSignatureAPIInput
+	if inputPointer {
+		kind = source.BackendSignatureAPIInputPtr
+	}
+	return kind, inputName, inputPointer, append([]source.BackendInputField(nil), inputStruct.Fields...), resultType, resultPointer, append([]source.BackendResultField(nil), resultStruct.Fields...), "", true
 }
 
 func typedLoadSignature(function *types.Signature, pkg *types.Package) (source.BackendSignatureKind, string, bool, []source.BackendResultField, string, bool) {

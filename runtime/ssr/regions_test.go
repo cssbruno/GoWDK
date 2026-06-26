@@ -82,6 +82,89 @@ func TestRenderInvalidatedRegionsSkipsUnregisteredAndAmbiguous(t *testing.T) {
 	}
 }
 
+func TestRenderInvalidatedRegionsUsesRoutePathForAmbiguousQuery(t *testing.T) {
+	resetRegions()
+	defer resetRegions()
+	const queryType = "example.com/app/patients.GetPatientPage"
+	board := boardRegion(queryType)
+	board.Route = "/board"
+	dashboard := boardRegion(queryType)
+	dashboard.Route = "/dashboard"
+	dashboard.Load = func(*http.Request) (map[string]any, error) {
+		return map[string]any{"patients": []map[string]any{{"Name": "Grace"}}}, nil
+	}
+	RegisterRegion(board)
+	RegisterRegion(dashboard)
+
+	if patches := RenderInvalidatedRegions(httptest.NewRequest(http.MethodPost, "/patients", nil), []string{queryType}); len(patches) != 0 {
+		t.Fatalf("query-only rendering for ambiguous route should fall back, got %+v", patches)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/_gowdk/realtime/query-refresh?path=%2Fdashboard", nil)
+	patches := RenderInvalidatedRegions(request, []string{queryType})
+	if len(patches) != 1 {
+		t.Fatalf("expected one route-scoped patch, got %+v", patches)
+	}
+	if !strings.Contains(patches[0].HTML, "<li>Grace</li>") || strings.Contains(patches[0].HTML, "<li>Ada</li>") {
+		t.Fatalf("expected dashboard route patch, got %q", patches[0].HTML)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/_gowdk/realtime/query-refresh?path=%2Fsettings", nil)
+	if patches := RenderInvalidatedRegions(request, []string{queryType}); len(patches) != 0 {
+		t.Fatalf("wrong-route refresh should not render patches, got %+v", patches)
+	}
+}
+
+func TestRenderInvalidatedRegionsHonorsRequestedRoute(t *testing.T) {
+	resetRegions()
+	defer resetRegions()
+	const queryType = "example.com/app/patients.GetPatientPage"
+	renderer := boardRegion(queryType)
+	renderer.Route = "/patients"
+	RegisterRegion(renderer)
+
+	wrongRoute := httptest.NewRequest(http.MethodGet, "/_gowdk/realtime/query-refresh?path=%2Fdashboard&query="+queryType, nil)
+	if patches := RenderInvalidatedRegions(wrongRoute, []string{queryType}); len(patches) != 0 {
+		t.Fatalf("expected no patches for a mismatched route, got %+v", patches)
+	}
+
+	matchingRoute := httptest.NewRequest(http.MethodGet, "/_gowdk/realtime/query-refresh?path=%2Fpatients%3Fpage%3D2&query="+queryType, nil)
+	patches := RenderInvalidatedRegions(matchingRoute, []string{queryType})
+	if len(patches) != 1 || patches[0].Query != queryType {
+		t.Fatalf("expected matching route patch, got %+v", patches)
+	}
+	if got := RegionRequestPath(matchingRoute); got != "/patients" {
+		t.Fatalf("RegionRequestPath = %q, want /patients", got)
+	}
+	if got := RegionRequestRawQuery(matchingRoute); got != "page=2" {
+		t.Fatalf("RegionRequestRawQuery = %q, want page=2", got)
+	}
+}
+
+func TestRenderInvalidatedRegionsSelectsRouteFromSharedQueryType(t *testing.T) {
+	resetRegions()
+	defer resetRegions()
+	const queryType = "example.com/app/patients.GetPatientPage"
+	patients := boardRegion(queryType)
+	patients.Route = "/patients"
+	board := boardRegion(queryType)
+	board.Route = "/board"
+	board.Template = `<section data-gowdk-query-type="` + queryType + `"><p>Board</p></section>`
+	RegisterRegion(patients)
+	RegisterRegion(board)
+
+	commandRequest := httptest.NewRequest(http.MethodPost, "/commands/create", nil)
+	if patches := RenderInvalidatedRegions(commandRequest, []string{queryType}); len(patches) != 0 {
+		t.Fatalf("expected ambiguous command patch to fall back, got %+v", patches)
+	}
+
+	refreshRequest := httptest.NewRequest(http.MethodGet, "/_gowdk/realtime/query-refresh?path=%2Fboard&query="+queryType, nil)
+	patches := RenderInvalidatedRegions(refreshRequest, []string{queryType})
+	if len(patches) != 1 || !strings.Contains(patches[0].HTML, "Board") {
+		t.Fatalf("expected route-specific board patch, got %+v", patches)
+	}
+}
+
 func TestRenderInvalidatedRegionsSkipsOnLoadError(t *testing.T) {
 	resetRegions()
 	defer resetRegions()

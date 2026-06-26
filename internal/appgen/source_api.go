@@ -11,7 +11,10 @@ import (
 func apiHandlerSource(apis []APIEndpoint) (source string, err error) {
 	defer recoverGeneratedIdentifierError(&err)
 
-	return printActionDecls([]ast.Decl{apiFuncDecl(backendAdapterIR(Options{APIs: apis}).APIs, false, false)})
+	adapter := backendAdapterIR(Options{APIs: apis})
+	decls := []ast.Decl{apiFuncDecl(adapter.APIs, false, false)}
+	decls = append(decls, apiDecoderDecls(adapter.APIs)...)
+	return printActionDecls(decls)
 }
 
 func apiFuncDecl(apis []BackendAPIAdapter, csrf bool, rateLimit bool) *ast.FuncDecl {
@@ -75,23 +78,276 @@ func apiCaseStmts(api BackendAPIAdapter, csrf bool, rateLimit bool) []ast.Stmt {
 		return stmts
 	}
 	stmts = append(stmts, apiCSRFStmts(csrf)...)
-	stmts = append(stmts,
-		define([]ast.Expr{id("result"), id("err")}, call(sel(api.BackendAlias, api.Binding.FunctionName), id("ctx"), id("request"))),
-		&ast.IfStmt{
-			Cond: notNil("err"),
-			Body: block(
-				writeNoStoreHandlerErrorExprStmt(id("err"), sel("http", "StatusInternalServerError")),
-				returnBool(true),
-			),
-		},
-		writeNoStoreHTTPStmt(id("result")),
-		returnBool(true),
-	)
+	stmts = append(stmts, apiInputDecodeStmts(api)...)
+	stmts = append(stmts, boundAPIResultStmts(api)...)
+	stmts = append(stmts, returnBool(true))
 	return stmts
 }
 
 func apiBodyLimitStmt() ast.Stmt {
 	return assign([]ast.Expr{selExpr(id("request"), "Body")}, call(sel("http", "MaxBytesReader"), id("response"), selExpr(id("request"), "Body"), id("maxAPIBodyBytes")))
+}
+
+func apiInputDecodeStmts(api BackendAPIAdapter) []ast.Stmt {
+	switch api.Binding.Signature {
+	case source.BackendSignatureAPIInput, source.BackendSignatureAPIInputPtr:
+		errorStmt := ifErrReturnInvalidJSONForm()
+		if !apiUsesQueryInput(api) {
+			errorStmt = ifErrReturnInvalidAPIJSONInput()
+		}
+		return []ast.Stmt{
+			define([]ast.Expr{id("input"), id("err")}, call(sel(apiDecoderName(api)), id("request"))),
+			errorStmt,
+		}
+	default:
+		return nil
+	}
+}
+
+func boundAPIResultStmts(api BackendAPIAdapter) []ast.Stmt {
+	args := []ast.Expr{id("ctx")}
+	switch api.Binding.Signature {
+	case source.BackendSignatureAPI:
+		args = append(args, id("request"))
+	case source.BackendSignatureAPIInput:
+		args = append(args, id("input"))
+	case source.BackendSignatureAPIInputPtr:
+		args = append(args, &ast.UnaryExpr{Op: token.AND, X: id("input")})
+	}
+	stmts := []ast.Stmt{
+		define([]ast.Expr{id("result"), id("err")}, call(sel(api.BackendAlias, api.Binding.FunctionName), args...)),
+		&ast.IfStmt{
+			Cond: notNil("err"),
+			Body: block(
+				apiHandlerErrorStmt(api),
+				returnBool(true),
+			),
+		},
+	}
+	if api.Binding.Signature == source.BackendSignatureAPI {
+		return append(stmts, writeNoStoreHTTPStmt(id("result")))
+	}
+	return append(stmts,
+		define([]ast.Expr{id("status")}, call(sel("gowdkapi", "ResultStatus"), id("result"), sel("http", "StatusOK"))),
+		define([]ast.Expr{id("httpResult"), id("err")}, call(sel("gowdkresponse", "JSONValue"), id("status"), id("result"))),
+		&ast.IfStmt{
+			Cond: notNil("err"),
+			Body: block(
+				writeNoStoreHandlerJSONErrorExprStmt(id("err"), sel("http", "StatusInternalServerError")),
+				returnBool(true),
+			),
+		},
+		writeNoStoreHTTPStmt(id("httpResult")),
+	)
+}
+
+func apiHandlerErrorStmt(api BackendAPIAdapter) ast.Stmt {
+	if api.Binding.Signature == source.BackendSignatureAPI {
+		return writeNoStoreHandlerErrorExprStmt(id("err"), sel("http", "StatusInternalServerError"))
+	}
+	return writeNoStoreHandlerJSONErrorExprStmt(id("err"), sel("http", "StatusInternalServerError"))
+}
+
+func apiDecoderDecls(apis []BackendAPIAdapter) []ast.Decl {
+	decls := make([]ast.Decl, 0, len(apis))
+	seen := map[string]bool{}
+	for _, api := range apis {
+		if !apiUsesTypedInput(api) {
+			continue
+		}
+		name := apiDecoderName(api)
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		if apiUsesQueryInput(api) {
+			decls = append(decls, queryAPIDecoderDecl(api))
+			continue
+		}
+		decls = append(decls, jsonAPIDecoderDecl(api))
+	}
+	return decls
+}
+
+func queryAPIDecoderDecl(api BackendAPIAdapter) *ast.FuncDecl {
+	stmts := []ast.Stmt{
+		define([]ast.Expr{id("input")}, &ast.CompositeLit{Type: sel(api.BackendAlias, api.Binding.InputType)}),
+		define([]ast.Expr{id("values")}, call(sel("gowdkform", "FromURLValues"), call(selExpr(selExpr(id("request"), "URL"), "Query")))),
+		define([]ast.Expr{id("decoded"), id("err")}, call(sel("gowdkform", "DecodeExpected"), id("values"), apiInputFormSchemaExpr(api.Binding.InputFields))),
+		&ast.IfStmt{
+			Cond: notNil("err"),
+			Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("input"), id("err")}}),
+		},
+		assign([]ast.Expr{id("values")}, id("decoded")),
+	}
+	for index, field := range api.Binding.InputFields {
+		stmts = append(stmts, boundActionFieldDecodeStmts(index, field)...)
+	}
+	stmts = append(stmts, &ast.ReturnStmt{Results: []ast.Expr{id("input"), id("nil")}})
+	return funcDecl(apiDecoderName(api), []*ast.Field{
+		{Names: []*ast.Ident{id("request")}, Type: &ast.StarExpr{X: sel("http", "Request")}},
+	}, []*ast.Field{{Type: sel(api.BackendAlias, api.Binding.InputType)}, {Type: id("error")}}, stmts)
+}
+
+func jsonAPIDecoderDecl(api BackendAPIAdapter) *ast.FuncDecl {
+	stmts := []ast.Stmt{
+		define([]ast.Expr{id("input")}, &ast.CompositeLit{Type: sel(api.BackendAlias, api.Binding.InputType)}),
+		define([]ast.Expr{id("decoder"), id("err")}, call(sel("gowdkapi", "NewJSONFieldDecoder"), id("request"))),
+		&ast.IfStmt{
+			Cond: notNil("err"),
+			Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("input"), id("err")}}),
+		},
+		&ast.ForStmt{
+			Cond: call(selExpr(id("decoder"), "More")),
+			Body: block(
+				define([]ast.Expr{id("field"), id("err")}, call(selExpr(id("decoder"), "Field"))),
+				&ast.IfStmt{
+					Cond: notNil("err"),
+					Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("input"), id("err")}}),
+				},
+				apiJSONFieldSwitch(api),
+			),
+		},
+		&ast.IfStmt{
+			Init: define([]ast.Expr{id("err")}, call(selExpr(id("decoder"), "Finish"))),
+			Cond: notNil("err"),
+			Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("input"), id("err")}}),
+		},
+		&ast.ReturnStmt{Results: []ast.Expr{id("input"), id("nil")}},
+	}
+	return funcDecl(apiDecoderName(api), []*ast.Field{
+		{Names: []*ast.Ident{id("request")}, Type: &ast.StarExpr{X: sel("http", "Request")}},
+	}, []*ast.Field{{Type: sel(api.BackendAlias, api.Binding.InputType)}, {Type: id("error")}}, stmts)
+}
+
+func apiJSONFieldSwitch(api BackendAPIAdapter) ast.Stmt {
+	clauses := make([]ast.Stmt, 0, len(api.Binding.InputFields)+1)
+	for index, field := range api.Binding.InputFields {
+		clauses = append(clauses, &ast.CaseClause{
+			List: []ast.Expr{stringLit(field.FormName)},
+			Body: apiJSONFieldDecodeStmts(index, field),
+		})
+	}
+	clauses = append(clauses, &ast.CaseClause{Body: []ast.Stmt{
+		&ast.ReturnStmt{Results: []ast.Expr{id("input"), call(selExpr(id("decoder"), "UnknownField"), id("field"))}},
+	}})
+	return &ast.SwitchStmt{Tag: id("field"), Body: &ast.BlockStmt{List: clauses}}
+}
+
+func apiJSONFieldDecodeStmts(index int, field source.BackendInputField) []ast.Stmt {
+	fieldType := source.MustBackendInputFieldType(field.Type)
+	value := id(fmtFieldValueName(index))
+	var decode ast.Expr
+	var assignment ast.Expr = value
+	switch fieldType.Kind {
+	case source.BackendInputFieldKindString:
+		decode = call(selExpr(id("decoder"), "String"), stringLit(field.FormName))
+	case source.BackendInputFieldKindBool:
+		decode = call(selExpr(id("decoder"), "Bool"), stringLit(field.FormName))
+	case source.BackendInputFieldKindSignedInt:
+		decode = call(selExpr(id("decoder"), "Int"), stringLit(field.FormName), intLit(fieldType.BitSize))
+		assignment = convertIfNeeded(field.Type, value)
+	case source.BackendInputFieldKindUnsignedInt:
+		decode = call(selExpr(id("decoder"), "Uint"), stringLit(field.FormName), intLit(fieldType.BitSize))
+		assignment = convertIfNeeded(field.Type, value)
+	case source.BackendInputFieldKindStringSlice:
+		decode = call(selExpr(id("decoder"), "Strings"), stringLit(field.FormName))
+	default:
+		panic("unsupported typed API input field type " + field.Type)
+	}
+	return []ast.Stmt{
+		define([]ast.Expr{value, id("err")}, decode),
+		&ast.IfStmt{
+			Cond: notNil("err"),
+			Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("input"), id("err")}}),
+		},
+		assign([]ast.Expr{selExpr(id("input"), field.FieldName)}, assignment),
+	}
+}
+
+func apiDecoderName(api BackendAPIAdapter) string {
+	return "decode" + source.ExportedIdentifier(api.PageID, "API") + source.ExportedIdentifier(api.APIName, "API") + source.ExportedIdentifier(api.Method, "Method") + "Input"
+}
+
+func apiUsesTypedInput(api BackendAPIAdapter) bool {
+	return api.Binding.Status == source.BackendBindingBound &&
+		(api.Binding.Signature == source.BackendSignatureAPIInput || api.Binding.Signature == source.BackendSignatureAPIInputPtr)
+}
+
+func apiUsesQueryInput(api BackendAPIAdapter) bool {
+	return api.Method == "GET" || api.Method == "HEAD"
+}
+
+func apisUseTypedJSONInput(apis []BackendAPIAdapter) bool {
+	for _, api := range apis {
+		if apiUsesTypedInput(api) && !apiUsesQueryInput(api) {
+			return true
+		}
+	}
+	return false
+}
+
+func apisUseTypedResult(apis []BackendAPIAdapter) bool {
+	for _, api := range apis {
+		switch api.Binding.Signature {
+		case source.BackendSignatureAPI0, source.BackendSignatureAPIInput, source.BackendSignatureAPIInputPtr:
+			return true
+		}
+	}
+	return false
+}
+
+func apisUseTypedQueryInput(apis []BackendAPIAdapter) bool {
+	for _, api := range apis {
+		if apiUsesTypedInput(api) && apiUsesQueryInput(api) {
+			return true
+		}
+	}
+	return false
+}
+
+func ifErrReturnInvalidAPIJSONInput() ast.Stmt {
+	return &ast.IfStmt{
+		Cond: notNil("err"),
+		Body: block(
+			&ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
+				Names: []*ast.Ident{id("maxBytesErr")},
+				Type:  &ast.StarExpr{X: sel("http", "MaxBytesError")},
+			}}}},
+			&ast.IfStmt{
+				Cond: call(sel("errors", "As"), id("err"), &ast.UnaryExpr{Op: token.AND, X: id("maxBytesErr")}),
+				Body: block(
+					writeNoStoreJSONErrorStmt(sel("http", "StatusRequestEntityTooLarge"), "request body too large"),
+					returnBool(true),
+				),
+			},
+			writeNoStoreJSONErrorStmt(sel("http", "StatusBadRequest"), "invalid form"),
+			returnBool(true),
+		),
+	}
+}
+
+func apiInputFormSchemaExpr(fields []source.BackendInputField) ast.Expr {
+	elts := make([]ast.Expr, 0, len(fields))
+	for _, field := range fields {
+		name := field.FormName
+		if name == "" {
+			name = field.FieldName
+		}
+		if name == "" {
+			continue
+		}
+		elts = append(elts, &ast.CompositeLit{
+			Elts: []ast.Expr{keyValue("Name", stringLit(name))},
+		})
+	}
+	return &ast.CompositeLit{
+		Type: sel("gowdkform", "Schema"),
+		Elts: []ast.Expr{keyValue("Fields", &ast.CompositeLit{
+			Type: &ast.ArrayType{Elt: sel("gowdkform", "Field")},
+			Elts: elts,
+		})},
+	}
 }
 
 func apiCSRFStmts(csrf bool) []ast.Stmt {

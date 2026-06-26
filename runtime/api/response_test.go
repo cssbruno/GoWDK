@@ -18,6 +18,26 @@ func TestJSONCreatesRuntimeResponse(t *testing.T) {
 	}
 }
 
+type statusResult struct {
+	status int
+}
+
+func (result statusResult) APIStatus() int {
+	return result.status
+}
+
+func TestResultStatusUsesTypedStatusContract(t *testing.T) {
+	if got := ResultStatus(statusResult{status: http.StatusAccepted}, http.StatusOK); got != http.StatusAccepted {
+		t.Fatalf("ResultStatus = %d, want %d", got, http.StatusAccepted)
+	}
+	if got := ResultStatus(statusResult{}, http.StatusCreated); got != http.StatusCreated {
+		t.Fatalf("ResultStatus fallback = %d, want %d", got, http.StatusCreated)
+	}
+	if got := ResultStatus(struct{}{}, 0); got != http.StatusOK {
+		t.Fatalf("ResultStatus default fallback = %d, want %d", got, http.StatusOK)
+	}
+}
+
 func TestErrorCreatesStructuredJSONError(t *testing.T) {
 	result, err := Error(http.StatusBadRequest, "invalid_request", "Invalid request")
 	if err != nil {

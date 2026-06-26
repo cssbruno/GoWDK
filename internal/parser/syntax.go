@@ -315,15 +315,20 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			depth = 1
 			continue
 		}
-		if match := actionEndpointPattern.FindStringSubmatch(line); match != nil {
-			if !isExportedIdentifier(match[1]) {
-				addError(fmt.Errorf("line %d: action handler %q must be an exported Go identifier", lineNumber, match[1]))
+		if endpoint, ok, err := parseEndpointLineSpec(line, "act", true); ok || err != nil {
+			if err != nil {
+				addError(fmt.Errorf("line %d: %w", lineNumber, err))
 				continue
 			}
-			if match[2] != "POST" {
-				addError(fmt.Errorf("line %d: action %s uses unsupported method %s; actions currently require POST", lineNumber, match[1], match[2]))
+			if !isExportedIdentifier(endpoint.Name) {
+				addError(fmt.Errorf("line %d: action handler %q must be an exported Go identifier", lineNumber, endpoint.Name))
 				continue
 			}
+			if endpoint.Method != "POST" {
+				addError(fmt.Errorf("line %d: action %s uses unsupported method %s; actions currently require POST", lineNumber, endpoint.Name, endpoint.Method))
+				continue
+			}
+			match := []string{line, endpoint.Name, endpoint.Method, endpoint.Route, endpoint.ErrorPath}
 			errorPage, err := endpointErrorPage(match, lineNumber)
 			if err != nil {
 				addError(err)
@@ -331,9 +336,9 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			}
 			file.Actions = append(file.Actions, SyntaxEndpoint{
 				Kind:          "act",
-				Name:          match[1],
-				Method:        match[2],
-				Route:         match[3],
+				Name:          endpoint.Name,
+				Method:        endpoint.Method,
+				Route:         endpoint.Route,
 				ErrorPage:     errorPage,
 				Span:          sourceLineSpan(lineNumber, rawLine),
 				ErrorPageSpan: endpointErrorPageSpan(match, sourceLineSpan(lineNumber, rawLine)),
@@ -345,22 +350,29 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			startSkippingBlock("act")
 			continue
 		}
-		if match := apiEndpointPattern.FindStringSubmatch(line); match != nil {
-			if !isExportedIdentifier(match[1]) {
-				addError(fmt.Errorf("line %d: API handler %q must be an exported Go identifier", lineNumber, match[1]))
+		if endpoint, ok, err := parseEndpointLineSpec(line, "api", false); ok || err != nil {
+			if err != nil {
+				addError(fmt.Errorf("line %d: %w", lineNumber, err))
 				continue
 			}
+			if !isExportedIdentifier(endpoint.Name) {
+				addError(fmt.Errorf("line %d: API handler %q must be an exported Go identifier", lineNumber, endpoint.Name))
+				continue
+			}
+			match := []string{line, endpoint.Name, endpoint.Method, endpoint.Route, endpoint.ErrorPath}
 			errorPage, err := endpointErrorPage(match, lineNumber)
 			if err != nil {
 				addError(err)
 				continue
 			}
+			endpoint.CORS.Span = sourceLineSpan(lineNumber, rawLine)
 			file.APIs = append(file.APIs, SyntaxEndpoint{
 				Kind:          "api",
-				Name:          match[1],
-				Method:        match[2],
-				Route:         match[3],
+				Name:          endpoint.Name,
+				Method:        endpoint.Method,
+				Route:         endpoint.Route,
 				ErrorPage:     errorPage,
+				CORS:          endpoint.CORS,
 				Span:          sourceLineSpan(lineNumber, rawLine),
 				ErrorPageSpan: endpointErrorPageSpan(match, sourceLineSpan(lineNumber, rawLine)),
 			})

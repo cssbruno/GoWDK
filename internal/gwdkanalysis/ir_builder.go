@@ -209,6 +209,7 @@ func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 			Guards:        append([]string(nil), page.Guards...),
 			CSRF:          builder.config.Build.CSRF.EnabledForGeneratedEndpoints() && gwdkir.HTTPMethodRequiresCSRF(method),
 			ErrorPage:     api.ErrorPage,
+			CORS:          cloneEndpointCORS(api.CORS),
 			DynamicParams: routeParams(path),
 			RouteParams:   copyRouteParams(gwdkir.RouteParamsFromPath(path)),
 			SourceFile:    page.Source,
@@ -351,6 +352,14 @@ func (builder *irBuilder) addLayout(layout gwdkir.Layout) {
 		Span:      layout.Blocks.Spans.View,
 		BodyStart: layout.Blocks.Spans.ViewBodyStart,
 	})
+}
+
+func cloneEndpointCORS(cors gwdkir.EndpointCORS) gwdkir.EndpointCORS {
+	cors.AllowedOrigins = append([]string(nil), cors.AllowedOrigins...)
+	cors.AllowedMethods = append([]string(nil), cors.AllowedMethods...)
+	cors.AllowedHeaders = append([]string(nil), cors.AllowedHeaders...)
+	cors.ExposedHeaders = append([]string(nil), cors.ExposedHeaders...)
+	return cors
 }
 
 func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.GoEndpoint) {

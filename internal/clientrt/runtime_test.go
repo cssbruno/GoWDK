@@ -92,11 +92,16 @@ func TestSourceEmitsSPANavigationRuntime(t *testing.T) {
 func TestSourceEmitsRealtimePatchRuntime(t *testing.T) {
 	source := string(Source())
 	for _, expected := range []string{
-		`new window.EventSource(realtimeEventsPath)`,
+		`new window.EventSource(realtimeEventsURL())`,
+		`realtimeEventsPath + (realtimeEventsPath.indexOf('?') >= 0 ? '&' : '?') + 'path=' + encodeURIComponent(path)`,
+		`var realtimeQueryRefreshPath = '/_gowdk/realtime/query-refresh'`,
+		`traceFetch(realtimeQueryRefreshURL(queries)`,
+		`url.searchParams.append('query', query)`,
 		`addEventListener('gowdk-presentation', handleRealtimeEvent)`,
 		`data-gowdk-subscribe`,
 		`data-gowdk-subscribe-type`,
 		`normalizeRealtimePatches(envelope.value || envelope.Value)`,
+		`assertRealtimePayloadVersion(value)`,
 		`patch.op !== 'replaceHTML'`,
 		`region.innerHTML = patch.html`,
 		`region.outerHTML = patch.html`,

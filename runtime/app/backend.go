@@ -32,6 +32,7 @@ type BackendRoute struct {
 	Kind       string
 	EndpointID string
 	Source     gowdktrace.SourceRef
+	CORS       *CORSPolicy
 	Handler    BackendHandler
 }
 
@@ -53,6 +54,7 @@ type backendRouteEntry struct {
 	path    string
 	id      string
 	source  gowdktrace.SourceRef
+	cors    *corsPolicy
 	handler BackendHandler
 }
 
@@ -61,6 +63,7 @@ type backendPatternRouteEntry struct {
 	kind    string
 	id      string
 	source  gowdktrace.SourceRef
+	cors    *corsPolicy
 	handler BackendHandler
 }
 
@@ -99,6 +102,14 @@ func (router *BackendRouter) handle(route BackendRoute) error {
 		kind = "backend"
 	}
 	key := backendRouteKey{method: method, path: normalizeBackendPath(route.Path)}
+	var routeCORS *corsPolicy
+	if route.CORS != nil {
+		normalized, err := normalizeCORSPolicy(*route.CORS)
+		if err != nil {
+			return err
+		}
+		routeCORS = &normalized
+	}
 	handler := BackendBoundary(kind, traceBackendRoute(kind, key.path, route.EndpointID, route.Source, route.Handler))
 	if backendRouteIsDynamic(key.path) {
 		for _, existing := range router.patterns {
@@ -106,13 +117,13 @@ func (router *BackendRouter) handle(route BackendRoute) error {
 				return fmt.Errorf("duplicate backend route %s %s", key.method, key.path)
 			}
 		}
-		router.patterns = append(router.patterns, backendPatternRouteEntry{key: key, kind: kind, id: route.EndpointID, source: route.Source, handler: handler})
+		router.patterns = append(router.patterns, backendPatternRouteEntry{key: key, kind: kind, id: route.EndpointID, source: route.Source, cors: routeCORS, handler: handler})
 		return nil
 	}
 	if _, exists := router.routes[key]; exists {
 		return fmt.Errorf("duplicate backend route %s %s", key.method, key.path)
 	}
-	router.routes[key] = backendRouteEntry{method: key.method, kind: kind, path: key.path, id: route.EndpointID, source: route.Source, handler: handler}
+	router.routes[key] = backendRouteEntry{method: key.method, kind: kind, path: key.path, id: route.EndpointID, source: route.Source, cors: routeCORS, handler: handler}
 	return nil
 }
 
@@ -160,7 +171,7 @@ func (router *BackendRouter) Dispatch(writer http.ResponseWriter, request *http.
 		return false
 	}
 	if backendRouteSupportsCORS(route.kind) {
-		router.cors.writeActualHeaders(writer, request, route.method)
+		route.corsPolicy(router.cors).writeActualHeaders(writer, request, route.method)
 	}
 	return route.handler(writer, request)
 }
@@ -177,7 +188,7 @@ func (router *BackendRouter) dispatchPattern(writer http.ResponseWriter, request
 			continue
 		}
 		if backendRouteSupportsCORS(route.kind) {
-			router.cors.writeActualHeaders(writer, request, route.key.method)
+			route.corsPolicy(router.cors).writeActualHeaders(writer, request, route.key.method)
 		}
 		return route.handler(writer, request)
 	}
@@ -196,7 +207,7 @@ func (router *BackendRouter) dispatchCORSPreflight(writer http.ResponseWriter, r
 	if !ok {
 		return false
 	}
-	if router.cors.writePreflight(writer, request, route.method) {
+	if route.corsPolicy(router.cors).writePreflight(writer, request, route.method) {
 		return true
 	}
 	response.WriteNoStoreError(writer, http.StatusForbidden, "cors preflight denied")
@@ -213,10 +224,24 @@ func (router *BackendRouter) corsRoute(method string, requestPath string) (backe
 			continue
 		}
 		if _, ok := gowdkroute.Match(route.key.path, requestPath); ok {
-			return backendRouteEntry{method: route.key.method, kind: route.kind, path: route.key.path, id: route.id, source: route.source, handler: route.handler}, true
+			return backendRouteEntry{method: route.key.method, kind: route.kind, path: route.key.path, id: route.id, source: route.source, cors: route.cors, handler: route.handler}, true
 		}
 	}
 	return backendRouteEntry{}, false
+}
+
+func (route backendRouteEntry) corsPolicy(fallback corsPolicy) corsPolicy {
+	if route.cors != nil {
+		return *route.cors
+	}
+	return fallback
+}
+
+func (route backendPatternRouteEntry) corsPolicy(fallback corsPolicy) corsPolicy {
+	if route.cors != nil {
+		return *route.cors
+	}
+	return fallback
 }
 
 func backendRouteSupportsCORS(kind string) bool {

@@ -664,7 +664,8 @@ Dependency-free adapters:
   `EventSource` for tests, local development, and single-process apps.
 - `runtime/contracts/sse` provides an `http.Handler` and
   `PresentationFanout` for server-sent browser presentation events.
-  `addons/realtime` re-exports this dependency-free SSE hub as `NewSSE`.
+  `addons/realtime` re-exports this dependency-free SSE hub as `NewSSE`, with
+  buffer, retry, replay, audience, and audience-revocation support.
 
 Optional broker and realtime adapters:
 
@@ -792,7 +793,10 @@ import (
     "github.com/cssbruno/gowdk/runtime/contracts/sse"
 )
 
-hub := sse.New()
+hub := sse.New(
+    sse.WithRetryMillis(2000),
+    sse.WithReplayLimit(128),
+)
 http.Handle("/gowdk/events", hub)
 
 gowdkapp.RegisterContractEventSink(
@@ -801,7 +805,10 @@ gowdkapp.RegisterContractEventSink(
 ```
 
 The browser receives `event: gowdk-presentation` messages whose `data` value is
-the JSON `contracts.EventEnvelope`. Domain and integration events are ignored.
+the JSON `contracts.EventEnvelope`. The hub emits SSE `id:` lines from
+`EventEnvelope.ID`, advertises a browser reconnect delay with `retry:`, and can
+replay a bounded in-memory window after `Last-Event-ID`. Domain and integration
+events are ignored.
 
 ### WebSocket Presentation Fanout
 
@@ -999,12 +1006,13 @@ Current behavior:
 - Must be on the same element as `g:query`; unbounded subscriptions are
   rejected.
 
-Only explicit `replaceHTML` client patches are supported today. The
+Only explicit version-1 `replaceHTML` client patches are supported today. The
 dependency-free SSE adapter sends a `retry: 1000` directive for browser
-EventSource reconnects and uses bounded per-client buffers; events are dropped
-for clients whose buffers are full rather than blocking command execution.
-Custom retry/backoff/replay, active session-change stream revocation, and
-richer patch shapes remain separate follow-up pieces.
+EventSource reconnects by default, supports `WithRetryMillis`,
+`WithReplayLimit`, bounded per-client buffers, and `RevokeAudience` for active
+session stream revocation. Events are dropped for clients whose buffers are
+full rather than blocking command execution. Richer patch shapes remain a
+separate follow-up piece.
 
 ## Query Invalidations
 
@@ -1037,13 +1045,14 @@ Current behavior:
 - Generated command adapters emit a `gowdk.query.invalidate` presentation event
   after successful command event dispatch when captured domain events
   invalidate bound queries.
-- Generated `gowdk.js` refetches the current document and replaces matching
-  non-subscribed query regions. Regions with `g:subscribe` are left to explicit
-  presentation patches.
+- Generated apps with eligible standalone public SSR/hybrid query regions mount
+  `/_gowdk/realtime/query-refresh`; generated `gowdk.js` asks that endpoint for
+  `{query, html}` patches first, then refetches the current document for any
+  remaining non-subscribed query regions. Regions with `g:subscribe` are left
+  to explicit presentation patches.
 
 Invalidations are explicit Go metadata, not compiler inference from handler
-bodies. The first slice refreshes matching regions from the current document;
-fragment/API-specific query execution and richer refresh policies remain
+bodies. Fragment/API-specific query execution and richer refresh policies remain
 future work.
 
 Templates must not declare backend facts:

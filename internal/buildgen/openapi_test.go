@@ -65,6 +65,68 @@ func TestBuildOpenAPISpecIncludesTypedEndpointRouteMetadata(t *testing.T) {
 	}
 }
 
+func TestBuildOpenAPISpecIncludesTypedAPIInputAndResultSchemas(t *testing.T) {
+	spec := buildOpenAPISpec(gowdk.Config{}, gwdkir.Program{
+		Endpoints: []gwdkir.Endpoint{{
+			Kind:   gwdkir.EndpointAPI,
+			Method: "POST",
+			Path:   "/api/search",
+			PageID: "search",
+			Symbol: "Search",
+			Binding: gwdkir.Binding{
+				Status:    source.BackendBindingBound,
+				Signature: source.BackendSignatureAPIInput,
+				InputType: "SearchInput",
+				InputFields: []source.BackendInputField{
+					{FieldName: "Query", FormName: "q", Type: "string"},
+					{FieldName: "Page", FormName: "page", Type: "int"},
+				},
+				ResultType: "SearchResult",
+				ResultFields: []source.BackendResultField{
+					{Path: "count", Selector: "Count", Type: "int"},
+					{Path: "next", Selector: "Next", Type: "string"},
+					{Path: "user", Selector: "User", Type: "SearchUser"},
+					{Path: "user.name", Selector: "User.Name", Type: "string"},
+				},
+			},
+		}},
+	})
+
+	operation := spec.Paths["/api/search"]["post"]
+	if operation.RequestBody == nil {
+		t.Fatalf("expected request body, got %#v", operation)
+	}
+	if _, ok := operation.RequestBody.Content["application/json"]; !ok {
+		t.Fatalf("expected JSON request body, got %#v", operation.RequestBody.Content)
+	}
+	response := operation.Responses["200"]
+	media, ok := response.Content["application/json"]
+	if !ok {
+		t.Fatalf("expected JSON response, got %#v", response.Content)
+	}
+	if media.Schema.Ref != "#/components/schemas/SearchResult" {
+		t.Fatalf("unexpected response schema: %#v", media.Schema)
+	}
+	input := spec.Components.Schemas["SearchInput"]
+	if input.Properties["q"].Type != "string" || input.Properties["page"].Type != "integer" {
+		t.Fatalf("unexpected input schema: %#v", input)
+	}
+	result := spec.Components.Schemas["SearchResult"]
+	if result.XGoType != "SearchResult" || result.Properties["count"].Type != "integer" || result.Properties["next"].Type != "string" {
+		t.Fatalf("unexpected result schema: %#v", result)
+	}
+	user := result.Properties["user"]
+	if user.Type != "object" || user.XGoType != "SearchUser" || user.Properties["name"].Type != "string" {
+		t.Fatalf("unexpected nested user result schema: %#v", user)
+	}
+	if _, ok := result.Properties["user.name"]; ok {
+		t.Fatalf("nested result path was emitted as a dotted top-level property: %#v", result.Properties)
+	}
+	if operation.XGOWDK.Signature != string(source.BackendSignatureAPIInput) || operation.XGOWDK.InputType != "SearchInput" {
+		t.Fatalf("unexpected x-gowdk binding metadata: %#v", operation.XGOWDK)
+	}
+}
+
 func TestBuildOpenAPISpecMapsSupportedEndpointRouteParamTypes(t *testing.T) {
 	tests := []struct {
 		paramType  string

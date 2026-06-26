@@ -7,6 +7,28 @@ import (
 	"github.com/cssbruno/gowdk/runtime/response"
 )
 
+// StatusResult can be implemented by typed API result structs to choose the
+// generated JSON response status without using the raw response.Response escape
+// hatch. Non-positive values fall back to 200 OK.
+type StatusResult interface {
+	APIStatus() int
+}
+
+// ResultStatus returns result's APIStatus when it implements StatusResult.
+func ResultStatus(result any, fallback int) int {
+	if fallback <= 0 {
+		fallback = http.StatusOK
+	}
+	statusResult, ok := result.(StatusResult)
+	if !ok {
+		return fallback
+	}
+	if status := statusResult.APIStatus(); status > 0 {
+		return status
+	}
+	return fallback
+}
+
 // ErrorBody is the default structured error payload for API helpers.
 type ErrorBody struct {
 	OK    bool      `json:"ok"`

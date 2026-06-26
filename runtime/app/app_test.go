@@ -328,6 +328,80 @@ func TestBackendRouterWritesCORSActualHeadersForAPI(t *testing.T) {
 	}
 }
 
+func TestBackendRouterEndpointCORSOverridesGlobalPolicy(t *testing.T) {
+	router, err := NewBackendRouter(BackendRoute{
+		Kind:   "api",
+		Method: http.MethodGet,
+		Path:   "/api/health",
+		CORS: &CORSPolicy{
+			AllowedOrigins:   []string{"https://route.example"},
+			AllowedHeaders:   []string{"Content-Type"},
+			AllowCredentials: true,
+		},
+		Handler: func(writer http.ResponseWriter, _ *http.Request) bool {
+			writer.WriteHeader(http.StatusNoContent)
+			return true
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := router.SetCORSPolicy(CORSPolicy{AllowedOrigins: []string{"https://global.example"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	denied := httptest.NewRecorder()
+	deniedRequest := httptest.NewRequest(http.MethodOptions, "/api/health", nil)
+	deniedRequest.Header.Set("Origin", "https://global.example")
+	deniedRequest.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	if !router.Dispatch(denied, deniedRequest) {
+		t.Fatal("expected denied preflight to be handled")
+	}
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("expected route policy to deny global origin, got %d", denied.Code)
+	}
+
+	allowed := httptest.NewRecorder()
+	allowedRequest := httptest.NewRequest(http.MethodOptions, "/api/health", nil)
+	allowedRequest.Header.Set("Origin", "https://route.example")
+	allowedRequest.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	allowedRequest.Header.Set("Access-Control-Request-Headers", "content-type")
+	if !router.Dispatch(allowed, allowedRequest) {
+		t.Fatal("expected allowed preflight to be handled")
+	}
+	if allowed.Code != http.StatusNoContent {
+		t.Fatalf("unexpected allowed preflight status: %d", allowed.Code)
+	}
+	assertHeader(t, allowed, "Access-Control-Allow-Origin", "https://route.example")
+	assertHeader(t, allowed, "Access-Control-Allow-Credentials", "true")
+	assertHeader(t, allowed, "Access-Control-Allow-Headers", "Content-Type")
+
+	actual := httptest.NewRecorder()
+	actualRequest := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	actualRequest.Header.Set("Origin", "https://route.example")
+	if !router.Dispatch(actual, actualRequest) {
+		t.Fatal("expected API request to be handled")
+	}
+	assertHeader(t, actual, "Access-Control-Allow-Origin", "https://route.example")
+	assertHeader(t, actual, "Access-Control-Allow-Credentials", "true")
+}
+
+func TestBackendRouterRejectsInvalidEndpointCORS(t *testing.T) {
+	_, err := NewBackendRouter(BackendRoute{
+		Kind:   "api",
+		Method: http.MethodGet,
+		Path:   "/api/health",
+		CORS: &CORSPolicy{
+			AllowedOrigins:   []string{"*"},
+			AllowCredentials: true,
+		},
+		Handler: func(http.ResponseWriter, *http.Request) bool { return true },
+	})
+	if err == nil || !strings.Contains(err.Error(), "wildcard origin") {
+		t.Fatalf("expected invalid endpoint CORS error, got %v", err)
+	}
+}
+
 func TestBackendRouterRejectsClosedCORSPreflightForAPI(t *testing.T) {
 	router, err := NewBackendRouter(BackendRoute{
 		Kind:    "api",

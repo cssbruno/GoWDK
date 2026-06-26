@@ -18,6 +18,8 @@ func TestAddonEnablesRealtimeFeature(t *testing.T) {
 func TestNewSSEReturnsPresentationFanout(t *testing.T) {
 	var fanout contracts.PresentationFanout = NewSSE(
 		WithSSEBufferSize(1),
+		WithSSERetryMillis(1500),
+		WithSSEReplayLimit(4),
 		WithSSEAudienceFromRequest(func(*http.Request) []string { return []string{"tenant:test"} }),
 	)
 	if fanout == nil {

@@ -95,6 +95,9 @@ Current v0.1-supported language surfaces report source locations as follows:
   reports the offending line; build execution errors that come from external Go
   execution keep their command/error context rather than a precise `.gwdk`
   expression range.
+- Build-output planning diagnostics report the owning `.gwdk` source file and
+  route when the compiler IR knows them, instead of asking authors to debug a
+  generated file name.
 
 Remaining known exact-range gaps:
 

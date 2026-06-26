@@ -17,9 +17,11 @@ description: Bump the GOWDK release version. Use when updating the CLI version, 
 - Pinned `v0.x.y` install snippets live in `README.md` and
   `docs/getting-started.md` (multiple snippets); release automation references
   in `docs/engineering/release.md`.
-- `CHANGELOG.md` is the canonical change log: `## v0.x.y - YYYY-MM-DD` with
-  `### Changed` / `### Implemented` / `### Known Gaps`; move Unreleased
-  content under the new version when cutting a release.
+- `CHANGELOG.md` is the canonical change log and is managed by release-please
+  for release PRs. `release.yml` derives the visible GitHub release body from
+  the matching changelog section and fails when that section is missing.
+- Pull request titles must use Conventional Commits because squash merges feed
+  release-please changelog and release-note generation.
 - Releases are tagged `v0.x.y` and built by `release.yml`
   (`gh workflow run release.yml -f version=v0.x.y`); smoke tests via
   `release-smoke.yml`; VS Code Marketplace publish is a separate manual
@@ -36,8 +38,8 @@ node editors/vscode/scripts/sync-version.js --check
 ```
 
 3. Update the pinned snippets and docs: `README.md`,
-   `docs/getting-started.md`, `docs/engineering/release.md`, and
-   `CHANGELOG.md` when cutting a release.
+   `docs/getting-started.md`, and `docs/engineering/release.md` when cutting a
+   release. Let release-please update `CHANGELOG.md` for release PRs.
 4. Sweep for stragglers of the previous version and update only surfaces that
    describe the current release (this includes the version mentions in this
    skill file):

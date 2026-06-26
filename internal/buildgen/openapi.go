@@ -324,9 +324,33 @@ func objectSchemaFromResultFields(fields []source.BackendResultField) openAPISch
 		if name == "" {
 			continue
 		}
-		properties[name] = schemaForOpenAPIGoType(field.Type)
+		setNestedOpenAPIProperty(properties, strings.Split(name, "."), schemaForOpenAPIGoType(field.Type))
 	}
 	return openAPISchema{Type: "object", Properties: properties}
+}
+
+func setNestedOpenAPIProperty(properties map[string]openAPISchema, parts []string, schema openAPISchema) {
+	if len(parts) == 0 || parts[0] == "" {
+		return
+	}
+	name := parts[0]
+	if len(parts) == 1 {
+		existing := properties[name]
+		if len(existing.Properties) > 0 && schema.Type == "object" {
+			schema.Properties = existing.Properties
+		}
+		properties[name] = schema
+		return
+	}
+	parent := properties[name]
+	if parent.Type == "" {
+		parent.Type = "object"
+	}
+	if parent.Properties == nil {
+		parent.Properties = map[string]openAPISchema{}
+	}
+	setNestedOpenAPIProperty(parent.Properties, parts[1:], schema)
+	properties[name] = parent
 }
 
 func schemaForGoType(goType string) openAPISchema {

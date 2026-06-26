@@ -95,6 +95,9 @@ func runtimeImportMap(options Options) map[string]string {
 	if apisUseTypedJSONInput(apis) || apisUseTypedResult(apis) {
 		imports["gowdkapi"] = "github.com/cssbruno/gowdk/runtime/api"
 	}
+	if apisUseTypedJSONInput(apis) {
+		imports["errors"] = "errors"
+	}
 	if apisUseTypedQueryInput(apis) {
 		imports["gowdkform"] = "github.com/cssbruno/gowdk/runtime/form"
 	}

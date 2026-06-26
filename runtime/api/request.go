@@ -50,6 +50,9 @@ func DecodeJSON[T any](request *http.Request) (T, error) {
 
 // RequireJSONContentType verifies that request declares a JSON media type.
 func RequireJSONContentType(request *http.Request) error {
+	if request == nil {
+		return ErrNilRequest
+	}
 	contentType := strings.TrimSpace(request.Header.Get("Content-Type"))
 	if contentType == "" {
 		// Require an explicit JSON content type. A missing Content-Type is a

@@ -790,6 +790,21 @@
     }
   }
 
+  function currentLocationPathWithSearch() {
+    var path = currentLocationPath();
+    if (!path || typeof window === 'undefined' || !window.location) {
+      return path;
+    }
+    if (typeof window.location.search === 'string' && window.location.search) {
+      return path + window.location.search;
+    }
+    try {
+      return path + new URL(window.location.href).search;
+    } catch (error) {
+      return path;
+    }
+  }
+
   function closeRealtime() {
     if (!realtimeSource) {
       return;
@@ -1153,7 +1168,7 @@
 
   function realtimeQueryRefreshURL(queries) {
     var url = new URL(realtimeQueryRefreshPath, window.location.href);
-    var path = currentLocationPath();
+    var path = currentLocationPathWithSearch();
     if (path) {
       url.searchParams.set('path', path);
     }

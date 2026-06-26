@@ -224,7 +224,9 @@ class EventSourceStub extends EventTarget {
 global.window = {
   location: {
     reloaded: false,
-    href: 'http://example.test/newsletter',
+    href: 'http://example.test/newsletter?page=2',
+    pathname: '/newsletter',
+    search: '?page=2',
     reload() {
       this.reloaded = true;
     }
@@ -531,7 +533,7 @@ let reload = false;
     }
   });
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(request.url, 'http://example.test/_gowdk/realtime/query-refresh?path=%2Fnewsletter&query=gowdk-generated-app%2Fpatients.GetPatientPage');
+  assert.equal(request.url, 'http://example.test/_gowdk/realtime/query-refresh?path=%2Fnewsletter%3Fpage%3D2&query=gowdk-generated-app%2Fpatients.GetPatientPage');
   assert.equal(liveRegion.replacedWith, '');
   assert.equal(invalidatedRegion.replacedWith, '<section id="invalidated-patients" data-gowdk-query="patients.GetPatientPage" data-gowdk-query-type="gowdk-generated-app/patients.GetPatientPage"><p>Route patched</p></section>');
   assert.deepEqual(islandLifecycle.shift(), ['destroy', 'invalidated-patients', true]);
@@ -655,7 +657,7 @@ let reload = false;
   await flushRuntime();
   assert.equal(commandSuccess.result.id, 'patient-1');
   assert.equal(commandError, null);
-  assert.deepEqual(requests.map(item => item.url), ['/commands/create', 'http://example.test/_gowdk/realtime/query-refresh?path=%2Fnewsletter&query=gowdk-generated-app%2Fpatients.GetPatientPage', 'http://example.test/newsletter']);
+  assert.deepEqual(requests.map(item => item.url), ['/commands/create', 'http://example.test/_gowdk/realtime/query-refresh?path=%2Fnewsletter%3Fpage%3D2&query=gowdk-generated-app%2Fpatients.GetPatientPage', 'http://example.test/newsletter?page=2']);
   assert.match(realtimeError.error.message, /navigation request failed with status 500/);
   assert.deepEqual(realtimeError.queries, ['gowdk-generated-app/patients.GetPatientPage']);
   assert.equal(realtimeError.form, commandForm);

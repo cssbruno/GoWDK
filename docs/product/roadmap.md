@@ -313,6 +313,8 @@ without making any minor version a production-readiness target.
   feature spec.
 - `docs/product/contract-runtime-spec.md`: milestone-14 contract runtime
   closure criteria.
+- `docs/product/realtime-hardening-spec.md`: reconnect, replay, revocation,
+  patch rejection, and route/query refresh hardening.
 - `docs/product/observability-tracing-spec.md`: runtime trace primitives and
   generated instrumentation direction.
 - `docs/engineering/architecture.md`: architecture and implemented boundaries.

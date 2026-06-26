@@ -131,13 +131,13 @@ func (hub *Hub) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		disconnect: make(chan struct{}),
 		audience:   audienceSet(hub.clientAudience(request)),
 	}
-	hub.add(client)
+	replay := hub.addWithReplay(client, request.Header.Get("Last-Event-ID"))
 	defer hub.remove(client)
 
 	if !writeRetry(response, flusher, hub.retryMillis) {
 		return
 	}
-	for _, message := range hub.replayAfter(request.Header.Get("Last-Event-ID"), client.audience) {
+	for _, message := range replay {
 		if !writeMessage(response, flusher, message) {
 			return
 		}
@@ -286,12 +286,16 @@ func (hub *Hub) recordReplayLocked(message sseMessage) {
 }
 
 func (hub *Hub) replayAfter(lastEventID string, clientAudience map[string]struct{}) []sseMessage {
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+	return hub.replayAfterLocked(lastEventID, clientAudience)
+}
+
+func (hub *Hub) replayAfterLocked(lastEventID string, clientAudience map[string]struct{}) []sseMessage {
 	lastEventID = strings.TrimSpace(lastEventID)
 	if lastEventID == "" || hub.replayLimit <= 0 {
 		return nil
 	}
-	hub.mu.Lock()
-	defer hub.mu.Unlock()
 	start := -1
 	for index, message := range hub.replay {
 		if message.id == lastEventID {
@@ -382,6 +386,14 @@ func (hub *Hub) add(client *sseClient) {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
 	hub.clients[client] = true
+}
+
+func (hub *Hub) addWithReplay(client *sseClient, lastEventID string) []sseMessage {
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+	replay := hub.replayAfterLocked(lastEventID, client.audience)
+	hub.clients[client] = true
+	return replay
 }
 
 func (hub *Hub) remove(client *sseClient) {

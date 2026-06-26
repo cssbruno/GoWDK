@@ -1292,8 +1292,10 @@ func TestGenerateRegistersSingleFlightRegionRenderers(t *testing.T) {
 	for _, expected := range []string{
 		`func init() {`,
 		`gowdkssr.RegisterRegion(gowdkssr.RegionRenderer{QueryType: "example.com/app/board.GetPatientPage"`,
+		`Route: "/board"`,
 		`Load: func(request *http.Request) (map[string]any, error)`,
 		`ctx := gowdkruntime.WithRoute(request.Context(), gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "board", Method: "GET", Path: "/board", Render: "ssr", Guards: []string{"public"}, HasLoad: true})`,
+		`pageURL.RawQuery = gowdkssr.RegionRequestRawQuery(request)`,
 		`pageRequest.Method = http.MethodGet`,
 		`loadContext := gowdkssr.NewLoadContext(request, nil)`,
 		`const RealtimeQueryRefreshPath = "/_gowdk/realtime/query-refresh"`,
@@ -3305,10 +3307,14 @@ func TestGenerateWritesTypedBoundAPIHandlers(t *testing.T) {
 	}
 	source := string(payload)
 	for _, expected := range []string{
+		`"errors"`,
 		`gowdkapi "github.com/cssbruno/gowdk/runtime/api"`,
 		`gowdkform "github.com/cssbruno/gowdk/runtime/form"`,
-		`func decodeStatusUpdateInput(request *http.Request) (status.UpdateInput, error)`,
+		`func decodeStatusUpdatePOSTInput(request *http.Request) (status.UpdateInput, error)`,
 		`decoder, err := gowdkapi.NewJSONFieldDecoder(request)`,
+		`var maxBytesErr *http.MaxBytesError`,
+		`if errors.As(err, &maxBytesErr)`,
+		`gowdkresponse.WriteNoStoreJSONError(response, http.StatusRequestEntityTooLarge, "request body too large")`,
 		`case "name":`,
 		`field0, err := decoder.String("name")`,
 		`input.Name = field0`,
@@ -3317,12 +3323,15 @@ func TestGenerateWritesTypedBoundAPIHandlers(t *testing.T) {
 		`field2, err := decoder.Strings("tags")`,
 		`input.Tags = field2`,
 		`return input, decoder.UnknownField(field)`,
-		`input, err := decodeStatusUpdateInput(request)`,
+		`input, err := decodeStatusUpdatePOSTInput(request)`,
 		`result, err := status.Update(ctx, input)`,
-		`func decodeStatusListInput(request *http.Request) (status.ListInput, error)`,
+		`func decodeStatusListGETInput(request *http.Request) (status.ListInput, error)`,
 		`values := gowdkform.FromURLValues(request.URL.Query())`,
+		`decoded, err := gowdkform.DecodeExpected(values, gowdkform.Schema{Fields: []gowdkform.Field{{Name: "filter"}}})`,
+		`values = decoded`,
 		`field0, ok, err := gowdkform.String(values, "filter")`,
 		`input.Filter = field0`,
+		`input, err := decodeStatusListGETInput(request)`,
 		`result, err := status.List(ctx, &input)`,
 		`status := gowdkapi.ResultStatus(result, http.StatusOK)`,
 		`httpResult, err := gowdkresponse.JSONValue(status, result)`,
@@ -3341,6 +3350,51 @@ func TestGenerateWritesTypedBoundAPIHandlers(t *testing.T) {
 		if strings.Contains(source, unexpected) {
 			t.Fatalf("did not expect generated typed API source to contain %q:\n%s", unexpected, source)
 		}
+	}
+}
+
+func TestGenerateUsesMethodSpecificTypedAPIDecoders(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "search", "index.html"), "<main>Search</main>")
+
+	binding := source.BackendBinding{
+		Status:       source.BackendBindingBound,
+		ImportPath:   "example.com/app/search",
+		PackageName:  "search",
+		FunctionName: "Search",
+		Signature:    source.BackendSignatureAPIInput,
+		InputType:    "SearchInput",
+		InputFields: []source.BackendInputField{
+			{FieldName: "Query", FormName: "q", Type: "string"},
+		},
+		ResultType: "SearchResult",
+	}
+	result, err := GenerateWithOptions(outputDir, appDir, Options{APIs: []APIEndpoint{
+		{Guards: []string{"public"}, PageID: "search", APIName: "Search", Method: http.MethodGet, Route: "/api/search", Binding: binding},
+		{Guards: []string{"public"}, PageID: "search", APIName: "Search", Method: http.MethodPost, Route: "/api/search", Binding: binding},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`func decodeSearchSearchGETInput(request *http.Request) (search.SearchInput, error)`,
+		`func decodeSearchSearchPOSTInput(request *http.Request) (search.SearchInput, error)`,
+		`input, err := decodeSearchSearchGETInput(request)`,
+		`input, err := decodeSearchSearchPOSTInput(request)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated typed API decoder source to contain %q:\n%s", expected, source)
+		}
+	}
+	if strings.Count(source, `func decodeSearchSearchGETInput`) != 1 || strings.Count(source, `func decodeSearchSearchPOSTInput`) != 1 {
+		t.Fatalf("expected exactly one decoder per method:\n%s", source)
 	}
 }
 
@@ -7241,6 +7295,40 @@ func LoadBoard(ctx ssr.LoadContext) map[string]any {
 	}
 	if !strings.Contains(body, `"id":"patient-1"`) {
 		t.Fatalf("expected command result in envelope, got %s", body)
+	}
+
+	refreshResponse, err := waitForHTTPStatus("http://"+addr+"/_gowdk/realtime/query-refresh?path=%2Fboard&query=gowdk-generated-app/patients.GetPatientPage", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	refreshBody, err := io.ReadAll(refreshResponse.Body)
+	_ = refreshResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if refreshResponse.StatusCode != http.StatusOK {
+		t.Fatalf("expected route refresh status 200, got %d: %s", refreshResponse.StatusCode, refreshBody)
+	}
+	if cache := refreshResponse.Header.Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store on route refresh, got %q", cache)
+	}
+	if !strings.Contains(string(refreshBody), "gowdk-generated-app/patients.GetPatientPage") ||
+		!strings.Contains(string(refreshBody), "Ada") ||
+		!strings.Contains(string(refreshBody), "Linus") {
+		t.Fatalf("expected route-scoped refresh patch, got %s", refreshBody)
+	}
+
+	wrongRouteResponse, err := waitForHTTPStatus("http://"+addr+"/_gowdk/realtime/query-refresh?path=%2Fdashboard&query=gowdk-generated-app/patients.GetPatientPage", http.MethodGet, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongRouteBody, err := io.ReadAll(wrongRouteResponse.Body)
+	_ = wrongRouteResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(wrongRouteBody)) != "[]" {
+		t.Fatalf("expected wrong-route refresh to return no patches, got %s", wrongRouteBody)
 	}
 }
 

@@ -110,6 +110,7 @@ func realtimeQueryRefreshHandlerDecl() ast.Decl {
 func regionRendererExpr(route SSRRoute, region SSRQueryRegion) ast.Expr {
 	elts := []ast.Expr{
 		keyValue("QueryType", stringLit(region.QueryType)),
+		keyValue("Route", stringLit(route.Route)),
 		keyValue("Template", stringLit(region.Template)),
 	}
 	if len(region.ListSpecs) > 0 {
@@ -154,7 +155,7 @@ func regionLoadThunk(route SSRRoute) ast.Expr {
 		define([]ast.Expr{id("pageURL")}, &ast.StarExpr{X: selExpr(id("request"), "URL")}),
 		assign([]ast.Expr{selExpr(id("pageURL"), "Path")}, stringLit(route.Route)),
 		assign([]ast.Expr{selExpr(id("pageURL"), "RawPath")}, stringLit("")),
-		assign([]ast.Expr{selExpr(id("pageURL"), "RawQuery")}, stringLit("")),
+		assign([]ast.Expr{selExpr(id("pageURL"), "RawQuery")}, call(sel("gowdkssr", "RegionRequestRawQuery"), id("request"))),
 		define([]ast.Expr{id("pageRequest")}, call(selExpr(id("request"), "Clone"), call(selExpr(id("request"), "Context")))),
 		assign([]ast.Expr{selExpr(id("pageRequest"), "Method")}, sel("http", "MethodGet")),
 		assign([]ast.Expr{selExpr(id("pageRequest"), "URL")}, &ast.UnaryExpr{Op: token.AND, X: id("pageURL")}),

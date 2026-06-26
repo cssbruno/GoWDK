@@ -85,6 +85,8 @@ func TestBuildOpenAPISpecIncludesTypedAPIInputAndResultSchemas(t *testing.T) {
 				ResultFields: []source.BackendResultField{
 					{Path: "count", Selector: "Count", Type: "int"},
 					{Path: "next", Selector: "Next", Type: "string"},
+					{Path: "user", Selector: "User", Type: "SearchUser"},
+					{Path: "user.name", Selector: "User.Name", Type: "string"},
 				},
 			},
 		}},
@@ -112,6 +114,13 @@ func TestBuildOpenAPISpecIncludesTypedAPIInputAndResultSchemas(t *testing.T) {
 	result := spec.Components.Schemas["SearchResult"]
 	if result.XGoType != "SearchResult" || result.Properties["count"].Type != "integer" || result.Properties["next"].Type != "string" {
 		t.Fatalf("unexpected result schema: %#v", result)
+	}
+	user := result.Properties["user"]
+	if user.Type != "object" || user.XGoType != "SearchUser" || user.Properties["name"].Type != "string" {
+		t.Fatalf("unexpected nested user result schema: %#v", user)
+	}
+	if _, ok := result.Properties["user.name"]; ok {
+		t.Fatalf("nested result path was emitted as a dotted top-level property: %#v", result.Properties)
 	}
 	if operation.XGOWDK.Signature != string(source.BackendSignatureAPIInput) || operation.XGOWDK.InputType != "SearchInput" {
 		t.Fatalf("unexpected x-gowdk binding metadata: %#v", operation.XGOWDK)

@@ -77,6 +77,12 @@ func TestDecodeJSONRejectsMissingContentType(t *testing.T) {
 	}
 }
 
+func TestRequireJSONContentTypeRejectsNilRequest(t *testing.T) {
+	if err := RequireJSONContentType(nil); !errors.Is(err, ErrNilRequest) {
+		t.Fatalf("expected nil request error, got %v", err)
+	}
+}
+
 func TestJSONFieldDecoderDecodesStrictObjectFields(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/patients", strings.NewReader(`{"name":"Ada","active":true,"age":41,"tags":["go","web"]}`))
 	request.Header.Set("Content-Type", "application/json")

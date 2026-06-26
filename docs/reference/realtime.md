@@ -82,8 +82,9 @@ Current limits:
   runtime; richer patch shapes are deferred.
 - Fragment/API-specific query execution remains follow-up work. Query
   invalidation refresh first asks the generated route/query refresh endpoint
-  for standalone region patches when eligible renderers exist, then falls back
-  to refetching the current document for any remaining query regions.
+  for standalone region patches when eligible route-matched renderers exist,
+  then falls back to refetching the current document for any remaining query
+  regions.
 
 ## Query Invalidations
 
@@ -117,8 +118,10 @@ Current behavior:
   `/_gowdk/realtime/query-refresh`. Generated `gowdk.js` calls it with the
   current route path and invalidated query types, applies any returned
   `{query, html}` patches, and refetches the current document only for query
-  regions that were not patched. Regions with `g:subscribe` are left to
-  explicit presentation patches so a refresh does not overwrite a patch.
+  regions that were not patched. The endpoint uses both `path` and `query`
+  values; a query region registered for another route is not rendered. Regions
+  with `g:subscribe` are left to explicit presentation patches so a refresh
+  does not overwrite a patch.
 
 The generated invalidation event value is:
 

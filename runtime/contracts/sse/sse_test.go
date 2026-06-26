@@ -267,6 +267,42 @@ func TestHubReplayKeepsAudienceScope(t *testing.T) {
 	}
 }
 
+func TestHubAddWithReplayDoesNotReplayEventsQueuedAfterConnect(t *testing.T) {
+	hub := New(WithReplayLimit(4))
+	if err := hub.SendPresentationEvents(context.Background(), []contracts.EventEnvelope{
+		{ID: "event-1", Category: contracts.PresentationEvent, Type: "PatientNotice", Value: patientNotice{ID: "patient-1"}},
+	}); err != nil {
+		t.Fatalf("seed replay: %v", err)
+	}
+	client := &sseClient{
+		queue:      make(chan sseMessage, 2),
+		disconnect: make(chan struct{}),
+	}
+	replay := hub.addWithReplay(client, "event-1")
+	defer hub.remove(client)
+	if len(replay) != 0 {
+		t.Fatalf("expected no replay before post-connect event, got %+v", replay)
+	}
+	if err := hub.SendPresentationEvents(context.Background(), []contracts.EventEnvelope{
+		{ID: "event-2", Category: contracts.PresentationEvent, Type: "PatientNotice", Value: patientNotice{ID: "patient-2"}},
+	}); err != nil {
+		t.Fatalf("send post-connect event: %v", err)
+	}
+	select {
+	case message := <-client.queue:
+		if message.id != "event-2" {
+			t.Fatalf("queued message id = %q, want event-2", message.id)
+		}
+	default:
+		t.Fatal("expected post-connect event to be queued")
+	}
+	select {
+	case duplicate := <-client.queue:
+		t.Fatalf("did not expect duplicate queued event: %+v", duplicate)
+	default:
+	}
+}
+
 func TestHubRevokeAudienceDisconnectsMatchingClients(t *testing.T) {
 	hub := New()
 	ada := &sseClient{

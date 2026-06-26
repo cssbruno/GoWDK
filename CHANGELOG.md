@@ -3,7 +3,7 @@
 GOWDK is experimental 0.x software. Public syntax, generated output, runtime
 packages, and tooling contracts may change before 1.0.
 
-## Unreleased
+## v0.11.0 - 2026-06-24
 
 ### Added
 

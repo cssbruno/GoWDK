@@ -136,16 +136,13 @@ jobs:
         with:
           subject-path: dist/*
 
-      - name: Select release notes
-        id: release_notes
+      - name: Prepare release body
+        id: release_body
         run: |
           version="${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
-          line="$(printf '%s\n' "$version" | sed -E 's/^v?([0-9]+)\.([0-9]+).*/v\1.\2/')"
-          notes="docs/engineering/release-notes-${line}.md"
-          if [ ! -f "$notes" ]; then
-            notes=".github/release-note-template.md"
-          fi
-          echo "path=$notes" >> "$GITHUB_OUTPUT"
+          body_path="${RUNNER_TEMP}/gowdk-release-body.md"
+          bash scripts/prepare-release-body.sh "$version" "$body_path"
+          echo "path=$body_path" >> "$GITHUB_OUTPUT"
 
       - name: Upload release artifacts
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3
@@ -153,7 +150,7 @@ jobs:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
           target_commitish: ${{ github.sha }}
           name: GOWDK ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
-          body_path: ${{ steps.release_notes.outputs.path }}
+          body_path: ${{ steps.release_body.outputs.path }}
           files: dist/*
           fail_on_unmatched_files: true
           draft: false

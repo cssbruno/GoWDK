@@ -6,17 +6,19 @@ visible normal GitHub releases with downloadable assets from `v*` tags or a
 manual workflow dispatch. VS Code Marketplace publishing lives in
 `.github/workflows/vscode-extension-publish.yml`.
 
-The current CLI version is set by `const version` in `cmd/gowdk/main.go` (and
-bumped automatically by release-please), but this is not a production-readiness
+The current CLI version is set by `const version` in `cmd/gowdk/main.go` and
+bumped automatically by release-please, but this is not a production-readiness
 claim. It identifies the current development line while the compiler, generated
-runtime, and docs continue through the 0.x line. Public release notes must keep
-the build experimental and not production-ready until the 1.0 release gates are
-satisfied.
+runtime, and docs continue through the 0.x line. The release workflow prepends
+the experimental/not-production-ready warning to the generated release body.
 
-Use `CHANGELOG.md` for published release history.
+Release-please manages `CHANGELOG.md`, and `release.yml` derives the visible
+GitHub release body from the matching changelog section. Pull request titles
+must use Conventional Commits so squash merges feed that changelog. If the
+changelog does not contain the version being published, release publication
+fails instead of falling back to placeholder notes.
 Use `docs/engineering/release-plan.md` for the open-ended 0.x hardening
 checklist. It does not make any minor version a production-readiness target.
-Use `.github/release-note-template.md` for future 0.x release bodies.
 
 ## Version Policy
 
@@ -37,7 +39,8 @@ implemented, partial, and planned.
 GitHub milestones track capability buckets such as compiler/language,
 routes/endpoints/contracts, secure runtime, SSR/hybrid, components/client
 language, assets/packaging, and DX. They are not patch-release changelogs.
-Patch-release changes belong in `CHANGELOG.md` and the selected release notes.
+Patch-release changes belong in the release-please-managed changelog and release
+notes.
 
 ## Release Readiness
 
@@ -86,10 +89,12 @@ go run ./cmd/gowdk build --out /tmp/gowdk-wasm-island examples/components/wasm/*
 ```
 
 The normal path is to merge the open **release-please** PR, which bumps the
-version and pushes the `vX.Y.Z` tag that triggers `release.yml`. To release
-manually instead (fallback), after those gates pass on the release commit, run
-the release workflow for the current CLI line or push the corresponding tag
-(substitute the version you are releasing):
+version, updates `CHANGELOG.md`, creates release notes, and pushes the `vX.Y.Z`
+tag that triggers `release.yml`. To release manually instead (fallback), after
+those gates pass on the release commit, run the release workflow for the current
+CLI line or push the corresponding tag (substitute the version you are
+releasing). The manual fallback still requires the matching `CHANGELOG.md`
+section because `release.yml` uses it as the release body source:
 
 ```sh
 gh workflow run release.yml -f version=vX.Y.Z

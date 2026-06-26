@@ -5,7 +5,6 @@
   "packages": {
     ".": {
       "release-type": "simple",
-      "skip-changelog": true,
       "extra-files": [
         {
           "type": "generic",

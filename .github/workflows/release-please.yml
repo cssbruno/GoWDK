@@ -2,8 +2,8 @@ name: Release Please
 
 # Maintains a standing "Release PR" from conventional commits on main. The PR
 # bumps the canonical version in cmd/gowdk/main.go and keeps the VS Code
-# extension package.json in lockstep (CI enforces sync-version --check). It does
-# NOT touch CHANGELOG.md (skip-changelog) — that stays hand-written.
+# extension package.json in lockstep (CI enforces sync-version --check), updates
+# CHANGELOG.md, and creates the GitHub release notes.
 #
 # Merging the Release PR creates the vX.Y.Z tag, which triggers release.yml to
 # build and publish artifacts.

@@ -80,11 +80,13 @@ Current limits:
   rejected.
 - Only explicit `replaceHTML` patches are supported in the generated client
   runtime; richer patch shapes are deferred.
-- Fragment/API-specific query execution remains follow-up work. Query
-  invalidation refresh first asks the generated route/query refresh endpoint
-  for standalone region patches when eligible route-matched renderers exist,
-  then falls back to refetching the current document for any remaining query
-  regions.
+- Fragment/API-specific query execution has a fallback-only policy in this
+  slice. Query invalidation refresh first asks the generated route/query
+  refresh endpoint for standalone patches when eligible route-matched
+  SSR/hybrid renderers exist. The generated endpoint does not execute fragment
+  or API handlers and does not synthesize patches from arbitrary JSON or
+  fragment responses; unsupported regions fall back to the current-document
+  refresh path.
 
 ## Query Invalidations
 
@@ -122,6 +124,12 @@ Current behavior:
   values; a query region registered for another route is not rendered. Regions
   with `g:subscribe` are left to explicit presentation patches so a refresh
   does not overwrite a patch.
+- The route/query refresh endpoint returns `no-store` JSON. It renders only
+  eligible public parameterless SSR/hybrid regions registered by generated
+  output; protected, dynamic, wrong-route, fragment-owned, or API-owned regions
+  receive no patch and use the fallback document refresh path. Generated stream
+  endpoints still run inherited guards before opening SSE responses, and
+  audience filtering remains a server-owned fanout concern.
 
 The generated invalidation event value is:
 

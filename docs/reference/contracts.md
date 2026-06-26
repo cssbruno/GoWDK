@@ -1049,11 +1049,16 @@ Current behavior:
   `/_gowdk/realtime/query-refresh`; generated `gowdk.js` asks that endpoint for
   `{query, html}` patches first, then refetches the current document for any
   remaining non-subscribed query regions. Regions with `g:subscribe` are left
-  to explicit presentation patches.
+  to explicit presentation patches. The refresh endpoint uses the browser's
+  current route path plus invalidated query type to avoid rendering a patch for
+  the wrong page, returns `no-store` JSON, and emits no patch for protected,
+  dynamic, fragment-owned, or API-owned regions.
 
 Invalidations are explicit Go metadata, not compiler inference from handler
-bodies. Fragment/API-specific query execution and richer refresh policies remain
-future work.
+bodies. Fragment/API-specific query execution is currently fallback-only:
+generated route/query refresh does not execute fragment or API handlers and does
+not synthesize patches from arbitrary JSON or fragment responses. Richer refresh
+policies remain future work.
 
 Templates must not declare backend facts:
 

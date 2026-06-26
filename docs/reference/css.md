@@ -355,12 +355,10 @@ gowdk build --out dist/site
 gowdk build --out dist/site --app .gowdk/app --bin bin/site
 ```
 
-The literal `gowdk.config.go` parser supports this known literal constructor
-shape when `tailwind` is imported from
-`github.com/cssbruno/gowdk/addons/tailwind`. It also recognizes built-in
-no-argument addon constructors. External CSS processor addons can be imported
-from other Go modules; when the AST-only loader cannot reduce the constructor,
-GOWDK uses the executable config bridge and proxies `ProcessCSS` back to that
-importable addon.
+Config-editing tooling supports this known literal constructor shape when
+`tailwind` is imported from `github.com/cssbruno/gowdk/addons/tailwind`. It also
+recognizes built-in no-argument addon constructors. External CSS processor
+addons can be imported from other Go modules; project-aware commands execute the
+native addon value through the generated config helper.
 
 GOWDK does not generate Tailwind v3 `content` configuration in this slice.

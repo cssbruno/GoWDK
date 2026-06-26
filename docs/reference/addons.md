@@ -8,11 +8,10 @@ interfaces: `gowdk.CSSProcessor` for build-time CSS output,
 `gowdk.SEOProvider` for build-time SEO files, and `gowdk.GoBlockConsumer` for
 targeted `go addon.<name> {}` blocks.
 
-The config loader parses built-in addon constructors from `gowdk.config.go`
-through the Go AST when possible. If an addon constructor comes from another
-importable Go module, the loader uses an executable config bridge so
-GitHub-hosted addons can return real `gowdk.Addon` values and preserve supported
-extension interfaces.
+Project-aware `build`, `check`, and `dev` run importable `gowdk.config.go`
+packages through the generated native helper. The helper imports the project
+config package, reads `var Config`, and keeps real `gowdk.Addon` values and
+supported extension interfaces in the same process as the compiler operation.
 
 ## Addon Lifecycle
 
@@ -21,10 +20,10 @@ specific interface, and an addon implements only the interfaces for the phases
 it needs. The base `gowdk.Addon` (`Name()`, `Features()`) is always required;
 the rest are opt-in extension points.
 
-1. **Config loading** — `gowdk.Addon`. The loader resolves the constructor from
-   `gowdk.config.go` (Go AST for built-ins, executable bridge for external
-   modules) and reads `Features()`. Feature IDs gate compiler and generator
-   logic through `Config.HasFeature`.
+1. **Config loading** — `gowdk.Addon`. Project-aware commands execute
+   `gowdk.config.go` as normal Go through the native helper and read
+   `Features()`. Feature IDs gate compiler and generator logic through
+   `Config.HasFeature`.
 2. **Compiler validation** — `gowdk.GoBlockConsumer.ValidateGoBlock` validates
    `go addon.<name> {}` blocks and may return addon-owned diagnostics. Built-in
    feature gates also run here (for example, a page using `server {}` or
@@ -240,8 +239,8 @@ The current compiler validator checks whether SSR is enabled when a page uses
 configured addons that implement `gowdk.GoBlockConsumer` for
 `go addon.<name> {}` blocks.
 
-The literal config loader recognizes no-argument constructors for most
-built-ins and the literal SEO options subset for `addons/seo`:
+Config-editing tooling recognizes no-argument constructors for most built-ins
+and the literal SEO options subset for `addons/seo`:
 
 ```go
 Addons: []gowdk.Addon{
@@ -494,10 +493,10 @@ For a `.gwdk` block like `go addon.contracts {}`, the addon named
 targets the addon accepts. `ValidateGoBlock` can return addon-owned diagnostics.
 `GeneratedGo` can return files relative to the generated app directory; `.go`
 files are formatted before writing. File paths must stay relative to the
-generated app directory. The AST config loader and executable config bridge both
-preserve this interface; external addons are not downgraded to inert feature
-markers when they implement `GoBlockConsumer`. If `go addon.<name> {}` targets
-an enabled addon that does not implement `GoBlockConsumer`, or whose
+generated app directory. Native helper execution preserves this interface;
+external addons are not downgraded to inert feature markers when they implement
+`GoBlockConsumer`. If `go addon.<name> {}` targets an enabled addon that does
+not implement `GoBlockConsumer`, or whose
 `GoBlockTargets` does not include the exact target, `gowdk check` and builds
 fail with `unsupported_addon_go_block_target`.
 
@@ -505,9 +504,9 @@ fail with `unsupported_addon_go_block_target`.
 the standalone CLI. When `Options.Command` is omitted it uses `tailwindcss` from
 `PATH`. If the executable is missing, builds fail with an install-required
 error. GOWDK does not download Tailwind, use npm, add Tailwind to the compiler
-core or runtime core, or generate Tailwind v3 content configuration. The literal
-config loader recognizes `tailwind.Addon` with a literal `tailwind.Options`
-value.
+core or runtime core, or generate Tailwind v3 content configuration.
+Config-editing tooling recognizes `tailwind.Addon` with a literal
+`tailwind.Options` value.
 
 `runtime/ratelimit` provides request-time HTTP middleware with fixed-window
 decisions, rate-limit response headers, a process-local in-memory store, and a

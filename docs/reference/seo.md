@@ -71,8 +71,8 @@ Sitemap: https://example.com/sitemap.xml
 When `Disallow` is empty, the file emits an empty `Disallow:` directive.
 
 Dynamic extra URLs can be supplied with `ExtraURLProvider` in normal Go config.
-The executable config bridge materializes those URLs before build output is
-generated.
+Project-aware commands execute the native config helper, so those URLs are
+materialized before build output is generated.
 
 ## Structured Data
 

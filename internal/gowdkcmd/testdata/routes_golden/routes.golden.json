@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "routes": [
+    {
+      "kind": "spa",
+      "method": "GET",
+      "route": "/newsletter",
+      "pageId": "newsletter",
+      "package": "app",
+      "render": "spa",
+      "guards": [
+        "public"
+      ],
+      "source": "newsletter.page.gwdk",
+      "sourceSpan": {
+        "start": {
+          "line": 4,
+          "column": 1
+        },
+        "end": {
+          "line": 4,
+          "column": 20
+        }
+      },
+      "handler": "embedded.SPA(\"pages/newsletter.html\")"
+    },
+    {
+      "kind": "action",
+      "endpointSource": "gwdk",
+      "directive": "act",
+      "method": "POST",
+      "route": "/newsletter",
+      "pageId": "newsletter",
+      "package": "app",
+      "packagePath": "github.com/cssbruno/gowdk/internal/gowdkcmd/testdata/routes_golden",
+      "packageName": "app",
+      "symbol": "Subscribe",
+      "cache": "no-store",
+      "guards": [
+        "public"
+      ],
+      "csrf": true,
+      "source": "newsletter.page.gwdk",
+      "sourceSpan": {
+        "start": {
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "line": 7,
+          "column": 33
+        }
+      },
+      "handler": "actions.NewsletterSubscribe",
+      "bindingStatus": "missing"
+    }
+  ],
+  "endpoints": [
+    {
+      "kind": "action",
+      "endpointSource": "gwdk",
+      "directive": "act",
+      "source": "newsletter.page.gwdk",
+      "sourceSpan": {
+        "start": {
+          "line": 7,
+          "column": 1
+        },
+        "end": {
+          "line": 7,
+          "column": 33
+        }
+      },
+      "package": "app",
+      "packagePath": "github.com/cssbruno/gowdk/internal/gowdkcmd/testdata/routes_golden",
+      "packageName": "app",
+      "symbol": "Subscribe",
+      "method": "POST",
+      "route": "/newsletter",
+      "cache": "no-store",
+      "guards": [
+        "public"
+      ],
+      "csrf": true,
+      "pageId": "newsletter",
+      "handler": "actions.NewsletterSubscribe",
+      "bindingStatus": "missing",
+      "backendBinding": {
+        "status": "missing",
+        "packageName": "app",
+        "importPath": "github.com/cssbruno/gowdk/internal/gowdkcmd/testdata/routes_golden",
+        "functionName": "Subscribe",
+        "message": "GOWDK action handler github.com/cssbruno/gowdk/internal/gowdkcmd/testdata/routes_golden.Subscribe is not implemented"
+      }
+    }
+  ],
+  "info": [
+    {
+      "code": "ssr_disabled",
+      "pageId": "newsletter",
+      "route": "/newsletter",
+      "message": "newsletter uses build-time page output; request-time page rendering is disabled for this route"
+    }
+  ]
+}

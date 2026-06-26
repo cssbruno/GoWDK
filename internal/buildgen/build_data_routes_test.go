@@ -1119,16 +1119,21 @@ func TestBuildRejectsInvalidDynamicPathsBeforeWriting(t *testing.T) {
 			name: "duplicate output",
 			body: `=> { slug: "hello-gowdk" }
 => { slug: "hello-gowdk" }`,
-			wantError: `generated output path "blog/hello-gowdk/index.html" duplicates page blog.post`,
+			wantError: `blog.post (src/pages/blog.post.page.gwdk): page route "/blog/hello-gowdk" duplicates page blog.post`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			outputDir := t.TempDir()
+			sourcePath := ""
+			if tt.name == "duplicate output" {
+				sourcePath = "src/pages/blog.post.page.gwdk"
+			}
 			app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{
-				ID:    "blog.post",
-				Route: "/blog/{slug}",
+				ID:     "blog.post",
+				Route:  "/blog/{slug}",
+				Source: sourcePath,
 				Blocks: gwdkir.Blocks{
 					Paths:     true,
 					PathsBody: tt.body,

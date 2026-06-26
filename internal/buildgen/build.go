@@ -717,13 +717,12 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, backendBindi
 			continue
 		}
 		for _, artifact := range routeArtifacts {
-			rel, err := relativeOutputPath(outputDir, artifact.Path)
-			if err != nil {
+			if _, err := relativeOutputPath(outputDir, artifact.Path); err != nil {
 				failures = append(failures, fmt.Sprintf("%s: %v", page.ID, err))
 				continue
 			}
 			if previousPage, ok := seenOutputPaths[artifact.Path]; ok {
-				failures = append(failures, fmt.Sprintf("%s: generated output path %q duplicates page %s", page.ID, rel, previousPage))
+				failures = append(failures, pageOutputCollisionError(page, artifact.Route, previousPage))
 				continue
 			}
 			seenOutputPaths[artifact.Path] = page.ID
@@ -1010,13 +1009,12 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 			continue
 		}
 		for _, artifact := range pageArtifacts {
-			rel, err := relativeOutputPath(outputDir, artifact.Path)
-			if err != nil {
+			if _, err := relativeOutputPath(outputDir, artifact.Path); err != nil {
 				failures = append(failures, fmt.Sprintf("%s: %v", page.ID, err))
 				continue
 			}
 			if previousPage, ok := seenOutputPaths[artifact.Path]; ok {
-				failures = append(failures, fmt.Sprintf("%s: generated output path %q duplicates page %s", page.ID, rel, previousPage))
+				failures = append(failures, pageOutputCollisionError(page, artifact.Route, previousPage))
 				continue
 			}
 			seenOutputPaths[artifact.Path] = page.ID
@@ -1037,4 +1035,22 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 		return buildPlan{}, err
 	}
 	return buildPlan{pages: planned, css: css.assets, assets: assets, obfuscations: obfuscations}, nil
+}
+
+func pageBuildErrorPrefix(page gwdkir.Page) string {
+	if sourcePath := strings.TrimSpace(page.Source); sourcePath != "" {
+		return fmt.Sprintf("%s (%s)", page.ID, sourcePath)
+	}
+	return page.ID
+}
+
+func pageOutputCollisionError(page gwdkir.Page, route string, previousPage string) string {
+	route = strings.TrimSpace(route)
+	if route == "" {
+		route = strings.TrimSpace(page.Route)
+	}
+	if route != "" {
+		return fmt.Sprintf("%s: page route %q duplicates page %s", pageBuildErrorPrefix(page), route, previousPage)
+	}
+	return fmt.Sprintf("%s: generated page output duplicates page %s", pageBuildErrorPrefix(page), previousPage)
 }

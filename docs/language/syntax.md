@@ -75,7 +75,7 @@ Supported metadata declarations:
 - `layout <id>[, <id>...]`: optional page layout IDs, or a layout identity in
   `.layout.gwdk` files.
 - `cache "<policy>"`: optional page Cache-Control policy for successful
-  generated static SPA HTML and SSR HTML responses.
+  generated static SPA, SSR, and hybrid HTML responses.
 - `revalidate <seconds|duration>`: optional stale-while-revalidate duration
   such as `60`, `60s`, `5m`, or `1h`; requires `cache`.
 - `error "<path.html>"`: optional route-local generated HTML error page for

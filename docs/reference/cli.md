@@ -547,7 +547,8 @@ handlers, guards, and concrete or dynamic SSR pages rendered from `view {}`
 and literal or imported `build {}` data. Hybrid pages use the same generated
 request-time page path with or without declared `server {}` data and appear as
 `hybrid` routes in `gowdk routes`. It does not stream hybrid responses, refresh
-hybrid server data in place, or run non-HTTP revalidation today.
+hybrid server data in place from browser-owned policy, run non-HTTP
+revalidation, or implicitly invalidate page load data after actions today.
 
 Current `serve` limitations: it serves generated build output files only. It does not
 run generated actions, APIs, partial fragments, or SSR routes.

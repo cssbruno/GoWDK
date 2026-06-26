@@ -363,7 +363,7 @@ public, configure the generated app, reverse proxy, or app middleware for:
   rollback behavior are verified. Do not send HSTS from local HTTP dev servers.
 
 Preserve generated `Cache-Control: no-store` responses for actions, APIs,
-fragments, SSR failures, generated errors, and CSRF-mutated HTML.
+fragments, SSR/hybrid failures, generated errors, and CSRF-mutated HTML.
 
 ## Cookie Policy
 
@@ -465,20 +465,20 @@ Generated binaries use explicit cache headers:
   with a content-hashed filename; the asset manifest maps the stable logical
   CSS path to the emitted hashed path.
 - CSRF-personalized HTML, action responses, API responses, partial fragments,
-  SSR HTML without an explicit `cache`, SSR load redirects, generated handler
-  errors, generated error pages, and invalid-CSRF responses use
+  SSR/hybrid HTML without an explicit `cache`, SSR/hybrid load redirects,
+  generated handler errors, generated error pages, and invalid-CSRF responses use
   `Cache-Control: no-store`.
 - Page-level `cache` records route response cache intent in compiler, route,
-  build-report, manifest, generated asset metadata, and generated SSR route
+  build-report, manifest, generated asset metadata, and generated SSR/hybrid route
   metadata.
-  Generated binaries apply it to successful static SPA HTML and SSR HTML
+  Generated binaries apply it to successful static SPA, SSR, and hybrid HTML
   responses for that page. It does not override the no-store safety policy for
   actions, APIs, partial responses, load redirects, generated errors, or
   CSRF-mutated HTML.
 - Page-level `revalidate` requires `cache` and appends
   `stale-while-revalidate=<seconds>` to the generated Cache-Control header for
-  successful static SPA HTML and SSR HTML responses. Accepted values are whole
-  seconds or whole-second durations such as `60s`, `5m`, or `1h`.
+  successful static SPA, SSR, and hybrid HTML responses. Accepted values are
+  whole seconds or whole-second durations such as `60s`, `5m`, or `1h`.
 
 ## Static Hosts And CDN
 
@@ -492,7 +492,8 @@ Recommended CDN policy:
 - For static-file hosting, cache content-hashed assets under `assets/` for a
   long time.
 - Revalidate HTML unless the page has an explicit `cache` policy.
-- Do not cache action/API/fragment/SSR error responses from a generated binary.
+- Do not cache action/API/fragment/SSR/hybrid error responses from a generated
+  binary.
 
 Cloudflare Pages, Vercel, and Netlify can serve static `dist/site` output when
 the app does not need generated request-time handlers. Use a generated binary,
@@ -683,13 +684,17 @@ Generated binaries currently support:
   params exposed to fragment hooks.
 - First-slice concrete and dynamic request-time SSR pages with declared
   `server {}` identifier or dotted paths.
+- Concrete and dynamic hybrid request-time pages with or without declared
+  `server {}` data, using the same page `cache`/`revalidate` contract as SSR
+  for successful HTML.
 - Optional split frontend/backend generation with `--backend-app` and
   `--backend-bin`; the frontend proxies backend routes to
   `GOWDK_BACKEND_ORIGIN`.
 
 Generated binaries do not yet support:
 
-- Hybrid streaming, data refresh, and non-HTTP revalidation.
+- Hybrid streaming, browser-owned server-data refresh, non-HTTP revalidation,
+  or implicit action invalidation of page load data.
 
 ## Local Development
 

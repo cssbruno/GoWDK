@@ -148,9 +148,9 @@ GOWDK supports three page rendering lanes:
 | Tooling | Scaffolding, formatting, diagnostics, safe fixes, tests, security audits, route and graph inspection, development serving, preview, LSP, and a VS Code extension. |
 
 The broad surface is intentional, but maturity is not uniform. Richer
-client-side reactivity, hybrid streaming and refresh, non-HTTP revalidation,
-scheduler policy, authentication hardening, and parts of the production
-security model remain partial or application-owned.
+client-side reactivity, hybrid streaming, browser-owned server-data refresh,
+non-HTTP revalidation, scheduler policy, authentication hardening, and parts of
+the production security model remain partial or application-owned.
 
 ## Generated project layout
 

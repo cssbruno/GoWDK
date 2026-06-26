@@ -103,4 +103,4 @@ out in requirements.
 - [Tracing ADR](../engineering/decisions/0013-built-in-tracing-observability.md):
   runtime trace primitives and generated instrumentation direction.
 - [Architecture](../engineering/architecture.md): implemented system boundaries.
-- [Release Planning](../engineering/release-plan.md): 0.x release selection and verification.
+- [Release Process](../engineering/release.md): release gates, artifacts, and publication workflow.

@@ -94,8 +94,8 @@ changes that do not have a matching island boundary on the current page. Local
 island state preservation is not a current contract.
 
 Generated-app rebuild and runtime 5xx overlay delivery use the dev-only proxy
-bridge. Broader state-preserving component HMR remains tracked in
-[#424](https://github.com/cssbruno/GoWDK/issues/424).
+bridge. State-preserving component HMR is not a current contract; unsupported
+cases continue to use the full-page reload fallback described above.
 
 ## Browser Overlay
 

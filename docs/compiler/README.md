@@ -23,33 +23,22 @@ passes. The full package ownership and compatibility boundaries live in
 
 ## Contract Boundaries
 
-- The machine-checked language contract lives in
-  [Language Conformance](../language/conformance.md).
-- Source discovery and project layout live in
-  [Project Structure](project-structure.md).
-- Compiler phase ownership lives in [Pipeline](pipeline.md).
-- Generated files and directories live in
-  [Generated Output](generated-output.md).
-- Current product maturity lives in
-  [Product Requirements](../product/requirements.md).
+| Topic | Source |
+| --- | --- |
+| Accepted language syntax | [Language Conformance](../language/conformance.md) |
+| Source discovery and project layout | [Project Structure](project-structure.md) |
+| Compiler phases | [Pipeline](pipeline.md) |
+| Generated files and directories | [Generated Output](generated-output.md) |
+| Browser runtime and islands | [Browser Compiler](browser-compiler.md) |
+| Build-report schema | [Build Report](build-report.md) |
+| Public manifest output | [Reference Manifest](../reference/manifest.md) |
+| Cache-key model | [Incremental Cache Keys](incremental-cache-keys.md) |
+| Syntax-change checklist | [Syntax Contributor Checklist](syntax-contributors.md) |
+| Current product maturity | [Product Requirements](../product/requirements.md) |
 
 Compiler docs should describe observable contracts and stable handoffs. Avoid
 copying an exhaustive capability list from requirements or architecture; link to
 the owning document instead.
-
-## Documents
-
-| Document | Purpose |
-| --- | --- |
-| [Project Structure](project-structure.md) | Source discovery, config requirements, file kinds, modules, and build targets |
-| [Pipeline](pipeline.md) | Compiler phases, package ownership, and current-to-target flow |
-| [Generated Output](generated-output.md) | Generated directories, files, binaries, and ownership rules |
-| [Browser Compiler](browser-compiler.md) | Generated browser runtime, JavaScript islands, and component WASM islands |
-| [Build Report](build-report.md) | `gowdk-build-report.json` schema and debug output |
-| [Manifest](manifest.md) | Manifest and site-map JSON contracts |
-| [Incremental Cache Keys](incremental-cache-keys.md) | Cache-key inputs and invalidation boundaries |
-| [Endpoint Binding Inspection](endpoint-binding-inspection.md) | Go package binding inspection and status output |
-| [Syntax Contributor Checklist](syntax-contributors.md) | Required parser, diagnostics, IR, generation, docs, and fixture work for syntax changes |
 
 ## Maintenance Rules
 

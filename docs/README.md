@@ -51,10 +51,10 @@ tests before changing status language.
 ## Document Types
 
 - **Contract and reference docs** describe behavior readers can use now.
-- **Product specifications** record accepted requirements and boundaries for a
-  capability.
-- **Implementation plans** record execution steps and may remain useful after the
-  work completes.
+- **Product contracts** record accepted requirements and boundaries that are not
+  already owned by reference or language docs.
+- **Implementation plans** record active execution steps and should be deleted or
+  folded into current contracts when complete.
 - **ADRs** record durable decisions and their consequences.
 - **Release notes and the changelog** describe a particular release, not the
   current full product surface.

@@ -232,21 +232,23 @@ reverse proxies, environment contracts, and operational guidance.
 
 ## Documentation
 
-- [Getting Started](docs/getting-started.md)
-- [Native Learning Path](docs/learning/native.md)
-- [Language Syntax](docs/language/syntax.md)
-- [Configuration Reference](docs/reference/config.md)
-- [Reference Index](docs/reference/README.md)
-- [Testing](docs/reference/testing.md)
-- [Deployment](docs/reference/deployment.md)
-- [Architecture](docs/engineering/architecture.md)
-- [Roadmap](docs/product/roadmap.md)
-- [Security Policy](SECURITY.md)
-- [Changelog](CHANGELOG.md)
+Start with the [Documentation Hub](docs/README.md), which maps each question to
+its authoritative source and explains how current contracts, specifications,
+plans, ADRs, and release history differ.
 
-The repository also includes focused examples under [`examples/`](examples/).
-[`examples/flagship/`](examples/flagship/) crosses most supported application
-surfaces in one project.
+| Need | Start here |
+| --- | --- |
+| First application | [Getting Started](docs/getting-started.md), [Native Learning Path](docs/learning/native.md), and [Cookbook](docs/cookbook/README.md) |
+| `.gwdk` language | [Language Index](docs/language/README.md) |
+| Commands, config, runtime, and integrations | [Reference Index](docs/reference/README.md) |
+| Compiler pipeline and generated output | [Compiler Index](docs/compiler/README.md) |
+| Capability status and product direction | [Product Index](docs/product/README.md) |
+| Architecture, security, operations, and contribution standards | [Engineering Index](docs/engineering/README.md) |
+| Security and release history | [Security Policy](SECURITY.md) and [Changelog](CHANGELOG.md) |
+
+Runnable projects live under [`examples/`](examples/). The
+[`examples/flagship/`](examples/flagship/) project crosses most supported
+application surfaces in one generated application.
 
 ## Contributing
 
@@ -258,8 +260,8 @@ go test ./...
 go build ./cmd/gowdk
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the repository workflow and
-verification expectations.
+See [Contributing](CONTRIBUTING.md) for repository workflow, documentation
+ownership, and verification expectations.
 
 ## License
 

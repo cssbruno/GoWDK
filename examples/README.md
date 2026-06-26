@@ -1,298 +1,49 @@
 # Examples
 
-This directory contains small `.gwdk` files for the current compiler and runtime
-scaffold. Examples are grouped by capability so build-time pages, generated
-actions, partial fragments, SSR metadata, styling, embedding, and Go interop can
-be tested independently.
+This directory contains runnable `.gwdk` examples for the current compiler and
+runtime surface. Use it as inventory; use the cookbook for task-oriented recipes.
 
-Run these commands from the repository root. The root `gowdk.config.go` is part
-of the example smoke setup and is required by project-level compiler commands,
-even when explicit `.gwdk` files are passed.
+Run commands from the repository root unless an example says to `cd` into its
+own directory. The root `gowdk.config.go` is part of the example smoke setup and
+is required by project-level compiler commands.
 
-For task-oriented recipes, use the
-[Native Cookbook](../docs/cookbook/README.md). For command, config, routing,
-generated output, and runtime contracts, use the
-[Reference Index](../docs/reference/README.md). This file stays focused on
-example inventory and verification commands. Cookbook/reference coverage gaps
-are tracked in the
-[cookbook coverage table](../docs/cookbook/README.md#coverage-and-gaps).
+## Start Here
 
-## Current Examples
-
-| File | Purpose | Command |
+| Goal | Example | Command |
 | --- | --- | --- |
-| `pages/home.page.gwdk` | Buildable page using literal `build {}` data and `Hero`. | `go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk` |
-| `pages/hero.cmp.gwdk` | Buildable component with string props. | `go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk` |
-| `pages/blog-post.page.gwdk` | Buildable dynamic route example with literal `paths {}` source. | `go run ./cmd/gowdk build --out /tmp/gowdk-dynamic-build examples/pages/blog-post.page.gwdk` |
-| `pages/layout-stack.page.gwdk` | Page that demonstrates ordered layout metadata. | `go run ./cmd/gowdk check examples/pages/layout-stack.page.gwdk` |
-| `actions/signup.page.gwdk` | Buildable action page with the first POST redirect action subset. | `go run ./cmd/gowdk build --out /tmp/gowdk-action-build --app /tmp/gowdk-action-app --bin /tmp/gowdk-action-site examples/actions/signup.page.gwdk` |
-| `actions/newsletter.page.gwdk` | Action-form syntax example with `g:post` and imported component markup. | `go run ./cmd/gowdk check examples/actions/newsletter.page.gwdk examples/components/base/button.cmp.gwdk examples/components/base/text-field.cmp.gwdk` |
-| `auth-guard/` | Auth addon guard example with public login, session-backed RBAC, protected SSR dashboard, and logout action. | `cd examples/auth-guard && make build` |
-| `login/` | Integrated auth-feature GWDK login with generated frontend binary plus feature-owned Go backend binary. | `cd examples/login && make serve` |
-| `flagship/` | Full-stack native GOWDK vertical slice with static output, endpoints, fragments, SSR load, contracts, islands, CSS/assets, guards, rate limiting, and one generated binary. | `cd examples/flagship && make build` |
-| `endpoints/` | Endpoint cookbook with action redirects, validation fragments, partial responses, APIs, JSON CRUD, webhooks, and standalone fragments. | `cd examples/endpoints && make build` |
-| `partials/patients-fragment.page.gwdk` | Partial/server fragment metadata example with `fragment`, `g:target`, and `g:swap`. | `go run ./cmd/gowdk manifest examples/partials/patients-fragment.page.gwdk` |
-| `api/status.page.gwdk` | API route metadata example with a named `GET` endpoint. | `go run ./cmd/gowdk routes examples/api/status.page.gwdk` |
-| `ssr/simple-ssr.page.gwdk` | Simple generated SSR page without `server {}`. | `go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/ssr/simple-ssr.page.gwdk` |
-| `ssr/hybrid-static.page.gwdk` | Generated hybrid request-time page without `server {}`. | `go run ./cmd/gowdk build --ssr --out /tmp/gowdk-hybrid-build --app /tmp/gowdk-hybrid-app --bin /tmp/gowdk-hybrid-site examples/ssr/hybrid-static.page.gwdk` |
-| `ssr/dynamic-ssr.page.gwdk` | Validation example for dynamic SSR route metadata. | `go run ./cmd/gowdk check --ssr examples/ssr/dynamic-ssr.page.gwdk` |
-| `ssr/dashboard.page.gwdk` | SSR page with `load` and guard metadata. | `go run ./cmd/gowdk check --ssr examples/ssr/dashboard.page.gwdk` |
-| `go-interop/imported-build.page.gwdk` | Buildable `.gwdk` import example that calls Go code from `build {}`. | `go run ./cmd/gowdk build --out /tmp/gowdk-go-interop examples/go-interop/imported-build.page.gwdk` |
-| `build-iteration/release-digest.page.gwdk` | Build-time iteration/transform: comprehensions, `seq`, list/object literals, and reductions over `build {}` data. | `go run ./cmd/gowdk build --out /tmp/gowdk-build-iteration examples/build-iteration/release-digest.page.gwdk` |
-| `i18n/` | Locale-prefixed page output with typed Go message catalogs. | `go run ./cmd/gowdk build --config examples/i18n/gowdk.config.go --out /tmp/gowdk-i18n-build examples/i18n/*.gwdk` |
-| `contracts/patients.page.gwdk` | Local command/query contract web adapter plus realtime `g:subscribe` live-region example backed by normal Go registrations. | `go run ./cmd/gowdk build --config examples/contracts/gowdk.config.go --out /tmp/gowdk-contracts-build --app /tmp/gowdk-contracts-app --bin /tmp/gowdk-contracts-site examples/contracts/patients.page.gwdk` |
-| `security/security.audit.gwdk` | Declared audit policy example that extends the frontend baseline and includes a generated header expectation. | `go run ./cmd/gowdk check examples/security/security.audit.gwdk` |
-| `embed/site.page.gwdk` | Standalone one-binary generated app example. | `go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk` |
-| `seo/` | SEO addon example that emits `sitemap.xml` and `robots.txt`. | `go run ./cmd/gowdk build --config examples/seo/gowdk.config.go --out /tmp/gowdk-seo-build examples/seo/*.gwdk` |
-| `css/styled.page.gwdk` | Configured stylesheet-link example. | `go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk` |
-| `tailwind/site.page.gwdk` | Tailwind v4 addon example using the standalone CLI. | `go run ./cmd/gowdk build --config examples/tailwind/gowdk.config.go --out /tmp/gowdk-tailwind-build examples/tailwind/site.page.gwdk` |
-| `components/base/base-components.page.gwdk` | Source-level base component examples for `Button`, `TextField`, and `Card`. | `go run ./cmd/gowdk build --out /tmp/gowdk-base-components examples/components/base/*.gwdk` |
-| `components/css/scoped-card.page.gwdk` | Component-local `css` metadata example. | `go run ./cmd/gowdk check examples/components/css/*.gwdk` |
-| `components/assets/asset-badge.page.gwdk` | Component-local `asset` metadata and emitted asset manifest example. | `go run ./cmd/gowdk build --out /tmp/gowdk-component-assets examples/components/assets/*.gwdk` |
-| `components/wasm/abi-counter.page.gwdk` | Component-level WASM island ABI example with a browser Go package. | `go run ./cmd/gowdk build --out /tmp/gowdk-wasm-island examples/components/wasm/*.gwdk` |
-| `store-persist/` | Persisted page store, typed component store use, and bounded store clear/reset example. | `go run ./cmd/gowdk build --out /tmp/gowdk-store-persist examples/store-persist/*.gwdk` |
+| Static page and component | `examples/pages/` | `go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk` |
+| Dynamic SPA route | `examples/pages/blog-post.page.gwdk` | `go run ./cmd/gowdk build --out /tmp/gowdk-dynamic-build examples/pages/blog-post.page.gwdk` |
+| Build-time Go data | `examples/go-interop/` | `go run ./cmd/gowdk build --out /tmp/gowdk-go-interop examples/go-interop/imported-build.page.gwdk` |
+| Actions, APIs, fragments | `examples/endpoints/` | `cd examples/endpoints && make check && make routes && make build` |
+| SSR and guards | `examples/auth-guard/` | `cd examples/auth-guard && make check && make routes && make build` |
+| One generated binary | `examples/embed/` | `go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk` |
+| Contracts and realtime | `examples/contracts/` | `go run ./cmd/gowdk build --config examples/contracts/gowdk.config.go --out /tmp/gowdk-contracts-build --app /tmp/gowdk-contracts-app --bin /tmp/gowdk-contracts-site examples/contracts/patients.page.gwdk` |
+| CSS and Tailwind | `examples/css/`, `examples/tailwind/` | `go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk` |
+| Component assets and WASM islands | `examples/components/` | `go run ./cmd/gowdk build --out /tmp/gowdk-wasm-island examples/components/wasm/*.gwdk` |
+| Full-stack vertical slice | `examples/flagship/` | `cd examples/flagship && make check && make routes && make build` |
 
-Check all current examples with SSR validation enabled:
+## Full Example Check
+
+Validate the broad source set with SSR enabled:
 
 ```sh
 go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/marketing/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/store-persist/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
-go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/marketing/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/store-persist/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
-go run ./cmd/gowdk sitemap --ssr examples/pages/*.gwdk examples/marketing/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/store-persist/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
-go run ./cmd/gowdk routes --ssr examples/pages/*.gwdk examples/marketing/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/store-persist/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
 ```
 
-Build the current simple page:
+Focused directories such as `examples/endpoints`, `examples/auth-guard`, and
+`examples/flagship` include `Makefile` targets that run the local checks used by
+CI.
 
-```sh
-go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
-test -f /tmp/gowdk-build/gowdk-routes.json
-test -f /tmp/gowdk-build/gowdk-assets.json
-go run ./cmd/gowdk serve --dir /tmp/gowdk-build
-go run ./cmd/gowdk build --out /tmp/gowdk-build --app /tmp/gowdk-app --bin /tmp/gowdk-site examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
-```
+## Documentation Map
 
-Build the current dynamic page:
+| Need | Source |
+| --- | --- |
+| Recipes | [Native Cookbook](../docs/cookbook/README.md) |
+| Learning path | [Native Learning Path](../docs/learning/native.md) |
+| Commands and config | [Reference Index](../docs/reference/README.md) |
+| Language syntax | [Language Index](../docs/language/README.md) |
+| Generated output | [Compiler Index](../docs/compiler/README.md) |
+| Current capability status | [Product Requirements](../docs/product/requirements.md) |
 
-```sh
-go run ./cmd/gowdk build --out /tmp/gowdk-dynamic-build examples/pages/blog-post.page.gwdk
-test -f /tmp/gowdk-dynamic-build/blog/hello-gowdk/index.html
-test -f /tmp/gowdk-dynamic-build/blog/compile-first/index.html
-```
-
-Build the current action redirect page:
-
-```sh
-go run ./cmd/gowdk build --out /tmp/gowdk-action-build --app /tmp/gowdk-action-app --bin /tmp/gowdk-action-site examples/actions/signup.page.gwdk
-test -x /tmp/gowdk-action-site
-```
-
-Run the current login backend example:
-
-```sh
-cd examples/login
-make serve
-```
-
-Build the auth guard addon example:
-
-```sh
-cd examples/auth-guard
-make check
-make routes
-make build
-test -x bin/auth-guard
-```
-
-Build the flagship full-stack generated binary:
-
-```sh
-cd examples/flagship
-make check
-make routes
-make build
-test -x bin/flagship
-```
-
-Build the endpoint examples cookbook:
-
-```sh
-cd examples/endpoints
-make check
-make routes
-make build
-test -x bin/endpoints
-```
-
-Build the current simple generated SSR page:
-
-```sh
-go run ./cmd/gowdk build --ssr --out /tmp/gowdk-ssr-build --app /tmp/gowdk-ssr-app --bin /tmp/gowdk-ssr-site examples/ssr/simple-ssr.page.gwdk
-test -x /tmp/gowdk-ssr-site
-```
-
-Build the current generated hybrid page without `server {}`:
-
-```sh
-go run ./cmd/gowdk build --ssr --out /tmp/gowdk-hybrid-build --app /tmp/gowdk-hybrid-app --bin /tmp/gowdk-hybrid-site examples/ssr/hybrid-static.page.gwdk
-test -x /tmp/gowdk-hybrid-site
-go run ./cmd/gowdk routes --ssr examples/ssr/hybrid-static.page.gwdk > /tmp/gowdk-hybrid-routes.json
-grep -F '"kind": "ssr"' /tmp/gowdk-hybrid-routes.json
-grep -F '"pageId": "hybrid.static"' /tmp/gowdk-hybrid-routes.json
-grep -F '"code": "spa_disabled"' /tmp/gowdk-hybrid-routes.json
-```
-
-Build the current `.gwdk` Go import example:
-
-```sh
-go run ./cmd/gowdk build --out /tmp/gowdk-go-interop examples/go-interop/imported-build.page.gwdk
-test -f /tmp/gowdk-go-interop/go-imported/index.html
-go test ./examples/go-interop
-```
-
-Build the localized page example:
-
-```sh
-go run ./cmd/gowdk build --config examples/i18n/gowdk.config.go --out /tmp/gowdk-i18n-build examples/i18n/*.gwdk
-test -f /tmp/gowdk-i18n-build/en/index.html
-test -f /tmp/gowdk-i18n-build/pt/index.html
-```
-
-Build the local command/query contract web adapter example:
-
-```sh
-go run ./cmd/gowdk build --config examples/contracts/gowdk.config.go --out /tmp/gowdk-contracts-build --app /tmp/gowdk-contracts-app --bin /tmp/gowdk-contracts-site examples/contracts/patients.page.gwdk
-test -x /tmp/gowdk-contracts-site
-test -f /tmp/gowdk-contracts-build/assets/gowdk/gowdk.js
-grep -F '"name": "patients.CreatePatient"' /tmp/gowdk-contracts-build/gowdk-build-report.json
-grep -F '"kind": "command"' /tmp/gowdk-contracts-build/gowdk-build-report.json
-grep -F '"path": "/contracts/patients"' /tmp/gowdk-contracts-build/gowdk-build-report.json
-grep -F '"guards": "public"' /tmp/gowdk-contracts-build/gowdk-build-report.json
-grep -F '"name": "patients.GetPatientPage"' /tmp/gowdk-contracts-build/gowdk-build-report.json
-grep -F '"kind": "query"' /tmp/gowdk-contracts-build/gowdk-build-report.json
-grep -F '"event": "patients.PatientNotice"' /tmp/gowdk-contracts-build/gowdk-build-report.json
-grep -F '"kind": "realtime_subscription"' /tmp/gowdk-contracts-build/gowdk-build-report.json
-grep -F 'data-gowdk-subscribe-type=' /tmp/gowdk-contracts-build/contracts/patients/index.html
-go test ./examples/contracts/patients
-```
-
-Build the one-binary generated app example:
-
-```sh
-go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk
-test -x /tmp/gowdk-embed-site
-GOWDK_SMOKE_ADDR=127.0.0.1:18085 scripts/smoke-generated-binary.sh /tmp/gowdk-embed-site /embed "Embedded GOWDK"
-```
-
-Build the SEO addon example:
-
-```sh
-go run ./cmd/gowdk build --config examples/seo/gowdk.config.go --out /tmp/gowdk-seo-build examples/seo/*.gwdk
-test -f /tmp/gowdk-seo-build/sitemap.xml
-test -f /tmp/gowdk-seo-build/robots.txt
-grep -F 'https://example.com/seo/blog/hello-gowdk' /tmp/gowdk-seo-build/sitemap.xml
-grep -F 'Sitemap: https://example.com/sitemap.xml' /tmp/gowdk-seo-build/robots.txt
-```
-
-Build the generated app WASM deploy artifact:
-
-```sh
-go run ./cmd/gowdk build --out /tmp/gowdk-wasm-build --app /tmp/gowdk-wasm-app --wasm /tmp/gowdk-site.wasm examples/embed/site.page.gwdk
-scripts/smoke-generated-wasm.sh /tmp/gowdk-site.wasm
-```
-
-Build the CSS stylesheet-link example:
-
-```sh
-go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk
-grep -F '<link rel="stylesheet" href="/assets/site.css">' /tmp/gowdk-css-build/styled/index.html
-go test ./examples/css
-```
-
-Build the Tailwind addon example. Install Tailwind separately first; the addon
-uses `tailwindcss` from `PATH` or the explicit `tailwind.Options.Command` path:
-
-```sh
-go run ./cmd/gowdk build --config examples/tailwind/gowdk.config.go --out /tmp/gowdk-tailwind-build examples/tailwind/site.page.gwdk
-test -f /tmp/gowdk-tailwind-build/tailwind/index.html
-grep -F 'assets/app.' /tmp/gowdk-tailwind-build/tailwind/index.html
-```
-
-Build the source-level base component examples:
-
-```sh
-go run ./cmd/gowdk build --out /tmp/gowdk-base-components examples/components/base/*.gwdk
-test -f /tmp/gowdk-base-components/components/base/index.html
-```
-
-Check the component-local CSS metadata example:
-
-```sh
-go run ./cmd/gowdk check examples/components/css/*.gwdk
-```
-
-Build the component-local asset example:
-
-```sh
-go run ./cmd/gowdk build --out /tmp/gowdk-component-assets examples/components/assets/*.gwdk
-test -f /tmp/gowdk-component-assets/components/assets/index.html
-grep -F '"assets/gowdk/components/componentassets/AssetBadge/badge.svg"' /tmp/gowdk-component-assets/gowdk-assets.json
-grep -F 'assets/gowdk/components/componentassets/AssetBadge/badge.' /tmp/gowdk-component-assets/gowdk-assets.json
-```
-
-Build the component-level WASM island ABI example:
-
-```sh
-go run ./cmd/gowdk build --out /tmp/gowdk-wasm-island examples/components/wasm/*.gwdk
-test -f /tmp/gowdk-wasm-island/components/wasm/index.html
-test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/componentwasm/WasmCounter.wasm
-test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/componentwasm/WasmCounter.wasm.js
-test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/wasm_exec.js
-```
-
-Build the persisted page-store example:
-
-```sh
-go run ./cmd/gowdk build --out /tmp/gowdk-store-persist examples/store-persist/*.gwdk
-test -f /tmp/gowdk-store-persist/shop/index.html
-grep -F 'data-gowdk-persist="local"' /tmp/gowdk-store-persist/shop/index.html
-```
-
-## Current Limitations
-
-- `gowdk build` emits app-shell HTML, `gowdk-routes.json`, and
-  `gowdk-assets.json` for simple app pages, components, literal dynamic
-  paths, and imported Go build data today.
-- Default build discovery exists, but the examples are intentionally split by
-  capability because some files are validation-only for the current slice. Pass
-  explicit files for build smoke commands.
-- Build-output examples can be served locally with `gowdk serve` or compiled into
-  an embedded binary with `gowdk build --app --bin`; the current generated
-  binary supports action redirects, partial action fragments, form input
-  decoder wrappers, and required-field validation, plus concrete and dynamic
-  SSR pages with declared `server {}` fields and hybrid pages with or without
-  declared `server {}` data. It runs declared guards for generated
-  SSR/action/API routes, uses `auth.Addon` defaults for `auth.required` and
-  native `role:` / `permission:` session guards when configured, and fails Go
-  compilation when required custom guard backing code is missing.
-- `view {}` bodies are parsed only for a small app-shell HTML subset; `act` bodies
-  support the first form-input/redirect subset, `api` bodies support the first
-  method/route metadata line, and `server` bodies are still not parsed beyond
-  top-level block detection.
-- `.gwdk` page imports currently support the first build-time data slice:
-  `build { => alias.Func() }` for a Go function returning a JSON object.
-  Dynamic `paths {}` builds can pass route params to helpers that declare one
-  `gowdk.BuildParams` argument. Generated action, API, partial, and `server {}`
-  user handler wiring is implemented for the supported first request-time
-  signatures.
-- `guard` is enforced by generated SSR/action/API handlers. Custom guarded
-  routes require `GOWDKGuardRegistry` unless an addon supplies the guard;
-  native RBAC guard IDs such as `role:admin` require `GOWDKAuthProvider` only
-  without `auth.Addon`.
-- Route params from literal `paths {}` are available to the current
-  `view {}` interpolation subset, literal `build {}` string interpolation, and
-  route-aware Go build functions.
-- Literal `build {}` string data and scalar fields returned by imported
-  Go build functions are available to the current `view {}`
-  interpolation subset.
-- Rich local client-side reactivity beyond the documented component subset is
-  planned.
+When an example changes, update its command here, the cookbook recipe if one
+exists, and the contract doc that owns the behavior.

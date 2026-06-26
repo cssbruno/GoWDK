@@ -1,56 +1,51 @@
 # Compiler
 
-This directory documents GOWDK compiler behavior and generated-output contracts.
+This directory documents GOWDK compiler behavior, internal handoffs, and
+generated-output contracts.
 
-## Current Status
+## Pipeline
 
-Implemented today:
+```text
+.gwdk source
+  -> shared tokenizer and parser
+  -> typed source AST (`internal/gwdkast`)
+  -> analyzed program records (`internal/gwdkanalysis`)
+  -> compiler IR (`internal/gwdkir`)
+  -> validation, discovery, and Go binding (`internal/compiler`)
+  -> build and application generation (`internal/buildgen`, `internal/appgen`)
+  -> go/format
+  -> optional go build
+```
 
-- Recursive `.gwdk` discovery through `internal/discover`.
-- Page and component metadata parsing through `internal/parser`.
-- IR-derived manifest JSON and site-map reports through `internal/lang`.
-- Render-rule, duplicate identity, redundant component, and component contract
-  validation through `internal/compiler`.
-- SPA `view {}` markup parsing through `internal/viewparse` and rendering
-  through `internal/viewrender`.
-- Imported Go props/state contract resolution through `internal/gotypes`.
-- Route-binding metadata for `gowdk routes` through `internal/compiler`.
-- App-shell HTML, route manifest, and asset manifest emission for simple build-time
-  pages, literal build data, imported and same-package Go build data functions,
-  literal dynamic paths, components, partial runtime assets, and island runtime
-  assets through `internal/buildgen`.
-- Mandatory SPA build reports through `internal/buildgen`, written as
-  `gowdk-build-report.json` for disk builds and returned on build errors.
-- Generated embedded app source and optional binary compilation through
-  `internal/appgen`, including supported action/API/fragment handlers, form
-  input decoder and required-field validation wrappers, CSRF wiring, guards,
-  concrete or dynamic SSR routes with declared `server {}` fields, and concrete
-  or dynamic hybrid request-time routes with or without declared `server {}`
-  fields.
-- SPA `gowdk.config.go` loading for build source discovery, build targets,
-  and output through `internal/project`.
-- CLI tools for `tokens`, `fmt`, `check`, `manifest`, `sitemap`, `build`, and `lsp`.
+`internal/gwdkir.Program` is the compiler handoff consumed by generated-output
+passes. The full package ownership and compatibility boundaries live in
+[Architecture](../engineering/architecture.md#compatibility-records).
 
-Not implemented yet:
+## Contract Boundaries
 
-- Full AST/semantic/type analysis beyond the current component contract slice.
-- Full component compilation, arbitrary `build {}` statements beyond expression
-  records, and full `paths {}` execution.
-- Broader generated-client reactivity beyond explicit reload/fragment outcomes.
-- Hybrid streaming, browser-owned server-data refresh, non-HTTP revalidation,
-  and implicit action invalidation of page load data.
+| Topic | Source |
+| --- | --- |
+| Accepted language syntax | [Language Conformance](../language/conformance.md) |
+| Source discovery and project layout | [Project Structure](project-structure.md) |
+| Compiler phases | [Pipeline](pipeline.md) |
+| Generated files and directories | [Generated Output](generated-output.md) |
+| Browser runtime and islands | [Browser Compiler](browser-compiler.md) |
+| Build-report schema | [Build Report](build-report.md) |
+| Public manifest output | [Reference Manifest](../reference/manifest.md) |
+| Cache-key model | [Incremental Cache Keys](incremental-cache-keys.md) |
+| Syntax-change checklist | [Syntax Contributor Checklist](syntax-contributors.md) |
+| Current product maturity | [Product Requirements](../product/requirements.md) |
 
-## Documents
+Compiler docs should describe observable contracts and stable handoffs. Avoid
+copying an exhaustive capability list from requirements or architecture; link to
+the owning document instead.
 
-- `pipeline.md`: current and target compile pipeline.
-- `project-structure.md`: current source inputs and planned project layout.
-- `generated-output.md`: planned generated artifacts and current limitations.
-- `endpoint-binding-inspection.md`: current Go package binding inspection.
-- `browser-compiler.md`: browser-facing partial runtime, JavaScript islands, and
-  component-level WASM island behavior.
-- `build-report.md`: generated build report schema and CLI debug output.
-- `incremental-cache-keys.md`: compiler cache-key model and implemented
-  incremental invalidation slice.
-- `manifest.md`: manifest and site-map JSON contracts.
-- `syntax-contributors.md`: checklist for parser, diagnostics, IR, generation,
-  docs, and fixture coverage when syntax changes.
+## Maintenance Rules
+
+- A syntax change updates language docs, conformance coverage, diagnostics, IR,
+  generation, and examples together.
+- A generated artifact change updates the generated-output, manifest, or build
+  report contract that owns it.
+- A compiler boundary change updates architecture and usually requires an ADR.
+- A capability status change updates product requirements instead of adding a
+  second status list here.

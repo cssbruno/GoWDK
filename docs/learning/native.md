@@ -110,8 +110,8 @@ Use installed `gowdk` commands inside an initialized app. Use
 - From this repository, run `go test ./addons/db` and
   `cd addons/db/sqlitetest && go test ./...` to exercise the helper package and
   isolated real-driver module.
-- Broader real-world Go interop examples are tracked in
-  [#329](https://github.com/cssbruno/GOWDK/issues/329).
+- Use the [Examples Index](../../examples/README.md) to find current Go interop,
+  contract, database, and generated-app verification commands.
 
 ## Lesson 14: Build One Binary
 
@@ -166,11 +166,11 @@ example.com {
 - WASM islands are explicit and not the default component runtime.
 - Read [component WASM](../language/components.md#wasm-islands) and the ABI
   fixture in `testfixture/islands/islands.go`.
-- The flagship example includes a call-site placeholder at
-  `examples/flagship/src/app/home.page.gwdk` and browser-side Go package shape
-  in `examples/flagship/src/ui/counter.go`.
-- Polished WASM island ABI examples remain tracked in
-  [#31](https://github.com/cssbruno/GOWDK/issues/31).
+- Build the focused component ABI example:
+  `go run ./cmd/gowdk build --out /tmp/gowdk-wasm-island examples/components/wasm/*.gwdk`.
+- The flagship app also contains a broader call-site and browser-package shape in
+  `examples/flagship/src/app/home.page.gwdk` and
+  `examples/flagship/src/ui/counter.go`.
 
 ## Full-Stack Practice Path
 

@@ -100,7 +100,7 @@ out in requirements.
 - [Contract Runtime](contract-runtime-spec.md): current contract-runtime product boundary.
 - [Realtime Hardening](realtime-hardening-spec.md): realtime subscription,
   replay, revocation, and invalidation hardening.
-- [Observability Tracing](observability-tracing-spec.md): runtime trace
-  primitives and generated instrumentation direction.
+- [Tracing ADR](../engineering/decisions/0013-built-in-tracing-observability.md):
+  runtime trace primitives and generated instrumentation direction.
 - [Architecture](../engineering/architecture.md): implemented system boundaries.
 - [Release Planning](../engineering/release-plan.md): 0.x release selection and verification.

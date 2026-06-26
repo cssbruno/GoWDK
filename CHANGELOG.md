@@ -3,6 +3,21 @@
 GOWDK is experimental 0.x software. Public syntax, generated output, runtime
 packages, and tooling contracts may change before 1.0.
 
+## [0.12.0](https://github.com/cssbruno/GoWDK/compare/v0.11.0...v0.12.0) (2026-06-26)
+
+
+### Features
+
+* **compiler:** complete API, hybrid, and realtime contracts ([#710](https://github.com/cssbruno/GoWDK/issues/710)) ([c6fbc57](https://github.com/cssbruno/GoWDK/commit/c6fbc5798ef0425ed9d1bc73b16f6b9bb7d830f6))
+* **contracts:** generate worker and cron role binaries ([#690](https://github.com/cssbruno/GoWDK/issues/690)) ([945e611](https://github.com/cssbruno/GoWDK/commit/945e61136207c1e067bb1548e72a244fa536c829))
+* **security:** harden auth sessions and release inputs ([#691](https://github.com/cssbruno/GoWDK/issues/691)) ([3f5010d](https://github.com/cssbruno/GoWDK/commit/3f5010d913e91eb347fe5b78a91728d81c40a7d4))
+
+
+### Bug Fixes
+
+* automate release changelog notes ([#741](https://github.com/cssbruno/GoWDK/issues/741)) ([3809963](https://github.com/cssbruno/GoWDK/commit/38099635ef5776ab97b2edd4356d7396e3cd8fb9))
+* **tooling:** harden validation and development HTTP paths ([#699](https://github.com/cssbruno/GoWDK/issues/699)) ([bab0e50](https://github.com/cssbruno/GoWDK/commit/bab0e50553c560dbcf6a4c73c8a489557e072177))
+
 ## v0.11.0 - 2026-06-24
 
 ### Added

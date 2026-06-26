@@ -249,9 +249,13 @@ func changedIncrementalSPAPages(app gwdkanalysis.Sources, changedPaths []string)
 }
 
 type devComponentHMRPayload struct {
-	Components []devComponentHMREntry `json:"components"`
-	Routes     []string               `json:"routes"`
+	Version    int                    `json:"version"`
+	Action     string                 `json:"action"`
+	Reason     string                 `json:"reason,omitempty"`
+	Components []devComponentHMREntry `json:"components,omitempty"`
+	Routes     []string               `json:"routes,omitempty"`
 	Generated  string                 `json:"generated"`
+	Preserve   []string               `json:"preserve,omitempty"`
 }
 
 type devComponentHMREntry struct {
@@ -259,18 +263,53 @@ type devComponentHMREntry struct {
 	ID   string `json:"id,omitempty"`
 }
 
-func devComponentHMRPayloadLoaded(plan buildOptions, change inputChange) (string, bool) {
-	if len(change.Added) > 0 || len(change.Removed) > 0 || len(change.Changed) == 0 {
+const (
+	devUpdateProtocolVersion        = 1
+	devUpdateActionReload           = "reload"
+	devUpdateActionComponentRemount = "component-remount"
+)
+
+func devReloadPayload(reason string) string {
+	encoded, ok := marshalDevUpdatePayload(devComponentHMRPayload{
+		Version: devUpdateProtocolVersion,
+		Action:  devUpdateActionReload,
+		Reason:  strings.TrimSpace(reason),
+	})
+	if !ok {
+		return fmt.Sprintf(`{"version":%d,"action":%q}`, devUpdateProtocolVersion, devUpdateActionReload)
+	}
+	return encoded
+}
+
+func marshalDevUpdatePayload(payload devComponentHMRPayload) (string, bool) {
+	if payload.Generated == "" {
+		payload.Generated = time.Now().Format(time.RFC3339Nano)
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
 		return "", false
+	}
+	return string(encoded), true
+}
+
+type devIncrementalSPAUpdate struct {
+	plan            incrementalSPAChangePlan
+	componentsByKey map[string]gwdkir.Component
+	pagesBySource   map[string]gwdkir.Page
+}
+
+func devIncrementalSPAUpdateLoaded(plan buildOptions, change inputChange) (devIncrementalSPAUpdate, bool) {
+	if len(change.Added) > 0 || len(change.Removed) > 0 || len(change.Changed) == 0 {
+		return devIncrementalSPAUpdate{}, false
 	}
 	if plan.shouldBuildConfiguredTargets() {
-		return "", false
+		return devIncrementalSPAUpdate{}, false
 	}
 	if strings.TrimSpace(plan.AppDir) != "" || strings.TrimSpace(plan.BinaryPath) != "" || strings.TrimSpace(plan.WASMPath) != "" || strings.TrimSpace(plan.BackendAppDir) != "" || strings.TrimSpace(plan.BackendBinaryPath) != "" {
-		return "", false
+		return devIncrementalSPAUpdate{}, false
 	}
 	if inputChangeTouchesConfig(change, plan.ConfigPath) {
-		return "", false
+		return devIncrementalSPAUpdate{}, false
 	}
 
 	options := plan.Options
@@ -280,24 +319,24 @@ func devComponentHMRPayloadLoaded(plan buildOptions, change inputChange) (string
 		outputDir = options.Config.Build.Output
 	}
 	if outputDir == "" {
-		return "", false
+		return devIncrementalSPAUpdate{}, false
 	}
 	options.Config.Build.Output = outputDir
 	if len(paths) == 0 {
 		discovered, err := discoverBuildFiles(options.Config, outputDir, plan.ModuleNames, options.ProjectRoot)
 		if err != nil || len(discovered) == 0 {
-			return "", false
+			return devIncrementalSPAUpdate{}, false
 		}
 		paths = discovered
 	}
 
 	app, diagnostics := lang.ParseBuildFiles(paths)
 	if diagnostics.HasErrors() {
-		return "", false
+		return devIncrementalSPAUpdate{}, false
 	}
 	incrementalPlan, incremental := changedIncrementalSPAPages(app, change.Changed)
-	if !incremental || incrementalPlan.ComponentChanges == 0 || incrementalPlan.PageChanges != 0 || incrementalPlan.LayoutChanges != 0 {
-		return "", false
+	if !incremental {
+		return devIncrementalSPAUpdate{}, false
 	}
 
 	componentsByKey := map[string]gwdkir.Component{}
@@ -309,10 +348,30 @@ func devComponentHMRPayloadLoaded(plan buildOptions, change inputChange) (string
 		pagesBySource[page.Source] = page
 	}
 
-	var payload devComponentHMRPayload
-	for _, key := range incrementalPlan.ComponentKeys {
-		component, ok := componentsByKey[key]
+	return devIncrementalSPAUpdate{
+		plan:            incrementalPlan,
+		componentsByKey: componentsByKey,
+		pagesBySource:   pagesBySource,
+	}, true
+}
+
+func devComponentHMRPayloadLoaded(plan buildOptions, change inputChange) (string, bool) {
+	update, ok := devIncrementalSPAUpdateLoaded(plan, change)
+	if !ok || update.plan.ComponentChanges == 0 || update.plan.PageChanges != 0 || update.plan.LayoutChanges != 0 {
+		return "", false
+	}
+
+	payload := devComponentHMRPayload{
+		Version:  devUpdateProtocolVersion,
+		Action:   devUpdateActionComponentRemount,
+		Preserve: []string{"page-stores"},
+	}
+	for _, key := range update.plan.ComponentKeys {
+		component, ok := update.componentsByKey[key]
 		if !ok {
+			return "", false
+		}
+		if strings.TrimSpace(component.WASM.Package) != "" {
 			return "", false
 		}
 		entry := devComponentHMREntry{
@@ -324,28 +383,47 @@ func devComponentHMRPayloadLoaded(plan buildOptions, change inputChange) (string
 		}
 		payload.Components = append(payload.Components, entry)
 	}
-	seenRoutes := map[string]bool{}
-	for _, source := range incrementalPlan.PageSources {
-		page, ok := pagesBySource[source]
-		if !ok || strings.TrimSpace(page.Route) == "" || seenRoutes[page.Route] {
-			continue
-		}
-		seenRoutes[page.Route] = true
-		payload.Routes = append(payload.Routes, page.Route)
-	}
+	payload.Routes = devRoutesForPageSources(update.pagesBySource, update.plan.PageSources)
 	sort.Slice(payload.Components, func(i, j int) bool {
 		if payload.Components[i].ID == payload.Components[j].ID {
 			return payload.Components[i].Name < payload.Components[j].Name
 		}
 		return payload.Components[i].ID < payload.Components[j].ID
 	})
-	sort.Strings(payload.Routes)
-	payload.Generated = time.Now().Format(time.RFC3339Nano)
-	encoded, err := json.Marshal(payload)
-	if err != nil {
+	encoded, ok := marshalDevUpdatePayload(payload)
+	return encoded, ok && len(payload.Components) > 0 && len(payload.Routes) > 0
+}
+
+func devRouteReloadPayloadLoaded(plan buildOptions, change inputChange) (string, bool) {
+	update, ok := devIncrementalSPAUpdateLoaded(plan, change)
+	if !ok || update.plan.LayoutChanges == 0 || update.plan.PageChanges != 0 || update.plan.ComponentChanges != 0 {
 		return "", false
 	}
-	return string(encoded), len(payload.Components) > 0 && len(payload.Routes) > 0
+	routes := devRoutesForPageSources(update.pagesBySource, update.plan.PageSources)
+	if len(routes) == 0 {
+		return "", false
+	}
+	return marshalDevUpdatePayload(devComponentHMRPayload{
+		Version: devUpdateProtocolVersion,
+		Action:  devUpdateActionReload,
+		Reason:  "route-scoped-layout",
+		Routes:  routes,
+	})
+}
+
+func devRoutesForPageSources(pagesBySource map[string]gwdkir.Page, sources []string) []string {
+	seenRoutes := map[string]bool{}
+	var routes []string
+	for _, source := range sources {
+		page, ok := pagesBySource[source]
+		if !ok || strings.TrimSpace(page.Route) == "" || seenRoutes[page.Route] {
+			continue
+		}
+		seenRoutes[page.Route] = true
+		routes = append(routes, page.Route)
+	}
+	sort.Strings(routes)
+	return routes
 }
 
 type incrementalDependencyIndex struct {

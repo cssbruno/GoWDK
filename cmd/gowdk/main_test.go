@@ -2754,8 +2754,114 @@ view {
 	if len(decoded.Components) != 1 || decoded.Components[0].Name != "Brand" || decoded.Components[0].ID != "app.Brand" {
 		t.Fatalf("unexpected HMR components: %#v", decoded.Components)
 	}
+	if decoded.Version != devUpdateProtocolVersion || decoded.Action != devUpdateActionComponentRemount {
+		t.Fatalf("unexpected HMR protocol fields: %#v", decoded)
+	}
 	if strings.Join(decoded.Routes, ",") != "/" {
 		t.Fatalf("unexpected HMR routes: %#v", decoded.Routes)
+	}
+	if strings.Join(decoded.Preserve, ",") != "page-stores" {
+		t.Fatalf("unexpected HMR state preservation contract: %#v", decoded.Preserve)
+	}
+	if decoded.Generated == "" {
+		t.Fatalf("expected generated timestamp in payload: %#v", decoded)
+	}
+}
+
+func TestDevReloadPayloadUsesVersionedReloadAction(t *testing.T) {
+	var decoded devComponentHMRPayload
+	payload := devReloadPayload("generated-app-runtime")
+	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
+		t.Fatalf("invalid reload payload JSON: %v\n%s", err, payload)
+	}
+	if decoded.Version != devUpdateProtocolVersion || decoded.Action != devUpdateActionReload || decoded.Reason != "generated-app-runtime" {
+		t.Fatalf("unexpected reload payload: %#v", decoded)
+	}
+	if decoded.Generated == "" {
+		t.Fatalf("expected generated timestamp in payload: %#v", decoded)
+	}
+}
+
+func TestDevServeNotifyReloadUsesDevUpdateEvent(t *testing.T) {
+	broker := newLiveReloadBroker()
+	client := make(chan liveReloadEvent, 1)
+	broker.mu.Lock()
+	broker.clients[client] = true
+	broker.mu.Unlock()
+
+	serve := &devServeState{reload: broker}
+	serve.notifyReloadWithReason("full-reload")
+
+	select {
+	case event := <-client:
+		if event.Name != "dev-update" {
+			t.Fatalf("expected dev-update event, got %#v", event)
+		}
+		var decoded devComponentHMRPayload
+		if err := json.Unmarshal([]byte(event.Data), &decoded); err != nil {
+			t.Fatalf("invalid dev-update data: %v\n%s", err, event.Data)
+		}
+		if decoded.Version != devUpdateProtocolVersion || decoded.Action != devUpdateActionReload || decoded.Reason != "full-reload" {
+			t.Fatalf("unexpected dev-update data: %#v", decoded)
+		}
+	default:
+		t.Fatal("expected reload notification")
+	}
+}
+
+func TestDevRouteReloadPayloadUsesLayoutDependencies(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "home.page.gwdk")
+	about := filepath.Join(root, "about.page.gwdk")
+	layout := filepath.Join(root, "root.layout.gwdk")
+	outputDir := filepath.Join(root, "dist")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+page home
+route "/"
+layout root
+
+view {
+  <main>Home</main>
+}
+`)
+	writeCLIFile(t, about, `package app
+
+page about
+route "/about"
+
+view {
+  <main>Stable</main>
+}
+`)
+	writeCLIFile(t, layout, `package app
+
+view {
+  <section><slot /></section>
+}
+`)
+
+	plan, err := loadBuildOptions([]string{"--config", config, "--out", outputDir, page, about, layout})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if payload, ok := devComponentHMRPayloadLoaded(plan, inputChange{Changed: []string{layout}}); ok {
+		t.Fatalf("expected changed layout to skip component remount HMR, got %s", payload)
+	}
+	payload, ok := devRouteReloadPayloadLoaded(plan, inputChange{Changed: []string{layout}})
+	if !ok {
+		t.Fatal("expected route-scoped reload payload for layout dependency")
+	}
+	var decoded devComponentHMRPayload
+	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
+		t.Fatalf("invalid route reload payload JSON: %v\n%s", err, payload)
+	}
+	if decoded.Version != devUpdateProtocolVersion || decoded.Action != devUpdateActionReload || decoded.Reason != "route-scoped-layout" {
+		t.Fatalf("unexpected route reload protocol fields: %#v", decoded)
+	}
+	if strings.Join(decoded.Routes, ",") != "/" {
+		t.Fatalf("unexpected route reload routes: %#v", decoded.Routes)
 	}
 	if decoded.Generated == "" {
 		t.Fatalf("expected generated timestamp in payload: %#v", decoded)
@@ -7554,7 +7660,13 @@ func TestLiveReloadFileHandlerInjectsScript(t *testing.T) {
 		`__gowdk-error-overlay`,
 		`events.addEventListener("build-error"`,
 		`events.addEventListener("runtime-error"`,
+		`events.addEventListener("dev-update"`,
 		`events.addEventListener("component-hmr"`,
+		`gowdk:dev-update`,
+		`DEV_UPDATE_VERSION = 1`,
+		`component-remount`,
+		`payload.action === "reload"`,
+		`routes.some((route) => pathMatchesRoute(route, window.location.pathname))`,
 		`fetchFreshDocument`,
 		`GOWDK build failed`,
 	} {

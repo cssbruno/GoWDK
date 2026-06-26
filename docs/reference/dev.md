@@ -83,19 +83,33 @@ Dev rebuild complete: generated app restarted: proxy http://<addr> -> http://<in
 ## HMR
 
 `gowdk dev` supports conservative component-aware HMR for generated JavaScript
-islands in plain SPA/static serving. When a changed component source maps to the
-current page and the browser can find matching `<gowdk-island>` roots, the dev
-bridge fetches the fresh document, swaps those island roots, remounts islands,
-and emits `gowdk:component-hmr`.
+islands in plain SPA/static serving. Successful rebuilds are sent to the browser
+as a versioned `dev-update` SSE payload:
 
-The dev bridge falls back to full-page reload for page changes, layout changes,
-source-set changes, generated app/runtime mode, WASM islands, and component
-changes that do not have a matching island boundary on the current page. Local
-island state preservation is not a current contract.
+- `version: 1`
+- `action: "component-remount"` for mapped JavaScript island roots
+- `action: "reload"` for route-scoped or full-page reload boundaries
+
+When a changed component source maps to the current page and the browser can
+find matching `<gowdk-island>` roots, the dev bridge fetches the fresh document,
+swaps those island roots, remounts islands, rehydrates page stores, and emits
+`gowdk:component-hmr` plus `gowdk:dev-update`. Payloads with an unsupported
+protocol version reload the page.
+
+Layout-only incremental SPA rebuilds send a route-scoped `reload` payload for
+the pages that use the changed layout. Browser tabs outside those routes do not
+reload.
+
+The dev bridge falls back to one full-page reload for page changes, source-set
+changes, added or removed inputs, generated app/runtime mode, WASM output or
+component WASM islands, and component changes that cannot be mapped to matching
+island boundaries on the current page. Local island state preservation is not a
+current contract.
 
 Generated-app rebuild and runtime 5xx overlay delivery use the dev-only proxy
-bridge. State-preserving component HMR is not a current contract; unsupported
-cases continue to use the full-page reload fallback described above.
+bridge. Unsupported HMR cases continue to use the full-page reload fallback
+described above. The dev-update bridge is injected only by `gowdk dev`; normal
+production-generated assets are unchanged by enabling the dev loop.
 
 ## Browser Overlay
 

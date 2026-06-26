@@ -322,16 +322,24 @@ func (serve *devServeState) notifyBuildError(err error, change inputChange, last
 }
 
 func (serve *devServeState) notifyReload() {
-	serve.reload.notify("reload")
+	serve.notifyReloadWithReason("full-reload")
+}
+
+func (serve *devServeState) notifyReloadWithReason(reason string) {
+	serve.reload.notifyData("dev-update", devReloadPayload(reason))
 }
 
 func (serve *devServeState) notifyReloadForChange(state devBuildState, change inputChange) {
 	if state.runtime.Enabled {
-		serve.notifyReload()
+		serve.notifyReloadWithReason("generated-app-runtime")
 		return
 	}
 	if payload, ok := devComponentHMRPayloadLoaded(state.plan, change); ok {
-		serve.reload.notifyData("component-hmr", payload)
+		serve.reload.notifyData("dev-update", payload)
+		return
+	}
+	if payload, ok := devRouteReloadPayloadLoaded(state.plan, change); ok {
+		serve.reload.notifyData("dev-update", payload)
 		return
 	}
 	serve.notifyReload()

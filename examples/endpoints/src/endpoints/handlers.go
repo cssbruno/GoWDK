@@ -2,12 +2,10 @@ package endpoints
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"html"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -108,57 +106,105 @@ func DashboardCard(context.Context) (response.Response, error) {
 	return response.FragmentSwap("#dashboard-card", response.SwapOuterHTML, `<article id="dashboard-card"><h2>Request-time card</h2><p>Ready.</p></article>`)
 }
 
-func Session(context.Context, *http.Request) (response.Response, error) {
-	return gowdkapi.JSON(http.StatusOK, map[string]any{
-		"authenticated": true,
-		"user":          "demo@example.com",
-		"issuedAt":      time.Now().UTC().Format(time.RFC3339),
-	})
+type SessionResult struct {
+	Authenticated bool   `json:"authenticated"`
+	User          string `json:"user"`
+	IssuedAt      string `json:"issuedAt"`
 }
 
-func Search(_ context.Context, request *http.Request) (response.Response, error) {
-	query := strings.TrimSpace(request.URL.Query().Get("q"))
+func Session(context.Context) (SessionResult, error) {
+	return SessionResult{
+		Authenticated: true,
+		User:          "demo@example.com",
+		IssuedAt:      time.Now().UTC().Format(time.RFC3339),
+	}, nil
+}
+
+type SearchInput struct {
+	Query string `json:"q"`
+}
+
+type SearchResult struct {
+	Query  string `json:"query"`
+	Count  int    `json:"count"`
+	First  string `json:"first"`
+	Second string `json:"second"`
+}
+
+func Search(_ context.Context, input SearchInput) (SearchResult, error) {
+	query := strings.TrimSpace(input.Query)
 	if len(query) < 2 {
-		return gowdkapi.Error(http.StatusBadRequest, "query_required", "q must contain at least two characters")
+		return SearchResult{}, response.NewHandlerError(http.StatusBadRequest, "q must contain at least two characters", nil)
 	}
-	return gowdkapi.JSON(http.StatusOK, map[string]any{"query": query, "results": []string{"GOWDK", "runtime"}})
+	return SearchResult{Query: query, Count: 2, First: "GOWDK", Second: "runtime"}, nil
 }
 
-func ListItems(context.Context, *http.Request) (response.Response, error) {
-	return gowdkapi.JSON(http.StatusOK, []item{{ID: 1, Name: "Keyboard"}, {ID: 2, Name: "Mouse"}})
+type ListItemsResult struct {
+	FirstID    int    `json:"firstId"`
+	FirstName  string `json:"firstName"`
+	SecondID   int    `json:"secondId"`
+	SecondName string `json:"secondName"`
 }
 
-func CreateItem(_ context.Context, request *http.Request) (response.Response, error) {
-	input, err := decodeItem(request)
-	if err != nil {
-		return gowdkapi.Error(http.StatusBadRequest, "invalid_json", err.Error())
-	}
-	if strings.TrimSpace(input.Name) == "" {
-		return gowdkapi.Error(http.StatusUnprocessableEntity, "name_required", "name is required")
-	}
-	input.ID = 3
-	return gowdkapi.JSON(http.StatusCreated, input)
+func ListItems(context.Context) (ListItemsResult, error) {
+	return ListItemsResult{FirstID: 1, FirstName: "Keyboard", SecondID: 2, SecondName: "Mouse"}, nil
 }
 
-func UpdateItem(_ context.Context, request *http.Request) (response.Response, error) {
-	id, err := queryID(request)
-	if err != nil {
-		return gowdkapi.Error(http.StatusBadRequest, "invalid_id", err.Error())
-	}
-	input, err := decodeItem(request)
-	if err != nil {
-		return gowdkapi.Error(http.StatusBadRequest, "invalid_json", err.Error())
-	}
-	input.ID = id
-	return gowdkapi.JSON(http.StatusOK, input)
+type CreateItemInput struct {
+	Name string `json:"name"`
 }
 
-func DeleteItem(_ context.Context, request *http.Request) (response.Response, error) {
-	id, err := queryID(request)
-	if err != nil {
-		return gowdkapi.Error(http.StatusBadRequest, "invalid_id", err.Error())
+type CreateItemResult struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+func (CreateItemResult) APIStatus() int {
+	return http.StatusCreated
+}
+
+func CreateItem(_ context.Context, input CreateItemInput) (CreateItemResult, error) {
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return CreateItemResult{}, response.ValidationFailed("name is required", nil)
 	}
-	return gowdkapi.JSON(http.StatusOK, map[string]any{"deleted": id})
+	return CreateItemResult{ID: 3, Name: name}, nil
+}
+
+type UpdateItemInput struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type UpdateItemResult struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+func UpdateItem(_ context.Context, input UpdateItemInput) (UpdateItemResult, error) {
+	if input.ID <= 0 {
+		return UpdateItemResult{}, response.NewHandlerError(http.StatusBadRequest, "id must be a positive integer", nil)
+	}
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return UpdateItemResult{}, response.ValidationFailed("name is required", nil)
+	}
+	return UpdateItemResult{ID: input.ID, Name: name}, nil
+}
+
+type DeleteItemInput struct {
+	ID int `json:"id"`
+}
+
+type DeleteItemResult struct {
+	Deleted int `json:"deleted"`
+}
+
+func DeleteItem(_ context.Context, input DeleteItemInput) (DeleteItemResult, error) {
+	if input.ID <= 0 {
+		return DeleteItemResult{}, response.NewHandlerError(http.StatusBadRequest, "id must be a positive integer", nil)
+	}
+	return DeleteItemResult{Deleted: input.ID}, nil
 }
 
 func DeployWebhook(_ context.Context, request *http.Request) (response.Response, error) {
@@ -173,35 +219,8 @@ func DeployWebhook(_ context.Context, request *http.Request) (response.Response,
 	return gowdkapi.JSON(http.StatusAccepted, map[string]any{"event": event, "bytes": len(payload)})
 }
 
-type item struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-}
-
 func contactInvalid(values form.Values) bool {
 	return strings.TrimSpace(values.First("email")) == "" || len(strings.TrimSpace(values.First("message"))) < 12
-}
-
-func decodeItem(request *http.Request) (item, error) {
-	defer request.Body.Close()
-	decoder := json.NewDecoder(io.LimitReader(request.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	var input item
-	if err := decoder.Decode(&input); err != nil {
-		return item{}, err
-	}
-	if decoder.Decode(&struct{}{}) != io.EOF {
-		return item{}, fmt.Errorf("request body must contain one JSON value")
-	}
-	return input, nil
-}
-
-func queryID(request *http.Request) (int, error) {
-	id, err := strconv.Atoi(request.URL.Query().Get("id"))
-	if err != nil || id <= 0 {
-		return 0, fmt.Errorf("id must be a positive integer")
-	}
-	return id, nil
 }
 
 func alertHTML(message string) string {

@@ -290,7 +290,14 @@ const liveReloadScriptTemplate = `<script>
     if (Number.isNaN(date.getTime())) return value;
     return date.toLocaleString();
   };
+  const DEV_UPDATE_VERSION = 1;
   const selectorValue = (value) => String(value || "").replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
+  const normalizeDevUpdate = (payload, fallbackAction) => {
+    payload = typeof payload === "string" ? parsePayload(payload) : (payload || {});
+    if (!payload.version) payload.version = DEV_UPDATE_VERSION;
+    if (!payload.action && fallbackAction) payload.action = fallbackAction;
+    return payload;
+  };
   const formatDiagnostic = (diagnostic) => {
     const tags = [];
     if (diagnostic.code) tags.push("[" + diagnostic.code + "]");
@@ -371,6 +378,10 @@ const liveReloadScriptTemplate = `<script>
   };
   const applyComponentHMR = async (payload) => {
     payload = typeof payload === "string" ? parsePayload(payload) : (payload || {});
+    if (payload.version && payload.version !== DEV_UPDATE_VERSION) {
+      window.location.reload();
+      return;
+    }
     const components = Array.isArray(payload.components) ? payload.components : [];
     const routes = Array.isArray(payload.routes) ? payload.routes : [];
     const routeAffected = routes.some((route) => pathMatchesRoute(route, window.location.pathname));
@@ -410,16 +421,37 @@ const liveReloadScriptTemplate = `<script>
     if (typeof window.__gowdkMountClientGoBlocks === "function") window.__gowdkMountClientGoBlocks();
     document.dispatchEvent(new CustomEvent("gowdk:component-hmr", { detail: payload }));
   };
+  const applyDevUpdate = async (payload) => {
+    payload = normalizeDevUpdate(payload, "reload");
+    removeOverlay();
+    document.dispatchEvent(new CustomEvent("gowdk:dev-update", { detail: payload }));
+    if (payload.version !== DEV_UPDATE_VERSION) {
+      window.location.reload();
+      return;
+    }
+    if (payload.action === "component-remount") {
+      await applyComponentHMR(payload);
+      return;
+    }
+    if (payload.action === "reload") {
+      const routes = Array.isArray(payload.routes) ? payload.routes : [];
+      if (routes.length > 0 && !routes.some((route) => pathMatchesRoute(route, window.location.pathname))) return;
+      window.location.reload();
+      return;
+    }
+    window.location.reload();
+  };
   const events = new EventSource("/__gowdk/reload");
   events.addEventListener("reload", () => {
-    removeOverlay();
-    window.location.reload();
+    applyDevUpdate({ version: DEV_UPDATE_VERSION, action: "reload", reason: "legacy-reload" });
   });
   events.addEventListener("build-error", (event) => showOverlay(parsePayload(event.data)));
   events.addEventListener("runtime-error", (event) => showOverlay(parsePayload(event.data)));
+  events.addEventListener("dev-update", (event) => {
+    applyDevUpdate(parsePayload(event.data)).catch(() => window.location.reload());
+  });
   events.addEventListener("component-hmr", (event) => {
-    removeOverlay();
-    applyComponentHMR(parsePayload(event.data)).catch(() => window.location.reload());
+    applyDevUpdate(normalizeDevUpdate(parsePayload(event.data), "component-remount")).catch(() => window.location.reload());
   });
   const initialOverlay = __GOWDK_INITIAL_OVERLAY__;
   if (initialOverlay) showOverlay(initialOverlay);

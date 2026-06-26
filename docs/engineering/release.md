@@ -17,8 +17,10 @@ GitHub release body from the matching changelog section. Pull request titles
 must use Conventional Commits so squash merges feed that changelog. If the
 changelog does not contain the version being published, release publication
 fails instead of falling back to placeholder notes.
-Use `docs/engineering/release-plan.md` for the open-ended 0.x hardening
-checklist. It does not make any minor version a production-readiness target.
+
+Use `docs/product/requirements.md` for current capability status and
+`docs/product/roadmap.md` for dependency-aware sequencing. Use
+`.github/release-note-template.md` for future 0.x release bodies.
 
 ## Version Policy
 

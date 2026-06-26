@@ -120,6 +120,7 @@ func apiEndpointsFromIR(ir gwdkir.Program) ([]APIEndpoint, error) {
 				Route:      route,
 				Guards:     append([]string(nil), page.Guards...),
 				ErrorPage:  api.ErrorPage,
+				CORS:       cloneEndpointCORS(api.CORS),
 				Binding:    bindings[irEndpointKey(gwdkir.EndpointAPI, page.ID, api.Name, method, route)],
 				Source:     page.Source,
 				SourceSpan: api.Span,
@@ -136,6 +137,7 @@ func apiEndpointsFromIR(ir gwdkir.Program) ([]APIEndpoint, error) {
 			Method:     endpoint.Method,
 			Route:      endpoint.Path,
 			ErrorPage:  endpoint.ErrorPage,
+			CORS:       cloneEndpointCORS(endpoint.CORS),
 			Binding:    bindings[irEndpointKey(endpoint.Kind, endpoint.PageID, endpoint.Symbol, endpoint.Method, endpoint.Path)],
 			Source:     endpoint.SourceFile,
 			SourceSpan: endpoint.Span,
@@ -145,6 +147,14 @@ func apiEndpointsFromIR(ir gwdkir.Program) ([]APIEndpoint, error) {
 		return nil, err
 	}
 	return endpoints, nil
+}
+
+func cloneEndpointCORS(cors gwdkir.EndpointCORS) gwdkir.EndpointCORS {
+	cors.AllowedOrigins = append([]string(nil), cors.AllowedOrigins...)
+	cors.AllowedMethods = append([]string(nil), cors.AllowedMethods...)
+	cors.AllowedHeaders = append([]string(nil), cors.AllowedHeaders...)
+	cors.ExposedHeaders = append([]string(nil), cors.ExposedHeaders...)
+	return cors
 }
 
 func fragmentEndpointsFromIR(ir gwdkir.Program) ([]FragmentEndpoint, error) {

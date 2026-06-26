@@ -9,7 +9,10 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
-const generatedRealtimeEventsPath = "/_gowdk/realtime/events"
+const (
+	generatedRealtimeEventsPath       = "/_gowdk/realtime/events"
+	generatedRealtimeQueryRefreshPath = "/_gowdk/realtime/query-refresh"
+)
 
 func generatedRealtimeEnabled(options Options) bool {
 	return !options.ProxyBackend && (len(boundRealtimeSubscriptions(options)) > 0 || len(boundQueryInvalidations(options)) > 0)
@@ -17,6 +20,10 @@ func generatedRealtimeEnabled(options Options) bool {
 
 func generatedRealtimeQueryInvalidationsEnabled(options Options) bool {
 	return !options.ProxyBackend && len(boundQueryInvalidations(options)) > 0
+}
+
+func generatedRealtimeQueryRefreshEnabled(options Options) bool {
+	return generatedRealtimeQueryInvalidationsEnabled(options) && len(ssrRegionRoutes(options.SSR)) > 0
 }
 
 func boundRealtimeSubscriptions(options Options) []gwdkir.RealtimeSubscription {
@@ -189,6 +196,13 @@ func realtimeDecls(options Options) []ast.Decl {
 		decls = append(decls, realtimeStreamGuardsDecl(options))
 	}
 	return decls
+}
+
+func realtimeQueryRefreshPathDecl() ast.Decl {
+	return &ast.GenDecl{Tok: token.CONST, Specs: []ast.Spec{&ast.ValueSpec{
+		Names:  []*ast.Ident{id("RealtimeQueryRefreshPath")},
+		Values: []ast.Expr{stringLit(generatedRealtimeQueryRefreshPath)},
+	}}}
 }
 
 func realtimeEventsPathDecl() ast.Decl {

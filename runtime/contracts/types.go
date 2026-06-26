@@ -63,6 +63,10 @@ type EventEnvelope struct {
 // event type generated when backend events invalidate query-owned regions.
 const QueryInvalidationPresentationEventType = "gowdk.query.invalidate"
 
+// QueryInvalidationNoticeVersion is the current browser query-invalidation
+// payload version.
+const QueryInvalidationNoticeVersion = 1
+
 // QueryInvalidation records that a backend event invalidates a query type.
 type QueryInvalidation struct {
 	EventCategory EventCategory
@@ -72,6 +76,7 @@ type QueryInvalidation struct {
 
 // QueryInvalidationNotice is the browser payload sent for invalidated queries.
 type QueryInvalidationNotice struct {
+	Version  int      `json:"version"`
 	Queries  []string `json:"queries"`
 	Events   []string `json:"events,omitempty"`
 	EventIDs []string `json:"eventIDs,omitempty"`

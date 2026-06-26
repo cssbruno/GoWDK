@@ -76,6 +76,10 @@ Current report events include:
 - `query_invalidation`: one event per validated domain-event to query
   invalidation edge used by bound `g:query` regions, including query, event,
   owner, source, status, and guard metadata when known.
+- `request_time_page_skipped`: one event per SSR or hybrid page that build-time
+  prerender output intentionally skips. The event records the page, route, and
+  `data.mode` (`ssr` or `hybrid`), while generated app output can still serve
+  the route at request time.
 - `sitemap_written` / `robots_written`: emitted when `addons/seo` writes
   `sitemap.xml` and `robots.txt`.
 - `seo_route_excluded`: emitted when `addons/seo` excludes a page from the

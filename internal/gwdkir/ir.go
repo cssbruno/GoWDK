@@ -269,10 +269,26 @@ type API struct {
 	Method        string
 	Route         string
 	ErrorPage     string
+	CORS          EndpointCORS
 	Span          source.SourceSpan
 	RouteSpan     source.SourceSpan
 	RouteParams   []source.NamedSpan
 	ErrorPageSpan source.SourceSpan
+}
+
+// EndpointCORS is an endpoint-local CORS policy declaration. Empty option
+// fields inherit from Build.CORS when it is enabled.
+type EndpointCORS struct {
+	Enabled             bool
+	AllowedOrigins      []string
+	AllowedMethods      []string
+	AllowedHeaders      []string
+	ExposedHeaders      []string
+	AllowCredentials    bool
+	AllowCredentialsSet bool
+	MaxAgeSeconds       int
+	MaxAgeSet           bool
+	Span                source.SourceSpan
 }
 
 // Component is the normalized IR for one component source.
@@ -419,6 +435,7 @@ type Endpoint struct {
 	Guards        []string
 	CSRF          bool
 	ErrorPage     string
+	CORS          EndpointCORS
 	DynamicParams []string
 	RouteParams   []source.RouteParam
 	SourceFile    string

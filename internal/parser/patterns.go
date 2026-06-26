@@ -1,8 +1,12 @@
 package parser
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 
+	"github.com/cssbruno/gowdk/internal/gwdkast"
+	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/syntax"
 )
 
@@ -212,45 +216,202 @@ func parseBuildCallLine(line string) []string {
 }
 
 func parseActionEndpointLine(line string) []string {
-	return parseEndpointLine(line, "act", true)
+	spec, ok, _ := parseEndpointLineSpec(line, "act", true)
+	if !ok {
+		return nil
+	}
+	return []string{line, spec.Name, spec.Method, spec.Route, spec.ErrorPath}
 }
 
 func parseAPIEndpointLine(line string) []string {
-	return parseEndpointLine(line, "api", false)
+	spec, ok, _ := parseEndpointLineSpec(line, "api", false)
+	if !ok {
+		return nil
+	}
+	return []string{line, spec.Name, spec.Method, spec.Route, spec.ErrorPath}
 }
 
 func parseEndpointLine(line, keyword string, action bool) []string {
-	tokens := syntaxTokens(line)
-	if len(tokens) != 4 && len(tokens) != 6 {
+	spec, ok, _ := parseEndpointLineSpec(line, keyword, action)
+	if !ok {
 		return nil
+	}
+	return []string{line, spec.Name, spec.Method, spec.Route, spec.ErrorPath}
+}
+
+type endpointLineSpec struct {
+	Name      string
+	Method    string
+	Route     string
+	ErrorPath string
+	CORS      gwdkast.EndpointCORS
+}
+
+func parseEndpointLineSpec(line, keyword string, action bool) (endpointLineSpec, bool, error) {
+	tokens := syntaxTokens(line)
+	if len(tokens) < 4 {
+		return endpointLineSpec{}, false, nil
 	}
 	if tokens[0].Kind != syntax.TokenIdentifier || tokens[0].Lexeme != keyword {
-		return nil
+		return endpointLineSpec{}, false, nil
 	}
 	if tokens[1].Kind != syntax.TokenIdentifier || !isStrictIdent(tokens[1].Lexeme) {
-		return nil
+		return endpointLineSpec{}, false, nil
 	}
 	if tokens[2].Kind != syntax.TokenIdentifier || !methodToken(tokens[2].Lexeme) {
-		return nil
+		return endpointLineSpec{}, false, nil
 	}
 	if action {
 		if tokens[2].Lexeme != "POST" {
-			return nil
+			return endpointLineSpec{}, false, nil
 		}
 	} else if !apiMethodToken(tokens[2].Lexeme) {
-		return nil
+		return endpointLineSpec{}, false, nil
 	}
 	if tokens[3].Kind != syntax.TokenString {
-		return nil
+		return endpointLineSpec{}, false, nil
 	}
-	errorPath := ""
-	if len(tokens) == 6 {
-		if tokens[4].Kind != syntax.TokenIdentifier || tokens[4].Lexeme != "error" || tokens[5].Kind != syntax.TokenString {
-			return nil
+	spec := endpointLineSpec{
+		Name:   tokens[1].Lexeme,
+		Method: tokens[2].Lexeme,
+		Route:  decodeStringLiteral(tokens[3].Lexeme),
+	}
+	index := 4
+	if index < len(tokens) && tokens[index].Kind == syntax.TokenIdentifier && tokens[index].Lexeme == "error" {
+		if index+1 >= len(tokens) || tokens[index+1].Kind != syntax.TokenString {
+			return endpointLineSpec{}, false, nil
 		}
-		errorPath = decodeStringLiteral(tokens[5].Lexeme)
+		spec.ErrorPath = decodeStringLiteral(tokens[index+1].Lexeme)
+		index += 2
 	}
-	return []string{line, tokens[1].Lexeme, tokens[2].Lexeme, decodeStringLiteral(tokens[3].Lexeme), errorPath}
+	if index < len(tokens) {
+		if action || tokens[index].Kind != syntax.TokenIdentifier || tokens[index].Lexeme != "cors" {
+			return endpointLineSpec{}, false, nil
+		}
+		cors, next, err := parseEndpointCORS(tokens, index, sourceLineSpan(1, line))
+		if err != nil {
+			return endpointLineSpec{}, true, err
+		}
+		if next != len(tokens) {
+			return endpointLineSpec{}, false, nil
+		}
+		spec.CORS = cors
+	}
+	return spec, true, nil
+}
+
+func parseEndpointCORS(tokens []syntax.Token, index int, span source.SourceSpan) (gwdkast.EndpointCORS, int, error) {
+	cors := gwdkast.EndpointCORS{Enabled: true, Span: span}
+	index++
+	if index >= len(tokens) {
+		return gwdkast.EndpointCORS{}, index, fmt.Errorf("cors requires at least one option")
+	}
+	seen := map[string]bool{}
+	for index < len(tokens) {
+		if tokens[index].Kind != syntax.TokenIdentifier {
+			return gwdkast.EndpointCORS{}, index, fmt.Errorf("cors option name is required")
+		}
+		option := tokens[index].Lexeme
+		if seen[option] {
+			return gwdkast.EndpointCORS{}, index, fmt.Errorf("cors option %q is declared more than once", option)
+		}
+		seen[option] = true
+		index++
+		if index >= len(tokens) {
+			return gwdkast.EndpointCORS{}, index, fmt.Errorf("cors option %q requires a value", option)
+		}
+		switch option {
+		case "origin", "origins":
+			values, ok := parseEndpointCORSStringList(tokens[index])
+			if !ok {
+				return gwdkast.EndpointCORS{}, index, fmt.Errorf("cors origins requires a quoted comma-separated string")
+			}
+			cors.AllowedOrigins = values
+			index++
+		case "method", "methods":
+			values, ok := parseEndpointCORSStringList(tokens[index])
+			if !ok {
+				return gwdkast.EndpointCORS{}, index, fmt.Errorf("cors methods requires a quoted comma-separated string")
+			}
+			cors.AllowedMethods = values
+			index++
+		case "header", "headers":
+			values, ok := parseEndpointCORSStringList(tokens[index])
+			if !ok {
+				return gwdkast.EndpointCORS{}, index, fmt.Errorf("cors headers requires a quoted comma-separated string")
+			}
+			cors.AllowedHeaders = values
+			index++
+		case "expose", "exposed", "exposedHeaders":
+			values, ok := parseEndpointCORSStringList(tokens[index])
+			if !ok {
+				return gwdkast.EndpointCORS{}, index, fmt.Errorf("cors expose requires a quoted comma-separated string")
+			}
+			cors.ExposedHeaders = values
+			index++
+		case "credentials", "allowCredentials":
+			value, ok := parseEndpointCORSBool(tokens[index])
+			if !ok {
+				return gwdkast.EndpointCORS{}, index, fmt.Errorf("cors credentials requires true or false")
+			}
+			cors.AllowCredentials = value
+			cors.AllowCredentialsSet = true
+			index++
+		case "maxAge", "maxAgeSeconds":
+			value, ok := parseEndpointCORSInt(tokens[index])
+			if !ok {
+				return gwdkast.EndpointCORS{}, index, fmt.Errorf("cors maxAge requires a non-negative integer")
+			}
+			cors.MaxAgeSeconds = value
+			cors.MaxAgeSet = true
+			index++
+		default:
+			return gwdkast.EndpointCORS{}, index, fmt.Errorf("unknown cors option %q", option)
+		}
+	}
+	return cors, index, nil
+}
+
+func parseEndpointCORSStringList(token syntax.Token) ([]string, bool) {
+	if token.Kind != syntax.TokenString {
+		return nil, false
+	}
+	raw := decodeStringLiteral(token.Lexeme)
+	parts := strings.Split(raw, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value == "" {
+			return nil, false
+		}
+		values = append(values, value)
+	}
+	return values, len(values) > 0
+}
+
+func parseEndpointCORSBool(token syntax.Token) (bool, bool) {
+	if token.Kind != syntax.TokenIdentifier {
+		return false, false
+	}
+	switch token.Lexeme {
+	case "true":
+		return true, true
+	case "false":
+		return false, true
+	default:
+		return false, false
+	}
+}
+
+func parseEndpointCORSInt(token syntax.Token) (int, bool) {
+	if token.Kind != syntax.TokenText && token.Kind != syntax.TokenIdentifier {
+		return 0, false
+	}
+	value, err := strconv.Atoi(token.Lexeme)
+	if err != nil || value < 0 {
+		return 0, false
+	}
+	return value, true
 }
 
 func parseFragmentEndpointLine(line string) []string {

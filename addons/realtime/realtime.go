@@ -22,6 +22,9 @@ type SSEHub = runtimerealtime.SSEHub
 // SSEOption configures a dependency-free SSE hub.
 type SSEOption = runtimerealtime.SSEOption
 
+// SSEStats reports process-local SSE hub counters for app-owned metrics export.
+type SSEStats = runtimerealtime.SSEStats
+
 // Addon enables realtime presentation-event fanout support.
 func Addon() gowdk.Addon {
 	return gowdk.NewAddon("realtime", gowdk.FeatureRealtime)
@@ -35,6 +38,18 @@ func NewSSE(options ...SSEOption) *SSEHub {
 // WithSSEBufferSize sets each SSE client's queued message buffer.
 func WithSSEBufferSize(size int) SSEOption {
 	return runtimerealtime.WithSSEBufferSize(size)
+}
+
+// WithSSERetryMillis sets the browser EventSource reconnect delay advertised by
+// the generated SSE stream.
+func WithSSERetryMillis(milliseconds int) SSEOption {
+	return runtimerealtime.WithSSERetryMillis(milliseconds)
+}
+
+// WithSSEReplayLimit keeps a bounded in-memory replay buffer for browser
+// reconnects that send Last-Event-ID.
+func WithSSEReplayLimit(limit int) SSEOption {
+	return runtimerealtime.WithSSEReplayLimit(limit)
 }
 
 // WithSSEAudienceFromRequest assigns server-owned audience labels to one SSE

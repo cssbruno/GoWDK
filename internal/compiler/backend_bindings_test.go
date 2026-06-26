@@ -153,6 +153,82 @@ func BrokenFragment(context.Context, *http.Request) (response.Response, error) {
 	}
 }
 
+func TestBindBackendHandlersClassifiesTypedAPISignatures(t *testing.T) {
+	root := t.TempDir()
+	writeCompilerTestModule(t, root)
+	writeCompilerTestFile(t, filepath.Join(root, "api.go"), `package api
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/cssbruno/gowdk/runtime/form"
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+type SearchInput struct {
+	Query string `+"`json:\"q\"`"+`
+	Page int `+"`json:\"page\"`"+`
+	Hidden string `+"`json:\"-\"`"+`
+	ignored string
+}
+
+type UploadInput struct {
+	Avatar form.File `+"`json:\"avatar\"`"+`
+}
+
+type SearchResult struct {
+	Count int `+"`json:\"count\"`"+`
+	Next string `+"`json:\"next\"`"+`
+}
+
+func Session(ctx context.Context, request *http.Request) (response.Response, error) {
+	return response.JSONBody(http.StatusNoContent, ""), nil
+}
+
+func Summary(ctx context.Context) (SearchResult, error) {
+	return SearchResult{}, nil
+}
+
+func Search(ctx context.Context, input SearchInput) (SearchResult, error) {
+	return SearchResult{}, nil
+}
+
+func SearchPtr(ctx context.Context, input *SearchInput) (SearchResult, error) {
+	return SearchResult{}, nil
+}
+
+func Bad(ctx context.Context, input UploadInput) (SearchResult, error) {
+	return SearchResult{}, nil
+}
+`)
+
+	app := bindBackendHandlers(appFixture{Pages: []gwdkir.Page{{
+		ID:     "api",
+		Source: filepath.Join(root, "api.page.gwdk"),
+		Route:  "/api",
+		Blocks: gwdkir.Blocks{APIs: []gwdkir.API{
+			{Name: "Session", Method: "GET", Route: "/api/session"},
+			{Name: "Summary", Method: "GET", Route: "/api/summary"},
+			{Name: "Search", Method: "POST", Route: "/api/search"},
+			{Name: "SearchPtr", Method: "POST", Route: "/api/search-ptr"},
+			{Name: "Bad", Method: "POST", Route: "/api/bad"},
+		}},
+	}}})
+
+	bindings := compilerBindingsByBlock(app.BackendBindings)
+	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
+	assertBinding(t, bindings["Summary"], source.BackendBindingBound, source.BackendSignatureAPI0, "", false)
+	assertResultFields(t, bindings["Summary"].ResultFields, "count:Count:int,next:Next:string")
+	assertBinding(t, bindings["Search"], source.BackendBindingBound, source.BackendSignatureAPIInput, "SearchInput", false)
+	assertInputFields(t, bindings["Search"].InputFields, "Query:q:string,Page:page:int")
+	assertResultFields(t, bindings["Search"].ResultFields, "count:Count:int,next:Next:string")
+	assertBinding(t, bindings["SearchPtr"], source.BackendBindingBound, source.BackendSignatureAPIInputPtr, "SearchInput", true)
+	if got := bindings["Bad"]; got.Status != source.BackendBindingUnsupportedSignature || !strings.Contains(got.Message, "typed API input UploadInput uses unsupported field type") {
+		t.Fatalf("expected unsupported typed API input, got %#v", got)
+	}
+}
+
 func TestBindBackendHandlersUsesTypedGoPackageResolution(t *testing.T) {
 	root := t.TempDir()
 	writeCompilerTestModule(t, root)

@@ -419,6 +419,8 @@
   var handledQueryRefreshEventIDOrder = [];
   var handledQueryRefreshEventIDLimit = 128;
   var realtimeEventsPath = '/_gowdk/realtime/events';
+  var realtimeQueryRefreshPath = '/_gowdk/realtime/query-refresh';
+  var realtimePayloadVersion = 1;
   var realtimeSource = null;
   var traceEndpoint = '/_gowdk/traces/browser';
   var traceStack = [];
@@ -750,7 +752,7 @@
       return;
     }
     try {
-      realtimeSource = new window.EventSource(realtimeEventsPath);
+      realtimeSource = new window.EventSource(realtimeEventsURL());
     } catch (error) {
       realtimeSource = null;
       dispatchRealtimeError(error, { source: null });
@@ -764,6 +766,43 @@
     realtimeSource.onerror = function (event) {
       dispatchRealtimeError(new Error('realtime stream error'), { source: realtimeSource, event: event });
     };
+  }
+
+  function realtimeEventsURL() {
+    var path = currentLocationPath();
+    if (!path) {
+      return realtimeEventsPath;
+    }
+    return realtimeEventsPath + (realtimeEventsPath.indexOf('?') >= 0 ? '&' : '?') + 'path=' + encodeURIComponent(path);
+  }
+
+  function currentLocationPath() {
+    if (typeof window === 'undefined' || !window.location) {
+      return '';
+    }
+    if (typeof window.location.pathname === 'string' && window.location.pathname) {
+      return window.location.pathname;
+    }
+    try {
+      return new URL(window.location.href).pathname;
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function currentLocationPathWithSearch() {
+    var path = currentLocationPath();
+    if (!path || typeof window === 'undefined' || !window.location) {
+      return path;
+    }
+    if (typeof window.location.search === 'string' && window.location.search) {
+      return path + window.location.search;
+    }
+    try {
+      return path + new URL(window.location.href).search;
+    } catch (error) {
+      return path;
+    }
   }
 
   function closeRealtime() {
@@ -1012,6 +1051,7 @@
     if (!value || typeof value !== 'object') {
       throw new Error('query invalidation event value must contain queries');
     }
+    assertRealtimePayloadVersion(value);
     var queries = Array.isArray(value.queries) ? value.queries : Array.isArray(value.Queries) ? value.Queries : null;
     if (!queries || !queries.length) {
       throw new Error('query invalidation event value must contain queries');
@@ -1051,11 +1091,26 @@
   }
 
   async function runInvalidatedQueryRefresh(queries, envelope) {
+    var originalQueries = queries.slice();
     var regions = queryRegionsForInvalidation(document, queries);
-    if (!regions.length || typeof DOMParser === 'undefined') {
+    if (!regions.length) {
       return;
     }
     var focused = focusTarget(document.activeElement);
+    var routePatches = await refreshInvalidatedQueriesFromEndpoint(queries, envelope);
+    var patchedQueries = applyCommandPatches(routePatches, envelope);
+    if (patchedQueries.length) {
+      queries = remainingQueries(queries, patchedQueries);
+      regions = queryRegionsForInvalidation(document, queries);
+      if (!queries.length || !regions.length || typeof DOMParser === 'undefined') {
+        restoreFocus(focused);
+        dispatchQueryRefresh(originalQueries, envelope, patchedQueries);
+        return;
+      }
+    }
+    if (typeof DOMParser === 'undefined') {
+      return;
+    }
     var fetched = await fetchDocument(window.location.href, false);
     if (!fetched || !fetched.html) {
       return;
@@ -1086,8 +1141,52 @@
     }
     ensureRealtime();
     restoreFocus(focused);
+    dispatchQueryRefresh(originalQueries, envelope, patchedQueries);
+  }
+
+  async function refreshInvalidatedQueriesFromEndpoint(queries, envelope) {
+    try {
+      var response = await traceFetch(realtimeQueryRefreshURL(queries), {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: { 'X-GOWDK-Query-Refresh': '1' }
+      }, { name: 'query refresh', lane: 'realtime' });
+      if (!response.ok) {
+        return [];
+      }
+      var body = await response.text();
+      if (!body) {
+        return [];
+      }
+      var patches = JSON.parse(body);
+      return Array.isArray(patches) ? patches : [];
+    } catch (error) {
+      dispatchRealtimeError(error, { envelope: envelope, queries: queries, refresh: 'route' });
+      return [];
+    }
+  }
+
+  function realtimeQueryRefreshURL(queries) {
+    var url = new URL(realtimeQueryRefreshPath, window.location.href);
+    var path = currentLocationPathWithSearch();
+    if (path) {
+      url.searchParams.set('path', path);
+    }
+    queries.forEach(function (query) {
+      url.searchParams.append('query', query);
+    });
+    return url.href;
+  }
+
+  function remainingQueries(queries, applied) {
+    return queries.filter(function (query) {
+      return applied.indexOf(query) < 0;
+    });
+  }
+
+  function dispatchQueryRefresh(queries, envelope, patches) {
     document.dispatchEvent(gowdkEvent('gowdk:query-refresh', {
-      detail: { queries: queries, envelope: envelope }
+      detail: { queries: queries, envelope: envelope, patchedQueries: patches || [] }
     }));
   }
 
@@ -1184,6 +1283,7 @@
     if (!value || typeof value !== 'object') {
       throw new Error('realtime event value must contain a patch object');
     }
+    assertRealtimePayloadVersion(value);
     var patches = Array.isArray(value.patches) ? value.patches : null;
     if (!patches && value.patch) {
       patches = [value.patch];
@@ -1198,6 +1298,7 @@
     if (!patch || typeof patch !== 'object') {
       throw new Error('realtime patch must be an object');
     }
+    assertRealtimePayloadVersion(patch);
     if (patch.op !== 'replaceHTML') {
       throw new Error('unsupported realtime patch operation');
     }
@@ -1209,6 +1310,16 @@
       throw new Error('unsupported realtime patch swap');
     }
     return { op: patch.op, html: patch.html, swap: swap };
+  }
+
+  function assertRealtimePayloadVersion(value) {
+    var version = value.version != null ? value.version : value.Version;
+    if (version == null || version === '') {
+      return;
+    }
+    if (Number(version) !== realtimePayloadVersion) {
+      throw new Error('unsupported realtime payload version');
+    }
   }
 
   function applyRealtimePatch(region, patch, envelope) {

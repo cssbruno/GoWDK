@@ -69,3 +69,23 @@ The public `gowdk manifest` command is documented in
   assets or explicit page code.
 - Document new generated files in this page, the build report page, or the
   reference page that owns the public contract.
+- Generated output ownership and license policy are documented in
+  [LICENSE](../../LICENSE) and
+  [Generated Code Policy](../engineering/generated-code-policy.md).
+
+## Generated App Contracts
+
+Generated app packages expose `App()`, `Handler()`, `ServeMux()`, and
+`RegisterMiddleware` for generated-binary startup and `net/http` integration.
+The generated server uses `GOWDK_ADDR`, applies bounded HTTP server timeouts,
+serves `/_gowdk/health`, loads optional generated error pages, and emits
+configured security and identity headers.
+
+Generated backend routes are registered through `runtime/app.BackendRouter`.
+Action, API, fragment, command, query, SSR, hybrid, realtime, guard, rate-limit,
+CSRF, CORS, and tracing behavior is included only when declared, enabled, and
+validated for the selected build.
+
+Worker and cron role outputs follow the same generated-app rule: they are
+normal Go modules downstream of contract metadata, and `--worker-bin` /
+`--cron-bin` compile their generated commands with `go build`.

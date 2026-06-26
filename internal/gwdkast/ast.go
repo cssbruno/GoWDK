@@ -212,8 +212,24 @@ type Endpoint struct {
 	Method        string
 	Route         string
 	ErrorPage     string
+	CORS          EndpointCORS
 	Span          source.SourceSpan
 	ErrorPageSpan source.SourceSpan
+}
+
+// EndpointCORS is an endpoint-local CORS policy declaration. Empty option
+// fields inherit from Build.CORS when it is enabled.
+type EndpointCORS struct {
+	Enabled             bool
+	AllowedOrigins      []string
+	AllowedMethods      []string
+	AllowedHeaders      []string
+	ExposedHeaders      []string
+	AllowCredentials    bool
+	AllowCredentialsSet bool
+	MaxAgeSeconds       int
+	MaxAgeSet           bool
+	Span                source.SourceSpan
 }
 
 // FragmentEndpoint is one generated server fragment route declaration.

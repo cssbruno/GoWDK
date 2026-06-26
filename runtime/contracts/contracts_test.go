@@ -750,6 +750,9 @@ func TestQueryInvalidationCommandEventSinkSendsGeneratedPresentationEvent(t *tes
 	if !ok {
 		t.Fatalf("event value type = %T, want QueryInvalidationNotice", event.Value)
 	}
+	if notice.Version != QueryInvalidationNoticeVersion {
+		t.Fatalf("notice version = %d, want %d", notice.Version, QueryInvalidationNoticeVersion)
+	}
 	if !reflect.DeepEqual(notice.Queries, []string{typeName[patientPageQuery]()}) {
 		t.Fatalf("notice queries = %#v", notice.Queries)
 	}

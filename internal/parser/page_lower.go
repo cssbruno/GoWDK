@@ -45,6 +45,7 @@ func lowerPageSyntax(src []byte, ast gwdkast.File, defaultID string) (gwdkir.Pag
 			Method:        endpoint.Method,
 			Route:         endpoint.Route,
 			ErrorPage:     endpoint.ErrorPage,
+			CORS:          lowerEndpointCORS(endpoint.CORS),
 			Span:          endpoint.Span,
 			RouteSpan:     endpoint.Span,
 			RouteParams:   routeParamSpans(endpoint.Route, endpoint.Span.Start.Line, rawLine),
@@ -78,6 +79,21 @@ func lowerPageSyntax(src []byte, ast gwdkast.File, defaultID string) (gwdkir.Pag
 		return gwdkir.Page{}, fmt.Errorf("%s missing route", page.ID)
 	}
 	return page, nil
+}
+
+func lowerEndpointCORS(cors gwdkast.EndpointCORS) gwdkir.EndpointCORS {
+	return gwdkir.EndpointCORS{
+		Enabled:             cors.Enabled,
+		AllowedOrigins:      append([]string(nil), cors.AllowedOrigins...),
+		AllowedMethods:      append([]string(nil), cors.AllowedMethods...),
+		AllowedHeaders:      append([]string(nil), cors.AllowedHeaders...),
+		ExposedHeaders:      append([]string(nil), cors.ExposedHeaders...),
+		AllowCredentials:    cors.AllowCredentials,
+		AllowCredentialsSet: cors.AllowCredentialsSet,
+		MaxAgeSeconds:       cors.MaxAgeSeconds,
+		MaxAgeSet:           cors.MaxAgeSet,
+		Span:                cors.Span,
+	}
 }
 
 func lowerPageSyntaxMetadata(src []byte, ast gwdkast.File, page *gwdkir.Page) error {

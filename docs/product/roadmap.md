@@ -46,17 +46,21 @@ operations.
 At a high level, the codebase already has:
 
 - config loading, source discovery, build targets, module selection, manifests,
-  formatting, diagnostics, route reports, endpoint reports, inspection reports,
-  LSP support, and docs gates;
+  route validation, formatting, diagnostics, route reports, endpoint reports,
+  inspection reports, LSP support, and docs gates;
 - typed `.gwdk` AST, analyzer, compiler IR, parser recovery, view model split,
-  generated-output planning, and Go binding inspection;
+  source import metadata, generated-output planning, and Go binding inspection;
 - static/SPA output, literal dynamic paths, build-time data, layouts,
   components, CSS/assets, SEO output, generated app source, local binaries,
-  Docker and deployment recipe starters, WASM artifacts, and a polling dev loop;
+  Docker and deployment recipe starters, WASM artifacts, production asset
+  obfuscation, and a polling dev loop;
 - generated action, API, fragment, SSR, hybrid, guard, CSRF, rate-limit,
-  contract, realtime, audit, trace, and lifecycle service slices;
-- root-module dependency boundaries with optional adapters isolated in nested
-  modules where required.
+  contract, realtime subscription/invalidation, audit, trace, and lifecycle
+  service slices;
+- generated app startup, backend route registration, middleware hooks, worker
+  and cron role outputs, and app test orchestration;
+- root-module dependency boundaries with optional framework, telemetry, and
+  broker adapters isolated in nested modules where required.
 
 Do not roadmap completed slices as future work. Future work should stabilize
 contracts, remove generation debt, and fill the remaining production gaps called
@@ -84,13 +88,19 @@ out in requirements.
 | 16 | Components and client language | Components gain richer props, state, slots, scoped CSS/assets, transitions, batching, and cycle diagnostics. |
 | 17 | Islands and WASM | JavaScript islands stay compiler-owned; component WASM islands get a production ABI and validation. |
 | 18 | CSS, assets, and packaging | Optional CSS processors, scoped assets, content hashes, cache metadata, and packaging contracts are stable. |
-| 19 | Tooling and docs | Formatter, diagnostics, LSP, VS Code, examples, docs-site, and cookbook stay aligned with implemented behavior. |
-| 20 | Production hardening | Security posture, auth boundaries, operations, telemetry, release trust, and deployment guidance are measurable without claiming production readiness. |
+| 19 | Framework adapters | Optional Chi, Echo, Gin, Fiber, and future adapters wrap generated `net/http` handlers without entering compiler/runtime core. |
+| 20 | Dev and tooling | Formatter, diagnostics, LSP, VS Code, examples, docs-site, cookbook, `gowdk dev`, and `gowdk test` stay aligned with implemented behavior. |
+| 21 | Observability | Trace, metrics, logs, browser spans, contract propagation, and production exporter boundaries stay opt-in and dependency-aware. |
+| 22 | Production hardening | Security posture, auth boundaries, operations, release trust, and deployment guidance are measurable without claiming production readiness. |
 
 ## Related Documents
 
 - [Requirements](requirements.md): current status matrix.
 - [Vision](vision.md): product identity and constraints.
 - [Contract Runtime](contract-runtime-spec.md): current contract-runtime product boundary.
+- [Realtime Hardening](realtime-hardening-spec.md): realtime subscription,
+  replay, revocation, and invalidation hardening.
+- [Observability Tracing](observability-tracing-spec.md): runtime trace
+  primitives and generated instrumentation direction.
 - [Architecture](../engineering/architecture.md): implemented system boundaries.
 - [Release Planning](../engineering/release-plan.md): 0.x release selection and verification.

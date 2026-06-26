@@ -914,6 +914,59 @@ view {
 	}
 }
 
+func TestParsePageReadsAPIEndpointCORSPolicy(t *testing.T) {
+	page, err := ParsePage([]byte(`
+page status
+route "/status"
+
+api Health GET "/api/health" cors origins "https://app.example,https://admin.example" headers "Content-Type,X-CSRF" expose "X-Total-Count" credentials true maxAge 600
+
+view {
+  <main>Status</main>
+}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Blocks.APIs) != 1 {
+		t.Fatalf("expected one API, got %#v", page.Blocks.APIs)
+	}
+	cors := page.Blocks.APIs[0].CORS
+	if !cors.Enabled {
+		t.Fatalf("expected endpoint CORS policy, got %#v", cors)
+	}
+	if strings.Join(cors.AllowedOrigins, ",") != "https://app.example,https://admin.example" {
+		t.Fatalf("unexpected origins: %#v", cors.AllowedOrigins)
+	}
+	if strings.Join(cors.AllowedHeaders, ",") != "Content-Type,X-CSRF" {
+		t.Fatalf("unexpected headers: %#v", cors.AllowedHeaders)
+	}
+	if strings.Join(cors.ExposedHeaders, ",") != "X-Total-Count" {
+		t.Fatalf("unexpected exposed headers: %#v", cors.ExposedHeaders)
+	}
+	if !cors.AllowCredentials || !cors.AllowCredentialsSet || cors.MaxAgeSeconds != 600 || !cors.MaxAgeSet {
+		t.Fatalf("unexpected credentials/max age: %#v", cors)
+	}
+}
+
+func TestParsePageRejectsMalformedAPIEndpointCORSPolicy(t *testing.T) {
+	_, err := ParsePage([]byte(`
+page status
+route "/status"
+
+api Health GET "/api/health" cors credentials maybe
+
+view {
+}
+`))
+	if err == nil {
+		t.Fatal("expected malformed CORS error")
+	}
+	if !strings.Contains(err.Error(), `cors credentials requires true or false`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestParsePageRejectsUnsafeEndpointErrorPage(t *testing.T) {
 	_, err := ParsePage([]byte(`
 page newsletter

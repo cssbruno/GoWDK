@@ -24,7 +24,7 @@ view {
 
     <section>
       <h2>JSON CRUD</h2>
-      <p>Use GET and POST /api/items, then PATCH /api/items/update or DELETE /api/items/delete with an id query value.</p>
+      <p>Use GET and POST /api/items, then PATCH /api/items/update or DELETE /api/items/delete with typed JSON bodies.</p>
     </section>
 
     <section>

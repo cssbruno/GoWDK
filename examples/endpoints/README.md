@@ -20,7 +20,7 @@ GOWDK_CSRF_SECRET=development-endpoints-csrf-secret-32b GOWDK_ADDR=127.0.0.1:809
 | `contact.page.gwdk` | Contact action redirect plus inline validation fragment response. |
 | `settings.page.gwdk` | Settings save/reset actions returning partial fragments. |
 | `upload.page.gwdk` | Multipart action form with generated file policy and typed `form.File` handler input. |
-| `api.page.gwdk` | Session, search, JSON CRUD, and webhook API declarations backed by Go handlers. |
+| `api.page.gwdk` | Typed generated API handlers for session, search, and JSON CRUD plus a raw request webhook escape hatch. |
 | `fragments.page.gwdk` | Inline validation, table row, list refresh, modal body, and dashboard card fragments. |
 
 ## Endpoint Inventory
@@ -35,8 +35,9 @@ GOWDK_CSRF_SECRET=development-endpoints-csrf-secret-32b GOWDK_ADDR=127.0.0.1:809
 
 ## Current Limits
 
-- API handlers own JSON body validation and authentication policy. Generated
-  API declarations do not create typed request structs yet.
+- Generated typed API handlers own query and JSON-body decoding for supported
+  scalar struct fields. Handlers still own domain validation, authentication,
+  authorization, persistence, and any raw request/header handling.
 - Action generated validation covers direct literal form constraints; domain
   validation remains in `src/endpoints/handlers.go`.
 - Multipart action uploads enforce generated request/file limits, but storage,

@@ -24,8 +24,10 @@ Issue #635 tracks the hardening needed after the first realtime slice.
 - Durable cross-process replay in the root runtime.
 - Browser-owned authorization, route policy, or cache policy.
 - New `.gwdk` syntax.
-- Fragment/API-specific query execution in this slice. Those adapters will need
-  explicit renderer metadata before they can return region patches safely.
+- Fragment/API-specific standalone renderers in this slice. Their current
+  result-to-patch behavior is defined as "no generated patch"; the browser uses
+  the current-document fallback unless the region also has an eligible
+  route-matched SSR/hybrid renderer.
 
 ## Users And Permissions
 
@@ -64,16 +66,19 @@ Issue #635 tracks the hardening needed after the first realtime slice.
 - Command single-flight refresh may continue to use query-only rendering only
   when the query has one unambiguous eligible renderer.
 - Patch envelopes must be versioned and reject unknown patch operations.
-- Fragment/API-specific query execution is defined as deferred; unsupported
-  regions fall back to the current-document refresh path.
+- Fragment/API-specific query execution has an explicit fallback policy:
+  generated route/query refresh does not execute fragment or API handlers, does
+  not synthesize patches from arbitrary JSON/fragment responses, and falls back
+  to the current-document refresh path for unsupported regions.
 
 ### Non-Functional
 
 - Performance: slow clients must not block command execution or other clients.
 - Reliability: replay misses and unsupported patches leave the DOM unchanged.
 - Accessibility: refresh keeps existing focus restoration behavior.
-- Security/privacy: guards and audience labels remain server-owned; route
-  refresh must not render protected or wrong-route regions.
+- Security/privacy: guards and audience labels remain server-owned; stream
+  responses run guards before opening, and route refresh renders only eligible
+  public route-matched regions with `no-store` responses.
 - Observability: runtime counters and browser events expose drops, replay,
   revocations, refresh, and patch errors for app-owned metrics/tracing.
 
@@ -105,7 +110,9 @@ Issue #635 tracks the hardening needed after the first realtime slice.
 
 ## Open Questions
 
-- Which generated adapter metadata should fragment/API-specific query execution
-  use for safe region rendering?
+## Follow-Up Questions
+
+- Which generated adapter metadata should a future fragment/API-specific
+  renderer use for safe region rendering beyond the current fallback policy?
 - Should production deployments standardize metrics labels for SSE stats, or
   keep export fully app-owned?

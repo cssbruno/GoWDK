@@ -1,11 +1,8 @@
-# Feature Spec: Realtime Hardening
+# Realtime Hardening
 
-## Problem
-
-Realtime subscriptions already stream presentation events to query-owned browser
-regions, but the transport and refresh behavior must stay resilient and
+Realtime subscriptions stream presentation events to query-owned browser regions.
+The hardening contract keeps transport and refresh behavior resilient and
 authorization-safe across disconnects, stale browser state, and session changes.
-Issue #635 tracks the hardening needed after the first realtime slice.
 
 ## Goals
 
@@ -107,8 +104,6 @@ Issue #635 tracks the hardening needed after the first realtime slice.
 - Internal: `runtime/contracts/sse`, `runtime/ssr`, `runtime/realtime`,
   `internal/appgen`, `internal/clientrt`.
 - External: none.
-
-## Open Questions
 
 ## Follow-Up Questions
 

@@ -337,7 +337,8 @@ Implemented today:
 Planned or partial:
 
 - User-defined domain validation helpers beyond generated request-shape checks.
-- Hybrid streaming, data refresh, and non-HTTP revalidation.
+- Hybrid streaming, browser-owned server-data refresh, non-HTTP revalidation,
+  and implicit action invalidation of page load data.
 - Richer generated-client reactivity beyond explicit reload/fragment outcomes.
 
 Troubleshooting:

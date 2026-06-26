@@ -130,12 +130,12 @@ cache "public, max-age=60"
 revalidate 5m
 ```
 
-Generated binaries apply explicit page `cache` values to successful static SPA
-HTML and SSR HTML responses. When `revalidate` is present, generated binaries
-send the appended stale-while-revalidate directive for the same successful
-responses. Request-time safety policies still win for actions, APIs, partial
-responses, SSR load redirects, CSRF HTML mutation, and generated request-time
-errors; those use `no-store`.
+Generated binaries apply explicit page `cache` values to successful static SPA,
+SSR, and hybrid HTML responses. When `revalidate` is present, generated
+binaries send the appended stale-while-revalidate directive for the same
+successful responses. Request-time safety policies still win for actions, APIs,
+partial responses, SSR/hybrid load redirects, CSRF HTML mutation, and generated
+request-time errors; those use `no-store`.
 
 ### Localized Page Routes
 

@@ -5368,6 +5368,53 @@ func TestGeneratedBinaryAppliesSSRCachePolicy(t *testing.T) {
 	}
 }
 
+func TestGeneratedBinaryAppliesHybridCachePolicy(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	binaryPath := filepath.Join(root, "site")
+	writeTestFile(t, filepath.Join(outputDir, "hybrid", "index.html"), "<main>Stale hybrid shell</main>")
+
+	if _, err := GenerateWithOptions(outputDir, appDir, Options{SSR: []SSRRoute{{
+		PageID: "hybrid",
+		Route:  "/hybrid",
+		Render: gowdk.Hybrid,
+		Guards: []string{"public"},
+		Cache:  "public, max-age=120, stale-while-revalidate=30",
+		HTML:   "<main><h1>Request Hybrid</h1></main>",
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	addr := freeAddr(t)
+	command := exec.Command(binaryPath)
+	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+	}()
+
+	body, headers, err := waitForHTTPResponse("http://" + addr + "/hybrid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(body) != "<main><h1>Request Hybrid</h1></main>" {
+		t.Fatalf("unexpected hybrid response body: %s", body)
+	}
+	if strings.Contains(body, "Stale hybrid shell") {
+		t.Fatalf("expected hybrid route to win over app fallback, got %s", body)
+	}
+	if cacheControl := headers.Get("Cache-Control"); cacheControl != "public, max-age=120, stale-while-revalidate=30" {
+		t.Fatalf("unexpected cache control: %q", cacheControl)
+	}
+}
+
 func TestGeneratedBinaryAppliesSPAHTMLCachePolicy(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")

@@ -37,7 +37,8 @@ Not implemented yet:
 - Full component compilation, arbitrary `build {}` statements beyond expression
   records, and full `paths {}` execution.
 - Broader generated-client reactivity beyond explicit reload/fragment outcomes.
-- Hybrid streaming, data refresh, and non-HTTP revalidation.
+- Hybrid streaming, browser-owned server-data refresh, non-HTTP revalidation,
+  and implicit action invalidation of page load data.
 
 ## Documents
 

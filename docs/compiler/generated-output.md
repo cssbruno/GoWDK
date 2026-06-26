@@ -412,8 +412,9 @@ forms, validate POSTs before generated decoding or user handlers run, and
 return HTTP 403 `invalid csrf token` with `Cache-Control: no-store` for invalid
 tokens. Set `Build.CSRF.Disabled` only for an intentional opt-out. The
 generated app does not run user-defined validation beyond handler logic,
-handle uploads, stream hybrid responses, refresh hybrid server data in place, or
-perform non-HTTP revalidation today.
+handle uploads, stream hybrid responses, perform browser-owned server-data
+refresh, perform non-HTTP revalidation, or implicitly invalidate page load data
+after actions today.
 
 Generated app source is an output artifact and sits downstream of feature
 packages. Feature packages may import stable public GOWDK runtime/addon

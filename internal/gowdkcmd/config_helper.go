@@ -49,7 +49,11 @@ func runProjectHelperIfNeeded(args []string) (bool, error) {
 		}
 		return true, err
 	}
-	cmd := exec.Command(helperPath, args...)
+	helperArgs, err := normalizeProjectHelperArgs(args)
+	if err != nil {
+		return true, err
+	}
+	cmd := exec.Command(helperPath, helperArgs...)
 	cmd.Dir = projectRoot
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -67,6 +71,139 @@ func runProjectHelperIfNeeded(args []string) (bool, error) {
 		return true, err
 	}
 	return true, nil
+}
+
+func normalizeProjectHelperArgs(args []string) ([]string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	out := append([]string(nil), args...)
+	switch out[0] {
+	case "build", "check":
+		return normalizeProjectCommandPathArgs(out, cwd, 1), nil
+	case "dev":
+		return normalizeDevHelperArgs(out, cwd), nil
+	default:
+		return out, nil
+	}
+}
+
+func normalizeDevHelperArgs(args []string, cwd string) []string {
+	out := append([]string(nil), args...)
+	for index := 1; index < len(out); index++ {
+		if _, next, ok, _ := consumeValueFlag(out, index, "--addr", true); ok {
+			index = next
+			continue
+		}
+		if _, next, ok, _ := consumeValueFlag(out, index, "--interval", true); ok {
+			index = next
+			continue
+		}
+		buildArgs := append([]string{"build"}, out[index:]...)
+		buildArgs = normalizeProjectCommandPathArgs(buildArgs, cwd, 1)
+		copy(out[index:], buildArgs[1:])
+		return out
+	}
+	return out
+}
+
+func normalizeProjectCommandPathArgs(args []string, cwd string, start int) []string {
+	out := append([]string(nil), args...)
+	for index := start; index < len(out); index++ {
+		if next, ok := normalizeHelperValueFlag(out, index, cwd, "--config"); ok {
+			index = next
+			continue
+		}
+		if next, ok := normalizeHelperValueFlag(out, index, cwd, "--env-file"); ok {
+			index = next
+			continue
+		}
+		if next, ok := skipProjectHelperValueFlag(out, index); ok {
+			index = next
+			continue
+		}
+		if skipProjectHelperBooleanFlag(out[index]) {
+			continue
+		}
+		arg := out[index]
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		out[index] = absoluteExistingPath(cwd, arg)
+	}
+	return out
+}
+
+func normalizeHelperValueFlag(args []string, index int, cwd string, name string) (int, bool) {
+	value, next, ok, missing := consumeValueFlag(args, index, name, true)
+	if !ok || missing {
+		return next, ok
+	}
+	normalized := absoluteExistingPath(cwd, value)
+	if strings.HasPrefix(args[index], name+"=") {
+		args[index] = name + "=" + normalized
+	} else if next < len(args) {
+		args[next] = normalized
+	}
+	return next, true
+}
+
+func skipProjectHelperValueFlag(args []string, index int) (int, bool) {
+	for _, name := range []string{
+		"--out",
+		"--app",
+		"--bin",
+		"--docker-base",
+		"--deploy-recipe",
+		"--wasm",
+		"--backend-app",
+		"--backend-bin",
+		"--worker-app",
+		"--worker-bin",
+		"--cron-app",
+		"--cron-bin",
+		"--target",
+		"--module",
+	} {
+		if _, next, ok, _ := consumeValueFlag(args, index, name, name == "--deploy-recipe" || name == "--docker-base"); ok {
+			return next, true
+		}
+	}
+	return index, false
+}
+
+func skipProjectHelperBooleanFlag(arg string) bool {
+	switch arg {
+	case "--ssr",
+		"--debug",
+		"--timings",
+		"--allow-missing-backend",
+		"--allow-insecure",
+		"--obfuscate-assets",
+		"--docker",
+		"--json",
+		"--warnings-as-errors",
+		"--standalone":
+		return true
+	}
+	return strings.HasPrefix(arg, "--timings=") ||
+		strings.HasPrefix(arg, "--allow-insecure=")
+}
+
+func absoluteExistingPath(cwd string, value string) string {
+	if strings.TrimSpace(value) == "" || filepath.IsAbs(value) {
+		return value
+	}
+	candidate := filepath.Join(cwd, value)
+	if _, err := os.Stat(candidate); err != nil {
+		return value
+	}
+	absolute, err := filepath.Abs(candidate)
+	if err != nil {
+		return value
+	}
+	return absolute
 }
 
 func projectHelperCommand(command string) bool {

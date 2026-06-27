@@ -130,6 +130,11 @@ If a future package adds a more specific validation command, document it in
 
 - Treat `AGENTS.md` as the always-on project instruction file for every coding
   agent.
+- When committing or opening pull requests, use the repository Conventional
+  Commit format for commit messages and PR titles, such as
+  `ci: require conventional PR titles` or
+  `fix(compiler): preserve route diagnostics`. Do not add generic agent
+  prefixes such as `[codex]`; release-please parses the final PR/squash title.
 - Keep this file small by moving long process details into `.agents/skills/` and
   `.agents/templates/`.
 - If more specific rules are needed for a future subdirectory, add a nested

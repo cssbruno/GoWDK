@@ -51,19 +51,34 @@ type SSRListSpec = source.SSRListSpec
 type SSRCondSpec = source.SSRCondSpec
 
 func SSRArtifacts(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) ([]SSRArtifact, error) {
-	ir, _, err := compiler.AssembleProgram(config, sources)
+	analyzed, err := compiler.AnalyzeProgram(config, sources)
 	if err != nil {
 		return nil, err
 	}
-	return SSRArtifactsFromIR(config, ir, outputDir)
+	validated, err := compiler.ValidateAnalyzedProgram(config, analyzed)
+	if err != nil {
+		return nil, err
+	}
+	return SSRArtifactsFromValidatedProgram(config, validated, outputDir)
 }
 
 // SSRArtifactsFromIR renders request-time page artifacts from normalized
 // compiler IR.
 func SSRArtifactsFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) ([]SSRArtifact, error) {
-	if err := compiler.ValidateProgram(config, ir); err != nil {
+	validated, err := compiler.ValidateIR(config, ir)
+	if err != nil {
 		return nil, err
 	}
+	return SSRArtifactsFromValidatedProgram(config, validated, outputDir)
+}
+
+// SSRArtifactsFromValidatedProgram renders request-time page artifacts from
+// compiler-validated IR.
+func SSRArtifactsFromValidatedProgram(config gowdk.Config, validated compiler.ValidatedProgram, outputDir string) ([]SSRArtifact, error) {
+	if !validated.Valid() {
+		return nil, fmt.Errorf("validated program was not constructed by compiler validation")
+	}
+	ir := validated.Program()
 
 	components, componentFailures := buildComponents(ir.Components)
 	layouts, layoutFailures := buildLayouts(ir.Layouts)

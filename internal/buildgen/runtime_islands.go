@@ -18,11 +18,11 @@ func islandRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, allCompone
 	includeSourceMaps := config.Build.DebugAssets()
 	planned := map[string]plannedAssetArtifact{}
 	for _, page := range pages {
-		source, err := composePageViewSource(page, layouts)
+		nodes, err := composePageViewNodes(page, layouts)
 		if err != nil {
-			return nil, fmt.Errorf("compose island view source for page %q: %w", page.ID, err)
+			return nil, fmt.Errorf("compose island view nodes for page %q: %w", page.ID, err)
 		}
-		usages, err := recursiveComponentCallUsagesForView(source, composedPageViewNodes(page), components, page.Package, componentUses(page.Uses), manifestComponentResolver)
+		usages, err := recursiveComponentCallUsagesForView("", nodes, components, page.Package, componentUses(page.Uses), manifestComponentResolver)
 		if err != nil {
 			return nil, fmt.Errorf("resolve island components for page %q: %w", page.ID, err)
 		}

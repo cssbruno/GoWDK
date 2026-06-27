@@ -3,12 +3,14 @@ package gwdkanalysis
 import (
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/viewmodel"
+	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
 // Sources are the parsed IR records one program is assembled from.
@@ -77,6 +79,7 @@ func (builder *irBuilder) addAuditSpec(audit gwdkir.AuditSpec) {
 }
 
 func (builder *irBuilder) addPage(page gwdkir.Page) {
+	ensureViewNodes(&page.Blocks)
 	// Normalize route params once at program assembly: explicit declarations
 	// win, otherwise they are derived from the route pattern, and untyped
 	// params default to string.
@@ -236,6 +239,7 @@ func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 }
 
 func (builder *irBuilder) addComponent(component gwdkir.Component) {
+	ensureViewNodes(&component.Blocks)
 	builder.program.Components = append(builder.program.Components, component)
 	pkg := builder.ensurePackage(component.Package, component.Source)
 	pkg.Files = append(pkg.Files, gwdkir.SourceFile{Path: component.Source, Kind: gwdkir.SourceComponent, Package: component.Package, Name: component.Name, Span: component.Span})
@@ -335,6 +339,7 @@ func (builder *irBuilder) addComponentTemplate(component gwdkir.Component) {
 }
 
 func (builder *irBuilder) addLayout(layout gwdkir.Layout) {
+	ensureViewNodes(&layout.Blocks)
 	builder.program.Layouts = append(builder.program.Layouts, layout)
 	pkg := builder.ensurePackage(layout.Package, layout.Source)
 	pkg.Files = append(pkg.Files, gwdkir.SourceFile{Path: layout.Source, Kind: gwdkir.SourceLayout, Package: layout.Package, Name: layout.ID, Span: layout.Span})
@@ -352,6 +357,17 @@ func (builder *irBuilder) addLayout(layout gwdkir.Layout) {
 		Span:      layout.Blocks.Spans.View,
 		BodyStart: layout.Blocks.Spans.ViewBodyStart,
 	})
+}
+
+func ensureViewNodes(blocks *gwdkir.Blocks) {
+	if !blocks.View || len(blocks.ViewNodes) > 0 || strings.TrimSpace(blocks.ViewBody) == "" {
+		return
+	}
+	nodes, err := viewparse.Parse(blocks.ViewBody)
+	if err != nil {
+		return
+	}
+	blocks.ViewNodes = nodes
 }
 
 func cloneEndpointCORS(cors gwdkir.EndpointCORS) gwdkir.EndpointCORS {

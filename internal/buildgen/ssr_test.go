@@ -8,10 +8,21 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
+
+func TestSSRArtifactsFromValidatedProgramRejectsZeroValue(t *testing.T) {
+	_, err := SSRArtifactsFromValidatedProgram(gowdk.Config{}, compiler.ValidatedProgram{}, t.TempDir())
+	if err == nil {
+		t.Fatal("expected zero-value validated program error")
+	}
+	if !strings.Contains(err.Error(), "not constructed by compiler validation") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
 
 func TestBuildSkipsRequestTimePagesAndKeepsSPAArtifacts(t *testing.T) {
 	outputDir := t.TempDir()
@@ -149,7 +160,7 @@ func TestSSRArtifactsEmitClientRuntimeForInvalidatedQueryRegions(t *testing.T) {
 		gowdk.NewAddon("ssr", gowdk.FeatureSSR),
 		gowdk.NewAddon("realtime", gowdk.FeatureRealtime),
 	}}
-	program := gwdkir.Program{
+	program := analyzedIRFixture(t, gwdkir.Program{
 		Pages: []gwdkir.Page{{
 			Source: "pages/board.page.gwdk",
 			ID:     "board",
@@ -171,7 +182,7 @@ func TestSSRArtifactsEmitClientRuntimeForInvalidatedQueryRegions(t *testing.T) {
 			OwnerID:       "board",
 			Source:        "pages/board.page.gwdk",
 		}},
-	}
+	})
 
 	artifacts, err := SSRArtifactsFromIR(config, program, outputDir)
 	if err != nil {
@@ -195,7 +206,7 @@ func TestSSRArtifactsEmitClientRuntimeForInvalidatedQueryRegions(t *testing.T) {
 func TestSSRArtifactsEmitClientRuntimeForCommandWriteForm(t *testing.T) {
 	outputDir := t.TempDir()
 	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}
-	program := gwdkir.Program{
+	program := analyzedIRFixture(t, gwdkir.Program{
 		Pages: []gwdkir.Page{{
 			Source: "pages/board.page.gwdk",
 			ID:     "board",
@@ -206,7 +217,7 @@ func TestSSRArtifactsEmitClientRuntimeForCommandWriteForm(t *testing.T) {
 				ViewBody: `<main><form g:command="issues.CreateIssue"><input name="title" /></form></main>`,
 			},
 		}},
-	}
+	})
 
 	artifacts, err := SSRArtifactsFromIR(config, program, outputDir)
 	if err != nil {
@@ -225,7 +236,7 @@ func TestSSRArtifactsEmitClientRuntimeForCommandWriteForm(t *testing.T) {
 func TestSSRArtifactsOmitClientRuntimeWithoutRuntimeRegions(t *testing.T) {
 	outputDir := t.TempDir()
 	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}
-	program := gwdkir.Program{
+	program := analyzedIRFixture(t, gwdkir.Program{
 		Pages: []gwdkir.Page{{
 			Source: "pages/board.page.gwdk",
 			ID:     "board",
@@ -236,7 +247,7 @@ func TestSSRArtifactsOmitClientRuntimeWithoutRuntimeRegions(t *testing.T) {
 				ViewBody: `<main><h1>Board</h1></main>`,
 			},
 		}},
-	}
+	})
 
 	artifacts, err := SSRArtifactsFromIR(config, program, outputDir)
 	if err != nil {
@@ -471,7 +482,7 @@ func TestSSRArtifactsPreserveTypedLoadResultMetadata(t *testing.T) {
 		{Path: "user.name", Selector: "User.Name", Type: "string"},
 		{Path: "User.Name", Selector: "User.Name", Type: "string"},
 	}
-	program := gwdkir.Program{Pages: []gwdkir.Page{{
+	program := analyzedIRFixture(t, gwdkir.Program{Pages: []gwdkir.Page{{
 		ID:     "dashboard",
 		Route:  "/dashboard",
 		Render: gowdk.SSR,
@@ -491,7 +502,7 @@ func TestSSRArtifactsPreserveTypedLoadResultMetadata(t *testing.T) {
 			View:       true,
 			ViewBody:   `<main>{user.name}</main>`,
 		},
-	}}}
+	}}})
 
 	artifacts, err := SSRArtifactsFromIR(config, program, t.TempDir())
 	if err != nil {

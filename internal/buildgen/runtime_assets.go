@@ -12,24 +12,23 @@ import (
 func clientRuntimeArtifacts(config gowdk.Config, ir gwdkir.Program, outputDir string, layouts map[string]gwdkir.Layout, components map[string]view.Component) ([]plannedAssetArtifact, error) {
 	queryTypeNames := queryInvalidationTypeNames(ir.QueryInvalidations)
 	for _, page := range ir.Pages {
-		viewSource, err := composePageViewSource(page, layouts)
+		viewNodes, err := composePageViewNodes(page, layouts)
 		if err != nil {
 			return nil, err
 		}
-		viewNodes := composedPageViewNodes(page)
-		usesSPANavigation, err := pageUsesSPANavigationRuntime(config, page, viewSource, viewNodes, components)
+		usesSPANavigation, err := pageUsesSPANavigationRuntime(config, page, viewNodes, components)
 		if err != nil {
 			return nil, err
 		}
-		usesRealtime, err := pageUsesRealtimeRuntime(page, viewSource, viewNodes, components, queryTypeNames)
+		usesRealtime, err := pageUsesRealtimeRuntime(page, viewNodes, components, queryTypeNames)
 		if err != nil {
 			return nil, err
 		}
-		usesCommand, err := pageUsesCommandRuntime(page, viewSource, viewNodes, components)
+		usesCommand, err := pageUsesCommandRuntime(page, viewNodes, components)
 		if err != nil {
 			return nil, err
 		}
-		if pageUsesPartialRuntime(page, viewSource) || usesSPANavigation || usesRealtime || usesCommand {
+		if pageUsesPartialRuntime(page, viewNodes) || usesSPANavigation || usesRealtime || usesCommand {
 			return []plannedAssetArtifact{{
 				AssetArtifact:        AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(clientRuntimeAssetPath))},
 				contents:             clientrt.Source(),

@@ -146,7 +146,7 @@ func TestGenerateWritesDynamicSitemapRoute(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "sitemap.xml"), "<urlset></urlset>")
 	writeTestFile(t, filepath.Join(outputDir, "gowdk-assets.json"), `{"version":1}`)
 
-	ir := gwdkir.Program{Pages: []gwdkir.Page{{
+	ir := gwdkanalysis.BuildProgram(gowdk.Config{}, gwdkanalysis.Sources{Pages: []gwdkir.Page{{
 		ID:     "home",
 		Route:  "/",
 		Guards: []string{"public"},
@@ -154,7 +154,7 @@ func TestGenerateWritesDynamicSitemapRoute(t *testing.T) {
 			View:     true,
 			ViewBody: `<main>Home</main>`,
 		},
-	}}}
+	}}})
 	config := gowdk.Config{Addons: []gowdk.Addon{seo.Addon(seo.Options{
 		BaseURL: "https://example.com",
 		DynamicSitemap: gowdk.SEODynamicSitemap{
@@ -2019,6 +2019,59 @@ func TestGenerateRejectsInvalidCORSConfig(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "wildcard origin") {
 		t.Fatalf("expected invalid CORS config error, got %v", err)
+	}
+}
+
+func TestGenerateWithPlanRejectsZeroValue(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+
+	_, err := GenerateWithPlan(outputDir, appDir, ApplicationPlan{})
+	if err == nil {
+		t.Fatal("expected zero-value application plan error")
+	}
+	if !strings.Contains(err.Error(), "application plan was not constructed") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGenerateWithPlanRejectsBackendPlan(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	plan, err := PlanBackendApplication(Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = GenerateWithPlan(outputDir, appDir, plan)
+	if err == nil {
+		t.Fatal("expected backend plan lane error")
+	}
+	if !strings.Contains(err.Error(), "backend application plan cannot be used") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGenerateBackendWithPlanRejectsEmbeddedPlan(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-backend")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	plan, err := PlanApplication(outputDir, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = GenerateBackendWithPlan(appDir, plan)
+	if err == nil {
+		t.Fatal("expected embedded plan lane error")
+	}
+	if !strings.Contains(err.Error(), "embedded application plan cannot be used") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -9394,15 +9447,37 @@ func waitForHTTPStatusWithHeaders(url, method, body string, headers map[string]s
 // through the production manifest->IR path, asserting against exactly what the
 // generated-app pipeline derives.
 func actionEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]ActionEndpoint, error) {
+	app = normalizeEndpointFixtureSources(app)
 	return actionEndpointsFromIR(gowdk.Config{}, gwdkanalysis.BuildProgram(gowdk.Config{}, app))
 }
 
 func apiEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]APIEndpoint, error) {
+	app = normalizeEndpointFixtureSources(app)
 	return apiEndpointsFromIR(gwdkanalysis.BuildProgram(gowdk.Config{}, app))
 }
 
 func fragmentEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]FragmentEndpoint, error) {
+	app = normalizeEndpointFixtureSources(app)
 	return fragmentEndpointsFromIR(gwdkanalysis.BuildProgram(gowdk.Config{}, app))
+}
+
+func normalizeEndpointFixtureSources(app gwdkanalysis.Sources) gwdkanalysis.Sources {
+	for index := range app.Pages {
+		if strings.TrimSpace(app.Pages[index].Blocks.ViewBody) != "" {
+			app.Pages[index].Blocks.View = true
+		}
+	}
+	for index := range app.Components {
+		if strings.TrimSpace(app.Components[index].Blocks.ViewBody) != "" {
+			app.Components[index].Blocks.View = true
+		}
+	}
+	for index := range app.Layouts {
+		if strings.TrimSpace(app.Layouts[index].Blocks.ViewBody) != "" {
+			app.Layouts[index].Blocks.View = true
+		}
+	}
+	return app
 }
 
 func TestDeniedPageRoutesSelectsGuardlessStaticPages(t *testing.T) {

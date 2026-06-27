@@ -303,8 +303,10 @@ func isMetadataDeclaration(text, keyword string) bool {
 // discovered standalone Go endpoints and backend handler bindings attached,
 // plus the flat binding record list for the manifest JSON report.
 type CheckResult struct {
-	IR       gwdkir.Program
-	Bindings []source.BackendBinding
+	IR        gwdkir.Program
+	Bindings  []source.BackendBinding
+	Analyzed  compiler.AnalyzedProgram
+	Validated *compiler.ValidatedProgram
 }
 
 // CheckOptions controls validation behavior that depends on project context.
@@ -324,22 +326,29 @@ func CheckFilesWithOptions(config gowdk.Config, paths []string, options CheckOpt
 	if diagnostics.HasErrors() {
 		return CheckResult{}, diagnostics
 	}
-	ir, bindings, err := compiler.AssembleProgram(config, sources)
-	result := CheckResult{IR: ir}
+	analyzed, err := compiler.AnalyzeProgram(config, sources)
+	result := CheckResult{Analyzed: analyzed, IR: analyzed.Program()}
 	if err != nil {
-		diagnostics = append(diagnostics, compilerDiagnostics(err, ir)...)
+		diagnostics = append(diagnostics, compilerDiagnostics(err, result.IR)...)
 		return result, diagnostics
 	}
-	result.Bindings = bindings
-	validate := compiler.ValidateProgramReport
+	result.Bindings = analyzed.BackendBindings()
 	if len(paths) == 1 {
 		// A single file can never satisfy cross-file checks (use packages,
 		// component references), so validate it in source mode to avoid
 		// false project-level errors.
-		validate = compiler.ValidateSourceProgramReport
+		diagnostics = append(diagnostics, compilerDiagnostics(compiler.ValidateSourceProgramReport(config, result.IR), result.IR)...)
+	} else {
+		var validated compiler.ValidatedProgram
+		var report compiler.ValidationErrors
+		validated, report = compiler.ValidateAnalyzedProgramReport(config, analyzed)
+		diagnostics = append(diagnostics, compilerDiagnostics(report, result.IR)...)
+		if !report.HasErrors() {
+			result.Validated = &validated
+		}
 	}
-	diagnostics = append(diagnostics, compilerDiagnostics(validate(config, result.IR), result.IR)...)
-	if bindingDiagnostics := compiler.BackendBindingDiagnostics(result.Bindings); len(bindingDiagnostics) > 0 {
+	if len(paths) == 1 {
+		bindingDiagnostics := compiler.BackendBindingDiagnostics(result.Bindings)
 		diagnostics = append(diagnostics, compilerDiagnostics(compiler.ValidationErrors(bindingDiagnostics), result.IR)...)
 	}
 	diagnostics = append(diagnostics, accessibilityDiagnostics(result.IR)...)

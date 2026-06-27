@@ -8,6 +8,7 @@ project config plus explicit file paths or configured discovery
   -> lower parsed records into internal/gwdkir.Program
   -> enrich IR with Go endpoint discovery and backend bindings
   -> validate IR invariants, render rules, routes, endpoints, packages, and assets
+     into a compiler-owned ValidatedProgram phase token
   -> emit diagnostics, public manifest JSON, site-map JSON, route/endpoint metadata, build-output artifacts, browser runtime assets, or generated app output
 ```
 
@@ -45,19 +46,34 @@ boundaries so one syntax error does not hide later declarations in the same
 file.
 
 `internal/gwdkanalysis` assembles parsed page, component, and layout records
-into `internal/gwdkir.Program`. The IR models packages, source
-files, page routes, backend endpoints from `.gwdk` declarations or explicit Go
-comments, templates, client behavior, source-selected assets, asset scope/hash
-metadata, parsed view nodes, typed literal records, and imported build-data call
-metadata. `gwdkir.Blocks` retains source bodies for spans and
-compatibility, but the parser-lowered handoff also carries parsed `view {}`
+into `internal/gwdkir.Program`. `internal/compiler.AnalyzedProgram` wraps that
+IR after enrichment, and `internal/compiler.ValidatedProgram` is the opaque
+phase token returned only by compiler validation. Build-output fast paths accept
+`ValidatedProgram`; raw `gwdkir.Program` entrypoints must run compiler
+validation before emission. Static build output resolves page artifacts, CSS,
+assets, manifests, and report metadata into `internal/buildgen.BuildPlan`
+before writing files. Generated app output resolves auto routes, endpoint
+projections, SSR artifacts, sitemap data, and generator-local validation into
+`internal/appgen.ApplicationPlan` before writing files.
+
+The IR models packages, source files, page routes, backend endpoints from
+`.gwdk` declarations or explicit Go comments, templates, client behavior,
+source-selected assets, asset scope/hash metadata, parsed view nodes, typed
+literal records, and imported build-data call metadata.
+
+`gwdkir.Blocks` retains source bodies for spans, formatting, inspection, and
+compatibility only. Parser/analyzer lowering must populate parsed `view {}`
 nodes, ordered literal `paths {}`/`build {}` records, and imported build-data
-call metadata; downstream passes should consume those typed fields before
-falling back to raw bodies. Build, memory build, incremental SPA build, SSR
-artifact, generated app planning, route reports, LSP metadata, and the public
-`gowdk manifest` report consume `internal/gwdkir.Program` and own their output
-planning separately. Route and asset manifests are generated output artifacts,
-not compiler handoff records.
+call metadata before validation. Downstream validation and generated-output
+planning consume those typed fields; raw block bodies are not a semantic fallback
+after lowering. `gwdkir.CheckInvariants` rejects non-empty supported `view {}`
+bodies that reach the IR without parsed view nodes.
+
+Build, memory build, incremental SPA build, SSR artifact, generated app
+planning, route reports, LSP metadata, and the public `gowdk manifest` report
+consume `internal/gwdkir.Program` and own their output planning separately.
+Route and asset manifests are generated output artifacts, not compiler handoff
+records.
 Generated app Go, backend adapter Go, build-data helper Go, and starter config
 Go are constructed as Go ASTs, printed, and formatted before use or write.
 

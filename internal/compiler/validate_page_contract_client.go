@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
@@ -55,21 +54,9 @@ func validatePageContractClient(page gwdkir.Page, mode gowdk.RenderMode) []Valid
 }
 
 func pageQueryReferences(page gwdkir.Page) ([]viewanalysis.QueryReference, error) {
-	if len(page.Blocks.ViewNodes) > 0 {
-		return viewanalysis.QueryReferencesFromNodes(page.Blocks.ViewNodes)
-	}
-	if strings.TrimSpace(page.Blocks.ViewBody) == "" {
-		return nil, nil
-	}
-	return viewanalysis.QueryReferences(page.Blocks.ViewBody)
+	return viewanalysis.QueryReferencesFromNodes(page.Blocks.ViewNodes)
 }
 
 func pageCommandReferences(page gwdkir.Page) ([]viewanalysis.CommandReference, error) {
-	if len(page.Blocks.ViewNodes) > 0 {
-		return viewanalysis.CommandReferencesFromNodes(page.Blocks.ViewNodes)
-	}
-	if strings.TrimSpace(page.Blocks.ViewBody) == "" {
-		return nil, nil
-	}
-	return viewanalysis.CommandReferences(page.Blocks.ViewBody)
+	return viewanalysis.CommandReferencesFromNodes(page.Blocks.ViewNodes)
 }

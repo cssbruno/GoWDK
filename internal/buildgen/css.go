@@ -325,13 +325,13 @@ func planComponentCSSStylesheetsByPage(pages []gwdkir.Page, components map[strin
 	}
 	var failures []string
 	for _, page := range pages {
-		viewSource, err := composePageViewSource(page, layouts)
+		viewNodes, err := composePageViewNodes(page, layouts)
 		if err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", page.ID, err))
 			continue
 		}
 		pageComponents := componentRegistryForPage(page, components)
-		usages, err := recursiveViewComponentCallUsagesForView(viewSource, composedPageViewNodes(page), pageComponents, page.Package, componentUses(page.Uses))
+		usages, err := recursiveViewComponentCallUsagesForView("", viewNodes, pageComponents, page.Package, componentUses(page.Uses))
 		if err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", page.ID, err))
 			continue
@@ -638,21 +638,7 @@ func cssSources(ir gwdkir.Program) []gowdk.CSSSource {
 }
 
 func cssClassesFromViewBlocks(blocks gwdkir.Blocks) []string {
-	if len(blocks.ViewNodes) > 0 {
-		return viewanalysis.ViewDependenciesFromNodes(blocks.ViewNodes).CSSClasses
-	}
-	return cssClassesFromViewBody(blocks.ViewBody)
-}
-
-func cssClassesFromViewBody(body string) []string {
-	if strings.TrimSpace(body) == "" {
-		return nil
-	}
-	dependencies, err := viewanalysis.ViewDependencies(body)
-	if err != nil {
-		return nil
-	}
-	return dependencies.CSSClasses
+	return viewanalysis.ViewDependenciesFromNodes(blocks.ViewNodes).CSSClasses
 }
 
 func nonEmptyStylesheets(stylesheets []gowdk.Stylesheet) []gowdk.Stylesheet {

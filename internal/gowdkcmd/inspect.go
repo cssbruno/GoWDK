@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/inspectreport"
 	"github.com/cssbruno/gowdk/internal/lang"
@@ -98,6 +99,13 @@ func commandProgram(args []string, command string, allowJSON bool) (cliOptions, 
 	ir := checked.IR
 	if err := linkIRContractReferences(&ir, options.ProjectRoot); err != nil {
 		return cliOptions{}, gwdkir.Program{}, err
+	}
+	if checked.Validated != nil {
+		validated, err := compiler.ValidateIR(options.Config, ir)
+		if err != nil {
+			return cliOptions{}, gwdkir.Program{}, err
+		}
+		ir = validated.Program()
 	}
 	return options, ir, nil
 }

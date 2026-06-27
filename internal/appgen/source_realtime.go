@@ -202,6 +202,27 @@ func realtimeSubscriptionAudiences(options Options) map[string][]string {
 	return audiences
 }
 
+func realtimeSubscriptionBroadcasts(options Options) map[string]bool {
+	routesByPage := realtimeRoutesByPage(options)
+	audiencesByRoute := realtimeRouteAudienceByRoute(options)
+	broadcasts := map[string]bool{}
+	for _, subscription := range boundRealtimeSubscriptions(options) {
+		eventType := realtimeEventEnvelopeType(subscription)
+		if eventType == "" {
+			continue
+		}
+		if subscription.OwnerKind != gwdkir.SourcePage {
+			broadcasts[eventType] = true
+			continue
+		}
+		route := routesByPage[subscription.OwnerID]
+		if audiencesByRoute[route] == "" {
+			broadcasts[eventType] = true
+		}
+	}
+	return broadcasts
+}
+
 func realtimeQueryAudiences(options Options) map[string][]string {
 	routesByPage := realtimeRoutesByPage(options)
 	audiencesByRoute := realtimeRouteAudienceByRoute(options)
@@ -220,6 +241,27 @@ func realtimeQueryAudiences(options Options) map[string][]string {
 	}
 	sortRealtimeAudienceMap(audiences)
 	return audiences
+}
+
+func realtimeQueryBroadcasts(options Options) map[string]bool {
+	routesByPage := realtimeRoutesByPage(options)
+	audiencesByRoute := realtimeRouteAudienceByRoute(options)
+	broadcasts := map[string]bool{}
+	for _, invalidation := range boundQueryInvalidations(options) {
+		queryType := strings.TrimSpace(invalidation.QueryType)
+		if queryType == "" {
+			continue
+		}
+		if invalidation.OwnerKind != gwdkir.SourcePage {
+			broadcasts[queryType] = true
+			continue
+		}
+		route := routesByPage[invalidation.OwnerID]
+		if audiencesByRoute[route] == "" {
+			broadcasts[queryType] = true
+		}
+	}
+	return broadcasts
 }
 
 func addRealtimeAudience(audiences map[string][]string, key string, audience string) {
@@ -272,7 +314,9 @@ func realtimeDecls(options Options) []ast.Decl {
 		realtimeFanoutVarDecl(options),
 		realtimeSubscriptionEventTypesDecl(options),
 		realtimeSubscriptionAudiencesDecl(options),
+		realtimeSubscriptionBroadcastsDecl(options),
 		realtimeQueryAudiencesDecl(options),
+		realtimeQueryBroadcastsDecl(options),
 		realtimeQueryInvalidationsDecl(options),
 		registerRealtimeFanoutDecl(),
 		currentRealtimeFanoutDecl(),
@@ -364,8 +408,16 @@ func realtimeSubscriptionAudiencesDecl(options Options) ast.Decl {
 	return stringSliceMapVarDecl("realtimeSubscriptionAudiences", realtimeSubscriptionAudiences(options))
 }
 
+func realtimeSubscriptionBroadcastsDecl(options Options) ast.Decl {
+	return stringBoolMapVarDecl("realtimeSubscriptionBroadcasts", realtimeSubscriptionBroadcasts(options))
+}
+
 func realtimeQueryAudiencesDecl(options Options) ast.Decl {
 	return stringSliceMapVarDecl("realtimeQueryAudiences", realtimeQueryAudiences(options))
+}
+
+func realtimeQueryBroadcastsDecl(options Options) ast.Decl {
+	return stringBoolMapVarDecl("realtimeQueryBroadcasts", realtimeQueryBroadcasts(options))
 }
 
 func stringSliceMapVarDecl(name string, values map[string][]string) ast.Decl {
@@ -388,6 +440,32 @@ func stringSliceMapExpr(values map[string][]string) ast.Expr {
 	}
 	return &ast.CompositeLit{
 		Type: &ast.MapType{Key: id("string"), Value: &ast.ArrayType{Elt: id("string")}},
+		Elts: elts,
+	}
+}
+
+func stringBoolMapVarDecl(name string, values map[string]bool) ast.Decl {
+	return &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
+		Names:  []*ast.Ident{id(name)},
+		Type:   &ast.MapType{Key: id("string"), Value: id("bool")},
+		Values: []ast.Expr{stringBoolMapExpr(values)},
+	}}}
+}
+
+func stringBoolMapExpr(values map[string]bool) ast.Expr {
+	keys := make([]string, 0, len(values))
+	for key, value := range values {
+		if value {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	elts := make([]ast.Expr, 0, len(keys))
+	for _, key := range keys {
+		elts = append(elts, &ast.KeyValueExpr{Key: stringLit(key), Value: id("true")})
+	}
+	return &ast.CompositeLit{
+		Type: &ast.MapType{Key: id("string"), Value: id("bool")},
 		Elts: elts,
 	}
 }
@@ -496,23 +574,17 @@ func realtimeEventsHandlerDecl(options Options) ast.Decl {
 
 func realtimeStreamPathDecl() ast.Decl {
 	stmts := []ast.Stmt{
-		define([]ast.Expr{id("requestPath")}, call(
-			selExpr(call(selExpr(selExpr(id("request"), "URL"), "Query")), "Get"),
-			stringLit("path"),
-		)),
+		define([]ast.Expr{id("referer")}, call(selExpr(id("request"), "Referer"))),
 		&ast.IfStmt{
-			Cond: &ast.BinaryExpr{X: id("requestPath"), Op: token.EQL, Y: stringLit("")},
-			Body: block(&ast.IfStmt{
-				Init: define([]ast.Expr{id("referer")}, call(selExpr(id("request"), "Referer"))),
-				Cond: &ast.BinaryExpr{X: id("referer"), Op: token.NEQ, Y: stringLit("")},
-				Body: block(&ast.IfStmt{
-					Init: define([]ast.Expr{id("refererURL"), id("err")}, call(sel("neturl", "Parse"), id("referer"))),
-					Cond: &ast.BinaryExpr{X: id("err"), Op: token.EQL, Y: id("nil")},
-					Body: block(assign([]ast.Expr{id("requestPath")}, selExpr(id("refererURL"), "Path"))),
-				}),
-			}),
+			Cond: &ast.BinaryExpr{X: id("referer"), Op: token.EQL, Y: stringLit("")},
+			Body: block(&ast.ReturnStmt{Results: []ast.Expr{stringLit("")}}),
 		},
-		&ast.ReturnStmt{Results: []ast.Expr{id("requestPath")}},
+		define([]ast.Expr{id("refererURL"), id("err")}, call(sel("neturl", "Parse"), id("referer"))),
+		&ast.IfStmt{
+			Cond: notNil("err"),
+			Body: block(&ast.ReturnStmt{Results: []ast.Expr{stringLit("")}}),
+		},
+		&ast.ReturnStmt{Results: []ast.Expr{selExpr(id("refererURL"), "Path")}},
 	}
 	return funcDecl("realtimeStreamPath", []*ast.Field{
 		{Names: []*ast.Ident{id("request")}, Type: &ast.StarExpr{X: sel("http", "Request")}},
@@ -597,6 +669,10 @@ func realtimeAudienceScopedEventsDecl() ast.Decl {
 			Cond: &ast.UnaryExpr{Op: token.NOT, X: &ast.IndexExpr{X: id("realtimeSubscriptionEventTypes"), Index: selExpr(id("event"), "Type")}},
 			Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil")}}),
 		},
+		&ast.IfStmt{
+			Cond: &ast.IndexExpr{X: id("realtimeSubscriptionBroadcasts"), Index: selExpr(id("event"), "Type")},
+			Body: block(&ast.ReturnStmt{Results: []ast.Expr{eventEnvelopeSliceExpr(id("event"))}}),
+		},
 		define([]ast.Expr{id("audiences")}, &ast.IndexExpr{X: id("realtimeSubscriptionAudiences"), Index: selExpr(id("event"), "Type")}),
 		&ast.IfStmt{
 			Cond: &ast.BinaryExpr{X: call(id("len"), id("audiences")), Op: token.EQL, Y: intLit(0)},
@@ -640,6 +716,7 @@ func realtimeQueryInvalidationAudienceEventsDecl() ast.Decl {
 			Body: block(&ast.ReturnStmt{Results: []ast.Expr{eventEnvelopeSliceExpr(id("event"))}}),
 		},
 		define([]ast.Expr{id("queriesByAudience")}, &ast.CompositeLit{Type: &ast.MapType{Key: id("string"), Value: &ast.ArrayType{Elt: id("string")}}}),
+		define([]ast.Expr{id("unscopedQueries")}, &ast.CompositeLit{Type: &ast.ArrayType{Elt: id("string")}}),
 		define([]ast.Expr{id("audiences")}, &ast.CompositeLit{Type: &ast.ArrayType{Elt: id("string")}}),
 		define([]ast.Expr{id("seenAudience")}, &ast.CompositeLit{Type: &ast.MapType{Key: id("string"), Value: id("bool")}}),
 		&ast.RangeStmt{
@@ -647,28 +724,57 @@ func realtimeQueryInvalidationAudienceEventsDecl() ast.Decl {
 			Value: id("query"),
 			Tok:   token.DEFINE,
 			X:     selExpr(id("notice"), "Queries"),
-			Body: block(&ast.RangeStmt{
-				Key:   id("_"),
-				Value: id("audience"),
-				Tok:   token.DEFINE,
-				X:     &ast.IndexExpr{X: id("realtimeQueryAudiences"), Index: id("query")},
-				Body: block(
-					&ast.IfStmt{
-						Cond: &ast.UnaryExpr{Op: token.NOT, X: &ast.IndexExpr{X: id("seenAudience"), Index: id("audience")}},
-						Body: block(
-							assign([]ast.Expr{&ast.IndexExpr{X: id("seenAudience"), Index: id("audience")}}, id("true")),
-							assign([]ast.Expr{id("audiences")}, call(id("append"), id("audiences"), id("audience"))),
-						),
+			Body: block(
+				define([]ast.Expr{id("queryAudiences")}, &ast.IndexExpr{X: id("realtimeQueryAudiences"), Index: id("query")}),
+				&ast.IfStmt{
+					Cond: &ast.BinaryExpr{
+						X:  &ast.IndexExpr{X: id("realtimeQueryBroadcasts"), Index: id("query")},
+						Op: token.LOR,
+						Y:  &ast.BinaryExpr{X: call(id("len"), id("queryAudiences")), Op: token.EQL, Y: intLit(0)},
 					},
-					assign([]ast.Expr{&ast.IndexExpr{X: id("queriesByAudience"), Index: id("audience")}}, call(id("append"), &ast.IndexExpr{X: id("queriesByAudience"), Index: id("audience")}, id("query"))),
-				),
-			}),
+					Body: block(
+						assign([]ast.Expr{id("unscopedQueries")}, call(id("append"), id("unscopedQueries"), id("query"))),
+						&ast.BranchStmt{Tok: token.CONTINUE},
+					),
+				},
+				&ast.RangeStmt{
+					Key:   id("_"),
+					Value: id("audience"),
+					Tok:   token.DEFINE,
+					X:     id("queryAudiences"),
+					Body: block(
+						&ast.IfStmt{
+							Cond: &ast.UnaryExpr{Op: token.NOT, X: &ast.IndexExpr{X: id("seenAudience"), Index: id("audience")}},
+							Body: block(
+								assign([]ast.Expr{&ast.IndexExpr{X: id("seenAudience"), Index: id("audience")}}, id("true")),
+								assign([]ast.Expr{id("audiences")}, call(id("append"), id("audiences"), id("audience"))),
+							),
+						},
+						assign([]ast.Expr{&ast.IndexExpr{X: id("queriesByAudience"), Index: id("audience")}}, call(id("append"), &ast.IndexExpr{X: id("queriesByAudience"), Index: id("audience")}, id("query"))),
+					),
+				},
+			),
 		},
 		&ast.IfStmt{
 			Cond: &ast.BinaryExpr{X: call(id("len"), id("audiences")), Op: token.EQL, Y: intLit(0)},
 			Body: block(&ast.ReturnStmt{Results: []ast.Expr{eventEnvelopeSliceExpr(id("event"))}}),
 		},
-		define([]ast.Expr{id("scoped")}, call(id("make"), eventEnvelopeSliceType(), intLit(0), call(id("len"), id("audiences")))),
+		define([]ast.Expr{id("scopedCapacity")}, call(id("len"), id("audiences"))),
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: call(id("len"), id("unscopedQueries")), Op: token.GTR, Y: intLit(0)},
+			Body: block(assign([]ast.Expr{id("scopedCapacity")}, &ast.BinaryExpr{X: id("scopedCapacity"), Op: token.ADD, Y: intLit(1)})),
+		},
+		define([]ast.Expr{id("scoped")}, call(id("make"), eventEnvelopeSliceType(), intLit(0), id("scopedCapacity"))),
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: call(id("len"), id("unscopedQueries")), Op: token.GTR, Y: intLit(0)},
+			Body: block(
+				define([]ast.Expr{id("unscopedNotice")}, id("notice")),
+				assign([]ast.Expr{selExpr(id("unscopedNotice"), "Queries")}, id("unscopedQueries")),
+				define([]ast.Expr{id("unscopedEvent")}, id("event")),
+				assign([]ast.Expr{selExpr(id("unscopedEvent"), "Value")}, id("unscopedNotice")),
+				assign([]ast.Expr{id("scoped")}, call(id("append"), id("scoped"), id("unscopedEvent"))),
+			),
+		},
 		&ast.RangeStmt{
 			Key:   id("_"),
 			Value: id("audience"),

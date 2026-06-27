@@ -1153,8 +1153,10 @@ func TestGenerateWritesRealtimeFanoutForSubscriptions(t *testing.T) {
 		`var realtimeFanout gowdkrealtime.PresentationFanout = gowdkrealtime.NewSSE()`,
 		`func RegisterRealtimeFanout(fanout gowdkrealtime.PresentationFanout)`,
 		`"example.com/app/contracts/patients.PatientNotice": true`,
+		`var realtimeSubscriptionBroadcasts map[string]bool = map[string]bool{"example.com/app/contracts/patients.PatientNotice": true}`,
 		`realtimeAudienceScopedEvents(event)...`,
-		`gowdkcontracts.PresentationFanoutCommandEventSink(realtimeSubscriptionFanout{inner: fanout})`,
+		`scopedFanout := realtimeSubscriptionFanout{inner: fanout}`,
+		`gowdkcontracts.PresentationFanoutCommandEventSink(scopedFanout)`,
 		`gowdkcontracts.CompositeCommandEventSink(gowdkcontracts.InProcessCommandEventSink(), fanoutSink)`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -1210,8 +1212,11 @@ func TestGenerateWritesRealtimeQueryInvalidationFanout(t *testing.T) {
 	for _, expected := range []string{
 		`gowdkcontracts.QueryInvalidationPresentationEventType: true`,
 		`var realtimeQueryInvalidations []gowdkcontracts.QueryInvalidation = []gowdkcontracts.QueryInvalidation{gowdkcontracts.QueryInvalidation{EventCategory: gowdkcontracts.DomainEvent, EventType: "example.com/app/contracts/patients.PatientCreated", QueryType: "example.com/app/contracts/patients.GetPatientPage"}}`,
-		`gowdkcontracts.QueryInvalidationCommandEventSink(fanout, realtimeQueryInvalidations)`,
-		`gowdkcontracts.CompositeCommandEventSink(gowdkcontracts.InProcessCommandEventSink(), gowdkcontracts.QueryInvalidationCommandEventSink(fanout, realtimeQueryInvalidations), fanoutSink)`,
+		`scopedFanout := realtimeSubscriptionFanout{inner: fanout}`,
+		`gowdkcontracts.QueryInvalidationCommandEventSink(scopedFanout, realtimeQueryInvalidations)`,
+		`gowdkcontracts.CompositeCommandEventSink(gowdkcontracts.InProcessCommandEventSink(), gowdkcontracts.QueryInvalidationCommandEventSink(scopedFanout, realtimeQueryInvalidations), fanoutSink)`,
+		`var realtimeQueryBroadcasts map[string]bool = map[string]bool{"example.com/app/contracts/patients.GetPatientPage": true}`,
+		`unscopedQueries := []string{}`,
 		// Single-flight write path: the command adapter tells the submitting
 		// client which g:query regions to refresh via the X-GOWDK-Queries header.
 		`invalidatedQueries := gowdkcontracts.InvalidatedQueryTypes(realtimeQueryInvalidations, events)`,
@@ -1231,6 +1236,63 @@ func TestGenerateWritesRealtimeQueryInvalidationFanout(t *testing.T) {
 		if strings.Contains(source, unexpected) {
 			t.Fatalf("did not expect inline patch source without an eligible SSR region %q:\n%s", unexpected, source)
 		}
+	}
+}
+
+func TestRealtimeBroadcastsTrackMixedScopedAndUnscopedOwners(t *testing.T) {
+	options := Options{IR: &gwdkir.Program{
+		Pages: []gwdkir.Page{{ID: "patients", Route: "/patients"}},
+		RealtimeSubscriptions: []gwdkir.RealtimeSubscription{{
+			Query:           "patients.GetPatientPage",
+			Event:           "patients.PatientNotice",
+			EventImportPath: "example.com/app/contracts/patients",
+			EventType:       "PatientNotice",
+			Status:          gwdkir.ContractBindingBound,
+			OwnerKind:       gwdkir.SourcePage,
+			OwnerID:         "patients",
+		}, {
+			Query:           "cards.GetPatientCard",
+			Event:           "patients.PatientNotice",
+			EventImportPath: "example.com/app/contracts/patients",
+			EventType:       "PatientNotice",
+			Status:          gwdkir.ContractBindingBound,
+			OwnerKind:       gwdkir.SourceComponent,
+			OwnerID:         "PatientCard",
+		}},
+		QueryInvalidations: []gwdkir.QueryInvalidation{{
+			Query:         "patients.GetPatientPage",
+			QueryType:     "example.com/app/contracts/patients.GetPatientPage",
+			Event:         "example.com/app/contracts/patients.PatientCreated",
+			EventType:     "example.com/app/contracts/patients.PatientCreated",
+			EventCategory: "domain",
+			Status:        gwdkir.ContractBindingBound,
+			OwnerKind:     gwdkir.SourcePage,
+			OwnerID:       "patients",
+		}, {
+			Query:         "cards.GetPatientCard",
+			QueryType:     "example.com/app/contracts/patients.GetPatientCard",
+			Event:         "example.com/app/contracts/patients.PatientCreated",
+			EventType:     "example.com/app/contracts/patients.PatientCreated",
+			EventCategory: "domain",
+			Status:        gwdkir.ContractBindingBound,
+			OwnerKind:     gwdkir.SourceComponent,
+			OwnerID:       "PatientCard",
+		}},
+	}}
+
+	subscriptionAudiences := realtimeSubscriptionAudiences(options)
+	if got := subscriptionAudiences["example.com/app/contracts/patients.PatientNotice"]; len(got) != 1 || got[0] != "gowdk.route.0" {
+		t.Fatalf("subscription audiences = %#v, want route audience", subscriptionAudiences)
+	}
+	if !realtimeSubscriptionBroadcasts(options)["example.com/app/contracts/patients.PatientNotice"] {
+		t.Fatalf("expected mixed subscription event type to retain broadcast delivery")
+	}
+	queryAudiences := realtimeQueryAudiences(options)
+	if got := queryAudiences["example.com/app/contracts/patients.GetPatientPage"]; len(got) != 1 || got[0] != "gowdk.route.0" {
+		t.Fatalf("query audiences = %#v, want route audience", queryAudiences)
+	}
+	if !realtimeQueryBroadcasts(options)["example.com/app/contracts/patients.GetPatientCard"] {
+		t.Fatalf("expected component-owned query invalidation to retain broadcast delivery")
 	}
 }
 
@@ -1558,6 +1620,7 @@ func TestGenerateGuardsRealtimeStreamForSubscribedPages(t *testing.T) {
 		`func realtimeStreamPath(request *http.Request) string`,
 		`referer := request.Referer()`,
 		`neturl.Parse(referer)`,
+		`return refererURL.Path`,
 		`gowdkroute.Match("/dashboard", requestPath)`,
 		`return []string{"gowdk.route.0"}`,
 		`return []string{"auth.required"}`,
@@ -1567,6 +1630,9 @@ func TestGenerateGuardsRealtimeStreamForSubscribedPages(t *testing.T) {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated guarded realtime source to contain %q:\n%s", expected, source)
 		}
+	}
+	if strings.Contains(source, `Query().Get("path")`) {
+		t.Fatalf("generated realtime stream must not authorize from client query path:\n%s", source)
 	}
 }
 
@@ -7597,10 +7663,11 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 
 	streamCtx, cancelStream := context.WithCancel(context.Background())
 	defer cancelStream()
-	streamRequest, err := http.NewRequestWithContext(streamCtx, http.MethodGet, "http://"+addr+"/_gowdk/realtime/events?path=/patients", nil)
+	streamRequest, err := http.NewRequestWithContext(streamCtx, http.MethodGet, "http://"+addr+"/_gowdk/realtime/events?path=/dashboard", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	streamRequest.Header.Set("Referer", "http://"+addr+"/patients")
 	streamResponse, err := http.DefaultClient.Do(streamRequest)
 	if err != nil {
 		t.Fatal(err)

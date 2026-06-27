@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cssbruno/gowdk/addons/ratelimit"
+	"github.com/cssbruno/gowdk/runtime/ratelimit"
 )
 
 const siteOutputDir = "dist/site"

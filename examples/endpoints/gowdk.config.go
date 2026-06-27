@@ -1,4 +1,4 @@
-package main
+package endpointsexample
 
 import (
 	"github.com/cssbruno/gowdk"

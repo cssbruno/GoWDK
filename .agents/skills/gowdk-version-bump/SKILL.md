@@ -8,11 +8,11 @@ description: Bump the GOWDK release version. Use when updating the CLI version, 
 ## Baselines
 
 - Source of truth: `const version = "0.x.y"` near the top of
-  `cmd/gowdk/main.go` (no `v` prefix). GitHub tags and install snippets use
-  `v0.x.y`. Current line: `const version = "0.7.0"`.
+  `internal/gowdkcmd/main.go` (no `v` prefix). GitHub tags and install snippets
+  use `v0.x.y`. Current line: `const version = "0.12.0"`.
 - `editors/vscode/package.json` must match the CLI constant exactly;
   `editors/vscode/scripts/sync-version.js` reads the constant from
-  `cmd/gowdk/main.go` and writes/checks `package.json`. Never edit the
+  `internal/gowdkcmd/main.go` and writes/checks `package.json`. Never edit the
   extension version by hand.
 - Pinned `v0.x.y` install snippets live in `README.md` and
   `docs/getting-started.md` (multiple snippets); release automation references
@@ -30,7 +30,7 @@ description: Bump the GOWDK release version. Use when updating the CLI version, 
 ## Core Workflow
 
 1. Confirm the target version (`0.x.y` constant, `v0.x.y` everywhere else).
-2. Update `cmd/gowdk/main.go`, then sync and check the extension:
+2. Update `internal/gowdkcmd/main.go`, then sync and check the extension:
 
 ```bash
 node editors/vscode/scripts/sync-version.js

@@ -1,4 +1,4 @@
-package main
+package cssexample
 
 import "github.com/cssbruno/gowdk"
 

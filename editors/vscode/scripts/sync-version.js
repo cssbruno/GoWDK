@@ -5,7 +5,7 @@ const path = require('path');
 
 const checkOnly = process.argv.includes('--check');
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
-const cliVersionFile = path.join(repoRoot, 'cmd', 'gowdk', 'main.go');
+const cliVersionFile = path.join(repoRoot, 'internal', 'gowdkcmd', 'main.go');
 const packageFile = path.join(repoRoot, 'editors', 'vscode', 'package.json');
 
 const cliVersion = vscodeVersion(readCLIVersion(cliVersionFile));

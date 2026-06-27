@@ -1,4 +1,4 @@
-package main
+package site
 
 import (
 	"github.com/cssbruno/gowdk"

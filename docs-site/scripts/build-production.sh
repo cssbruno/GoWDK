@@ -18,4 +18,4 @@ rm -rf dist/site
 mkdir -p dist/site/assets
 cp -R assets/. dist/site/assets/
 cp assets/favicon.ico dist/site/favicon.ico
-go build -tags netgo -ldflags '-s -w' -o app .
+go build -tags netgo -ldflags '-s -w' -o app ./cmd/site

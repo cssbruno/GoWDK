@@ -8,7 +8,7 @@
       "extra-files": [
         {
           "type": "generic",
-          "path": "cmd/gowdk/main.go"
+          "path": "internal/gowdkcmd/main.go"
         },
         {
           "type": "json",

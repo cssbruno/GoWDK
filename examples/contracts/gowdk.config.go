@@ -1,4 +1,4 @@
-package main
+package contractsexample
 
 import (
 	"github.com/cssbruno/gowdk"

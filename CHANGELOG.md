@@ -3,6 +3,17 @@
 GOWDK is experimental 0.x software. Public syntax, generated output, runtime
 packages, and tooling contracts may change before 1.0.
 
+## [0.12.2](https://github.com/cssbruno/GoWDK/compare/v0.12.1...v0.12.2) (2026-06-27)
+
+
+### Bug Fixes
+
+* **app:** do not trust Host alone for local trace viewer access ([#783](https://github.com/cssbruno/GoWDK/issues/783)) ([0492260](https://github.com/cssbruno/GoWDK/commit/0492260914b732c857230801aa073ec5c48e5545))
+* **app:** skip csrf injection for off-origin post forms ([#785](https://github.com/cssbruno/GoWDK/issues/785)) ([7adb9ef](https://github.com/cssbruno/GoWDK/commit/7adb9ef9ad6d72ba216c21f316436a5613f96b7d))
+* **compiler:** align generated apps and typed IR ([#787](https://github.com/cssbruno/GoWDK/issues/787)) ([c2cf66c](https://github.com/cssbruno/GoWDK/commit/c2cf66c2f9f50ca82c7c38831aaf44d9e090b02a))
+* **realtime:** scope sse streams by authorized route ([#786](https://github.com/cssbruno/GoWDK/issues/786)) ([419ed3f](https://github.com/cssbruno/GoWDK/commit/419ed3f260334fdbc34b134baf1d3225f41ee7cc))
+* **trace:** redact browser trace URL query data ([#784](https://github.com/cssbruno/GoWDK/issues/784)) ([ab24801](https://github.com/cssbruno/GoWDK/commit/ab24801130e36c130aae2d982002b5d78fb4ac3d))
+
 ## [0.12.1](https://github.com/cssbruno/GoWDK/compare/v0.12.0...v0.12.1) (2026-06-27)
 
 

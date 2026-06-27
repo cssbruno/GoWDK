@@ -18,9 +18,18 @@ is required by project-level compiler commands.
 | SSR and guards | `examples/auth-guard/` | `cd examples/auth-guard && make check && make routes && make build` |
 | One generated binary | `examples/embed/` | `go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk` |
 | Contracts and realtime | `examples/contracts/` | `go run ./cmd/gowdk build --config examples/contracts/gowdk.config.go --out /tmp/gowdk-contracts-build --app /tmp/gowdk-contracts-app --bin /tmp/gowdk-contracts-site examples/contracts/patients.page.gwdk` |
-| CSS and Tailwind | `examples/css/`, `examples/tailwind/` | `go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk` |
+| CSS | `examples/css/` | `go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk` |
+| Tailwind | `examples/tailwind/` | `go run ./cmd/gowdk build --config examples/tailwind/gowdk.config.go --out /tmp/gowdk-tailwind-build examples/tailwind/site.page.gwdk` |
+| SEO | `examples/seo/` | `go run ./cmd/gowdk build --config examples/seo/gowdk.config.go --out /tmp/gowdk-seo-build examples/seo/*.gwdk` |
 | Component assets and WASM islands | `examples/components/` | `go run ./cmd/gowdk build --out /tmp/gowdk-wasm-island examples/components/wasm/*.gwdk` |
 | Full-stack vertical slice | `examples/flagship/` | `cd examples/flagship && make check && make routes && make build` |
+
+The Tailwind build command requires the standalone `tailwindcss` executable on
+`PATH`. To validate the source without running the CSS processor:
+
+```sh
+go run ./cmd/gowdk check --config examples/tailwind/gowdk.config.go examples/tailwind/site.page.gwdk
+```
 
 ## Full Example Check
 

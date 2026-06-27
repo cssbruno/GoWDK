@@ -28,7 +28,7 @@ Required pull-request lanes:
   a `removed-syntax-ok` marker.
 - `Example reports`: `scripts/check-example-reports.sh`.
 - `Parser fuzz smoke`: `scripts/test-parser-fuzz.sh` with
-  `GOWDK_FUZZTIME=1s`.
+  `GOWDK_FUZZTIME=1000x`.
 - `Generated app integration`: `scripts/test-generated-app-integration.sh`.
 - `Generated output determinism`:
   `scripts/test-generated-output-determinism.sh`.
@@ -89,6 +89,7 @@ Run the same local checks before handoff when relevant:
 
   ```sh
   scripts/test-parser-fuzz.sh
+  GOWDK_FUZZTIME=100000x scripts/test-parser-fuzz.sh
   GOWDK_FUZZTIME=30s scripts/test-parser-fuzz.sh
   scripts/test-generated-app-integration.sh
   scripts/test-generated-output-determinism.sh
@@ -126,7 +127,10 @@ Baseline CI keeps these checks bounded and Linux-only so the OS matrix is not
 multiplied by generated-binary work:
 
 - `scripts/test-parser-fuzz.sh` runs the existing `FuzzParseSyntax` target.
-  CI sets `GOWDK_FUZZTIME=1s`; local hardening can raise it, for example
+  CI sets `GOWDK_FUZZTIME=1000x` so the smoke uses a deterministic execution
+  count instead of a short wall-clock deadline. Local hardening can raise the
+  count or use a duration, for example
+  `GOWDK_FUZZTIME=100000x scripts/test-parser-fuzz.sh` or
   `GOWDK_FUZZTIME=30s scripts/test-parser-fuzz.sh`.
 - `scripts/test-generated-app-integration.sh` runs representative generated
   binary flows for embedded SPA serving, action redirect, CSRF, fragments,

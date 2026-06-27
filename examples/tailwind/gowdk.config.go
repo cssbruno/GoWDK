@@ -8,7 +8,7 @@ import (
 var Config = gowdk.Config{
 	Addons: []gowdk.Addon{
 		tailwind.Addon(tailwind.Options{
-			Input:  "examples/tailwind/app.css",
+			Input:  "app.css",
 			Minify: true,
 		}),
 	},

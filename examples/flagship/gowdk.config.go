@@ -14,18 +14,18 @@ var Config = gowdk.Config{
 		Include: []string{"src/**/*.gwdk"},
 	},
 	Build: gowdk.BuildConfig{
-		Output: "examples/flagship/dist",
+		Output: "dist",
 		Targets: []gowdk.BuildTargetConfig{
 			{
 				Name:   "flagship",
-				Output: "examples/flagship/dist",
-				App:    "examples/flagship/.gowdk/app",
-				Binary: "examples/flagship/bin/flagship",
+				Output: "dist",
+				App:    ".gowdk/app",
+				Binary: "bin/flagship",
 			},
 		},
 	},
 	CSS: gowdk.CSSConfig{
-		Include: []string{"examples/flagship/styles/**/*.css"},
+		Include: []string{"styles/*.css"},
 		Output: gowdk.CSSOutputConfig{
 			Dir:        "assets/gowdk",
 			HrefPrefix: "/assets/gowdk",

@@ -4,8 +4,8 @@ This example shows the first localization slice:
 
 - `gowdk.config.go` declares `Config.I18N` locales.
 - `messages.go` keeps typed message keys and catalogs in normal Go.
-- `messages_test.go` checks the typed message references against each locale
-  catalog, which is the current CI-friendly extraction/completeness path.
+- `messages_test.go` checks the required typed message keys against each locale
+  catalog without hand-maintained source line metadata.
 - `home.page.gwdk` calls a Go build helper that reads
   `gowdk.BuildParams.LocaleCode()`.
 

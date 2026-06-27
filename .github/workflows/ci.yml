@@ -242,7 +242,7 @@ jobs:
 
       - name: Run parser fuzz smoke
         env:
-          GOWDK_FUZZTIME: 1s
+          GOWDK_FUZZTIME: 1000x
         run: scripts/test-parser-fuzz.sh
 
   generated-app-integration:

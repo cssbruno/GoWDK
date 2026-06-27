@@ -3,9 +3,9 @@ package gowdkapp
 import (
 	"time"
 
-	gowdkratelimit "github.com/cssbruno/gowdk/addons/ratelimit"
 	flagship "github.com/cssbruno/gowdk/examples/flagship/src/app"
 	gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
+	gowdkratelimit "github.com/cssbruno/gowdk/runtime/ratelimit"
 )
 
 func init() {

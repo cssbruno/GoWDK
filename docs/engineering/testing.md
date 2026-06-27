@@ -72,7 +72,9 @@ must pass `--config <file>`.
 ## Fuzz, Integration, And Determinism
 
 - `scripts/test-parser-fuzz.sh` is the explicit parser fuzz runner. It defaults
-  to `GOWDK_FUZZTIME=1s` for CI smoke cost; use a longer local run such as
+  to `GOWDK_FUZZTIME=1000x` for deterministic CI smoke cost; use a larger
+  count or a longer local run such as
+  `GOWDK_FUZZTIME=100000x scripts/test-parser-fuzz.sh` or
   `GOWDK_FUZZTIME=30s scripts/test-parser-fuzz.sh` before risky parser work.
 - `scripts/test-generated-app-integration.sh` is the generated-app integration
   slice. It builds temporary binaries through `internal/appgen` tests and

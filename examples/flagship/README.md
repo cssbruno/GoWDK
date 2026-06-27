@@ -11,7 +11,11 @@ Run from this directory:
 make check
 make routes
 make build
-GOWDK_CSRF_SECRET=development-flagship-csrf-secret-32b GOWDK_ADDR=127.0.0.1:8092 bin/flagship
+GOWDK_CSRF_SECRET=development-flagship-csrf-secret-32b \
+  GOWDK_FLAGSHIP_SECRET=development-flagship-session-secret-32b \
+  GOWDK_FLAGSHIP_PASSWORD=demo-password \
+  GOWDK_ADDR=127.0.0.1:8092 \
+  bin/flagship
 ```
 
 Expected build outputs:
@@ -66,9 +70,10 @@ The main generated routes are:
 
 ## Demo Credentials
 
-Use `demo@example.com` and `demo-password`. Override them with
-`GOWDK_FLAGSHIP_EMAIL`, `GOWDK_FLAGSHIP_PASSWORD`, and
-`GOWDK_FLAGSHIP_SECRET`.
+Use `demo@example.com` and set `GOWDK_FLAGSHIP_PASSWORD=demo-password` for the
+demo. `GOWDK_FLAGSHIP_EMAIL` can override the demo email.
+`GOWDK_FLAGSHIP_PASSWORD` is required; `GOWDK_FLAGSHIP_SECRET` is also required
+and signs the demo session cookie.
 
 ## Current Limitations
 

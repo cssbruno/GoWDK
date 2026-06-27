@@ -181,7 +181,11 @@ cd examples/flagship
 make check
 make routes
 make build
-GOWDK_CSRF_SECRET=development-flagship-csrf-secret-32b GOWDK_ADDR=127.0.0.1:8092 bin/flagship
+GOWDK_CSRF_SECRET=development-flagship-csrf-secret-32b \
+  GOWDK_FLAGSHIP_SECRET=development-flagship-session-secret-32b \
+  GOWDK_FLAGSHIP_PASSWORD=demo-password \
+  GOWDK_ADDR=127.0.0.1:8092 \
+  bin/flagship
 ```
 
 The flagship app covers static output, build-time Go data, actions,

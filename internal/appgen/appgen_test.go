@@ -1153,7 +1153,7 @@ func TestGenerateWritesRealtimeFanoutForSubscriptions(t *testing.T) {
 		`var realtimeFanout gowdkrealtime.PresentationFanout = gowdkrealtime.NewSSE()`,
 		`func RegisterRealtimeFanout(fanout gowdkrealtime.PresentationFanout)`,
 		`"example.com/app/contracts/patients.PatientNotice": true`,
-		`event.Category == gowdkcontracts.PresentationEvent`,
+		`realtimeAudienceScopedEvents(event)...`,
 		`gowdkcontracts.PresentationFanoutCommandEventSink(realtimeSubscriptionFanout{inner: fanout})`,
 		`gowdkcontracts.CompositeCommandEventSink(gowdkcontracts.InProcessCommandEventSink(), fanoutSink)`,
 	} {
@@ -1551,11 +1551,15 @@ func TestGenerateGuardsRealtimeStreamForSubscribedPages(t *testing.T) {
 	for _, expected := range []string{
 		`neturl "net/url"`,
 		`gowdkroute "github.com/cssbruno/gowdk/runtime/route"`,
+		`gowdkrealtime.NewSSE(gowdkrealtime.WithSSEAudienceFromRequest(realtimeStreamAudience))`,
+		`var realtimeSubscriptionAudiences map[string][]string = map[string][]string{"example.com/app/contracts/patients.PatientNotice": []string{"gowdk.route.0"}}`,
+		`func realtimeStreamAudience(request *http.Request) []string`,
 		`func realtimeStreamGuards(request *http.Request) []string`,
-		`request.URL.Query().Get("path")`,
+		`func realtimeStreamPath(request *http.Request) string`,
 		`referer := request.Referer()`,
 		`neturl.Parse(referer)`,
 		`gowdkroute.Match("/dashboard", requestPath)`,
+		`return []string{"gowdk.route.0"}`,
 		`return []string{"auth.required"}`,
 		`if !runGuards(response, request, realtimeStreamGuards(request))`,
 		`RegisterGuards(GOWDKGuardRegistry())`,
@@ -7150,6 +7154,10 @@ func TestGeneratedBinaryCommandSetsInvalidatedQueriesHeader(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients page</main>")
 
 	program := &gwdkir.Program{
+		Pages: []gwdkir.Page{
+			{ID: "dashboard", Route: "/dashboard"},
+			{ID: "patients", Route: "/patients"},
+		},
 		ContractRefs: []gwdkir.ContractReference{{
 			Kind:        gwdkir.ContractCommand,
 			Name:        "patients.CreatePatient",
@@ -7477,8 +7485,13 @@ func TestGeneratedBinaryRealtimeFanoutStreamsSubscribedPresentationEvents(t *tes
 	appDir := filepath.Join(root, "generated-app")
 	binaryPath := filepath.Join(root, "site")
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients page</main>")
+	writeTestFile(t, filepath.Join(outputDir, "dashboard", "index.html"), "<main>Dashboard page</main>")
 
 	program := &gwdkir.Program{
+		Pages: []gwdkir.Page{
+			{ID: "dashboard", Route: "/dashboard"},
+			{ID: "patients", Route: "/patients"},
+		},
 		ContractRefs: []gwdkir.ContractReference{{
 			Kind:        gwdkir.ContractCommand,
 			Name:        "patients.CreatePatient",
@@ -7504,6 +7517,14 @@ func TestGeneratedBinaryRealtimeFanoutStreamsSubscribedPresentationEvents(t *tes
 			Status:          gwdkir.ContractBindingBound,
 			OwnerKind:       gwdkir.SourcePage,
 			OwnerID:         "patients",
+		}, {
+			Query:           "patients.GetDashboard",
+			Event:           "patients.OtherNotice",
+			EventImportPath: "gowdk-generated-app/patients",
+			EventType:       "OtherNotice",
+			Status:          gwdkir.ContractBindingBound,
+			OwnerKind:       gwdkir.SourcePage,
+			OwnerID:         "dashboard",
 		}},
 	}
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program}); err != nil {
@@ -7576,7 +7597,7 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 
 	streamCtx, cancelStream := context.WithCancel(context.Background())
 	defer cancelStream()
-	streamRequest, err := http.NewRequestWithContext(streamCtx, http.MethodGet, "http://"+addr+"/_gowdk/realtime/events", nil)
+	streamRequest, err := http.NewRequestWithContext(streamCtx, http.MethodGet, "http://"+addr+"/_gowdk/realtime/events?path=/patients", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -7639,6 +7660,19 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 	for _, unexpected := range []string{"OtherNotice", "PatientCreated", "domain-1"} {
 		if strings.Contains(dataLine, unexpected) {
 			t.Fatalf("realtime stream included unsubscribed event %q in %s", unexpected, dataLine)
+		}
+	}
+	noLeakDeadline := time.After(300 * time.Millisecond)
+	for {
+		select {
+		case line := <-lines:
+			if strings.HasPrefix(line, "data: ") && strings.Contains(line, "OtherNotice") {
+				t.Fatalf("route-scoped realtime stream leaked dashboard event: %s", line)
+			}
+		case err := <-readErrs:
+			t.Fatalf("read realtime stream after first event: %v", err)
+		case <-noLeakDeadline:
+			return
 		}
 	}
 }

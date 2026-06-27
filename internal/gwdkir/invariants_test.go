@@ -84,6 +84,11 @@ func TestCheckInvariantsReportsViolations(t *testing.T) {
 			want:    `route "/" references unknown page "ghost"`,
 		},
 		{
+			name:    "mismatched route semantic id",
+			corrupt: func(p *Program) { p.Routes[0].ID = RouteID("wrong") },
+			want:    `has semantic id "wrong"`,
+		},
+		{
 			name: "unsorted routes",
 			corrupt: func(p *Program) {
 				p.Pages = append(p.Pages, Page{ID: "about", Route: "/about"})
@@ -108,6 +113,18 @@ func TestCheckInvariantsReportsViolations(t *testing.T) {
 			name:    "endpoint without method",
 			corrupt: func(p *Program) { p.Endpoints[0].Method = "" },
 			want:    "has no method",
+		},
+		{
+			name:    "mismatched endpoint semantic id",
+			corrupt: func(p *Program) { p.Endpoints[0].ID = EndpointID("wrong") },
+			want:    `has semantic id "wrong"`,
+		},
+		{
+			name: "duplicate endpoint semantic id",
+			corrupt: func(p *Program) {
+				p.Endpoints[1].ID = p.Endpoints[0].SemanticID()
+			},
+			want: "duplicates semantic id",
 		},
 		{
 			name: "unsorted endpoints",

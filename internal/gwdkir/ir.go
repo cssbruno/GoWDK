@@ -398,6 +398,7 @@ func GoRefFromLiteral(literal string) GoRef {
 // Route is page/file route metadata. Endpoint behavior is represented by
 // Endpoint, not by route kinds.
 type Route struct {
+	ID            RouteID
 	Kind          RouteKind
 	Method        string
 	Path          string
@@ -424,6 +425,7 @@ const (
 
 // Endpoint is framework-neutral backend endpoint metadata.
 type Endpoint struct {
+	ID            EndpointID
 	Kind          EndpointKind
 	Source        EndpointSource
 	Package       string
@@ -451,6 +453,7 @@ type Endpoint struct {
 // the exact kind, method, and spans the author wrote with no information loss.
 // Fields mirror the parser/discovery output one-to-one.
 type GoEndpoint struct {
+	ID            EndpointID
 	Kind          string
 	SourceKind    EndpointSource
 	Package       string

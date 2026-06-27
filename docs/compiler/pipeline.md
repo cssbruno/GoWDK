@@ -49,7 +49,10 @@ into `internal/gwdkir.Program`. The IR models packages, source
 files, page routes, backend endpoints from `.gwdk` declarations or explicit Go
 comments, templates, client behavior, source-selected assets, asset scope/hash
 metadata, parsed view nodes, typed literal records, and imported build-data call
-metadata. `gwdkir.Blocks` retains source bodies for spans and
+metadata. Semantic records expose typed identities such as `PageID`, `RouteID`,
+and `EndpointID`; target plans should carry those IDs instead of rebuilding
+ad hoc string keys from route or endpoint fields. `gwdkir.Blocks` retains source
+bodies for spans and
 compatibility, but the parser-lowered handoff also carries parsed `view {}`
 nodes, ordered literal `paths {}`/`build {}` records, and imported build-data
 call metadata; downstream passes should consume those typed fields before

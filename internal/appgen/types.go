@@ -42,6 +42,7 @@ func OptionsFromIR(config gowdk.Config, ir *gwdkir.Program) Options {
 
 // ActionEndpoint describes a generated action handler.
 type ActionEndpoint struct {
+	EndpointID       gwdkir.EndpointID
 	PageID           string
 	ActionName       string
 	Method           string
@@ -85,6 +86,7 @@ type ActionValidationRule struct {
 
 // APIEndpoint describes a generated API handler.
 type APIEndpoint struct {
+	EndpointID   gwdkir.EndpointID
 	PageID       string
 	APIName      string
 	Method       string
@@ -100,6 +102,7 @@ type APIEndpoint struct {
 
 // FragmentEndpoint describes a generated server fragment handler.
 type FragmentEndpoint struct {
+	EndpointID   gwdkir.EndpointID
 	PageID       string
 	FragmentName string
 	Method       string

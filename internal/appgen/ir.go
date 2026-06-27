@@ -28,13 +28,14 @@ func actionEndpointsFromIR(config gowdk.Config, ir gwdkir.Program) ([]ActionEndp
 			if route == "" {
 				route = page.Route
 			}
-			bindingRoute := route
 			fragments, err := actionFragmentsFromIR(action)
 			if err != nil {
 				return nil, fmt.Errorf("%s.%s: %w", page.ID, action.Name, err)
 			}
+			semanticEndpoint := irEndpointForBlock(ir.Endpoints, gwdkir.EndpointAction, page.ID, action.Name, method, route)
 			for _, localized := range actionEndpointRoutes(config.I18N, page.Route, route, action.Route == "") {
 				endpoints = append(endpoints, ActionEndpoint{
+					EndpointID:       semanticEndpoint.SemanticID(),
 					PageID:           page.ID,
 					ActionName:       action.Name,
 					Method:           method,
@@ -51,7 +52,7 @@ func actionEndpointsFromIR(config gowdk.Config, ir gwdkir.Program) ([]ActionEndp
 					Redirect:         action.Redirect,
 					Fragments:        fragments,
 					ErrorPage:        action.ErrorPage,
-					Binding:          bindings[irEndpointKey(gwdkir.EndpointAction, page.ID, action.Name, method, bindingRoute)],
+					Binding:          bindings[semanticEndpoint.SemanticID()],
 					Source:           page.Source,
 					SourceSpan:       action.Span,
 				})
@@ -62,8 +63,9 @@ func actionEndpointsFromIR(config gowdk.Config, ir gwdkir.Program) ([]ActionEndp
 		if endpoint.Kind != gwdkir.EndpointAction || endpoint.Source != gwdkir.EndpointSourceGo {
 			continue
 		}
-		binding := bindings[irEndpointKey(endpoint.Kind, endpoint.PageID, endpoint.Symbol, endpoint.Method, endpoint.Path)]
+		binding := bindings[endpoint.SemanticID()]
 		endpoints = append(endpoints, ActionEndpoint{
+			EndpointID:  endpoint.SemanticID(),
 			PageID:      endpoint.PageID,
 			ActionName:  endpoint.Symbol,
 			Method:      endpoint.Method,
@@ -113,7 +115,9 @@ func apiEndpointsFromIR(ir gwdkir.Program) ([]APIEndpoint, error) {
 			if route == "" {
 				route = page.Route
 			}
+			semanticEndpoint := irEndpointForBlock(ir.Endpoints, gwdkir.EndpointAPI, page.ID, api.Name, method, route)
 			endpoints = append(endpoints, APIEndpoint{
+				EndpointID: semanticEndpoint.SemanticID(),
 				PageID:     page.ID,
 				APIName:    api.Name,
 				Method:     method,
@@ -121,7 +125,7 @@ func apiEndpointsFromIR(ir gwdkir.Program) ([]APIEndpoint, error) {
 				Guards:     append([]string(nil), page.Guards...),
 				ErrorPage:  api.ErrorPage,
 				CORS:       cloneEndpointCORS(api.CORS),
-				Binding:    bindings[irEndpointKey(gwdkir.EndpointAPI, page.ID, api.Name, method, route)],
+				Binding:    bindings[semanticEndpoint.SemanticID()],
 				Source:     page.Source,
 				SourceSpan: api.Span,
 			})
@@ -132,13 +136,14 @@ func apiEndpointsFromIR(ir gwdkir.Program) ([]APIEndpoint, error) {
 			continue
 		}
 		endpoints = append(endpoints, APIEndpoint{
+			EndpointID: endpoint.SemanticID(),
 			PageID:     endpoint.PageID,
 			APIName:    endpoint.Symbol,
 			Method:     endpoint.Method,
 			Route:      endpoint.Path,
 			ErrorPage:  endpoint.ErrorPage,
 			CORS:       cloneEndpointCORS(endpoint.CORS),
-			Binding:    bindings[irEndpointKey(endpoint.Kind, endpoint.PageID, endpoint.Symbol, endpoint.Method, endpoint.Path)],
+			Binding:    bindings[endpoint.SemanticID()],
 			Source:     endpoint.SourceFile,
 			SourceSpan: endpoint.Span,
 		})
@@ -172,18 +177,21 @@ func fragmentEndpointsFromIR(ir gwdkir.Program) ([]FragmentEndpoint, error) {
 			if method == "" {
 				method = "GET"
 			}
+			route := strings.TrimSpace(fragment.Route)
+			semanticEndpoint := irEndpointForBlock(ir.Endpoints, gwdkir.EndpointFragment, page.ID, fragment.Name, method, route)
 			endpoints = append(endpoints, FragmentEndpoint{
+				EndpointID:   semanticEndpoint.SemanticID(),
 				PageID:       page.ID,
 				FragmentName: fragment.Name,
 				Method:       method,
-				Route:        strings.TrimSpace(fragment.Route),
-				RouteParams:  gwdkir.RouteParamsFromPath(strings.TrimSpace(fragment.Route)),
+				Route:        route,
+				RouteParams:  gwdkir.RouteParamsFromPath(route),
 				Target:       fragment.Target,
 				HTML:         html,
 				Package:      page.Package,
 				Uses:         uses,
 				Guards:       append([]string(nil), page.Guards...),
-				Binding:      bindings[irEndpointKey(gwdkir.EndpointFragment, page.ID, fragment.Name, method, strings.TrimSpace(fragment.Route))],
+				Binding:      bindings[semanticEndpoint.SemanticID()],
 				Source:       page.Source,
 				SourceSpan:   fragment.Span,
 			})
@@ -313,8 +321,8 @@ func irExportTypes(exports []gwdkir.Export) map[string]clientlang.ValueType {
 	return out
 }
 
-func irBindingsByEndpoint(endpoints []gwdkir.Endpoint) map[string]source.BackendBinding {
-	out := map[string]source.BackendBinding{}
+func irBindingsByEndpoint(endpoints []gwdkir.Endpoint) map[gwdkir.EndpointID]source.BackendBinding {
+	out := map[gwdkir.EndpointID]source.BackendBinding{}
 	for _, endpoint := range endpoints {
 		if endpoint.Binding.Status == "" && endpoint.Binding.ImportPath == "" && endpoint.Binding.FunctionName == "" {
 			continue
@@ -323,7 +331,7 @@ func irBindingsByEndpoint(endpoints []gwdkir.Endpoint) map[string]source.Backend
 		if endpoint.Kind == gwdkir.EndpointAPI {
 			kind = "api"
 		}
-		out[irEndpointKey(endpoint.Kind, endpoint.PageID, endpoint.Symbol, endpoint.Method, endpoint.Path)] = source.BackendBinding{
+		out[endpoint.SemanticID()] = source.BackendBinding{
 			Kind:          kind,
 			PageID:        endpoint.PageID,
 			Source:        endpoint.SourceFile,
@@ -347,8 +355,23 @@ func irBindingsByEndpoint(endpoints []gwdkir.Endpoint) map[string]source.Backend
 	return out
 }
 
-func irEndpointKey(kind gwdkir.EndpointKind, pageID, symbol, method, route string) string {
-	return strings.Join([]string{string(kind), pageID, symbol, method, route}, "\x00")
+func irEndpointForBlock(endpoints []gwdkir.Endpoint, kind gwdkir.EndpointKind, pageID, symbol, method, route string) gwdkir.Endpoint {
+	for _, endpoint := range endpoints {
+		if endpoint.Kind == kind &&
+			endpoint.PageID == pageID &&
+			endpoint.Symbol == symbol &&
+			endpoint.Method == method &&
+			endpoint.Path == route {
+			return endpoint
+		}
+	}
+	return gwdkir.Endpoint{
+		Kind:   kind,
+		PageID: pageID,
+		Symbol: symbol,
+		Method: method,
+		Path:   route,
+	}
 }
 
 func actionFragmentsFromIR(action gwdkir.Action) ([]ActionFragment, error) {

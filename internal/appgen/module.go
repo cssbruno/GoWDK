@@ -39,12 +39,13 @@ func moduleSourceForImportPaths(importPaths map[string]bool) (string, error) {
 		"require " + gowdkRuntimeModulePath + " " + version,
 	}
 
+	var runtimeReplaceDir string
 	if version == "v0.0.0" {
 		root, ok := gowdkRuntimeModuleRoot()
 		if !ok {
 			return "", fmt.Errorf("cannot locate %s module root for generated app runtime imports", gowdkRuntimeModulePath)
 		}
-		lines = append(lines, "", "replace "+gowdkRuntimeModulePath+" => "+filepath.ToSlash(root))
+		runtimeReplaceDir = root
 	}
 	appModule, err := currentAppModule()
 	if err != nil {
@@ -56,12 +57,17 @@ func moduleSourceForImportPaths(importPaths map[string]bool) (string, error) {
 		if importPathsHasLocalModuleImports(importPaths) {
 			return "", fmt.Errorf("cannot determine the app Go module for generated app imports: %w", err)
 		}
-	} else if appModule.Path != gowdkRuntimeModulePath && importPathsUseModule(importPaths, appModule.Path) {
+	} else if appModule.Path == gowdkRuntimeModulePath {
+		runtimeReplaceDir = appModule.Dir
+	} else if importPathsUseModule(importPaths, appModule.Path) {
 		lines = append(lines,
 			"",
 			"require "+appModule.Path+" v0.0.0",
 			"replace "+appModule.Path+" => "+filepath.ToSlash(appModule.Dir),
 		)
+	}
+	if runtimeReplaceDir != "" {
+		lines = append(lines, "", "replace "+gowdkRuntimeModulePath+" => "+filepath.ToSlash(runtimeReplaceDir))
 	}
 
 	return strings.Join(lines, "\n") + "\n", nil

@@ -1,4 +1,4 @@
-package main
+package loginexample
 
 import "github.com/cssbruno/gowdk"
 

@@ -5997,6 +5997,25 @@ func TestModuleSourceToleratesUndeterminedAppModuleWithoutLocalImports(t *testin
 	}
 }
 
+func TestModuleSourceReplacesRuntimeModuleForSourceCheckout(t *testing.T) {
+	appModule, err := currentAppModule()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if appModule.Path != gowdkRuntimeModulePath {
+		t.Skipf("current module is %q, not %q", appModule.Path, gowdkRuntimeModulePath)
+	}
+
+	source, err := moduleSourceForImportPaths(map[string]bool{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "replace " + gowdkRuntimeModulePath + " => " + filepath.ToSlash(appModule.Dir)
+	if !strings.Contains(source, want) {
+		t.Fatalf("expected source checkout runtime replace %q, got:\n%s", want, source)
+	}
+}
+
 func TestParseCurrentAppModuleSelectsWorkspaceModule(t *testing.T) {
 	output := []byte(`{
 	"Path": "example.com/root",

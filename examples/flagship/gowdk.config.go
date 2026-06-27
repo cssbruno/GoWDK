@@ -1,4 +1,4 @@
-package main
+package flagshipexample
 
 import (
 	"github.com/cssbruno/gowdk"

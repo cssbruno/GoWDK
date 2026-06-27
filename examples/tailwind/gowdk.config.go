@@ -1,4 +1,4 @@
-package main
+package tailwindexample
 
 import (
 	"github.com/cssbruno/gowdk"

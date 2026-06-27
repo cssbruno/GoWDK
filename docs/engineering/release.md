@@ -6,7 +6,7 @@ visible normal GitHub releases with downloadable assets from `v*` tags or a
 manual workflow dispatch. VS Code Marketplace publishing lives in
 `.github/workflows/vscode-extension-publish.yml`.
 
-The current CLI version is set by `const version` in `cmd/gowdk/main.go` and
+The current CLI version is set by `const version` in `internal/gowdkcmd/main.go` and
 bumped automatically by release-please, but this is not a production-readiness
 claim. It identifies the current development line while the compiler, generated
 runtime, and docs continue through the 0.x line. The release workflow prepends

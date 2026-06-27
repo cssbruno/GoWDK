@@ -123,7 +123,7 @@ Use `gowdk lsp --ssr` when editing projects that should validate SSR pages as if
 
 The extension package metadata lives in `editors/vscode/package.json`.
 The extension version follows the main GOWDK CLI version in
-`cmd/gowdk/main.go`; do not bump it separately.
+`internal/gowdkcmd/main.go`; do not bump it separately.
 
 Package a local `.vsix`:
 
@@ -147,7 +147,7 @@ Do not commit Marketplace tokens or generated `.vsix` files.
 
 ## Release Workflow
 
-1. Update the main GOWDK version in `cmd/gowdk/main.go`.
+1. Update the main GOWDK version in `internal/gowdkcmd/main.go`.
 2. Run `node editors/vscode/scripts/sync-version.js`.
 3. Run `npm --prefix editors/vscode ci`.
 4. Run `node --check editors/vscode/extension.js` and `node --check editors/vscode/extension-core.js`.

@@ -554,15 +554,13 @@ func currentContractEventSinkDecl(realtime bool, queryInvalidations bool) ast.De
 		&ast.IfStmt{
 			Cond: &ast.BinaryExpr{X: id("fanout"), Op: token.NEQ, Y: id("nil")},
 			Body: block(
-				define([]ast.Expr{id("fanoutSink")}, call(sel("gowdkcontracts", "PresentationFanoutCommandEventSink"), &ast.CompositeLit{
-					Type: id("realtimeSubscriptionFanout"),
-					Elts: []ast.Expr{keyValue("inner", id("fanout"))},
-				})),
+				define([]ast.Expr{id("scopedFanout")}, realtimeSubscriptionFanoutExpr(id("fanout"))),
+				define([]ast.Expr{id("fanoutSink")}, call(sel("gowdkcontracts", "PresentationFanoutCommandEventSink"), id("scopedFanout"))),
 				&ast.IfStmt{
 					Cond: &ast.BinaryExpr{X: id("sink"), Op: token.NEQ, Y: id("nil")},
-					Body: block(&ast.ReturnStmt{Results: []ast.Expr{realtimeCompositeSinkExpr(queryInvalidations, id("sink"), id("fanoutSink"), id("fanout"))}}),
+					Body: block(&ast.ReturnStmt{Results: []ast.Expr{realtimeCompositeSinkExpr(queryInvalidations, id("sink"), id("fanoutSink"), id("scopedFanout"))}}),
 				},
-				&ast.ReturnStmt{Results: []ast.Expr{realtimeCompositeSinkExpr(queryInvalidations, call(sel("gowdkcontracts", "InProcessCommandEventSink")), id("fanoutSink"), id("fanout"))}},
+				&ast.ReturnStmt{Results: []ast.Expr{realtimeCompositeSinkExpr(queryInvalidations, call(sel("gowdkcontracts", "InProcessCommandEventSink")), id("fanoutSink"), id("scopedFanout"))}},
 			),
 		},
 	)
@@ -570,6 +568,13 @@ func currentContractEventSinkDecl(realtime bool, queryInvalidations bool) ast.De
 	return funcDecl("currentContractEventSink", nil, []*ast.Field{
 		{Type: sel("gowdkcontracts", "CommandEventSink")},
 	}, stmts)
+}
+
+func realtimeSubscriptionFanoutExpr(fanout ast.Expr) ast.Expr {
+	return &ast.CompositeLit{
+		Type: id("realtimeSubscriptionFanout"),
+		Elts: []ast.Expr{keyValue("inner", fanout)},
+	}
 }
 
 func realtimeCompositeSinkExpr(queryInvalidations bool, base ast.Expr, fanoutSink ast.Expr, fanout ast.Expr) ast.Expr {

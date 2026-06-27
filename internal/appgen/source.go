@@ -115,7 +115,7 @@ func runtimeImportMap(options Options) map[string]string {
 		imports["gowdkseo"] = "github.com/cssbruno/gowdk/runtime/seo"
 		imports["gowdkseositemap"] = strings.TrimSpace(options.Sitemap.Dynamic.ImportPath)
 	}
-	if generatedRealtimeStreamUsesRouteMatching(options) {
+	if generatedRealtimeStreamUsesRouteMatching(options) || generatedRealtimeStreamUsesAudience(options) {
 		imports["gowdkroute"] = "github.com/cssbruno/gowdk/runtime/route"
 		imports["neturl"] = "net/url"
 	}

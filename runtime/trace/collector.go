@@ -375,17 +375,64 @@ func sameOriginRequest(request *http.Request) bool {
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return false
 	}
-	return strings.EqualFold(parsed.Scheme, requestScheme(request)) && strings.EqualFold(parsed.Host, request.Host)
+	scheme := requestScheme(request)
+	return strings.EqualFold(parsed.Scheme, scheme) && strings.EqualFold(canonicalOriginHost(parsed.Scheme, parsed.Host), canonicalOriginHost(scheme, request.Host))
 }
 
 func requestScheme(request *http.Request) string {
-	if request.URL != nil && request.URL.Scheme != "" {
-		return request.URL.Scheme
-	}
 	if request.TLS != nil {
 		return "https"
 	}
+	if scheme := forwardedRequestProto(request.Header); scheme != "" {
+		return scheme
+	}
+	if request.URL != nil && request.URL.Scheme != "" {
+		return request.URL.Scheme
+	}
 	return "http"
+}
+
+func forwardedRequestProto(header http.Header) string {
+	for _, value := range header.Values("Forwarded") {
+		for _, forwarded := range strings.Split(value, ",") {
+			for _, part := range strings.Split(forwarded, ";") {
+				name, raw, ok := strings.Cut(strings.TrimSpace(part), "=")
+				if !ok || !strings.EqualFold(name, "proto") {
+					continue
+				}
+				if scheme := cleanForwardedProto(raw); scheme != "" {
+					return scheme
+				}
+			}
+		}
+	}
+	for _, value := range header.Values("X-Forwarded-Proto") {
+		if scheme := cleanForwardedProto(strings.Split(value, ",")[0]); scheme != "" {
+			return scheme
+		}
+	}
+	return ""
+}
+
+func cleanForwardedProto(value string) string {
+	value = strings.ToLower(strings.Trim(strings.TrimSpace(value), `"`))
+	if value == "http" || value == "https" {
+		return value
+	}
+	return ""
+}
+
+func canonicalOriginHost(scheme string, host string) string {
+	host = strings.ToLower(strings.TrimSpace(host))
+	name, port, err := net.SplitHostPort(host)
+	if err == nil {
+		name = strings.ToLower(strings.Trim(name, "[]"))
+		if (scheme == "http" && port == "80") || (scheme == "https" && port == "443") {
+			return name
+		}
+		return name + ":" + port
+	}
+	return strings.Trim(host, "[]")
 }
 
 func (collector *Collector) allowIngest(request *http.Request) bool {

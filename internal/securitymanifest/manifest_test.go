@@ -436,16 +436,19 @@ func TestBuildRecordsGuardContractAndObservabilityEvidence(t *testing.T) {
 	if !hasMethod(browser.Methods, http.MethodPost) || browser.BodyLimitBytes != 1<<20 {
 		t.Fatalf("expected browser ingestion body posture, got %#v", browser)
 	}
+	if browser.AccessPolicy != "same-origin-browser-ingest" || browser.ContentTypeRequired != "application/json" || browser.BatchLimit != 128 {
+		t.Fatalf("expected same-origin JSON browser ingestion posture, got %#v", browser)
+	}
 	data, ok := observabilityEntry(manifest.Observability, "trace.data", "/_gowdk/traces/data", true)
-	if !ok || !hasMethod(data.Methods, http.MethodGet) || !hasMethod(data.Methods, http.MethodPost) || data.BodyLimitBytes != 1<<20 {
-		t.Fatalf("expected trace data GET/POST posture with body limit, got %#v", data)
+	if !ok || !hasMethod(data.Methods, http.MethodGet) || hasMethod(data.Methods, http.MethodPost) || data.BodyLimitBytes != 0 {
+		t.Fatalf("expected trace data GET posture on local viewer listener, got %#v", data)
 	}
 	events, ok := observabilityEntry(manifest.Observability, "trace.events", "/_gowdk/traces/events", true)
-	if !ok || !hasMethod(events.Methods, http.MethodGet) || !hasMethod(events.Methods, http.MethodPost) || events.BodyLimitBytes != 1<<20 {
-		t.Fatalf("expected trace events GET/POST posture with body limit, got %#v", events)
+	if !ok || !hasMethod(events.Methods, http.MethodGet) || hasMethod(events.Methods, http.MethodPost) || events.BodyLimitBytes != 0 {
+		t.Fatalf("expected trace events GET posture on local viewer listener, got %#v", events)
 	}
-	if events.SubscriberLimit != 0 {
-		t.Fatalf("trace events should not report an unenforced subscriber cap, got %#v", events)
+	if events.AccessPolicy != "loopback-listener" || events.SubscriberLimit != 32 {
+		t.Fatalf("expected trace events loopback listener posture with subscriber cap, got %#v", events)
 	}
 }
 

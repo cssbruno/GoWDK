@@ -138,9 +138,15 @@ collector := gowdktrace.NewCollector(
 `collector.HealthSnapshot()` returns the same storage, dropped, rejected,
 subscriber, and ingest-limit counters for app-owned health endpoints.
 
-Generated apps mount the viewer behind `runtime/app.LocalTraceAccess`. If an
-application mounts `Collector.Handler()` or `ViewerHandler()` itself on an
-internet-facing route, the application must still provide normal authentication,
+Generated apps keep browser ingest on the main app handler but serve the
+readable viewer, JSON data, and SSE stream from
+`runtime/app.LocalTraceViewerService` on a separate loopback listener. The
+generated binary prints that local viewer URL at startup. If an application
+mounts `Collector.Handler()` or `ViewerHandler()` itself, it can use
+`runtime/app.LocalTraceAccess` as a local-only gate: it ignores
+client-supplied `Host` and requires both the remote peer and the server listener
+address recorded in `http.LocalAddrContextKey` to be loopback, with no forwarded
+proxy headers. Internet-facing trace routes still need normal authentication,
 authorization, TLS, reverse-proxy, and production rate-limit policy.
 
 ## Log Correlation And Health

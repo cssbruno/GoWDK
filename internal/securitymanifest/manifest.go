@@ -454,9 +454,9 @@ func observabilityEntries(config gowdk.Config, ir gwdkir.Program) []Observabilit
 		buildMode = string(gowdk.Development)
 	}
 	absoluteSources := exportsAbsoluteSourcePaths(ir)
-	common := ObservabilityEntry{
+	readCommon := ObservabilityEntry{
 		Mounted:                    true,
-		AccessPolicy:               "loopback-only",
+		AccessPolicy:               "loopback-listener",
 		BuildMode:                  buildMode,
 		DevOnly:                    config.Build.DebugAssets(),
 		AllowedOrigins:             []string{"loopback"},
@@ -464,39 +464,41 @@ func observabilityEntries(config gowdk.Config, ir gwdkir.Program) []Observabilit
 		ExportsAbsoluteSourcePaths: absoluteSources,
 		SpanDataLeavesProcess:      true,
 	}
+	browserCommon := readCommon
+	browserCommon.AccessPolicy = "same-origin-browser-ingest"
+	browserCommon.AllowedOrigins = []string{"same-origin"}
 	return []ObservabilityEntry{
-		mergeObservability(common, ObservabilityEntry{
+		mergeObservability(readCommon, ObservabilityEntry{
 			ID:      "trace.viewer",
 			Kind:    "viewer",
 			Path:    "/_gowdk/traces",
 			Methods: []string{http.MethodGet},
 		}),
-		mergeObservability(common, ObservabilityEntry{
+		mergeObservability(readCommon, ObservabilityEntry{
 			ID:                  "trace.data",
 			Kind:                "json",
 			Path:                "/_gowdk/traces/data",
-			Methods:             []string{http.MethodGet, http.MethodPost},
+			Methods:             []string{http.MethodGet},
 			ContentTypeRequired: "",
-			BodyLimitBytes:      1 << 20,
 			BatchLimit:          0,
 		}),
-		mergeObservability(common, ObservabilityEntry{
+		mergeObservability(readCommon, ObservabilityEntry{
 			ID:                  "trace.events",
 			Kind:                "sse",
 			Path:                "/_gowdk/traces/events",
-			Methods:             []string{http.MethodGet, http.MethodPost},
+			Methods:             []string{http.MethodGet},
 			ContentTypeRequired: "",
-			BodyLimitBytes:      1 << 20,
 			BatchLimit:          0,
+			SubscriberLimit:     32,
 		}),
-		mergeObservability(common, ObservabilityEntry{
+		mergeObservability(browserCommon, ObservabilityEntry{
 			ID:                  "trace.browser",
 			Kind:                "browser-ingest",
 			Path:                "/_gowdk/traces/browser",
 			Methods:             []string{http.MethodPost},
-			ContentTypeRequired: "",
+			ContentTypeRequired: "application/json",
 			BodyLimitBytes:      1 << 20,
-			BatchLimit:          0,
+			BatchLimit:          128,
 		}),
 	}
 }

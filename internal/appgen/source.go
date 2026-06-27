@@ -614,7 +614,7 @@ func embeddedHandlerFields(options Options, identity ast.Expr) []ast.Expr {
 		fields = append(fields,
 			keyValue("Tracer", id("traceTracer")),
 			keyValue("TraceHandler", call(selExpr(id("traceCollector"), "ViewerHandler"))),
-			keyValue("TraceAccess", sel("gowdkruntime", "LocalTraceAccess")),
+			keyValue("TraceAccess", sel("gowdkruntime", "BrowserTraceIngestAccess")),
 		)
 	}
 	fields = append(fields,
@@ -843,7 +843,7 @@ func backendOnlyBaseHandlerExpr(options Options) ast.Expr {
 					keyValue("Backend", call(selExpr(id("backendRouter"), "HandlerFunc"))),
 					keyValue("Tracer", id("traceTracer")),
 					keyValue("TraceHandler", call(selExpr(id("traceCollector"), "ViewerHandler"))),
-					keyValue("TraceAccess", sel("gowdkruntime", "LocalTraceAccess")),
+					keyValue("TraceAccess", sel("gowdkruntime", "BrowserTraceIngestAccess")),
 					keyValue("RequestTimeout", sel("gowdkruntime", "DefaultRequestTimeout")),
 				},
 			}}

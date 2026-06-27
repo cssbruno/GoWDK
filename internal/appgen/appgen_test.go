@@ -1365,6 +1365,8 @@ func TestGenerateObservabilityTracesSSRRouteAndLoad(t *testing.T) {
 	for _, expected := range []string{
 		`gowdktrace "github.com/cssbruno/gowdk/runtime/trace"`,
 		`Tracer: traceTracer,`,
+		`TraceAccess: gowdkruntime.BrowserTraceIngestAccess,`,
+		`services = append(services, gowdkruntime.LocalTraceViewerService(traceCollector.ViewerHandler()))`,
 		`ctx, ssrSpan := gowdktrace.Start(request.Context(), "ssr /dashboard"`,
 		`gowdktrace.WithLane(gowdktrace.LaneSSR)`,
 		`gowdktrace.WithSource(gowdktrace.SourceRef{File: "dashboard.page.gwdk", Line: 3, Column: 1, OwnerKind: "page", OwnerID: "dashboard"})`,

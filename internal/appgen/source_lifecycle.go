@@ -33,6 +33,9 @@ func appDecl(options Options) ast.Decl {
 			Cond: notNil("err"),
 			Body: block(&ast.ReturnStmt{Results: []ast.Expr{id("nil"), id("err")}}),
 		},
+	)
+	stmts = append(stmts, observabilityServiceStmts(options)...)
+	stmts = append(stmts,
 		&ast.ReturnStmt{Results: []ast.Expr{&ast.UnaryExpr{Op: token.AND, X: &ast.CompositeLit{
 			Type: sel("gowdkruntime", "Application"),
 			Elts: []ast.Expr{

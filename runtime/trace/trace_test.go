@@ -559,6 +559,24 @@ func TestCollectorAcceptsSameOriginAndMissingOriginBrowserIngest(t *testing.T) {
 	}
 }
 
+func TestCollectorAcceptsSameOriginHTTPSProxyBrowserIngest(t *testing.T) {
+	collector := trace.NewCollector(4)
+	payload := []byte(snapshotJSON(t, validSnapshot("browser")))
+	request := jsonPostRequest("http://trace.local/browser", payload)
+	request.Header.Set("Origin", "https://trace.local")
+	request.Header.Set("X-Forwarded-Proto", "https")
+	response := httptest.NewRecorder()
+
+	collector.ViewerHandler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("browser ingest status = %d body=%q, want 204", response.Code, response.Body.String())
+	}
+	if got := collector.Spans(); len(got) != 1 || got[0].Name != "browser" {
+		t.Fatalf("browser ingest stored unexpected spans: %#v", got)
+	}
+}
+
 func TestCollectorRateLimitsIngest(t *testing.T) {
 	collector := trace.NewCollector(4, trace.WithCollectorIngestRate(1, time.Minute))
 	handler := collector.Handler()

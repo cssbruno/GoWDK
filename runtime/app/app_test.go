@@ -2331,6 +2331,7 @@ func TestLocalTraceAccessRejectsAnyXForwardedProxyHeader(t *testing.T) {
 
 func TestBrowserTraceIngestAccessOnlyAllowsBrowserPOST(t *testing.T) {
 	allowed := httptest.NewRequest(http.MethodPost, "http://public.example/_gowdk/traces/browser", nil)
+	allowed.Header.Set("Origin", "http://public.example")
 	if !BrowserTraceIngestAccess(allowed) {
 		t.Fatal("expected browser trace ingest POST to be allowed")
 	}
@@ -2346,8 +2347,38 @@ func TestBrowserTraceIngestAccessOnlyAllowsBrowserPOST(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			request := httptest.NewRequest(tc.method, "http://public.example"+tc.path, nil)
+			request.Header.Set("Origin", "http://public.example")
 			if BrowserTraceIngestAccess(request) {
 				t.Fatalf("expected %s %s to be rejected", tc.method, tc.path)
+			}
+		})
+	}
+}
+
+func TestBrowserTraceIngestAccessRequiresSameOriginBrowserOrigin(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		origin  string
+		headers map[string]string
+		want    bool
+	}{
+		{name: "same origin", origin: "http://public.example", want: true},
+		{name: "missing origin"},
+		{name: "cross origin", origin: "http://evil.example"},
+		{name: "https proxy", origin: "https://public.example", headers: map[string]string{"X-Forwarded-Proto": "https"}, want: true},
+		{name: "forwarded https proxy", origin: "https://public.example", headers: map[string]string{"Forwarded": `for=192.0.2.1;proto=https;host=public.example`}, want: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "http://public.example/_gowdk/traces/browser", nil)
+			if tt.origin != "" {
+				request.Header.Set("Origin", tt.origin)
+			}
+			for name, value := range tt.headers {
+				request.Header.Set(name, value)
+			}
+
+			if got := BrowserTraceIngestAccess(request); got != tt.want {
+				t.Fatalf("BrowserTraceIngestAccess = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -2425,6 +2456,68 @@ func TestLocalTraceViewerServiceServesOnLoopbackListener(t *testing.T) {
 	}
 
 	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("local trace viewer service did not stop")
+	}
+}
+
+func TestLocalTraceViewerServiceShutdownCancelsActiveViewerRequest(t *testing.T) {
+	started := make(chan net.Addr, 1)
+	entered := make(chan struct{})
+	requestCancelled := make(chan struct{})
+	service := localTraceViewerService{
+		handler: http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			response.Header().Set("Content-Type", "text/event-stream")
+			response.WriteHeader(http.StatusOK)
+			if flusher, ok := response.(http.Flusher); ok {
+				flusher.Flush()
+			}
+			close(entered)
+			<-request.Context().Done()
+			close(requestCancelled)
+		}),
+		onStart: func(addr net.Addr) {
+			started <- addr
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- service.Run(ctx, ServiceContext{})
+	}()
+
+	var addr net.Addr
+	select {
+	case addr = <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("local trace viewer service did not start")
+	}
+	response, err := http.Get("http://" + addr.String() + "/_gowdk/traces/events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected trace viewer stream status: %d", response.StatusCode)
+	}
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("local trace viewer stream did not start")
+	}
+
+	cancel()
+
+	select {
+	case <-requestCancelled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("active trace viewer request context was not canceled")
+	}
 	select {
 	case err := <-done:
 		if err != nil {

@@ -2,6 +2,10 @@
 
 - 
 
+Title format: use Conventional Commits, for example
+`feat(compiler): add route graph output` or
+`fix(runtime): preserve clicked submit button`.
+
 ## Issue Closure
 
 <!-- Use Closes/Fixes/Resolves only when this PR fully resolves the issue.

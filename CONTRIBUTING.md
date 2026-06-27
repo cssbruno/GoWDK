@@ -28,12 +28,16 @@ reverse.
 ## Workflow
 
 1. Make the smallest vertical slice that exercises the behavior.
-2. Preserve unrelated user changes.
-3. Update tests, examples, docs, and status in the same change.
-4. Keep generated Go as adapter glue rather than application logic.
-5. Avoid new production dependencies unless the change documents the reason.
-6. Run focused checks first, then the relevant repository gates.
-7. Record commands that fail and the next action needed.
+2. Title pull requests with Conventional Commits, such as
+   `feat(compiler): add route graph output` or
+   `fix(runtime): preserve clicked submit button`; release-please uses the
+   squash title for changelog and release-note generation.
+3. Preserve unrelated user changes.
+4. Update tests, examples, docs, and status in the same change.
+5. Keep generated Go as adapter glue rather than application logic.
+6. Avoid new production dependencies unless the change documents the reason.
+7. Run focused checks first, then the relevant repository gates.
+8. Record commands that fail and the next action needed.
 
 ## Verification
 

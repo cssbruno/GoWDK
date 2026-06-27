@@ -74,8 +74,8 @@ func parsePreviewOptions(args []string) (previewOptions, error) {
 			i = next
 			continue
 		}
-		switch {
-		case arg == "--hot":
+		switch arg {
+		case "--hot":
 			options.Hot = true
 		default:
 			options.BuildArgs = append(options.BuildArgs, arg)

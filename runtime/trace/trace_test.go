@@ -363,7 +363,9 @@ func TestCollectorHandlerServesJSONAndSSE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if contentType := resp.Header.Get("Content-Type"); !strings.Contains(contentType, "text/event-stream") {
 		t.Fatalf("expected event stream, got %q", contentType)
 	}
@@ -391,7 +393,7 @@ func TestCollectorAcceptsValidSingleAndBatchPayloads(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, jsonPostRequest(http.MethodPost, "/", singlePayload))
+	handler.ServeHTTP(response, jsonPostRequest("/", singlePayload))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("single POST status = %d body=%q, want 204", response.Code, response.Body.String())
 	}
@@ -401,7 +403,7 @@ func TestCollectorAcceptsValidSingleAndBatchPayloads(t *testing.T) {
 		t.Fatal(err)
 	}
 	response = httptest.NewRecorder()
-	handler.ServeHTTP(response, jsonPostRequest(http.MethodPost, "/", batchPayload))
+	handler.ServeHTTP(response, jsonPostRequest("/", batchPayload))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("batch POST status = %d body=%q, want 204", response.Code, response.Body.String())
 	}
@@ -427,7 +429,7 @@ func TestCollectorRejectsInvalidBatchWithoutPartialRecord(t *testing.T) {
 				t.Fatal(err)
 			}
 			response := httptest.NewRecorder()
-			collector.Handler().ServeHTTP(response, jsonPostRequest(http.MethodPost, "/", payload))
+			collector.Handler().ServeHTTP(response, jsonPostRequest("/", payload))
 			if response.Code != http.StatusBadRequest {
 				t.Fatalf("POST status = %d body=%q, want 400", response.Code, response.Body.String())
 			}
@@ -453,7 +455,7 @@ func TestCollectorRejectsAmbiguousOrOversizedPayloads(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			collector := trace.NewCollector(4)
 			response := httptest.NewRecorder()
-			collector.Handler().ServeHTTP(response, jsonPostRequest(http.MethodPost, "/", []byte(tt.body)))
+			collector.Handler().ServeHTTP(response, jsonPostRequest("/", []byte(tt.body)))
 			if response.Code != tt.status {
 				t.Fatalf("POST status = %d body=%q, want %d", response.Code, response.Body.String(), tt.status)
 			}
@@ -514,7 +516,7 @@ func TestCollectorRejectsUnsupportedMethods(t *testing.T) {
 func TestCollectorRejectsCrossOriginBrowserIngest(t *testing.T) {
 	collector := trace.NewCollector(4)
 	payload := []byte(snapshotJSON(t, validSnapshot("browser")))
-	request := jsonPostRequest(http.MethodPost, "http://trace.local/browser", payload)
+	request := jsonPostRequest("http://trace.local/browser", payload)
 	request.Header.Set("Origin", "http://evil.local")
 	response := httptest.NewRecorder()
 
@@ -539,7 +541,7 @@ func TestCollectorAcceptsSameOriginAndMissingOriginBrowserIngest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			collector := trace.NewCollector(4)
 			payload := []byte(snapshotJSON(t, validSnapshot("browser")))
-			request := jsonPostRequest(http.MethodPost, "http://trace.local/browser", payload)
+			request := jsonPostRequest("http://trace.local/browser", payload)
 			if tt.origin != "" {
 				request.Header.Set("Origin", tt.origin)
 			}
@@ -563,13 +565,13 @@ func TestCollectorRateLimitsIngest(t *testing.T) {
 	payload := []byte(snapshotJSON(t, validSnapshot("limited")))
 
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, jsonPostRequest(http.MethodPost, "/", payload))
+	handler.ServeHTTP(response, jsonPostRequest("/", payload))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("first POST status = %d body=%q, want 204", response.Code, response.Body.String())
 	}
 
 	response = httptest.NewRecorder()
-	handler.ServeHTTP(response, jsonPostRequest(http.MethodPost, "/", payload))
+	handler.ServeHTTP(response, jsonPostRequest("/", payload))
 	if response.Code != http.StatusTooManyRequests {
 		t.Fatalf("second POST status = %d body=%q, want 429", response.Code, response.Body.String())
 	}
@@ -590,7 +592,9 @@ func TestCollectorSSELimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer first.Body.Close()
+	defer func() {
+		_ = first.Body.Close()
+	}()
 	if first.StatusCode != http.StatusOK {
 		t.Fatalf("first SSE status = %d, want 200", first.StatusCode)
 	}
@@ -599,7 +603,9 @@ func TestCollectorSSELimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer second.Body.Close()
+	defer func() {
+		_ = second.Body.Close()
+	}()
 	if second.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("second SSE status = %d, want 429", second.StatusCode)
 	}
@@ -847,8 +853,8 @@ func snapshotJSON(t *testing.T, span trace.Snapshot) string {
 	return string(payload)
 }
 
-func jsonPostRequest(method string, target string, payload []byte) *http.Request {
-	request := httptest.NewRequest(method, target, bytes.NewReader(payload))
+func jsonPostRequest(target string, payload []byte) *http.Request {
+	request := httptest.NewRequest(http.MethodPost, target, bytes.NewReader(payload))
 	request.Header.Set("Content-Type", "application/json")
 	return request
 }

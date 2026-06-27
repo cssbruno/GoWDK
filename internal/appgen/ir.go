@@ -98,7 +98,7 @@ func actionEndpointRoutes(config gowdk.I18NConfig, pageRoute string, route strin
 func actionFormSchemaFromBlocks(blocks gwdkir.Blocks) (map[string][]view.ActionFormField, error) {
 	if len(blocks.ViewNodes) == 0 {
 		if strings.TrimSpace(blocks.ViewBody) == "" {
-			return nil, nil
+			return map[string][]view.ActionFormField{}, nil
 		}
 		return nil, fmt.Errorf("view {} has source body but no parsed nodes")
 	}

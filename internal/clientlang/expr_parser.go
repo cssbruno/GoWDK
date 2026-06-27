@@ -200,7 +200,7 @@ func (parser *exprParser) parsePostfix() (Expr, error) {
 				if token.value != "" {
 					return nil, fmt.Errorf("expected field name after ., got %q", token.value)
 				}
-				return nil, fmt.Errorf("expected field name after .")
+				return nil, fmt.Errorf("expected field name after dot")
 			}
 			expr = MemberExpr{X: expr, Name: token.value, Span: mergeExprSpans(ExprSpan(expr), tokenSpan(token))}
 		case tokenLBracket:
@@ -222,11 +222,11 @@ func (parser *exprParser) parsePostfix() (Expr, error) {
 			if !ok {
 				return nil, fmt.Errorf("only helper names can be called")
 			}
-			args, close, err := parser.parseCallArgs()
+			args, closeToken, err := parser.parseCallArgs()
 			if err != nil {
 				return nil, err
 			}
-			expr = CallExpr{Name: name.Name, Args: args, Span: mergeExprSpans(ExprSpan(name), tokenSpan(close))}
+			expr = CallExpr{Name: name.Name, Args: args, Span: mergeExprSpans(ExprSpan(name), tokenSpan(closeToken))}
 		default:
 			return expr, nil
 		}
@@ -238,8 +238,8 @@ func (parser *exprParser) parseCallArgs() ([]Expr, exprToken, error) {
 		return nil, exprToken{}, parser.expected("opening ( for helper call", token)
 	}
 	if parser.peek().kind == tokenRParen {
-		close := parser.consume()
-		return nil, close, nil
+		closeToken := parser.consume()
+		return nil, closeToken, nil
 	}
 	var args []Expr
 	for {

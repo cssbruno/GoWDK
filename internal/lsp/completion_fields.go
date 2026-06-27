@@ -40,11 +40,12 @@ func collectBindingFields(source string, fields map[string]bool) {
 		}
 		index += cursor
 		rest := source[index+len("g:bind:"):]
-		if strings.HasPrefix(rest, "value") {
+		switch {
+		case strings.HasPrefix(rest, "value"):
 			rest = rest[len("value"):]
-		} else if strings.HasPrefix(rest, "checked") {
+		case strings.HasPrefix(rest, "checked"):
 			rest = rest[len("checked"):]
-		} else {
+		default:
 			cursor = index + len("g:bind:")
 			continue
 		}

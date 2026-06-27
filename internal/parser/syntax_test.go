@@ -300,7 +300,7 @@ view {
 }
 
 func TestParseSyntaxReturnsGOWDKAST(t *testing.T) {
-	var _ gwdkast.File = mustParseSyntax(t, []byte(`package ui
+	_ = mustParseSyntax(t, []byte(`package ui
 component Counter
 wasm ./counter/browser
 css "./counter.css"

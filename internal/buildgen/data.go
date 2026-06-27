@@ -39,10 +39,6 @@ func parsePathDeclarationsFromBlocks(blocks gwdkir.Blocks) ([]map[string]string,
 	return declarations, nil
 }
 
-func parsePathParams(source string) (map[string]string, error) {
-	return parseLiteralStringMap(source, "path param")
-}
-
 func parseBuildData(body string, routeParams map[string]string, locale string, imports []gwdkir.Import, scripts []gwdkir.GoBlock, source string) (map[string]string, error) {
 	lines := significantBuildLines(body)
 	if len(lines) == 1 {
@@ -81,7 +77,7 @@ func parseBuildData(body string, routeParams map[string]string, locale string, i
 		}
 	}
 	if declarations == 0 {
-		return nil, nil
+		return map[string]string{}, nil
 	}
 	return buildValueStrings(data), nil
 }

@@ -14,11 +14,11 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func actionHandlerSource(actions []ActionEndpoint, csrf bool) (source string, err error) {
+func actionHandlerSource(actions []ActionEndpoint) (source string, err error) {
 	defer recoverGeneratedIdentifierError(&err)
 
 	sorted := backendAdapterIR(Options{Actions: actions}).Actions
-	decls := []ast.Decl{actionFuncDecl(sorted, csrf, false)}
+	decls := []ast.Decl{actionFuncDecl(sorted, false, false)}
 	if len(sorted) > 0 {
 		decls = append(decls, actionRequestPathDecl())
 		decls = append(decls, actionDecoderDecls(sorted)...)
@@ -139,7 +139,7 @@ func actionFuncDecl(actions []BackendActionAdapter, csrf bool, rateLimit bool) *
 	}
 	results := boolResults()
 	if actionsUseErrorPages(actions) {
-		results = namedBoolResults("handled")
+		results = namedBoolResults()
 	}
 	var clauses []ast.Stmt
 	for _, action := range actions {
@@ -185,12 +185,13 @@ func actionCaseStmts(action BackendActionAdapter, csrf bool, rateLimit bool) []a
 		return stmts
 	}
 	stmts = append(stmts, actionParseFormStmts(action, csrf)...)
-	if actionUsesMultipart(action) {
+	switch {
+	case actionUsesMultipart(action):
 		stmts = append(stmts,
 			define([]ast.Expr{id("data")}, call(sel("gowdkform", "FromMultipartForm"), selExpr(id("request"), "MultipartForm"))),
 			define([]ast.Expr{id("values")}, selExpr(id("data"), "Values")),
 		)
-	} else if actionNeedsData(action) {
+	case actionNeedsData(action):
 		stmts = append(stmts,
 			define([]ast.Expr{id("values")}, call(sel("gowdkform", "FromURLValues"), selExpr(id("request"), "PostForm"))),
 			define([]ast.Expr{id("data")}, &ast.CompositeLit{
@@ -201,7 +202,7 @@ func actionCaseStmts(action BackendActionAdapter, csrf bool, rateLimit bool) []a
 				},
 			}),
 		)
-	} else if actionNeedsValues(action) {
+	case actionNeedsValues(action):
 		stmts = append(stmts, define([]ast.Expr{id("values")}, call(sel("gowdkform", "FromURLValues"), selExpr(id("request"), "PostForm"))))
 	}
 	stmts = append(stmts, actionInputDecodeStmts(action)...)
@@ -752,7 +753,7 @@ func boundActionDecoderDecl(action BackendActionAdapter) *ast.FuncDecl {
 		define([]ast.Expr{id("input")}, &ast.CompositeLit{Type: inputType}),
 	}
 	paramName := "values"
-	paramType := ast.Expr(sel("gowdkform", "Values"))
+	paramType := sel("gowdkform", "Values")
 	if boundActionDecoderUsesData(action) {
 		paramName = "data"
 		paramType = sel("gowdkform", "Data")
@@ -976,8 +977,8 @@ func boolResults() []*ast.Field {
 	return []*ast.Field{{Type: id("bool")}}
 }
 
-func namedBoolResults(name string) []*ast.Field {
-	return []*ast.Field{{Names: []*ast.Ident{id(name)}, Type: id("bool")}}
+func namedBoolResults() []*ast.Field {
+	return []*ast.Field{{Names: []*ast.Ident{id("handled")}, Type: id("bool")}}
 }
 
 func funcDecl(name string, params []*ast.Field, results []*ast.Field, stmts []ast.Stmt) *ast.FuncDecl {
@@ -1059,14 +1060,6 @@ func intLit(value int) *ast.BasicLit {
 
 func int64Lit(value int64) *ast.BasicLit {
 	return &ast.BasicLit{Kind: token.INT, Value: strconv.FormatInt(value, 10)}
-}
-
-func goString(value string) string {
-	return strconv.Quote(value)
-}
-
-func quote(value string) string {
-	return strconv.Quote(path.Clean("/" + value))
 }
 
 func cleanRoutePath(value string) string {

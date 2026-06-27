@@ -380,10 +380,7 @@ func componentInitialState(component gwdkir.Component) (map[string]string, map[s
 	// A typed `use <store> <Type>` declaration contributes the store's fields to
 	// the island seed so SSR and the initial client state carry the right shape;
 	// the store registry merges its actual (init or persisted) value on mount.
-	added, err := mergeComponentStoreSeed(component, state, stateTypes, raw)
-	if err != nil {
-		return nil, nil, "", err
-	}
+	added := mergeComponentStoreSeed(component, state, stateTypes, raw)
 	if len(state) == 0 && !added {
 		return nil, nil, "", nil
 	}
@@ -404,13 +401,13 @@ func componentInitialState(component gwdkir.Component) (map[string]string, map[s
 // contract. It reports whether any field was added so the caller knows to
 // re-marshal the seed JSON. Type-resolution failures are reported by contract
 // validation, so they are swallowed here.
-func mergeComponentStoreSeed(component gwdkir.Component, state map[string]string, stateTypes map[string]clientlang.ValueType, raw map[string]any) (bool, error) {
+func mergeComponentStoreSeed(component gwdkir.Component, state map[string]string, stateTypes map[string]clientlang.ValueType, raw map[string]any) bool {
 	if strings.TrimSpace(component.Blocks.ClientBody) == "" {
-		return false, nil
+		return false
 	}
 	program, err := clientlang.Parse(component.Blocks.ClientBody)
 	if err != nil {
-		return false, nil
+		return false
 	}
 	added := false
 	for _, use := range program.Uses {
@@ -439,7 +436,7 @@ func mergeComponentStoreSeed(component gwdkir.Component, state map[string]string
 			}
 		}
 	}
-	return added, nil
+	return added
 }
 
 func zeroStateValue(typ clientlang.ValueType) any {

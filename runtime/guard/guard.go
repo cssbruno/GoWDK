@@ -32,19 +32,26 @@ func RunGuardsWithAuth(ctx Context, names []string, registry Registry, provider 
 		if guard == nil {
 			return fmt.Errorf("guard %q is not registered", name)
 		}
-		guardCtx, span := startGuardTrace(ctx, name)
-		ctx.Context = guardCtx
-		if err := guard(ctx); err != nil {
-			if span != nil {
-				span.SetStatus(gowdktrace.StatusError, security.RedactSecrets(err.Error()))
-				span.End()
-			}
-			return fmt.Errorf("guard %q failed: %w", name, err)
+		if err := runGuard(ctx, name, guard); err != nil {
+			return err
 		}
+	}
+	return nil
+}
+
+func runGuard(ctx Context, name string, guard Func) error {
+	guardCtx, span := startGuardTrace(ctx, name)
+	ctx.Context = guardCtx
+	if err := guard(ctx); err != nil {
 		if span != nil {
-			span.SetStatus(gowdktrace.StatusOK, "")
+			span.SetStatus(gowdktrace.StatusError, security.RedactSecrets(err.Error()))
 			span.End()
 		}
+		return fmt.Errorf("guard %q failed: %w", name, err)
+	}
+	if span != nil {
+		span.SetStatus(gowdktrace.StatusOK, "")
+		span.End()
 	}
 	return nil
 }

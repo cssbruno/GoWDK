@@ -69,10 +69,12 @@ func TestClientBuildsJSONRequestsAndAssertions(t *testing.T) {
 		}
 		response.Header().Set("Content-Type", "application/json; charset=utf-8")
 		response.Header().Set("X-GOWDK-Fragment-Target", "#result")
-		_ = json.NewEncoder(response).Encode(map[string]any{
+		if err := json.NewEncoder(response).Encode(map[string]any{
 			"ok":    true,
 			"email": payload["email"],
-		})
+		}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
 	})
 	client := NewClient(t, handler)
 

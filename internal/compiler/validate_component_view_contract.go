@@ -253,10 +253,6 @@ func sortedUsedRefNames(refs map[string]source.SourceSpan) []string {
 	return names
 }
 
-func componentFieldError(component gwdkir.Component, message string) ValidationError {
-	return componentFieldErrorAt(component, firstSpan(component.Blocks.Spans.View, component.Span), message)
-}
-
 func componentFieldErrorAt(component gwdkir.Component, span source.SourceSpan, message string) ValidationError {
 	return ValidationError{
 		Code:          "component_field_error",

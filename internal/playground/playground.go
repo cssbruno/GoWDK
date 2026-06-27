@@ -115,11 +115,13 @@ func ExportArchive(sourceDir string, archivePath string, options Options) (Expor
 	if err != nil {
 		return ExportResult{}, err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 	writer := zip.NewWriter(file)
 	for _, item := range files {
 		if err := writeZipFile(writer, sourceDir, item.Path); err != nil {
-			writer.Close()
+			_ = writer.Close()
 			return ExportResult{}, err
 		}
 	}
@@ -143,11 +145,11 @@ func StageWorkspace(sourceDir string, options Options) (Workspace, func() error,
 		sourcePath := filepath.Join(sourceDir, filepath.FromSlash(item.Path))
 		targetPath := filepath.Join(root, filepath.FromSlash(item.Path))
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-			cleanup()
+			_ = cleanup()
 			return Workspace{}, nil, err
 		}
 		if err := copyFile(sourcePath, targetPath); err != nil {
-			cleanup()
+			_ = cleanup()
 			return Workspace{}, nil, err
 		}
 	}
@@ -352,7 +354,9 @@ func writeZipFile(writer *zip.Writer, sourceDir string, rel string) error {
 	if err != nil {
 		return err
 	}
-	defer source.Close()
+	defer func() {
+		_ = source.Close()
+	}()
 	_, err = io.Copy(target, source)
 	return err
 }
@@ -362,12 +366,16 @@ func copyFile(sourcePath string, targetPath string) error {
 	if err != nil {
 		return err
 	}
-	defer source.Close()
+	defer func() {
+		_ = source.Close()
+	}()
 	target, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	if err != nil {
 		return err
 	}
-	defer target.Close()
+	defer func() {
+		_ = target.Close()
+	}()
 	_, err = io.Copy(target, source)
 	return err
 }

@@ -28,16 +28,6 @@ func validateParsedHTMLAttrSafety(attr Attr) error {
 	return validateURLAttrValue(attr.Name, attr.Value)
 }
 
-func validateRenderedHTMLAttrSafety(name, value string) error {
-	if inlineEventHandlerAttr(name) {
-		return fmt.Errorf("inline event handler attribute %q is not supported; use g:on:* inside stateful components", name)
-	}
-	if strings.EqualFold(strings.TrimSpace(name), "srcdoc") {
-		return fmt.Errorf("srcdoc attribute is not supported; use g:unsafe-html only with trusted sanitized HTML")
-	}
-	return validateURLAttrValue(name, value)
-}
-
 func inlineEventHandlerAttr(name string) bool {
 	name = strings.ToLower(strings.TrimSpace(name))
 	return strings.HasPrefix(name, "on") && len(name) > 2
@@ -107,8 +97,8 @@ func explicitURLScheme(value string) (string, bool) {
 		return "", false
 	}
 	for index, char := range value {
-		switch {
-		case char == ':':
+		switch char {
+		case ':':
 			if index == 0 {
 				return "", false
 			}
@@ -117,7 +107,7 @@ func explicitURLScheme(value string) (string, bool) {
 				return "", false
 			}
 			return strings.ToLower(candidate), true
-		case char == '/', char == '?', char == '#':
+		case '/', '?', '#':
 			return "", false
 		}
 	}

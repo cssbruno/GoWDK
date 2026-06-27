@@ -2,6 +2,7 @@ package lang
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -555,28 +556,22 @@ func applyDefaultRenderMode(pages []gwdkir.Page, defaultMode gowdk.RenderMode) [
 
 func compilerDiagnostics(err error, ir gwdkir.Program) Diagnostics {
 	sources := pageSources(ir)
-	switch typed := err.(type) {
-	case compiler.ValidationErrors:
-		diagnostics := make(Diagnostics, 0, len(typed))
-		for _, validation := range typed {
-			severity := "error"
-			if validation.Severity == compiler.SeverityWarning {
-				severity = "warning"
+	{
+		var typed compiler.ValidationErrors
+		switch {
+		case errors.As(err, &typed):
+			diagnostics := make(Diagnostics, 0, len(typed))
+			for _, validation := range typed {
+				severity := "error"
+				if validation.Severity == compiler.SeverityWarning {
+					severity = "warning"
+				}
+				diagnostics = append(diagnostics, Diagnostic{File: diagnosticSource(validation, sources), Code: validation.Code, Pos: sourcePosition(validation.Span.Start), Range: sourceSpanRange(validation.Span), Severity: severity, Message: validation.Error(), Suggestion: diagnosticSuggestion(validation), Related: relatedLocations(validation.Related)})
 			}
-			diagnostics = append(diagnostics, Diagnostic{
-				File:       diagnosticSource(validation, sources),
-				Code:       validation.Code,
-				Pos:        sourcePosition(validation.Span.Start),
-				Range:      sourceSpanRange(validation.Span),
-				Severity:   severity,
-				Message:    validation.Error(),
-				Suggestion: diagnosticSuggestion(validation),
-				Related:    relatedLocations(validation.Related),
-			})
+			return diagnostics
+		default:
+			return Diagnostics{{Severity: "error", Message: fmt.Sprint(err)}}
 		}
-		return diagnostics
-	default:
-		return Diagnostics{{Severity: "error", Message: fmt.Sprint(err)}}
 	}
 }
 

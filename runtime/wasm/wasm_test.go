@@ -1,13 +1,16 @@
 package wasm
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestStubHelpersReportUnavailable(t *testing.T) {
 	var payload Payload
-	if err := DecodePayload(&payload); err != ErrUnavailable {
+	if err := DecodePayload(&payload); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("DecodePayload error = %v, want ErrUnavailable", err)
 	}
-	if _, err := CurrentPayload(); err != ErrUnavailable {
+	if _, err := CurrentPayload(); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("CurrentPayload error = %v, want ErrUnavailable", err)
 	}
 	if pointer := Return(Result{}); pointer != 0 {

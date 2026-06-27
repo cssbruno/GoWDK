@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -123,13 +124,13 @@ func BrokenFragment(context.Context, *http.Request) (response.Response, error) {
 	}}})
 
 	bindings := compilerBindingsByBlock(app.BackendBindings)
-	assertBinding(t, bindings["Ping"], source.BackendBindingBound, source.BackendSignatureAction0, "", false)
-	assertBinding(t, bindings["Login"], source.BackendBindingBound, source.BackendSignatureActionForm, "LoginInput", false)
-	assertBinding(t, bindings["LoginPtr"], source.BackendBindingBound, source.BackendSignatureActionFormPtr, "LoginInput", true)
-	assertBinding(t, bindings["Raw"], source.BackendBindingBound, source.BackendSignatureActionValues, "", false)
-	assertBinding(t, bindings["RawData"], source.BackendBindingBound, source.BackendSignatureActionData, "", false)
-	assertBinding(t, bindings["Upload"], source.BackendBindingBound, source.BackendSignatureActionForm, "UploadInput", false)
-	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
+	assertBinding(t, bindings["Ping"], source.BackendSignatureAction0, "", false)
+	assertBinding(t, bindings["Login"], source.BackendSignatureActionForm, "LoginInput", false)
+	assertBinding(t, bindings["LoginPtr"], source.BackendSignatureActionFormPtr, "LoginInput", true)
+	assertBinding(t, bindings["Raw"], source.BackendSignatureActionValues, "", false)
+	assertBinding(t, bindings["RawData"], source.BackendSignatureActionData, "", false)
+	assertBinding(t, bindings["Upload"], source.BackendSignatureActionForm, "UploadInput", false)
+	assertBinding(t, bindings["Session"], source.BackendSignatureAPI, "", false)
 	assertInputFields(t, bindings["Login"].InputFields, "Email:email:string,Tags:tag:[]string,Remember:remember:bool,Age:age:int,Score:score:uint64,Code:code:byte,Letter:letter:rune")
 	assertInputFields(t, bindings["Upload"].InputFields, "Avatar:avatar:form.File,Photos:photos:[]form.File,Caption:caption:string")
 	if got := bindings["Broken"]; got.Status != source.BackendBindingUnsupportedSignature {
@@ -144,7 +145,7 @@ func BrokenFragment(context.Context, *http.Request) (response.Response, error) {
 	if got := bindings["Missing"]; got.Status != source.BackendBindingMissing {
 		t.Fatalf("expected Missing binding, got %#v", got)
 	}
-	assertBinding(t, bindings["List"], source.BackendBindingBound, source.BackendSignatureFragment, "", false)
+	assertBinding(t, bindings["List"], source.BackendSignatureFragment, "", false)
 	if got := bindings["BrokenFragment"]; got.Status != source.BackendBindingUnsupportedSignature {
 		t.Fatalf("expected BrokenFragment unsupported signature, got %#v", got)
 	}
@@ -217,13 +218,13 @@ func Bad(ctx context.Context, input UploadInput) (SearchResult, error) {
 	}}})
 
 	bindings := compilerBindingsByBlock(app.BackendBindings)
-	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
-	assertBinding(t, bindings["Summary"], source.BackendBindingBound, source.BackendSignatureAPI0, "", false)
+	assertBinding(t, bindings["Session"], source.BackendSignatureAPI, "", false)
+	assertBinding(t, bindings["Summary"], source.BackendSignatureAPI0, "", false)
 	assertResultFields(t, bindings["Summary"].ResultFields, "count:Count:int,next:Next:string")
-	assertBinding(t, bindings["Search"], source.BackendBindingBound, source.BackendSignatureAPIInput, "SearchInput", false)
+	assertBinding(t, bindings["Search"], source.BackendSignatureAPIInput, "SearchInput", false)
 	assertInputFields(t, bindings["Search"].InputFields, "Query:q:string,Page:page:int")
 	assertResultFields(t, bindings["Search"].ResultFields, "count:Count:int,next:Next:string")
-	assertBinding(t, bindings["SearchPtr"], source.BackendBindingBound, source.BackendSignatureAPIInputPtr, "SearchInput", true)
+	assertBinding(t, bindings["SearchPtr"], source.BackendSignatureAPIInputPtr, "SearchInput", true)
 	if got := bindings["Bad"]; got.Status != source.BackendBindingUnsupportedSignature || !strings.Contains(got.Message, "typed API input UploadInput uses unsupported field type") {
 		t.Fatalf("expected unsupported typed API input, got %#v", got)
 	}
@@ -278,9 +279,9 @@ func hidden(ctx.Context) (ActionResult, error) {
 	}}})
 
 	bindings := compilerBindingsByBlock(app.BackendBindings)
-	assertBinding(t, bindings["Login"], source.BackendBindingBound, source.BackendSignatureActionForm, "AliasInput", false)
+	assertBinding(t, bindings["Login"], source.BackendSignatureActionForm, "AliasInput", false)
 	assertInputFields(t, bindings["Login"].InputFields, "Email:email:string")
-	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
+	assertBinding(t, bindings["Session"], source.BackendSignatureAPI, "", false)
 	if got := bindings["hidden"]; got.Status != source.BackendBindingMissing {
 		t.Fatalf("expected unexported handler to remain missing, got %#v", got)
 	}
@@ -444,9 +445,9 @@ func LoadBroken() map[string]any {
 	}})
 
 	bindings := compilerBindingsByBlock(app.BackendBindings)
-	assertBinding(t, bindings["LoadDashboard"], source.BackendBindingBound, source.BackendSignatureLoadError, "", false)
-	assertBinding(t, bindings["LoadProfile"], source.BackendBindingBound, source.BackendSignatureLoad, "", false)
-	assertBinding(t, bindings["LoadTyped"], source.BackendBindingBound, source.BackendSignatureLoadStructError, "", false)
+	assertBinding(t, bindings["LoadDashboard"], source.BackendSignatureLoadError, "", false)
+	assertBinding(t, bindings["LoadProfile"], source.BackendSignatureLoad, "", false)
+	assertBinding(t, bindings["LoadTyped"], source.BackendSignatureLoadStructError, "", false)
 	if bindings["LoadTyped"].ResultType != "TypedData" {
 		t.Fatalf("expected typed load result type, got %#v", bindings["LoadTyped"])
 	}
@@ -559,9 +560,9 @@ func List(context.Context) (response.Response, error) {
 			t.Fatalf("expected %s to bind generated inline go package, got %#v", name, bindings[name])
 		}
 	}
-	assertBinding(t, bindings["Subscribe"], source.BackendBindingBound, source.BackendSignatureAction0, "", false)
-	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
-	assertBinding(t, bindings["List"], source.BackendBindingBound, source.BackendSignatureFragment, "", false)
+	assertBinding(t, bindings["Subscribe"], source.BackendSignatureAction0, "", false)
+	assertBinding(t, bindings["Session"], source.BackendSignatureAPI, "", false)
+	assertBinding(t, bindings["List"], source.BackendSignatureFragment, "", false)
 }
 
 func TestDiscoverGoEndpointCommentsBindsStandaloneEndpoints(t *testing.T) {
@@ -626,9 +627,9 @@ func Refresh(context.Context, *http.Request) (response.Response, error) {
 		t.Fatal(err)
 	}
 	bindings := compilerBindingsByBlock(BindBackendHandlers(&ir))
-	assertBinding(t, bindings["Login"], source.BackendBindingBound, source.BackendSignatureAction0, "", false)
-	assertBinding(t, bindings["Session"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
-	assertBinding(t, bindings["Refresh"], source.BackendBindingBound, source.BackendSignatureAPI, "", false)
+	assertBinding(t, bindings["Login"], source.BackendSignatureAction0, "", false)
+	assertBinding(t, bindings["Session"], source.BackendSignatureAPI, "", false)
+	assertBinding(t, bindings["Refresh"], source.BackendSignatureAPI, "", false)
 }
 
 func TestDiscoverGoEndpointCommentsRejectsMalformedComments(t *testing.T) {
@@ -689,7 +690,11 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 			if err == nil {
 				t.Fatal("expected malformed endpoint comment diagnostic")
 			}
-			diagnostics := err.(ValidationErrors)
+			diagnostics := func() ValidationErrors {
+				var target ValidationErrors
+				_ = errors.As(err, &target)
+				return target
+			}()
 			if len(diagnostics) != 1 || diagnostics[0].Code != "malformed_go_endpoint_comment" {
 				t.Fatalf("unexpected diagnostics: %#v", diagnostics)
 			}
@@ -803,7 +808,11 @@ func TestValidateManifestRejectsGoEndpointConflictWithGOWDKEndpoint(t *testing.T
 	if err == nil {
 		t.Fatal("expected route conflict diagnostic")
 	}
-	if !hasDiagnosticCode(err.(ValidationErrors), "route_method_conflict") {
+	if !hasDiagnosticCode(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "route_method_conflict") {
 		t.Fatalf("missing route_method_conflict diagnostic: %#v", err)
 	}
 }
@@ -846,7 +855,11 @@ func TestValidateManifestReportsDuplicateStandaloneEndpointsAsAuthorDiagnostic(t
 	if strings.Contains(err.Error(), "internal compiler error") {
 		t.Fatalf("duplicate standalone endpoints should not produce internal compiler error: %v", err)
 	}
-	if !hasDiagnosticCode(err.(ValidationErrors), "route_method_conflict") {
+	if !hasDiagnosticCode(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "route_method_conflict") {
 		t.Fatalf("missing route_method_conflict diagnostic: %#v", err)
 	}
 }
@@ -865,7 +878,11 @@ func TestValidateBackendBindingPolicyFailsProductionMissingHandler(t *testing.T)
 	if err == nil {
 		t.Fatal("expected production missing handler diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "backend_binding_required") {
 		t.Fatalf("missing backend_binding_required diagnostic: %#v", diagnostics)
 	}
@@ -910,9 +927,9 @@ func TestValidateBackendBindingPolicyAllowsExplicitProductionStubMode(t *testing
 	}
 }
 
-func assertBinding(t *testing.T, binding source.BackendBinding, status source.BackendBindingStatus, signature source.BackendSignatureKind, inputType string, inputPointer bool) {
+func assertBinding(t *testing.T, binding source.BackendBinding, signature source.BackendSignatureKind, inputType string, inputPointer bool) {
 	t.Helper()
-	if binding.Status != status || binding.Signature != signature || binding.InputType != inputType || binding.InputPointer != inputPointer {
+	if binding.Status != source.BackendBindingBound || binding.Signature != signature || binding.InputType != inputType || binding.InputPointer != inputPointer {
 		t.Fatalf("unexpected binding: %#v", binding)
 	}
 }
@@ -1034,7 +1051,11 @@ func TestValidateBackendBindingPolicyIRSeesMissingLoadBinding(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected missing load binding to fail the production policy even when endpoint bindings exist")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "backend_binding_required") {
 		t.Fatalf("missing backend_binding_required diagnostic: %#v", diagnostics)
 	}
@@ -1064,7 +1085,11 @@ func TestValidateBackendBindingPolicyIRFailsProductionUnsupportedFragmentBinding
 	if err == nil {
 		t.Fatal("expected unsupported fragment binding to fail the production policy")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "backend_binding_required") {
 		t.Fatalf("missing backend_binding_required diagnostic: %#v", diagnostics)
 	}

@@ -8,7 +8,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
 
-func persistedStorePageNamed(id, route, storeName, typeName, initName, scope string) gwdkir.Page {
+func persistedStorePageNamed(id, route, typeName, initName, scope string) gwdkir.Page {
 	return gwdkir.Page{
 		ID:     id,
 		Route:  route,
@@ -19,7 +19,7 @@ func persistedStorePageNamed(id, route, storeName, typeName, initName, scope str
 			Path:  "github.com/cssbruno/gowdk/testfixture/islands",
 		}},
 		Stores: []gwdkir.Store{{
-			Name:       storeName,
+			Name:       "cart",
 			Type:       gwdkir.GoRef{Alias: "ui", Name: typeName},
 			Init:       gwdkir.GoRef{Alias: "ui", Name: initName},
 			Persist:    scope,
@@ -132,8 +132,8 @@ func TestValidateWarnsOnPersistedStoreScopeConflict(t *testing.T) {
 	// Same store name and shape but different persist scopes share one storage
 	// key; the effective scope then depends on navigation order.
 	app := appFixture{Pages: []gwdkir.Page{
-		persistedStorePageNamed("shop", "/shop", "cart", "CounterState", "NewCounterState", "local"),
-		persistedStorePageNamed("checkout", "/checkout", "cart", "CounterState", "NewCounterState", "session"),
+		persistedStorePageNamed("shop", "/shop", "CounterState", "NewCounterState", "local"),
+		persistedStorePageNamed("checkout", "/checkout", "CounterState", "NewCounterState", "session"),
 	}}
 	diagnostics := ValidateProgramReport(gowdk.Config{}, app.program(gowdk.Config{}))
 	d := firstDiagnostic(diagnostics, "page_store_persist_scope_conflict")
@@ -148,7 +148,7 @@ func TestValidateWarnsOnPersistedStoreScopeConflict(t *testing.T) {
 	if other := firstDiagnostic(diagnostics, "page_store_persist_key_conflict"); other != nil {
 		t.Fatalf("same-shape scope conflict must not also raise a key conflict: %#v", other)
 	}
-	if ValidationErrors(diagnostics).HasErrors() {
+	if diagnostics.HasErrors() {
 		t.Fatalf("scope conflict alone must not fail the build: %#v", diagnostics)
 	}
 }
@@ -165,8 +165,8 @@ func TestValidatePageDoesNotPersistCheckUnpersistedStore(t *testing.T) {
 func TestValidateWarnsOnPersistedStoreKeyConflict(t *testing.T) {
 	// Same store name, different shapes, both persisted -> shared key, divergent hash.
 	app := appFixture{Pages: []gwdkir.Page{
-		persistedStorePageNamed("shop", "/shop", "cart", "CounterState", "NewCounterState", "local"),
-		persistedStorePageNamed("notes", "/notes", "cart", "TextState", "NewTextState", "local"),
+		persistedStorePageNamed("shop", "/shop", "CounterState", "NewCounterState", "local"),
+		persistedStorePageNamed("notes", "/notes", "TextState", "NewTextState", "local"),
 	}}
 	diagnostics := ValidateProgramReport(gowdk.Config{}, app.program(gowdk.Config{}))
 	d := firstDiagnostic(diagnostics, "page_store_persist_key_conflict")
@@ -176,7 +176,7 @@ func TestValidateWarnsOnPersistedStoreKeyConflict(t *testing.T) {
 	if d.Severity != SeverityWarning {
 		t.Fatalf("key conflict should be a warning, got %v", d.Severity)
 	}
-	if ValidationErrors(diagnostics).HasErrors() {
+	if diagnostics.HasErrors() {
 		t.Fatalf("key conflict alone must not fail the build: %#v", diagnostics)
 	}
 }
@@ -184,8 +184,8 @@ func TestValidateWarnsOnPersistedStoreKeyConflict(t *testing.T) {
 func TestValidateAllowsSharedPersistedStoreAcrossPages(t *testing.T) {
 	// Same name AND same shape across pages is intentional cross-route sharing.
 	app := appFixture{Pages: []gwdkir.Page{
-		persistedStorePageNamed("shop", "/shop", "cart", "CounterState", "NewCounterState", "local"),
-		persistedStorePageNamed("checkout", "/checkout", "cart", "CounterState", "NewCounterState", "local"),
+		persistedStorePageNamed("shop", "/shop", "CounterState", "NewCounterState", "local"),
+		persistedStorePageNamed("checkout", "/checkout", "CounterState", "NewCounterState", "local"),
 	}}
 	diagnostics := ValidateProgramReport(gowdk.Config{}, app.program(gowdk.Config{}))
 	if d := firstDiagnostic(diagnostics, "page_store_persist_key_conflict"); d != nil {

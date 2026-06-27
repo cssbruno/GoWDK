@@ -1,6 +1,7 @@
 package gowdkcmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -60,7 +61,7 @@ func parseFixOptions(args []string) (fixOptions, error) {
 		case arg == "--code":
 			i++
 			if i >= len(args) {
-				return fixOptions{}, fmt.Errorf(fixUsage)
+				return fixOptions{}, errors.New(fixUsage)
 			}
 			options.Code = args[i]
 		case strings.HasPrefix(arg, "--code="):

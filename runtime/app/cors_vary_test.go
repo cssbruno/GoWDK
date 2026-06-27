@@ -67,8 +67,8 @@ func TestCORSPreflightVaryMergesExistingValuesCaseInsensitively(t *testing.T) {
 		t.Fatal("expected preflight to be handled")
 	}
 	assertVaryTokens(t, recorder.Header(), map[string]int{
-		"accept-encoding":                 1,
-		"origin":                          1,
+		"accept-encoding":                1,
+		"origin":                         1,
 		"access-control-request-method":  1,
 		"access-control-request-headers": 1,
 	})

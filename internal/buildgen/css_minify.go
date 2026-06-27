@@ -35,7 +35,7 @@ func minifyCSS(contents []byte) []byte {
 		}
 		if current == '/' && index+1 < len(runes) && runes[index+1] == '*' {
 			index++
-			for index+1 < len(runes) && !(runes[index] == '*' && runes[index+1] == '/') {
+			for index+1 < len(runes) && (runes[index] != '*' || runes[index+1] != '/') {
 				index++
 			}
 			if index+1 < len(runes) {
@@ -57,7 +57,7 @@ func minifyCSS(contents []byte) []byte {
 			pendingSpace = true
 			continue
 		}
-		if isCSSPunctuation(current) && !(parenDepth > 0 && current == '+') {
+		if isCSSPunctuation(current) && (parenDepth <= 0 || current != '+') {
 			if current == '(' {
 				parenDepth++
 			}

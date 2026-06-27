@@ -25,7 +25,7 @@ import (
 // invalidation graph, which ValidatePage does not receive; it is tracked as a
 // follow-up.
 func validatePageContractClient(page gwdkir.Page, mode gowdk.RenderMode) []ValidationError {
-	if isBuildTimeRoute(mode, page) || !page.Blocks.View {
+	if isBuildTimeRoute(mode) || !page.Blocks.View {
 		return nil
 	}
 	refs, err := pageCommandReferences(page)

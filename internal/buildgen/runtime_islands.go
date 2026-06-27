@@ -71,10 +71,6 @@ func islandRuntimeArtifacts(config gowdk.Config, pages []gwdkir.Page, allCompone
 	return artifacts, nil
 }
 
-func islandScriptHrefs(source string, components map[string]view.Component, ownerPackage string, uses map[string]string) ([]string, error) {
-	return islandScriptHrefsForView(source, nil, components, ownerPackage, uses)
-}
-
 func islandScriptHrefsForView(source string, nodes []view.Node, components map[string]view.Component, ownerPackage string, uses map[string]string) ([]string, error) {
 	usages, err := recursiveComponentCallUsagesForView(source, nodes, components, ownerPackage, uses, viewComponentResolver)
 	if err != nil {
@@ -154,16 +150,8 @@ var manifestComponentResolver = componentResolver[gwdkir.Component]{
 	Uses:     func(component gwdkir.Component) map[string]string { return componentUses(component.Uses) },
 }
 
-func recursiveViewComponentCallUsages(source string, components map[string]view.Component, ownerPackage string, uses map[string]string) ([]resolvedComponentCallUsage[view.Component], error) {
-	return recursiveViewComponentCallUsagesForView(source, nil, components, ownerPackage, uses)
-}
-
 func recursiveViewComponentCallUsagesForView(source string, nodes []view.Node, components map[string]view.Component, ownerPackage string, uses map[string]string) ([]resolvedComponentCallUsage[view.Component], error) {
 	return recursiveComponentCallUsagesForView(source, nodes, components, ownerPackage, uses, viewComponentResolver)
-}
-
-func recursiveComponentCallUsages[T any](source string, components map[string]T, ownerPackage string, uses map[string]string, resolver componentResolver[T]) ([]resolvedComponentCallUsage[T], error) {
-	return recursiveComponentCallUsagesForView(source, nil, components, ownerPackage, uses, resolver)
 }
 
 func recursiveComponentCallUsagesForView[T any](source string, nodes []view.Node, components map[string]T, ownerPackage string, uses map[string]string, resolver componentResolver[T]) ([]resolvedComponentCallUsage[T], error) {
@@ -229,19 +217,6 @@ func lookupComponent[T any](components map[string]T, name string, ownerPackage s
 	}
 	component, ok := components[name]
 	return component, ok
-}
-
-func statefulComponentNames(components []gwdkir.Component) map[string]bool {
-	out := map[string]bool{}
-	for _, component := range components {
-		if componentNeedsJSIsland(component) {
-			out[component.Name] = true
-			if component.Package != "" {
-				out[component.Package+"."+component.Name] = true
-			}
-		}
-	}
-	return out
 }
 
 func componentNeedsJSIsland(component gwdkir.Component) bool {

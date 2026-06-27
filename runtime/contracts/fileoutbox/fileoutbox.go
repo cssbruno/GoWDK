@@ -285,7 +285,9 @@ func (store *Store) readRecordsFromPathLocked(path string) ([]Record, error) {
 		}
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	var records []Record
 	scanner := bufio.NewScanner(file)

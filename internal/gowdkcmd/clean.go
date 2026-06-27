@@ -60,10 +60,10 @@ func clean(args []string) error {
 			i = next
 			continue
 		}
-		switch {
-		case arg == "--dry-run":
+		switch arg {
+		case "--dry-run":
 			dryRun = true
-		case arg == "--json":
+		case "--json":
 			jsonOutput = true
 		default:
 			return fmt.Errorf("unknown clean flag %q\n%s", arg, cleanUsage)

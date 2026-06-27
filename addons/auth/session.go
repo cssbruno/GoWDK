@@ -263,7 +263,7 @@ func sessionSigningKeys(options Options) (SigningKey, map[string]SigningKey, err
 
 func validateSigningKeyID(label string, id string) error {
 	if strings.Contains(id, ".") {
-		return fmt.Errorf("gowdk auth: %s id %q must not contain .", label, id)
+		return fmt.Errorf("gowdk auth: %s id %q must not contain dot", label, id)
 	}
 	return nil
 }
@@ -406,12 +406,12 @@ func (sessions *Sessions) Revoke(ctx context.Context, request *http.Request) err
 	if sessions.mode != SessionModeRevocable || request == nil {
 		return nil
 	}
-	cookie, err := request.Cookie(sessions.cookie)
-	if err != nil {
+	cookie, ok := sessions.requestCookie(request)
+	if !ok {
 		return nil
 	}
-	payload, err := sessions.verify(cookie.Value)
-	if err != nil {
+	payload, ok := sessions.verifiedPayload(cookie.Value)
+	if !ok {
 		return nil
 	}
 	if strings.TrimSpace(payload.SessionID) == "" {
@@ -456,24 +456,24 @@ func (sessions *Sessions) ClearCookie() http.Cookie {
 // principal and no error, meaning unauthenticated.
 func (sessions *Sessions) Principal(request *http.Request) (*Principal, error) {
 	if request == nil {
-		return nil, nil
+		return unauthenticatedPrincipal()
 	}
-	cookie, err := request.Cookie(sessions.cookie)
-	if err != nil {
-		return nil, nil
+	cookie, ok := sessions.requestCookie(request)
+	if !ok {
+		return unauthenticatedPrincipal()
 	}
-	payload, err := sessions.verify(cookie.Value)
-	if err != nil {
-		return nil, nil
+	payload, ok := sessions.verifiedPayload(cookie.Value)
+	if !ok {
+		return unauthenticatedPrincipal()
 	}
 	if sessions.now().Unix() >= payload.Expires {
-		return nil, nil
+		return unauthenticatedPrincipal()
 	}
 	if sessions.mode == SessionModeRevocable {
 		return sessions.revocablePrincipal(request.Context(), payload)
 	}
 	if strings.TrimSpace(payload.ID) == "" {
-		return nil, nil
+		return unauthenticatedPrincipal()
 	}
 	return &Principal{
 		ID:                   payload.ID,
@@ -485,21 +485,21 @@ func (sessions *Sessions) Principal(request *http.Request) (*Principal, error) {
 
 func (sessions *Sessions) revocablePrincipal(ctx context.Context, payload sessionPayload) (*Principal, error) {
 	if strings.TrimSpace(payload.SessionID) == "" {
-		return nil, nil
+		return unauthenticatedPrincipal()
 	}
 	record, err := sessions.store.LookupSession(ctx, payload.SessionID)
 	if err != nil {
 		if errors.Is(err, ErrSessionNotFound) {
-			return nil, nil
+			return unauthenticatedPrincipal()
 		}
 		return nil, err
 	}
 	now := sessions.now()
 	if record.Revoked || record.expired(now) || strings.TrimSpace(record.Principal.ID) == "" {
-		return nil, nil
+		return unauthenticatedPrincipal()
 	}
 	if sessionRecordAuthorizationVersion(record) != payload.AuthorizationVersion {
-		return nil, nil
+		return unauthenticatedPrincipal()
 	}
 	if sessions.idleTTL > 0 {
 		toucher, ok := sessions.store.(SessionToucher)
@@ -514,6 +514,27 @@ func (sessions *Sessions) revocablePrincipal(ctx context.Context, payload sessio
 		principal.AuthorizationVersion = record.AuthorizationVersion
 	}
 	return &principal, nil
+}
+
+func unauthenticatedPrincipal() (*Principal, error) {
+	var principal *Principal
+	return principal, nil
+}
+
+func (sessions *Sessions) requestCookie(request *http.Request) (*http.Cookie, bool) {
+	cookie, err := request.Cookie(sessions.cookie)
+	if err != nil {
+		return nil, false
+	}
+	return cookie, true
+}
+
+func (sessions *Sessions) verifiedPayload(token string) (sessionPayload, bool) {
+	payload, err := sessions.verify(token)
+	if err != nil {
+		return sessionPayload{}, false
+	}
+	return payload, true
 }
 
 func sessionRecordAuthorizationVersion(record SessionRecord) string {

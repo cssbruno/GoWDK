@@ -37,6 +37,10 @@ Required pull-request lanes:
 
 The release lanes live outside the pull-request CI workflow:
 
+- `.github/workflows/golangci-lint.yml`: manual strict lint workflow. It runs
+  `scripts/check-golangci-lint.sh` with the pinned GolangCI-Lint version. Do
+  not make this a required pull-request lane until the repository is clean under
+  the configured lint set.
 - `.github/workflows/release-dry-run.yml`: scheduled weekly and manual; packages
   CLI/VS Code artifacts, writes checksums, and uploads workflow artifacts. This
   is GitHub-only because it uses Actions artifact upload.
@@ -58,6 +62,7 @@ Run the same local checks before handoff when relevant:
   scripts/vulncheck-go-modules.sh
   go build ./cmd/gowdk
   scripts/check-dead-code.sh
+  scripts/check-golangci-lint.sh
   ```
 
 - VS Code extension checks:
@@ -176,6 +181,27 @@ implementations are intentionally outside the first gate. Add packages only
 after confirming a clean baseline without broad suppressions; if an intentional
 entry point needs a suppression, keep it local to the declaration and document
 why external reachability is expected.
+
+## GolangCI-Lint
+
+`.golangci.yml` is intentionally strict:
+
+```sh
+scripts/check-golangci-lint.sh
+```
+
+The gate verifies the config and runs `golangci-lint run` with correctness,
+resource-handling, formatting, maintainability, and dead-code linters enabled.
+Test files are included, module downloads are readonly, issue counts are
+uncapped, and existing findings are not hidden through exclusions.
+The wrapper uses `golangci-lint` when `v2.12.2` is on `PATH`; otherwise it falls back to
+`go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2`. CI
+also installs that pinned version before running the wrapper.
+
+Do not add broad `linters.exclusions` or `issues.exclude` entries to make a
+dirty baseline pass. Fix the finding, add a narrow `//nolint:<linter>` with a
+reason where the code is intentionally exceptional, or lower strictness only
+with an owning engineering note that explains the tradeoff.
 
 ## Release Smoke
 

@@ -191,10 +191,14 @@ func TestTruthy(t *testing.T) {
 		value any
 		want  bool
 	}{
-		{true, true}, {false, false},
-		{"x", true}, {"", false},
-		{1, true}, {0, false},
-		{[]any{1}, true}, {[]any{}, false},
+		{true, true},
+		{false, false},
+		{"x", true},
+		{"", false},
+		{1, true},
+		{0, false},
+		{[]any{1}, true},
+		{[]any{}, false},
 		{nil, false},
 	}
 	for _, tc := range cases {

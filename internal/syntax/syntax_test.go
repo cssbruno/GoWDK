@@ -52,9 +52,9 @@ func TestLineExtentAndMatchBrace(t *testing.T) {
 	if tokens[end].Kind != TokenNewline {
 		t.Fatalf("LineExtent stopped at %s, want newline", tokens[end].Kind)
 	}
-	close := MatchBrace(tokens, 0)
-	if tokens[close].Kind != TokenRBrace {
-		t.Fatalf("MatchBrace landed on %s, want rbrace", tokens[close].Kind)
+	closeIndex := MatchBrace(tokens, 0)
+	if tokens[closeIndex].Kind != TokenRBrace {
+		t.Fatalf("MatchBrace landed on %s, want rbrace", tokens[closeIndex].Kind)
 	}
 }
 

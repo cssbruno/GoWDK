@@ -95,7 +95,9 @@ func inspectDockerBinary(path string) (dockerBinaryInfo, error) {
 		}
 		return dockerBinaryInfo{}, fmt.Errorf("gowdk build --docker requires a Linux ELF binary; set GOOS=linux GOARCH=<arch> when building")
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	info := dockerBinaryInfo{ELF: true, Static: true}
 	for _, program := range file.Progs {

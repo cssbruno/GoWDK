@@ -11,8 +11,15 @@ import (
 	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
 )
 
+type ssrTestContextKey string
+
+func unauthenticatedSSRPrincipal(*http.Request) (*gowdkauth.Principal, error) {
+	var principal *gowdkauth.Principal
+	return principal, nil
+}
+
 func TestLoadFuncContract(t *testing.T) {
-	request, err := http.NewRequestWithContext(context.WithValue(context.Background(), "trace", "abc"), http.MethodGet, "/dashboard", nil)
+	request, err := http.NewRequestWithContext(context.WithValue(context.Background(), ssrTestContextKey("trace"), "abc"), http.MethodGet, "/dashboard", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +27,7 @@ func TestLoadFuncContract(t *testing.T) {
 	load := LoadFunc(func(ctx LoadContext) (map[string]any, error) {
 		return map[string]any{
 			"name":   "GOWDK",
-			"trace":  ctx.Context.Value("trace"),
+			"trace":  ctx.Context.Value(ssrTestContextKey("trace")),
 			"path":   ctx.Request.URL.Path,
 			"userID": ctx.Session["userID"],
 		}, nil
@@ -219,9 +226,7 @@ func TestRunGuardsWithAuthFailsClosedForNativeRBACGuards(t *testing.T) {
 		t.Fatalf("expected missing auth provider error, got %v", err)
 	}
 
-	if err := RunGuardsWithAuth(LoadContext{}, []string{"role:admin"}, nil, gowdkauth.ProviderFunc(func(*http.Request) (*gowdkauth.Principal, error) {
-		return nil, nil
-	})); !errors.Is(err, gowdkauth.ErrUnauthenticated) {
+	if err := RunGuardsWithAuth(LoadContext{}, []string{"role:admin"}, nil, gowdkauth.ProviderFunc(unauthenticatedSSRPrincipal)); !errors.Is(err, gowdkauth.ErrUnauthenticated) {
 		t.Fatalf("expected unauthenticated error, got %v", err)
 	}
 

@@ -80,11 +80,15 @@ func TestBaselineFlagsMissingAndUnsafeRequestLimits(t *testing.T) {
 			// No raw cap recorded at all -> missing.
 			{ID: "Submit", Kind: "action", Method: "POST", Path: "/signup", Guards: []string{"auth.required"}, CSRF: true},
 			// Cap recorded but installed after parse -> phase unsafe.
-			{ID: "Ingest", Kind: "api", Method: "POST", Path: "/api/ingest", Guards: []string{"permission:x"}, CSRF: true,
-				RequestLimits: securitymanifest.RequestLimitPosture{EndpointKind: "api", RawBodyBytes: 1 << 20, InstalledBeforeParse: false}},
+			{
+				ID: "Ingest", Kind: "api", Method: "POST", Path: "/api/ingest", Guards: []string{"permission:x"}, CSRF: true,
+				RequestLimits: securitymanifest.RequestLimitPosture{EndpointKind: "api", RawBodyBytes: 1 << 20, InstalledBeforeParse: false},
+			},
 			// Multipart accepted without a multipart cap -> unbounded multipart.
-			{ID: "Upload", Kind: "action", Method: "POST", Path: "/upload", Guards: []string{"auth.required"}, CSRF: true,
-				RequestLimits: securitymanifest.RequestLimitPosture{EndpointKind: "action", RawBodyBytes: 1 << 20, InstalledBeforeParse: true, MultipartEnabled: true}},
+			{
+				ID: "Upload", Kind: "action", Method: "POST", Path: "/upload", Guards: []string{"auth.required"}, CSRF: true,
+				RequestLimits: securitymanifest.RequestLimitPosture{EndpointKind: "action", RawBodyBytes: 1 << 20, InstalledBeforeParse: true, MultipartEnabled: true},
+			},
 		},
 	}
 	got := codes(Evaluate(manifest, Baseline()))

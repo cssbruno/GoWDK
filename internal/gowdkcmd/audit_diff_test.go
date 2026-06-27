@@ -9,27 +9,27 @@ import (
 	"github.com/cssbruno/gowdk/internal/diagnostics"
 )
 
-func enrichedFinding(code, target, source, message string, severity diagnostics.Severity) auditspec.Finding {
+func enrichedFinding(code, target, source, message string) auditspec.Finding {
 	enriched := auditspec.EnrichFindings([]auditspec.Finding{{
 		Code:     code,
+		Severity: diagnostics.SeverityError,
 		Target:   target,
 		Source:   source,
 		Message:  message,
-		Severity: severity,
 	}})
 	return enriched[0]
 }
 
 func TestComputeAuditDiffClassifiesIntroducedResolvedUnchanged(t *testing.T) {
 	previous := []auditspec.Finding{
-		enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:10", "missing csrf", diagnostics.SeverityError),
-		enrichedFinding("audit_raw_html_sink", "component:Old", "old.gwdk:3", "raw html", diagnostics.SeverityError),
+		enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:10", "missing csrf"),
+		enrichedFinding("audit_raw_html_sink", "component:Old", "old.gwdk:3", "raw html"),
 	}
 	current := []auditspec.Finding{
 		// previous[0] moved to a different line: same fingerprint -> unchanged.
-		enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:42", "missing csrf", diagnostics.SeverityError),
+		enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:42", "missing csrf"),
 		// A brand new finding -> introduced.
-		enrichedFinding("audit_contract_roleless", "contract:New", "new.gwdk:7", "roleless", diagnostics.SeverityError),
+		enrichedFinding("audit_contract_roleless", "contract:New", "new.gwdk:7", "roleless"),
 	}
 
 	diff := computeAuditDiff("sha256:prev", previous, current)
@@ -48,19 +48,19 @@ func TestComputeAuditDiffClassifiesIntroducedResolvedUnchanged(t *testing.T) {
 }
 
 func TestFindingFingerprintIsStableAcrossLineMovement(t *testing.T) {
-	a := enrichedFinding("audit_action_missing_csrf", "action:A", "pages/a.gwdk:10", "missing csrf", diagnostics.SeverityError)
-	b := enrichedFinding("audit_action_missing_csrf", "action:A", "pages/a.gwdk:999", "missing csrf", diagnostics.SeverityError)
+	a := enrichedFinding("audit_action_missing_csrf", "action:A", "pages/a.gwdk:10", "missing csrf")
+	b := enrichedFinding("audit_action_missing_csrf", "action:A", "pages/a.gwdk:999", "missing csrf")
 	if a.Fingerprint == "" || a.Fingerprint != b.Fingerprint {
 		t.Fatalf("fingerprint must ignore line numbers: %q vs %q", a.Fingerprint, b.Fingerprint)
 	}
-	c := enrichedFinding("audit_action_missing_csrf", "action:B", "pages/a.gwdk:10", "missing csrf", diagnostics.SeverityError)
+	c := enrichedFinding("audit_action_missing_csrf", "action:B", "pages/a.gwdk:10", "missing csrf")
 	if a.Fingerprint == c.Fingerprint {
 		t.Fatal("fingerprint must change when the target changes")
 	}
 }
 
 func TestComputeAuditDiffIgnoresWaivedFindings(t *testing.T) {
-	waived := enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:1", "missing csrf", diagnostics.SeverityError)
+	waived := enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:1", "missing csrf")
 	waived.Suppression = &auditspec.Suppression{Owner: "sec"}
 	diff := computeAuditDiff("base", nil, []auditspec.Finding{waived})
 	if len(diff.Introduced) != 0 || diff.IntroducedErrors != 0 {
@@ -69,9 +69,9 @@ func TestComputeAuditDiffIgnoresWaivedFindings(t *testing.T) {
 }
 
 func TestComputeAuditDiffTreatsNowWaivedFindingAsUnchangedNotResolved(t *testing.T) {
-	active := enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:10", "missing csrf", diagnostics.SeverityError)
+	active := enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:10", "missing csrf")
 	// The same finding, still present, but waived in the current report.
-	waivedNow := enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:10", "missing csrf", diagnostics.SeverityError)
+	waivedNow := enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:10", "missing csrf")
 	waivedNow.Suppression = &auditspec.Suppression{Owner: "sec"}
 
 	diff := computeAuditDiff("base", []auditspec.Finding{active}, []auditspec.Finding{waivedNow})
@@ -84,9 +84,9 @@ func TestComputeAuditDiffTreatsNowWaivedFindingAsUnchangedNotResolved(t *testing
 }
 
 func TestComputeAuditDiffTreatsUnwaivedFindingAsUnchangedNotIntroduced(t *testing.T) {
-	waivedBefore := enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:10", "missing csrf", diagnostics.SeverityError)
+	waivedBefore := enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:10", "missing csrf")
 	waivedBefore.Suppression = &auditspec.Suppression{Owner: "sec"}
-	activeNow := enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:10", "missing csrf", diagnostics.SeverityError)
+	activeNow := enrichedFinding("audit_action_missing_csrf", "action:A", "a.gwdk:10", "missing csrf")
 
 	diff := computeAuditDiff("base", []auditspec.Finding{waivedBefore}, []auditspec.Finding{activeNow})
 	if len(diff.Introduced) != 0 || diff.IntroducedErrors != 0 {
@@ -135,7 +135,8 @@ func TestAuditErrorExitCodePrefersRuntimeFailure(t *testing.T) {
 	if got := auditErrorExitCode(staticOnly); got != auditExitErrorFindings {
 		t.Fatalf("static error findings should exit %d, got %d", auditExitErrorFindings, got)
 	}
-	withRuntime := append(staticOnly, auditspec.Finding{Code: "audit_test_failed", Severity: diagnostics.SeverityError})
+	withRuntime := append([]auditspec.Finding{}, staticOnly...)
+	withRuntime = append(withRuntime, auditspec.Finding{Code: "audit_test_failed", Severity: diagnostics.SeverityError})
 	if got := auditErrorExitCode(withRuntime); got != auditExitRuntimeFailure {
 		t.Fatalf("a runtime test failure should exit %d, got %d", auditExitRuntimeFailure, got)
 	}

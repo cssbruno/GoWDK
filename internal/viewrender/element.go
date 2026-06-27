@@ -2,12 +2,12 @@ package viewrender
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/viewvalidation"
 	gowhtml "github.com/cssbruno/gowdk/runtime/html"
-	"strconv"
-	"strings"
 )
 
 func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
@@ -425,11 +425,12 @@ func renderElement(node Element, ctx *renderContext, out *renderOutput) error {
 		next.formAction = directives.Action
 		childCtx = &next
 	}
-	if hasRawHTML {
+	switch {
+	case hasRawHTML:
 		out.write(rawHTML)
-	} else if node.Name == "textarea" && valueBinding != "" {
+	case node.Name == "textarea" && valueBinding != "":
 		out.write(gowhtml.Escape(ctx.values[valueBinding]))
-	} else {
+	default:
 		for _, child := range node.Children {
 			if err := renderNode(child, childCtx, out); err != nil {
 				return err

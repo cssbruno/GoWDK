@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/playground"
@@ -22,7 +21,7 @@ const sandboxBuildSubcommand = "__sandbox-build"
 
 func playgroundCommand(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf(playgroundUsage)
+		return errors.New(playgroundUsage)
 	}
 	switch args[0] {
 	case "policy":
@@ -34,7 +33,7 @@ func playgroundCommand(args []string) error {
 	case sandboxBuildSubcommand:
 		return playgroundSandboxBuild(args[1:])
 	default:
-		return fmt.Errorf(playgroundUsage)
+		return errors.New(playgroundUsage)
 	}
 }
 
@@ -45,7 +44,7 @@ func playgroundPolicy(args []string) error {
 		case "--json":
 			jsonOutput = true
 		default:
-			return fmt.Errorf(playgroundUsage)
+			return errors.New(playgroundUsage)
 		}
 	}
 	policy := playground.DefaultPolicy()
@@ -72,7 +71,7 @@ func playgroundExport(args []string) error {
 		return err
 	}
 	if strings.TrimSpace(options.Output) == "" {
-		return fmt.Errorf(playgroundUsage)
+		return errors.New(playgroundUsage)
 	}
 	result, err := playground.ExportArchive(options.Dir, options.Output, playground.Options{})
 	if err != nil {
@@ -105,7 +104,7 @@ func playgroundRun(args []string) error {
 		return fmt.Errorf("hosted playground execution is disabled by default; pass --allow-hosted-execution only inside the documented sandbox")
 	}
 	if strings.TrimSpace(options.Output) == "" {
-		return fmt.Errorf(playgroundUsage)
+		return errors.New(playgroundUsage)
 	}
 
 	// Fail closed: hosted execution only runs inside the OS-level sandbox. If
@@ -118,7 +117,9 @@ func playgroundRun(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer cleanup()
+	defer func() {
+		_ = cleanup()
+	}()
 
 	outputDir, err := filepath.Abs(options.Output)
 	if err != nil {
@@ -219,13 +220,14 @@ func playgroundSandboxBuild(args []string) error {
 
 // resolveGoRoot returns the GOROOT to expose read-only inside the sandbox.
 //
-// It comes from runtime.GOROOT(), which is baked into this binary at build time
-// and so cannot be redirected by an attacker-controlled PATH; the toolchain is
-// then addressed by absolute path rather than a PATH lookup, since this runs
-// before any namespace/pivot confinement and a hosted wrapper may have an
-// attacker-writable directory on PATH.
+// It comes from `go env GOROOT`, then the toolchain is addressed by absolute
+// path rather than a PATH lookup inside the sandbox.
 func resolveGoRoot() (string, error) {
-	goRoot := strings.TrimSpace(runtime.GOROOT())
+	output, err := exec.Command("go", "env", "GOROOT").Output()
+	if err != nil {
+		return "", fmt.Errorf("resolve GOROOT: %w", err)
+	}
+	goRoot := strings.TrimSpace(string(output))
 	if goRoot == "" {
 		return "", fmt.Errorf("could not resolve GOROOT for the sandbox toolchain")
 	}
@@ -310,7 +312,7 @@ func parsePlaygroundFileOptions(args []string) (playgroundFileOptions, error) {
 		arg := args[index]
 		if value, next, ok, missing := consumeValueFlag(args, index, "--dir", true); ok {
 			if missing {
-				return playgroundFileOptions{}, fmt.Errorf(playgroundUsage)
+				return playgroundFileOptions{}, errors.New(playgroundUsage)
 			}
 			options.Dir = value
 			index = next
@@ -318,7 +320,7 @@ func parsePlaygroundFileOptions(args []string) (playgroundFileOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--out", true); ok {
 			if missing {
-				return playgroundFileOptions{}, fmt.Errorf(playgroundUsage)
+				return playgroundFileOptions{}, errors.New(playgroundUsage)
 			}
 			options.Output = value
 			index = next
@@ -326,21 +328,21 @@ func parsePlaygroundFileOptions(args []string) (playgroundFileOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--module-cache", true); ok {
 			if missing {
-				return playgroundFileOptions{}, fmt.Errorf(playgroundUsage)
+				return playgroundFileOptions{}, errors.New(playgroundUsage)
 			}
 			options.ModuleCache = value
 			index = next
 			continue
 		}
-		switch {
-		case arg == "--json":
+		switch arg {
+		case "--json":
 			options.JSON = true
-		case arg == "--allow-hosted-execution":
+		case "--allow-hosted-execution":
 			options.AllowExecution = true
-		case arg == "--allow-shared-module-cache":
+		case "--allow-shared-module-cache":
 			options.AllowSharedModuleCache = true
 		default:
-			return playgroundFileOptions{}, fmt.Errorf(playgroundUsage)
+			return playgroundFileOptions{}, errors.New(playgroundUsage)
 		}
 	}
 	if strings.TrimSpace(options.Dir) == "" {

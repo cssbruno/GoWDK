@@ -214,7 +214,7 @@ func BackendRoutePath(value string) string {
 // ValidateBackendRoutePath rejects paths that would be unsafe or ambiguous when
 // registered as generated backend routes.
 func ValidateBackendRoutePath(value string) error {
-	if _, err := validateBackendRoutePreflight(value, "must be a concrete path without query, fragment, or params"); err != nil {
+	if err := validateBackendRoutePreflight(value, "must be a concrete path without query, fragment, or params"); err != nil {
 		return err
 	}
 	if strings.ContainsAny(value, "{}") {
@@ -226,7 +226,7 @@ func ValidateBackendRoutePath(value string) error {
 // ValidateBackendRoutePattern rejects unsafe generated route patterns while
 // allowing whole-segment route params such as /patients/{id:int}.
 func ValidateBackendRoutePattern(value string) error {
-	if _, err := validateBackendRoutePreflight(value, "must not contain query strings or fragments"); err != nil {
+	if err := validateBackendRoutePreflight(value, "must not contain query strings or fragments"); err != nil {
 		return err
 	}
 	if value == "/" {
@@ -272,35 +272,35 @@ func ValidateBackendRoutePattern(value string) error {
 	return nil
 }
 
-func validateBackendRoutePreflight(value, queryFragmentRule string) (string, error) {
+func validateBackendRoutePreflight(value, queryFragmentRule string) error {
 	if strings.TrimSpace(value) != value {
-		return "", fmt.Errorf("endpoint path %q must not contain surrounding whitespace", value)
+		return fmt.Errorf("endpoint path %q must not contain surrounding whitespace", value)
 	}
 	if value == "" {
-		return "", fmt.Errorf("endpoint path must not be empty")
+		return fmt.Errorf("endpoint path must not be empty")
 	}
 	if value[0] != '/' {
-		return "", fmt.Errorf("endpoint path %q must be a local absolute path", value)
+		return fmt.Errorf("endpoint path %q must be a local absolute path", value)
 	}
 	if len(value) > 1 && (value[1] == '/' || value[1] == '\\') {
-		return "", fmt.Errorf("endpoint path %q must not be protocol-relative", value)
+		return fmt.Errorf("endpoint path %q must not be protocol-relative", value)
 	}
 	if strings.Contains(value, "\\") {
-		return "", fmt.Errorf("endpoint path %q must not contain backslashes", value)
+		return fmt.Errorf("endpoint path %q must not contain backslashes", value)
 	}
 	if strings.ContainsAny(value, "?#") {
-		return "", fmt.Errorf("endpoint path %q %s", value, queryFragmentRule)
+		return fmt.Errorf("endpoint path %q %s", value, queryFragmentRule)
 	}
 	for _, char := range value {
 		if char < 0x20 || char == 0x7f {
-			return "", fmt.Errorf("endpoint path %q must not contain control characters", value)
+			return fmt.Errorf("endpoint path %q must not contain control characters", value)
 		}
 	}
 	cleaned := BackendRoutePath(value)
 	if cleaned != value {
-		return "", fmt.Errorf("endpoint path %q must be a clean absolute path without dot segments, duplicate slashes, or trailing slash", value)
+		return fmt.Errorf("endpoint path %q must be a clean absolute path without dot segments, duplicate slashes, or trailing slash", value)
 	}
-	return cleaned, nil
+	return nil
 }
 
 type backendRouteParam struct {

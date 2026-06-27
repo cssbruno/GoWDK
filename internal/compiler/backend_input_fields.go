@@ -43,10 +43,6 @@ func backendInputStruct(typeName string, structType *ast.StructType, imports map
 	return backendTaggedInputStruct("typed action input", typeName, structType, imports, "form", true)
 }
 
-func backendAPIInputStruct(typeName string, structType *ast.StructType, imports map[string]string) inputStruct {
-	return backendTaggedInputStruct("typed API input", typeName, structType, imports, "json", false)
-}
-
 func backendTaggedInputStruct(label string, typeName string, structType *ast.StructType, imports map[string]string, tagKey string, allowFiles bool) inputStruct {
 	if structType == nil || structType.Fields == nil {
 		return inputStruct{}
@@ -143,10 +139,6 @@ func backendTypedTaggedInputStruct(label string, typeName string, typ types.Type
 	return inputStruct{Fields: fields}
 }
 
-func formTagName(field *ast.Field) (string, bool, bool, error) {
-	return inputTagName(field, "form")
-}
-
 func inputTagName(field *ast.Field, key string) (string, bool, bool, error) {
 	if field == nil || field.Tag == nil {
 		return "", false, false, nil
@@ -156,10 +148,6 @@ func inputTagName(field *ast.Field, key string) (string, bool, bool, error) {
 		return "", false, false, err
 	}
 	return inputTagNameValue(tag, key)
-}
-
-func formTagNameValue(tag string) (string, bool, bool, error) {
-	return inputTagNameValue(tag, "form")
 }
 
 func inputTagNameValue(tag string, key string) (string, bool, bool, error) {

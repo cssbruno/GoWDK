@@ -23,7 +23,7 @@ func apiFuncDecl(apis []BackendAPIAdapter, csrf bool, rateLimit bool) *ast.FuncD
 	}
 	results := boolResults()
 	if apisUseErrorPages(apis) {
-		results = namedBoolResults("handled")
+		results = namedBoolResults()
 	}
 	var clauses []ast.Stmt
 	for _, api := range apis {

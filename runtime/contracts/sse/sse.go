@@ -285,12 +285,6 @@ func (hub *Hub) recordReplayLocked(message sseMessage) {
 	}
 }
 
-func (hub *Hub) replayAfter(lastEventID string, clientAudience map[string]struct{}) []sseMessage {
-	hub.mu.Lock()
-	defer hub.mu.Unlock()
-	return hub.replayAfterLocked(lastEventID, clientAudience)
-}
-
 func (hub *Hub) replayAfterLocked(lastEventID string, clientAudience map[string]struct{}) []sseMessage {
 	lastEventID = strings.TrimSpace(lastEventID)
 	if lastEventID == "" || hub.replayLimit <= 0 {

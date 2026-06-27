@@ -102,7 +102,9 @@ func buildWASMIslandPackage(component gwdkir.Component) ([]byte, error) {
 		_ = os.Remove(tempPath)
 		return nil, wasmIslandDiagnosticError(component, "wasm_package_build_error", packagePath, fmt.Errorf("close temp output: %w", err))
 	}
-	defer os.Remove(tempPath)
+	defer func() {
+		_ = os.Remove(tempPath)
+	}()
 
 	dir, buildPackage, err := wasmIslandBuildContext(packagePath)
 	if err != nil {
@@ -155,7 +157,9 @@ func buildClientGoBlockWASM(page gwdkir.Page, script gwdkir.GoBlock) ([]byte, er
 		_ = os.Remove(tempPath)
 		return nil, clientGoBlockDiagnosticError(page, "client_go_block_wasm_build_error", fmt.Errorf("close temp output: %w", err))
 	}
-	defer os.Remove(tempPath)
+	defer func() {
+		_ = os.Remove(tempPath)
+	}()
 
 	source, err := clientGoBlockWASMSource(page, script)
 	if err != nil {
@@ -174,7 +178,9 @@ func buildClientGoBlockWASM(page gwdkir.Page, script gwdkir.GoBlock) ([]byte, er
 		_ = os.Remove(sourcePath)
 		return nil, clientGoBlockDiagnosticError(page, "client_go_block_wasm_build_error", fmt.Errorf("write temp source: %w", err))
 	}
-	defer os.Remove(sourcePath)
+	defer func() {
+		_ = os.Remove(sourcePath)
+	}()
 	if err := validateClientGoBlockWASMImports(page, sourcePath); err != nil {
 		return nil, err
 	}

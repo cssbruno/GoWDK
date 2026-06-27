@@ -21,12 +21,14 @@ type testEvent struct {
 
 func TestContractRegistryCaptureAndAssertEmitted(t *testing.T) {
 	registry := ContractRegistry(func(registry *contracts.Registry) {
-		contracts.RegisterCommand[testCommand, testCommandResult](registry, func(ctx context.Context, command testCommand) (testCommandResult, error) {
+		if err := contracts.RegisterCommand[testCommand, testCommandResult](registry, func(ctx context.Context, command testCommand) (testCommandResult, error) {
 			if err := contracts.EmitDomain(ctx, testEvent{ID: "event-1"}); err != nil {
 				return testCommandResult{}, err
 			}
 			return testCommandResult{ID: command.Name}, nil
-		}, contracts.RoleWeb)
+		}, contracts.RoleWeb); err != nil {
+			t.Fatal(err)
+		}
 	})
 
 	result, events := CaptureCommandEvents[testCommand, testCommandResult](t, registry, testCommand{Name: "command-1"})

@@ -2,6 +2,7 @@ package gowdkcmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/ast"
 	goformat "go/format"
@@ -23,7 +24,7 @@ const generateUsage = "usage: gowdk generate stubs [--config <file>] [--project-
 
 func generate(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf(generateUsage)
+		return errors.New(generateUsage)
 	}
 	switch args[0] {
 	case "stubs":

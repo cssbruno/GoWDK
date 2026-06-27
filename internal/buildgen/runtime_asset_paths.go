@@ -2,6 +2,7 @@ package buildgen
 
 import (
 	"fmt"
+	"go/build"
 	"os"
 	"path"
 	"path/filepath"
@@ -18,7 +19,7 @@ import (
 // matches the emitted glue even when this binary was compiled by a different
 // toolchain. It falls back to the build version when VERSION is unreadable.
 func islandWASMExecGoVersion() string {
-	if contents, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "VERSION")); err == nil {
+	if contents, err := os.ReadFile(filepath.Join(wasmGoRoot(), "VERSION")); err == nil {
 		line, _, _ := strings.Cut(strings.TrimSpace(string(contents)), "\n")
 		if line = strings.TrimSpace(line); line != "" {
 			return line
@@ -47,7 +48,7 @@ func clientGoBlockWASMLoaderArtifact(outputDir string, page gwdkir.Page) planned
 
 func islandWASMExecArtifact(outputDir string) (plannedAssetArtifact, error) {
 	assetPath := islandWASMExecAssetPath()
-	contents, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "lib", "wasm", "wasm_exec.js"))
+	contents, err := os.ReadFile(filepath.Join(wasmGoRoot(), "lib", "wasm", "wasm_exec.js"))
 	if err != nil {
 		return plannedAssetArtifact{}, fmt.Errorf("read Go wasm_exec.js runtime: %w", err)
 	}
@@ -55,6 +56,10 @@ func islandWASMExecArtifact(outputDir string) (plannedAssetArtifact, error) {
 		AssetArtifact: AssetArtifact{Path: filepath.Join(outputDir, filepath.FromSlash(assetPath))},
 		contents:      contents,
 	}, nil
+}
+
+func wasmGoRoot() string {
+	return strings.TrimSpace(build.Default.GOROOT)
 }
 
 func islandJSAssetPath(packageName, componentName string) string {

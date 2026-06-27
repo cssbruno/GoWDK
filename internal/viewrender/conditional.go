@@ -2,9 +2,10 @@ package viewrender
 
 import (
 	"fmt"
-	"github.com/cssbruno/gowdk/internal/clientlang"
 	"strconv"
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/clientlang"
 )
 
 func renderNodes(nodes []Node, ctx *renderContext) (string, error) {

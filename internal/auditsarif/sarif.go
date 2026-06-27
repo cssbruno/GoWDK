@@ -317,7 +317,7 @@ func looksLikeFilePath(uri string) bool {
 		return false
 	}
 	for _, char := range uri[dot+1:] {
-		if !(char >= 'a' && char <= 'z') && !(char >= 'A' && char <= 'Z') {
+		if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') {
 			return false
 		}
 	}

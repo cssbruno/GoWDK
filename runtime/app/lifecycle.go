@@ -186,7 +186,7 @@ func startServices(ctx context.Context, serviceContext ServiceContext, services 
 	done := make(chan struct{})
 	var wait sync.WaitGroup
 	for _, service := range services {
-		service := service
+
 		wait.Add(1)
 		go func() {
 			defer wait.Done()

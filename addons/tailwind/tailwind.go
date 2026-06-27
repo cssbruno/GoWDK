@@ -72,7 +72,9 @@ func (p processor) ProcessCSS(context gowdk.CSSContext) (gowdk.CSSResult, error)
 	if err != nil {
 		return gowdk.CSSResult{}, err
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		_ = os.RemoveAll(tempDir)
+	}()
 
 	tempOutput := filepath.Join(tempDir, "app.css")
 	workingDir := cssWorkingDir(context)

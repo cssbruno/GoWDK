@@ -19,18 +19,18 @@ func ContractRegistry(register ...func(*contracts.Registry)) *contracts.Registry
 }
 
 // CaptureCommandEvents runs a command and fails the test on command errors.
-func CaptureCommandEvents[C, R any](t testing.TB, registry *contracts.Registry, command C) (R, []contracts.EventEnvelope) {
-	t.Helper()
+func CaptureCommandEvents[C, R any](tb testing.TB, registry *contracts.Registry, command C) (R, []contracts.EventEnvelope) {
+	tb.Helper()
 	result, events, err := contracts.CaptureCommandEvents[C, R](context.Background(), registry, command)
 	if err != nil {
-		t.Fatalf("capture command events: %v", err)
+		tb.Fatalf("capture command events: %v", err)
 	}
 	return result, events
 }
 
 // AssertEmitted finds one captured event with the requested category and type.
-func AssertEmitted[E any](t testing.TB, events []contracts.EventEnvelope, category contracts.EventCategory, check func(E)) {
-	t.Helper()
+func AssertEmitted[E any](tb testing.TB, events []contracts.EventEnvelope, category contracts.EventCategory, check func(E)) {
+	tb.Helper()
 	wantType := contracts.ContractName[E]()
 	for _, event := range events {
 		if event.Category != category || event.Type != wantType {
@@ -39,20 +39,20 @@ func AssertEmitted[E any](t testing.TB, events []contracts.EventEnvelope, catego
 		value, ok := event.Value.(E)
 		if !ok {
 			var zero E
-			t.Fatalf("captured %s event %s has value type %T, want %T", category, event.Type, event.Value, zero)
+			tb.Fatalf("captured %s event %s has value type %T, want %T", category, event.Type, event.Value, zero)
 		}
 		if check != nil {
 			check(value)
 		}
 		return
 	}
-	t.Fatalf("missing captured %s event %s in %#v", category, wantType, events)
+	tb.Fatalf("missing captured %s event %s in %#v", category, wantType, events)
 }
 
 // AssertNoEvents fails when a command unexpectedly emitted events.
-func AssertNoEvents(t testing.TB, events []contracts.EventEnvelope) {
-	t.Helper()
+func AssertNoEvents(tb testing.TB, events []contracts.EventEnvelope) {
+	tb.Helper()
 	if len(events) != 0 {
-		t.Fatalf("expected no captured events, got %#v", events)
+		tb.Fatalf("expected no captured events, got %#v", events)
 	}
 }

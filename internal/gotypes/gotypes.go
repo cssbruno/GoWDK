@@ -211,7 +211,9 @@ func RunStateInitJSON(imports []gwdkir.Import, state gwdkir.StateContract) ([]by
 		return nil, err
 	}
 	path := file.Name()
-	defer os.Remove(path)
+	defer func() {
+		_ = os.Remove(path)
+	}()
 	if err := file.Close(); err != nil {
 		return nil, err
 	}
@@ -414,7 +416,7 @@ func stateInitEncodeGuardStmt() ast.Stmt {
 // alias and rejects relative import paths.
 func ImportPathForAlias(imports []gwdkir.Import, alias string) (string, error) {
 	if strings.TrimSpace(alias) == "" {
-		return "", fmt.Errorf("Go import alias is required")
+		return "", fmt.Errorf("go import alias is required")
 	}
 	for _, item := range imports {
 		effective, err := EffectiveImportAlias(item)
@@ -425,7 +427,7 @@ func ImportPathForAlias(imports []gwdkir.Import, alias string) (string, error) {
 			return item.Path, nil
 		}
 	}
-	return "", fmt.Errorf("Go import alias %q is not declared", alias)
+	return "", fmt.Errorf("go import alias %q is not declared", alias)
 }
 
 // EffectiveImportAlias returns the explicit import alias or the package name
@@ -449,10 +451,10 @@ func EffectiveImportAlias(item gwdkir.Import) (string, error) {
 func ValidateImportPath(importPath string) error {
 	path := strings.TrimSpace(importPath)
 	if path == "" {
-		return fmt.Errorf("Go import path is required")
+		return fmt.Errorf("go import path is required")
 	}
 	if strings.HasPrefix(path, ".") || strings.HasPrefix(path, "/") || strings.Contains(path, `\`) {
-		return fmt.Errorf("Go import path %q must be a module import path, not a relative path", importPath)
+		return fmt.Errorf("go import path %q must be a module import path, not a relative path", importPath)
 	}
 	return nil
 }
@@ -523,7 +525,7 @@ func loadPackage(importPath string) (loadedPackage, error) {
 		files = append(files, file)
 	}
 	if len(files) == 0 {
-		return loadedPackage{}, fmt.Errorf("Go package %q has no buildable Go files", importPath)
+		return loadedPackage{}, fmt.Errorf("go package %q has no buildable Go files", importPath)
 	}
 	config := types.Config{Importer: importer.Default()}
 	checked, err := config.Check(info.ImportPath, fileSet, files, nil)

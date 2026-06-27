@@ -2,8 +2,9 @@ package viewrender
 
 import (
 	"fmt"
-	"github.com/cssbruno/gowdk/internal/clientlang"
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/clientlang"
 )
 
 type styleBinding struct {

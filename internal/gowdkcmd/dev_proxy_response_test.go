@@ -157,11 +157,15 @@ func TestModifyDevRuntimeProxyResponsePropagatesReadAndCloseErrors(t *testing.T)
 	if original.closes != 1 {
 		t.Fatalf("expected errored body to close once, got %d", original.closes)
 	}
+	_ = response.Body.Close()
 }
 
 func TestModifyDevRuntimeProxyResponseKeepsRuntimeErrorEventForOversizedHTML(t *testing.T) {
 	original := &trackingReadCloser{reader: strings.NewReader("unread")}
 	response := devProxyHTMLResponse(http.StatusInternalServerError, maxDevProxyHTMLBytes+1, original)
+	defer func() {
+		_ = response.Body.Close()
+	}()
 	broker := newLiveReloadBroker()
 	events := make(chan liveReloadEvent, 2)
 	broker.clients[events] = true

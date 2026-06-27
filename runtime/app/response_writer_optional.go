@@ -99,6 +99,7 @@ type boundaryHijackerPusher struct{ *boundaryResponseWriter }
 func (writer boundaryHijackerPusher) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return writer.hijack()
 }
+
 func (writer boundaryHijackerPusher) Push(target string, options *http.PushOptions) error {
 	return writer.push(target, options)
 }
@@ -109,6 +110,7 @@ func (writer boundaryFlusherHijackerPusher) Flush() { writer.flush() }
 func (writer boundaryFlusherHijackerPusher) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return writer.hijack()
 }
+
 func (writer boundaryFlusherHijackerPusher) Push(target string, options *http.PushOptions) error {
 	return writer.push(target, options)
 }
@@ -184,6 +186,7 @@ type traceHijackerPusher struct{ *traceResponseWriter }
 func (writer traceHijackerPusher) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return writer.hijack()
 }
+
 func (writer traceHijackerPusher) Push(target string, options *http.PushOptions) error {
 	return writer.push(target, options)
 }
@@ -194,6 +197,7 @@ func (writer traceFlusherHijackerPusher) Flush() { writer.flush() }
 func (writer traceFlusherHijackerPusher) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return writer.hijack()
 }
+
 func (writer traceFlusherHijackerPusher) Push(target string, options *http.PushOptions) error {
 	return writer.push(target, options)
 }

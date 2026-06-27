@@ -168,7 +168,7 @@ func evalExpr(expr ast.Expr, container any) (any, error) {
 		case "false":
 			return false, nil
 		case "nil":
-			return nil, nil
+			return nilEvalValue(), nil
 		default:
 			value, ok := ElementPath(container, typed.Name)
 			if !ok {
@@ -234,6 +234,10 @@ func evalExpr(expr ast.Expr, container any) (any, error) {
 	default:
 		return nil, fmt.Errorf("unsupported SSR conditional expression")
 	}
+}
+
+func nilEvalValue() any {
+	return nil
 }
 
 func evalBasicLit(expr *ast.BasicLit) (any, error) {
@@ -324,8 +328,7 @@ func evalCallExpr(expr *ast.CallExpr, container any) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		switch typed := value.(type) {
-		case string:
+		if typed, ok := value.(string); ok {
 			return len(typed), nil
 		}
 		reflected := reflect.ValueOf(value)
@@ -484,8 +487,7 @@ func convertValue(kind string, value any) (any, error) {
 }
 
 func normalizeEvalValue(value any) any {
-	switch typed := value.(type) {
-	case json.Number:
+	if typed, ok := value.(json.Number); ok {
 		return typed
 	}
 	reflected := reflect.ValueOf(value)

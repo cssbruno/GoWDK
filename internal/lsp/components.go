@@ -127,7 +127,7 @@ func (server *Server) loadWorkspaceComponentDefinitions(root string) (map[string
 	payloads := map[string]string{}
 	_ = filepath.WalkDir(root, func(filePath string, entry os.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return ignoreWorkspaceWalkError()
 		}
 		if entry.IsDir() {
 			if shouldSkipWorkspaceDir(entry.Name()) && filePath != root {
@@ -142,8 +142,8 @@ func (server *Server) loadWorkspaceComponentDefinitions(root string) (map[string
 		if _, open := server.openDocumentByPath(filePath); open {
 			return nil
 		}
-		payload, err := os.ReadFile(filePath)
-		if err != nil {
+		payload, ok := readWorkspaceComponentPayload(filePath)
+		if !ok {
 			return nil
 		}
 		if lang.ClassifySource(filePath, payload) != lang.FileKindComponent {
@@ -177,6 +177,18 @@ func (server *Server) loadWorkspaceComponentDefinitions(root string) (map[string
 		}
 	}
 	return definitions, key, paths, dirs
+}
+
+func ignoreWorkspaceWalkError() error {
+	return nil
+}
+
+func readWorkspaceComponentPayload(filePath string) ([]byte, bool) {
+	payload, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, false
+	}
+	return payload, true
 }
 
 func workspaceComponentCacheKey(files, dirs []string) string {

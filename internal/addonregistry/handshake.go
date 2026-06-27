@@ -36,20 +36,20 @@ func (e Entry) SupportsVersion(version string) VersionSupport {
 	}
 
 	if strings.TrimSpace(e.MinGOWDK) != "" {
-		min, ok := parseVersion(e.MinGOWDK)
+		minimum, ok := parseVersion(e.MinGOWDK)
 		if !ok {
 			return VersionUnknown
 		}
-		if compareVersion(target, min) < 0 {
+		if compareVersion(target, minimum) < 0 {
 			return VersionUnsupported
 		}
 	}
 	if strings.TrimSpace(e.MaxGOWDK) != "" {
-		max, ok := parseVersion(e.MaxGOWDK)
+		maximum, ok := parseVersion(e.MaxGOWDK)
 		if !ok {
 			return VersionUnknown
 		}
-		if compareVersion(target, max) > 0 {
+		if compareVersion(target, maximum) > 0 {
 			return VersionUnsupported
 		}
 	}

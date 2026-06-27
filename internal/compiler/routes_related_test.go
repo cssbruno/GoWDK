@@ -8,6 +8,13 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
+func testSpan(line, endColumn int) source.SourceSpan {
+	return source.SourceSpan{
+		Start: source.SourcePosition{Line: line, Column: 1},
+		End:   source.SourcePosition{Line: line, Column: endColumn},
+	}
+}
+
 func span(line, startColumn, endColumn int) source.SourceSpan {
 	return source.SourceSpan{
 		Start: source.SourcePosition{Line: line, Column: startColumn},
@@ -26,8 +33,8 @@ func findByCode(diagnostics []ValidationError, code string) (ValidationError, bo
 
 func TestDuplicateRouteCarriesRelatedFirstDeclaration(t *testing.T) {
 	pages := []gwdkir.Page{
-		{ID: "home", Source: "home.page.gwdk", Route: "/", Spans: gwdkir.PageSpans{Route: span(2, 1, 9)}},
-		{ID: "index", Source: "index.page.gwdk", Route: "/", Spans: gwdkir.PageSpans{Route: span(3, 1, 9)}},
+		{ID: "home", Source: "home.page.gwdk", Route: "/", Spans: gwdkir.PageSpans{Route: testSpan(2, 9)}},
+		{ID: "index", Source: "index.page.gwdk", Route: "/", Spans: gwdkir.PageSpans{Route: testSpan(3, 9)}},
 	}
 
 	diagnostic, ok := findByCode(validateUniquePageRoutes(gowdk.Config{}, pages), "duplicate_route")
@@ -44,7 +51,7 @@ func TestDuplicateRouteCarriesRelatedFirstDeclaration(t *testing.T) {
 	if related.Source != "home.page.gwdk" {
 		t.Fatalf("related location should point at the first declaration; got %q", related.Source)
 	}
-	if related.Span != span(2, 1, 9) {
+	if related.Span != testSpan(2, 9) {
 		t.Fatalf("related span should be the first route span; got %+v", related.Span)
 	}
 	if related.Message == "" {
@@ -54,8 +61,8 @@ func TestDuplicateRouteCarriesRelatedFirstDeclaration(t *testing.T) {
 
 func TestDuplicatePageIDCarriesRelatedFirstDeclaration(t *testing.T) {
 	pages := []gwdkir.Page{
-		{ID: "home", Source: "a.page.gwdk", Spans: gwdkir.PageSpans{Page: span(1, 1, 9)}},
-		{ID: "home", Source: "b.page.gwdk", Spans: gwdkir.PageSpans{Page: span(1, 1, 9)}},
+		{ID: "home", Source: "a.page.gwdk", Spans: gwdkir.PageSpans{Page: testSpan(1, 9)}},
+		{ID: "home", Source: "b.page.gwdk", Spans: gwdkir.PageSpans{Page: testSpan(1, 9)}},
 	}
 	diagnostic, ok := findByCode(validateUniquePages(pages), "duplicate_page_id")
 	if !ok {
@@ -71,15 +78,15 @@ func TestDuplicatePageStoreCarriesRelatedFirstDeclaration(t *testing.T) {
 		ID:     "home",
 		Source: "home.page.gwdk",
 		Stores: []gwdkir.Store{
-			{Name: "Counter", Span: span(3, 1, 8)},
-			{Name: "Counter", Span: span(6, 1, 8)},
+			{Name: "Counter", Span: testSpan(3, 8)},
+			{Name: "Counter", Span: testSpan(6, 8)},
 		},
 	}
 	diagnostic, ok := findByCode(validatePageStores(page), "duplicate_page_store")
 	if !ok {
 		t.Fatal("expected a duplicate_page_store diagnostic")
 	}
-	if len(diagnostic.Related) != 1 || diagnostic.Related[0].Span != span(3, 1, 8) {
+	if len(diagnostic.Related) != 1 || diagnostic.Related[0].Span != testSpan(3, 8) {
 		t.Fatalf("expected related location at first store; got %+v", diagnostic.Related)
 	}
 }
@@ -89,8 +96,8 @@ func TestContractRouteConflictCarriesRelatedFirstDeclaration(t *testing.T) {
 	// through the shared route-registration path; the conflict must point back
 	// at the first contract's declaration.
 	refs := []gwdkir.ContractReference{
-		{Kind: gwdkir.ContractQuery, Name: "Reports", Method: "GET", Path: "/reports", Source: "reports.gwdk", Span: span(4, 1, 12)},
-		{Kind: gwdkir.ContractQuery, Name: "Summary", Method: "GET", Path: "/reports", Source: "summary.gwdk", Span: span(7, 1, 12)},
+		{Kind: gwdkir.ContractQuery, Name: "Reports", Method: "GET", Path: "/reports", Source: "reports.gwdk", Span: testSpan(4, 12)},
+		{Kind: gwdkir.ContractQuery, Name: "Summary", Method: "GET", Path: "/reports", Source: "summary.gwdk", Span: testSpan(7, 12)},
 	}
 
 	diagnostic, ok := findByCode(validateRouteMethodConflicts(gowdk.Config{}, nil, nil, gwdkir.SourceMap{}, refs), "route_method_conflict")
@@ -104,7 +111,7 @@ func TestContractRouteConflictCarriesRelatedFirstDeclaration(t *testing.T) {
 	if related.Source != "reports.gwdk" {
 		t.Fatalf("related location should point at the first contract; got %q", related.Source)
 	}
-	if related.Span != span(4, 1, 12) {
+	if related.Span != testSpan(4, 12) {
 		t.Fatalf("related span should be the first contract span; got %+v", related.Span)
 	}
 }

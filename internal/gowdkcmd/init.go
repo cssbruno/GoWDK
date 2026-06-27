@@ -2,6 +2,7 @@ package gowdkcmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/ast"
 	goformat "go/format"
@@ -322,22 +323,22 @@ func assertGET(t *testing.T, target string, status int, contains string) {
 
 func initConfigExpr() ast.Expr {
 	return &ast.CompositeLit{
-		Type: initSel("gowdk", "Config"),
+		Type: initSel("Config"),
 		Elts: []ast.Expr{
 			initKeyValue("AppName", initStringLit("GOWDK App")),
 			initKeyValue("Source", &ast.CompositeLit{
-				Type: initSel("gowdk", "SourceConfig"),
+				Type: initSel("SourceConfig"),
 				Elts: []ast.Expr{
 					initKeyValue("Include", initStringSlice("src/**/*.gwdk")),
 				},
 			}),
 			initKeyValue("Build", &ast.CompositeLit{
-				Type: initSel("gowdk", "BuildConfig"),
+				Type: initSel("BuildConfig"),
 				Elts: []ast.Expr{
 					initKeyValue("Targets", &ast.CompositeLit{
-						Type: &ast.ArrayType{Elt: initSel("gowdk", "BuildTargetConfig")},
+						Type: &ast.ArrayType{Elt: initSel("BuildTargetConfig")},
 						Elts: []ast.Expr{&ast.CompositeLit{
-							Type: initSel("gowdk", "BuildTargetConfig"),
+							Type: initSel("BuildTargetConfig"),
 							Elts: []ast.Expr{
 								initKeyValue("Name", initStringLit("site")),
 								initKeyValue("App", initStringLit(".gowdk/site")),
@@ -348,7 +349,7 @@ func initConfigExpr() ast.Expr {
 				},
 			}),
 			initKeyValue("CSS", &ast.CompositeLit{
-				Type: initSel("gowdk", "CSSConfig"),
+				Type: initSel("CSSConfig"),
 				Elts: []ast.Expr{
 					initKeyValue("Include", initStringSlice("styles/**/*.css")),
 					initKeyValue("Default", initStringSlice("global")),
@@ -370,8 +371,8 @@ func initKeyValue(key string, value ast.Expr) ast.Expr {
 	return &ast.KeyValueExpr{Key: ast.NewIdent(key), Value: value}
 }
 
-func initSel(pkg string, name string) ast.Expr {
-	return &ast.SelectorExpr{X: ast.NewIdent(pkg), Sel: ast.NewIdent(name)}
+func initSel(name string) ast.Expr {
+	return &ast.SelectorExpr{X: ast.NewIdent("gowdk"), Sel: ast.NewIdent(name)}
 }
 
 func initStringLit(value string) *ast.BasicLit {
@@ -390,11 +391,11 @@ func parseInitOptions(args []string) (initOptions, error) {
 		case "--template":
 			index++
 			if index >= len(args) {
-				return initOptions{}, fmt.Errorf(initUsage)
+				return initOptions{}, errors.New(initUsage)
 			}
 			options.Template = args[index]
 		case "-h", "--help":
-			return initOptions{}, fmt.Errorf(initUsage)
+			return initOptions{}, errors.New(initUsage)
 		default:
 			if strings.HasPrefix(arg, "--template=") {
 				options.Template = strings.TrimPrefix(arg, "--template=")
@@ -404,7 +405,7 @@ func parseInitOptions(args []string) (initOptions, error) {
 				return initOptions{}, fmt.Errorf("unknown init flag %q", arg)
 			}
 			if options.Dir != "." {
-				return initOptions{}, fmt.Errorf(initUsage)
+				return initOptions{}, errors.New(initUsage)
 			}
 			options.Dir = arg
 		}

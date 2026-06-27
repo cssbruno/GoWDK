@@ -64,7 +64,7 @@ func RunScheduledJobs(ctx context.Context, jobs []ScheduledJob) error {
 	errs := make(chan error, len(parsed))
 	var wait sync.WaitGroup
 	for _, job := range parsed {
-		job := job
+
 		wait.Add(1)
 		go func() {
 			defer wait.Done()

@@ -81,7 +81,9 @@ func OpenWithOptions(driver, dsn string, options Options) (*sql.DB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer cancel()
 	if err := database.PingContext(ctx); err != nil {
-		database.Close()
+		if closeErr := database.Close(); closeErr != nil {
+			return nil, fmt.Errorf("gowdk db: ping %q: %w; close: %w", driver, err, closeErr)
+		}
 		return nil, fmt.Errorf("gowdk db: ping %q: %w", driver, err)
 	}
 	return database, nil

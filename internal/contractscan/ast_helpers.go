@@ -53,7 +53,7 @@ func goImportAliases(file *ast.File) map[string]string {
 		if err != nil || importPath == "" {
 			continue
 		}
-		alias := ""
+		var alias string
 		switch {
 		case importSpec.Name == nil:
 			alias = pathpkg.Base(importPath)

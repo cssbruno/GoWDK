@@ -68,7 +68,7 @@ func isStaticPackageGoBlockTarget(target string) bool {
 
 func runInlineBuildDataCall(script gwdkir.GoBlock, imports []gwdkir.Import, source string, function string, routeParams map[string]string, locale string) (map[string]string, error) {
 	var lastErr error
-	for _, candidate := range buildDataRunnerCandidates(routeParams) {
+	for _, candidate := range buildDataRunnerCandidates() {
 		runnerSource, err := inlineBuildDataRunnerSource(script, imports, source, function, candidate, routeParams, locale)
 		if err != nil {
 			return nil, err
@@ -87,7 +87,7 @@ type buildDataRunnerCandidate struct {
 	withParams   bool
 }
 
-func buildDataRunnerCandidates(routeParams map[string]string) []buildDataRunnerCandidate {
+func buildDataRunnerCandidates() []buildDataRunnerCandidate {
 	return []buildDataRunnerCandidate{
 		{returnsError: true},
 		{returnsError: false},
@@ -293,7 +293,7 @@ func sourceDir(source string) string {
 
 func runBuildDataCall(alias, importPath, function string, workDir string, routeParams map[string]string, locale string) (map[string]string, error) {
 	var lastErr error
-	for _, candidate := range buildDataRunnerCandidates(routeParams) {
+	for _, candidate := range buildDataRunnerCandidates() {
 		source, err := buildDataRunnerSource(alias, importPath, function, candidate, routeParams, locale)
 		if err != nil {
 			return nil, err
@@ -486,7 +486,9 @@ func runBuildDataRunner(source string, workDir string, label string) (map[string
 		return nil, err
 	}
 	path := file.Name()
-	defer os.Remove(path)
+	defer func() {
+		_ = os.Remove(path)
+	}()
 	if err := file.Close(); err != nil {
 		return nil, err
 	}

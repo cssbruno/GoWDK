@@ -208,13 +208,13 @@ func parseAuditApply(line string, lineNumber int, rawLine string) (gwdkast.Audit
 	if len(tokens) == 0 {
 		return gwdkast.AuditApply{}, false, nil
 	}
-	switch {
-	case tokens[0].Lexeme == "match":
+	switch tokens[0].Lexeme {
+	case "match":
 		if len(tokens) != 2 || tokens[1].Kind != syntax.TokenString {
 			return gwdkast.AuditApply{}, true, fmt.Errorf("line %d: match must use match \"<selector>\"", lineNumber)
 		}
 		return gwdkast.AuditApply{Selector: decodeStringLiteral(tokens[1].Lexeme), Span: sourceLineSpan(lineNumber, rawLine)}, true, nil
-	case tokens[0].Lexeme == "apply":
+	case "apply":
 		if len(tokens) != 3 || tokens[1].Lexeme != "to" || tokens[2].Kind != syntax.TokenString {
 			return gwdkast.AuditApply{}, true, fmt.Errorf("line %d: apply must use apply to \"<selector>\"", lineNumber)
 		}

@@ -13,26 +13,28 @@ import (
 	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
-type SyntaxFile = gwdkast.File
-type SyntaxPackage = gwdkast.Package
-type SyntaxMetadata = gwdkast.MetadataDecl
-type SyntaxImport = gwdkast.Import
-type SyntaxUse = gwdkast.Use
-type SyntaxBlock = gwdkast.Block
-type SyntaxEndpoint = gwdkast.Endpoint
-type SyntaxFragmentEndpoint = gwdkast.FragmentEndpoint
-type GoTypeRef = gwdkast.GoTypeRef
-type GoFuncRef = gwdkast.GoFuncRef
-type StateContract = gwdkast.StateContract
-type WASMContract = gwdkast.WASMContract
-type LiteralRecord = gwdkast.LiteralRecord
-type BuildCall = gwdkast.BuildCall
-type Prop = gwdkast.Prop
-type Export = gwdkast.Export
-type Emit = gwdkast.Emit
-type EmitParam = gwdkast.EmitParam
-type ActionStatement = gwdkast.ActionStatement
-type APIStatement = gwdkast.APIStatement
+type (
+	SyntaxFile             = gwdkast.File
+	SyntaxPackage          = gwdkast.Package
+	SyntaxMetadata         = gwdkast.MetadataDecl
+	SyntaxImport           = gwdkast.Import
+	SyntaxUse              = gwdkast.Use
+	SyntaxBlock            = gwdkast.Block
+	SyntaxEndpoint         = gwdkast.Endpoint
+	SyntaxFragmentEndpoint = gwdkast.FragmentEndpoint
+	GoTypeRef              = gwdkast.GoTypeRef
+	GoFuncRef              = gwdkast.GoFuncRef
+	StateContract          = gwdkast.StateContract
+	WASMContract           = gwdkast.WASMContract
+	LiteralRecord          = gwdkast.LiteralRecord
+	BuildCall              = gwdkast.BuildCall
+	Prop                   = gwdkast.Prop
+	Export                 = gwdkast.Export
+	Emit                   = gwdkast.Emit
+	EmitParam              = gwdkast.EmitParam
+	ActionStatement        = gwdkast.ActionStatement
+	APIStatement           = gwdkast.APIStatement
+)
 
 // ParseSyntax parses a .gwdk source file into a typed syntax AST for the
 // current compiler subset.
@@ -533,10 +535,7 @@ func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, e
 		}
 		block.Records = records
 	case "build":
-		call, ok, err := parseBuildCall(body)
-		if err != nil {
-			return SyntaxBlock{}, err
-		}
+		call, ok := parseBuildCall(body)
 		if ok {
 			block.Call = &call
 			return block, nil
@@ -594,7 +593,7 @@ func syntaxBodyStart(body []syntaxBodyLine) source.SourcePosition {
 	return source.SourcePosition{}
 }
 
-func parseBuildCall(body []syntaxBodyLine) (BuildCall, bool, error) {
+func parseBuildCall(body []syntaxBodyLine) (BuildCall, bool) {
 	var significant []syntaxBodyLine
 	for _, raw := range body {
 		line := strings.TrimSpace(raw.Text)
@@ -604,18 +603,18 @@ func parseBuildCall(body []syntaxBodyLine) (BuildCall, bool, error) {
 		significant = append(significant, raw)
 	}
 	if len(significant) != 1 {
-		return BuildCall{}, false, nil
+		return BuildCall{}, false
 	}
 	line := strings.TrimSpace(significant[0].Text)
 	match := buildCallPattern.FindStringSubmatch(line)
 	if match == nil {
-		return BuildCall{}, false, nil
+		return BuildCall{}, false
 	}
 	return BuildCall{
 		Alias:    match[1],
 		Function: match[2],
 		Span:     sourceLineSpan(significant[0].Line, significant[0].Text),
-	}, true, nil
+	}, true
 }
 
 func joinSyntaxBody(body []syntaxBodyLine) string {

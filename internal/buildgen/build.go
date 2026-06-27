@@ -201,19 +201,19 @@ func recordWriteStat(result *Result, wrote bool) {
 }
 
 func finalizeCSSArtifact(artifact *plannedCSSArtifact) {
-	artifact.CSSArtifact.Hash = contentHash(artifact.contents)
-	artifact.CSSArtifact.CachePolicy = immutableAssetCachePolicy
-	artifact.CSSArtifact.SizeBytes = int64(len(artifact.contents))
+	artifact.Hash = contentHash(artifact.contents)
+	artifact.CachePolicy = immutableAssetCachePolicy
+	artifact.SizeBytes = int64(len(artifact.contents))
 }
 
 func finalizeAssetArtifact(artifact *plannedAssetArtifact) {
-	if artifact.AssetArtifact.Hash == "" {
-		artifact.AssetArtifact.Hash = contentHash(artifact.contents)
+	if artifact.Hash == "" {
+		artifact.Hash = contentHash(artifact.contents)
 	}
-	if artifact.AssetArtifact.CachePolicy == "" {
-		artifact.AssetArtifact.CachePolicy = noCacheAssetCachePolicy
+	if artifact.CachePolicy == "" {
+		artifact.CachePolicy = noCacheAssetCachePolicy
 	}
-	artifact.AssetArtifact.SizeBytes = int64(len(artifact.contents))
+	artifact.SizeBytes = int64(len(artifact.contents))
 }
 
 func BuildMemory(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (MemoryResult, error) {
@@ -746,7 +746,8 @@ func BuildIncrementalFromValidatedProgram(config gowdk.Config, validated compile
 	if err != nil {
 		return Result{}, reporter.fail("plan", err)
 	}
-	runtime = append(componentAssets, append(scopedJS, runtime...)...)
+	runtime = append(scopedJS, runtime...)
+	runtime = append(componentAssets, runtime...)
 	var obfuscations []assetObfuscationRecord
 	runtime, obfuscations, err = applyAssetObfuscation(config, outputDir, runtime)
 	if err != nil {
@@ -1116,7 +1117,8 @@ func planFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (build
 	if err != nil {
 		return buildPlan{}, err
 	}
-	assets := append(componentAssets, scopedJS...)
+	assets := append([]plannedAssetArtifact{}, componentAssets...)
+	assets = append(assets, scopedJS...)
 	assets = append(assets, runtime...)
 	assets, obfuscations, err := applyAssetObfuscation(config, outputDir, assets)
 	if err != nil {

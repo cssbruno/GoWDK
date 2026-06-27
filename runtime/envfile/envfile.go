@@ -107,7 +107,9 @@ func ParseFile(path string) ([]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	var entries []Entry
 	scanner := bufio.NewScanner(file)

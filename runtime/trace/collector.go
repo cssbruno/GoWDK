@@ -441,7 +441,9 @@ func collectorRateKey(request *http.Request) string {
 }
 
 func (collector *Collector) recordJSON(ctx context.Context, request *http.Request) error {
-	defer request.Body.Close()
+	defer func() {
+		_ = request.Body.Close()
+	}()
 	payload, err := io.ReadAll(io.LimitReader(request.Body, maxCollectorBodyBytes+1))
 	if err != nil {
 		return err

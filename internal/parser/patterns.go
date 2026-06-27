@@ -18,8 +18,6 @@ var (
 	jsPattern               = linePattern{parse: parseJSLine}
 	jsBlockPattern          = linePattern{parse: parseJSBlockLine}
 	buildCallPattern        = linePattern{parse: parseBuildCallLine}
-	actionEndpointPattern   = linePattern{parse: parseActionEndpointLine}
-	apiEndpointPattern      = linePattern{parse: parseAPIEndpointLine}
 	fragmentEndpointPattern = linePattern{parse: parseFragmentEndpointLine}
 	actionPattern           = linePattern{parse: parseActionBlockLine}
 	apiPattern              = linePattern{parse: parseAPIBlockLine}
@@ -213,30 +211,6 @@ func parseBuildCallLine(line string) []string {
 		return nil
 	}
 	return []string{line, alias, function}
-}
-
-func parseActionEndpointLine(line string) []string {
-	spec, ok, _ := parseEndpointLineSpec(line, "act", true)
-	if !ok {
-		return nil
-	}
-	return []string{line, spec.Name, spec.Method, spec.Route, spec.ErrorPath}
-}
-
-func parseAPIEndpointLine(line string) []string {
-	spec, ok, _ := parseEndpointLineSpec(line, "api", false)
-	if !ok {
-		return nil
-	}
-	return []string{line, spec.Name, spec.Method, spec.Route, spec.ErrorPath}
-}
-
-func parseEndpointLine(line, keyword string, action bool) []string {
-	spec, ok, _ := parseEndpointLineSpec(line, keyword, action)
-	if !ok {
-		return nil
-	}
-	return []string{line, spec.Name, spec.Method, spec.Route, spec.ErrorPath}
 }
 
 type endpointLineSpec struct {
@@ -469,15 +443,15 @@ func parsePropLine(line string) []string {
 func parseEmitLine(line string) []string {
 	line = strings.TrimSpace(line)
 	open := strings.Index(line, "(")
-	close := strings.LastIndex(line, ")")
-	if open <= 0 || close != len(line)-1 {
+	closeIndex := strings.LastIndex(line, ")")
+	if open <= 0 || closeIndex != len(line)-1 {
 		return nil
 	}
 	name := strings.TrimSpace(line[:open])
 	if !isStrictIdent(name) {
 		return nil
 	}
-	return []string{line, name, line[open+1 : close]}
+	return []string{line, name, line[open+1 : closeIndex]}
 }
 
 func parseIdentifierLine(line string) []string {

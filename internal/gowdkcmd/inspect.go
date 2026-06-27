@@ -2,6 +2,7 @@ package gowdkcmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -15,7 +16,7 @@ const inspectUsage = "usage: gowdk inspect ir|tree|endpoint-graph|asset-graph|go
 
 func inspect(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf(inspectUsage)
+		return errors.New(inspectUsage)
 	}
 	switch args[0] {
 	case "ir":

@@ -122,9 +122,7 @@ func RuntimeSitemapPlanFromValidatedProgram(config gowdk.Config, validated compi
 			urls = append(urls, runtimeseo.URL{Loc: output.route})
 		}
 	}
-	for _, extra := range options.ExtraURLs {
-		urls = append(urls, runtimeseo.URL(extra))
-	}
+	urls = append(urls, options.ExtraURLs...)
 	return RuntimeSitemapPlan{
 		Enabled:    true,
 		BaseURL:    options.BaseURL,

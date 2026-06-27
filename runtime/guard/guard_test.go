@@ -20,15 +20,22 @@ func (invalidTraceIDGenerator) NewTraceID() gowdktrace.TraceID { return "" }
 
 func (invalidTraceIDGenerator) NewSpanID() gowdktrace.SpanID { return "" }
 
+type guardTestContextKey string
+
+func unauthenticatedGuardPrincipal(*http.Request) (*gowdkauth.Principal, error) {
+	var principal *gowdkauth.Principal
+	return principal, nil
+}
+
 func TestNewContextCarriesRequestContext(t *testing.T) {
-	request, err := http.NewRequestWithContext(context.WithValue(context.Background(), "trace", "abc"), http.MethodGet, "/dashboard", nil)
+	request, err := http.NewRequestWithContext(context.WithValue(context.Background(), guardTestContextKey("trace"), "abc"), http.MethodGet, "/dashboard", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	ctx := NewContext(request, map[string]any{"user": "Ada"})
 
-	if ctx.Request != request || ctx.Context.Value("trace") != "abc" || ctx.Session["user"] != "Ada" {
+	if ctx.Request != request || ctx.Context.Value(guardTestContextKey("trace")) != "abc" || ctx.Session["user"] != "Ada" {
 		t.Fatalf("unexpected guard context: %#v", ctx)
 	}
 }
@@ -133,9 +140,7 @@ func TestRunGuardsWithAuthFailsClosedForNativeRBACGuards(t *testing.T) {
 		t.Fatalf("expected missing auth provider error, got %v", err)
 	}
 
-	if err := RunGuardsWithAuth(Context{}, []string{"role:admin"}, nil, gowdkauth.ProviderFunc(func(*http.Request) (*gowdkauth.Principal, error) {
-		return nil, nil
-	})); !errors.Is(err, gowdkauth.ErrUnauthenticated) {
+	if err := RunGuardsWithAuth(Context{}, []string{"role:admin"}, nil, gowdkauth.ProviderFunc(unauthenticatedGuardPrincipal)); !errors.Is(err, gowdkauth.ErrUnauthenticated) {
 		t.Fatalf("expected unauthenticated error, got %v", err)
 	}
 
@@ -237,10 +242,8 @@ func TestWriteNoStoreFailureRedactsGuardRuntimeErrors(t *testing.T) {
 			blocked: []string{"role:admin", "requires an auth provider"},
 		},
 		{
-			name: "native unauthenticated",
-			err: RunGuardsWithAuth(NewContext(request, nil), []string{"role:admin"}, nil, gowdkauth.ProviderFunc(func(*http.Request) (*gowdkauth.Principal, error) {
-				return nil, nil
-			})),
+			name:    "native unauthenticated",
+			err:     RunGuardsWithAuth(NewContext(request, nil), []string{"role:admin"}, nil, gowdkauth.ProviderFunc(unauthenticatedGuardPrincipal)),
 			blocked: []string{"role:admin", gowdkauth.ErrUnauthenticated.Error()},
 		},
 		{

@@ -17,13 +17,17 @@ func TestInheritedListenerRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer base.Close()
+	defer func() {
+		_ = base.Close()
+	}()
 
 	file, err := base.(*net.TCPListener).File()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	// Hand inheritedListener its own duplicate so the descriptor it consumes and
 	// closes is independent of the ones this test owns.
@@ -40,7 +44,9 @@ func TestInheritedListenerRoundTrip(t *testing.T) {
 	if got == nil {
 		t.Fatal("expected a listener from an inherited descriptor")
 	}
-	defer got.Close()
+	defer func() {
+		_ = got.Close()
+	}()
 
 	if got.Addr().String() != base.Addr().String() {
 		t.Fatalf("inherited listener addr = %q, want %q", got.Addr(), base.Addr())
@@ -53,7 +59,7 @@ func TestInheritedListenerRoundTrip(t *testing.T) {
 			accepted <- err
 			return
 		}
-		conn.Close()
+		_ = conn.Close()
 		accepted <- nil
 	}()
 
@@ -61,7 +67,7 @@ func TestInheritedListenerRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial inherited listener: %v", err)
 	}
-	client.Close()
+	_ = client.Close()
 	if err := <-accepted; err != nil {
 		t.Fatalf("accept on inherited listener: %v", err)
 	}

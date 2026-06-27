@@ -724,11 +724,12 @@ func TestStandaloneAuditTestRejectsDynamicEndpointExpectations(t *testing.T) {
 }
 
 func TestAuditSecurityHeadersCanonicalizesCaseVariants(t *testing.T) {
+	spacedContentSecurityPolicy := " content-security-policy "
 	headers := auditSecurityHeaders(gowdk.Config{Build: gowdk.BuildConfig{
 		SecurityHeaders: gowdk.SecurityHeadersConfig{
 			Enabled: true,
 			Headers: map[string]string{
-				" content-security-policy ": "default-src 'self'",
+				spacedContentSecurityPolicy: "default-src 'self'",
 				"X-Frame-Options":           "DENY",
 				"x-frame-options":           "DENY",
 			},
@@ -1629,46 +1630,47 @@ func TestGeneratedGoMatchesGoldenFixture(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "patients", "index.html"), "<main>Patients</main>")
 
 	program := &gwdkir.Program{
-		ContractRefs: []gwdkir.ContractReference{{
-			Kind:        gwdkir.ContractCommand,
-			Name:        "patients.CreatePatient",
-			ImportAlias: "patients",
-			ImportPath:  "example.com/app/contracts/patients",
-			Type:        "CreatePatient",
-			Result:      "CreatePatientResult",
-			InputFields: []source.BackendInputField{
-				{FieldName: "Name", FormName: "name", Type: "string"},
-				{FieldName: "Tags", FormName: "tag", Type: "[]string"},
-				{FieldName: "Age", FormName: "age", Type: "int"},
-				{FieldName: "Remember", FormName: "remember", Type: "bool"},
+		ContractRefs: []gwdkir.ContractReference{
+			{
+				Kind:        gwdkir.ContractCommand,
+				Name:        "patients.CreatePatient",
+				ImportAlias: "patients",
+				ImportPath:  "example.com/app/contracts/patients",
+				Type:        "CreatePatient",
+				Result:      "CreatePatientResult",
+				InputFields: []source.BackendInputField{
+					{FieldName: "Name", FormName: "name", Type: "string"},
+					{FieldName: "Tags", FormName: "tag", Type: "[]string"},
+					{FieldName: "Age", FormName: "age", Type: "int"},
+					{FieldName: "Remember", FormName: "remember", Type: "bool"},
+				},
+				Method:    "POST",
+				Path:      "/patients",
+				Status:    gwdkir.ContractBindingBound,
+				Handler:   "HandleCreatePatient",
+				Register:  "Register",
+				OwnerKind: gwdkir.SourcePage,
+				OwnerID:   "patients",
+				Guards:    []string{"public"},
+			}, {
+				Kind:        gwdkir.ContractQuery,
+				Name:        "patients.GetPatientPage",
+				ImportAlias: "patients",
+				ImportPath:  "example.com/app/contracts/patients",
+				Type:        "GetPatientPage",
+				Result:      "PatientPageData",
+				InputFields: []source.BackendInputField{
+					{FieldName: "Filter", FormName: "filter", Type: "string"},
+				},
+				Method:    "GET",
+				Path:      "/patients",
+				Status:    gwdkir.ContractBindingBound,
+				Handler:   "LoadPatientPage",
+				Register:  "Register",
+				OwnerKind: gwdkir.SourcePage,
+				OwnerID:   "patients",
+				Guards:    []string{"public"},
 			},
-			Method:    "POST",
-			Path:      "/patients",
-			Status:    gwdkir.ContractBindingBound,
-			Handler:   "HandleCreatePatient",
-			Register:  "Register",
-			OwnerKind: gwdkir.SourcePage,
-			OwnerID:   "patients",
-			Guards:    []string{"public"},
-		}, {
-			Kind:        gwdkir.ContractQuery,
-			Name:        "patients.GetPatientPage",
-			ImportAlias: "patients",
-			ImportPath:  "example.com/app/contracts/patients",
-			Type:        "GetPatientPage",
-			Result:      "PatientPageData",
-			InputFields: []source.BackendInputField{
-				{FieldName: "Filter", FormName: "filter", Type: "string"},
-			},
-			Method:    "GET",
-			Path:      "/patients",
-			Status:    gwdkir.ContractBindingBound,
-			Handler:   "LoadPatientPage",
-			Register:  "Register",
-			OwnerKind: gwdkir.SourcePage,
-			OwnerID:   "patients",
-			Guards:    []string{"public"},
-		},
 		},
 	}
 	actions := []ActionEndpoint{{
@@ -3151,7 +3153,7 @@ func TestAppShellSourceEmitterDoesNotUseRawTemplates(t *testing.T) {
 }
 
 func TestActionHandlerSourceReturnsInvalidGeneratedIdentifierError(t *testing.T) {
-	_, err := actionHandlerSource([]ActionEndpoint{invalidGeneratedIdentifierActionEndpoint()}, false)
+	_, err := actionHandlerSource([]ActionEndpoint{invalidGeneratedIdentifierActionEndpoint()})
 	assertInvalidGeneratedIdentifierError(t, err)
 }
 
@@ -3237,7 +3239,7 @@ func TestGeneratedDeclarationSnippetIsGoFormatted(t *testing.T) {
 		Route:       "/newsletter",
 		InputFields: []string{"email"},
 		Redirect:    "/newsletter?ok=1",
-	}}, false)
+	}})
 	if err != nil {
 		t.Fatalf("actionHandlerSource: %v", err)
 	}
@@ -6281,7 +6283,9 @@ func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 	payload, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatal(err)
@@ -6365,7 +6369,9 @@ func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 	payload, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatal(err)
@@ -6442,7 +6448,9 @@ func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 	payload, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatal(err)
@@ -6514,7 +6522,9 @@ func LoadDashboard(ctx ssr.LoadContext) map[string]any {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 	payload, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatal(err)
@@ -6591,7 +6601,9 @@ func Health(ctx context.Context, request *http.Request) (response.Response, erro
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 	payload, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatal(err)
@@ -7556,9 +7568,11 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 		_ = command.Process.Kill()
 		_, _ = command.Process.Wait()
 	}()
-	if _, err := waitForHTTPStatus("http://"+addr+"/_gowdk/health", http.MethodGet, ""); err != nil {
+	healthResponse, err := waitForHTTPStatus("http://"+addr+"/_gowdk/health", http.MethodGet, "")
+	if err != nil {
 		t.Fatal(err)
 	}
+	_ = healthResponse.Body.Close()
 
 	streamCtx, cancelStream := context.WithCancel(context.Background())
 	defer cancelStream()
@@ -7570,7 +7584,9 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer streamResponse.Body.Close()
+	defer func() {
+		_ = streamResponse.Body.Close()
+	}()
 	if streamResponse.StatusCode != http.StatusOK {
 		t.Fatalf("expected realtime stream status 200, got %d", streamResponse.StatusCode)
 	}
@@ -7684,9 +7700,11 @@ func GOWDKGuardRegistry() gowdkguard.Registry {
 		_ = command.Process.Kill()
 		_, _ = command.Process.Wait()
 	}()
-	if _, err := waitForHTTPStatus("http://"+addr+"/_gowdk/health", http.MethodGet, ""); err != nil {
+	healthResponse, err := waitForHTTPStatus("http://"+addr+"/_gowdk/health", http.MethodGet, "")
+	if err != nil {
 		t.Fatal(err)
 	}
+	_ = healthResponse.Body.Close()
 
 	response, err := waitForHTTPStatus("http://"+addr+"/_gowdk/realtime/events?path=/dashboard", http.MethodGet, "")
 	if err != nil {
@@ -9451,11 +9469,6 @@ func actionEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]ActionEndpo
 	return actionEndpointsFromIR(gowdk.Config{}, gwdkanalysis.BuildProgram(gowdk.Config{}, app))
 }
 
-func apiEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]APIEndpoint, error) {
-	app = normalizeEndpointFixtureSources(app)
-	return apiEndpointsFromIR(gwdkanalysis.BuildProgram(gowdk.Config{}, app))
-}
-
 func fragmentEndpointsFromManifestFixture(app gwdkanalysis.Sources) ([]FragmentEndpoint, error) {
 	app = normalizeEndpointFixtureSources(app)
 	return fragmentEndpointsFromIR(gwdkanalysis.BuildProgram(gowdk.Config{}, app))
@@ -9541,7 +9554,7 @@ func TestGuardlessActionAndAPIAreDeniedByOmission(t *testing.T) {
 	const deny = `gowdkresponse.WriteNoStoreError(response, http.StatusForbidden, "403 forbidden")`
 	const denyJSON = `gowdkresponse.WriteNoStoreJSONError(response, http.StatusForbidden, "403 forbidden")`
 
-	actionSrc, err := actionHandlerSource([]ActionEndpoint{{PageID: "p", ActionName: "Sub", Route: "/sub"}}, false)
+	actionSrc, err := actionHandlerSource([]ActionEndpoint{{PageID: "p", ActionName: "Sub", Route: "/sub"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -9644,7 +9657,7 @@ func TestGuardlessActionAndAPIAreDeniedByOmission(t *testing.T) {
 
 	// An endpoint that declares `guard public` is intentionally reachable and
 	// must NOT be denied by omission.
-	publicSrc, err := actionHandlerSource([]ActionEndpoint{{PageID: "p", ActionName: "Sub", Route: "/sub", Guards: []string{"public"}}}, false)
+	publicSrc, err := actionHandlerSource([]ActionEndpoint{{PageID: "p", ActionName: "Sub", Route: "/sub", Guards: []string{"public"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -468,12 +468,12 @@ func TestReceiveEventBatchDoesNotDuplicateDeadLetterAfterPendingRewriteFailure(t
 
 	renameErr := errors.New("pending rewrite failed")
 	var renames int
-	store.rename = func(old, new string) error {
+	store.rename = func(oldName, newName string) error {
 		renames++
 		if renames == 2 {
 			return renameErr
 		}
-		return os.Rename(old, new)
+		return os.Rename(oldName, newName)
 	}
 
 	first, err := store.ReceiveEventBatch(context.Background())

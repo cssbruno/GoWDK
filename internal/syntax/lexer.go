@@ -201,7 +201,7 @@ func (scanner *scanner) peekNext() rune {
 	return scanner.source[scanner.index+1]
 }
 
-func (scanner *scanner) advance() rune {
+func (scanner *scanner) advance() {
 	ch := scanner.source[scanner.index]
 	scanner.index++
 	if ch == '\n' {
@@ -210,7 +210,6 @@ func (scanner *scanner) advance() rune {
 	} else {
 		scanner.column++
 	}
-	return ch
 }
 
 func (scanner *scanner) position() Position {

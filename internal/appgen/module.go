@@ -48,7 +48,8 @@ func moduleSourceForImportPaths(importPaths map[string]bool) (string, error) {
 		runtimeReplaceDir = root
 	}
 	appModule, err := currentAppModule()
-	if err != nil {
+	switch {
+	case err != nil:
 		// A missing/broken main module is only fatal when the generated app
 		// imports app-owned packages: without the module path we cannot add the
 		// require/replace, so the generated app would otherwise fail to build
@@ -57,9 +58,9 @@ func moduleSourceForImportPaths(importPaths map[string]bool) (string, error) {
 		if importPathsHasLocalModuleImports(importPaths) {
 			return "", fmt.Errorf("cannot determine the app Go module for generated app imports: %w", err)
 		}
-	} else if appModule.Path == gowdkRuntimeModulePath {
+	case appModule.Path == gowdkRuntimeModulePath:
 		runtimeReplaceDir = appModule.Dir
-	} else if importPathsUseModule(importPaths, appModule.Path) {
+	case importPathsUseModule(importPaths, appModule.Path):
 		lines = append(lines,
 			"",
 			"require "+appModule.Path+" v0.0.0",

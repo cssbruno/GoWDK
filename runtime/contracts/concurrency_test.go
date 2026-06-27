@@ -9,15 +9,17 @@ import (
 	"time"
 )
 
-type raceQueryA struct{}
-type raceQueryB struct{}
-type raceCommandA struct{}
-type raceCommandB struct{}
-type raceEventA struct{}
-type raceEventB struct{}
-type raceJobA struct{}
-type raceJobB struct{}
-type raceResult struct{}
+type (
+	raceQueryA   struct{}
+	raceQueryB   struct{}
+	raceCommandA struct{}
+	raceCommandB struct{}
+	raceEventA   struct{}
+	raceEventB   struct{}
+	raceJobA     struct{}
+	raceJobB     struct{}
+	raceResult   struct{}
+)
 
 func TestRegistryConcurrentRegistrationAndReads(t *testing.T) {
 	registry := NewRegistry()
@@ -65,7 +67,7 @@ func TestRegistryConcurrentRegistrationAndReads(t *testing.T) {
 
 	var writers sync.WaitGroup
 	for _, registration := range registrations {
-		registration := registration
+
 		writers.Add(1)
 		go func() {
 			defer writers.Done()
@@ -93,7 +95,7 @@ func TestMemorySeenStoreConcurrentAccessEvictsSafely(t *testing.T) {
 
 	var done sync.WaitGroup
 	for worker := 0; worker < workers; worker++ {
-		worker := worker
+
 		done.Add(1)
 		go func() {
 			defer done.Done()

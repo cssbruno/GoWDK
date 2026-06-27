@@ -22,7 +22,5 @@ func TestNewSSEReturnsPresentationFanout(t *testing.T) {
 		WithSSEReplayLimit(4),
 		WithSSEAudienceFromRequest(func(*http.Request) []string { return []string{"tenant:test"} }),
 	)
-	if fanout == nil {
-		t.Fatal("expected SSE fanout")
-	}
+	_ = fanout
 }

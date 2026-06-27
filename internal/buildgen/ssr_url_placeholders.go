@@ -133,7 +133,7 @@ func markURLPlaceholdersInValue(value string, replacements []SSRReplacement, loa
 }
 
 func urlPlaceholder(base string, next *int) string {
-	*next = *next + 1
+	*next++
 	suffix := "_URL_" + strconv.Itoa(*next)
 	if strings.HasSuffix(base, "__") {
 		return strings.TrimSuffix(base, "__") + suffix + "__"

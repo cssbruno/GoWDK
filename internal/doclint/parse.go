@@ -205,11 +205,11 @@ func referenceDefinition(line string) (string, bool) {
 	if !strings.HasPrefix(trimmed, "[") {
 		return "", false
 	}
-	close := strings.Index(trimmed, "]:")
-	if close < 1 {
+	closeIndex := strings.Index(trimmed, "]:")
+	if closeIndex < 1 {
 		return "", false
 	}
-	rest := strings.TrimSpace(trimmed[close+2:])
+	rest := strings.TrimSpace(trimmed[closeIndex+2:])
 	if rest == "" {
 		return "", false
 	}

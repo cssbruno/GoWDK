@@ -186,7 +186,7 @@ func TestApplyMigrationsReservesBeforeRunningMigrationSQL(t *testing.T) {
 	if reserve < 0 || migration < 0 || finalize < 0 {
 		t.Fatalf("did not find reservation, migration, and finalize statements in %#v", state.executed)
 	}
-	if !(reserve < migration && migration < finalize) {
+	if reserve >= migration || migration >= finalize {
 		t.Fatalf("migration was not reserved before user SQL and finalized after it: %#v", state.executed)
 	}
 }

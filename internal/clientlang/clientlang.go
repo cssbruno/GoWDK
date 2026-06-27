@@ -104,24 +104,25 @@ func parseFunctionHeader(line string) (functionHeader, bool) {
 		async = true
 		line = strings.TrimSpace(strings.TrimPrefix(line, "async "))
 	}
-	if strings.HasPrefix(line, "fn ") {
+	switch {
+	case strings.HasPrefix(line, "fn "):
 		line = strings.TrimSpace(strings.TrimPrefix(line, "fn "))
-	} else if strings.HasPrefix(line, "func ") {
+	case strings.HasPrefix(line, "func "):
 		line = strings.TrimSpace(strings.TrimPrefix(line, "func "))
-	} else {
+	default:
 		return functionHeader{}, false
 	}
 	open := strings.Index(line, "(")
-	close := strings.LastIndex(line, ")")
-	if open <= 0 || close < open || close == -1 {
+	closeIndex := strings.LastIndex(line, ")")
+	if open <= 0 || closeIndex < open || closeIndex == -1 {
 		return functionHeader{}, false
 	}
 	name := strings.TrimSpace(line[:open])
 	if !isIdentifier(name) {
 		return functionHeader{}, false
 	}
-	params := line[open+1 : close]
-	returnType := strings.TrimSpace(line[close+1:])
+	params := line[open+1 : closeIndex]
+	returnType := strings.TrimSpace(line[closeIndex+1:])
 	if returnType != "" && !isIdentifier(returnType) {
 		return functionHeader{}, false
 	}
@@ -1117,7 +1118,7 @@ func ParseEmitCall(expr string) (EmitCall, bool) {
 	if !ok {
 		return EmitCall{}, false
 	}
-	return EmitCall{Name: call.Name, Args: call.Args}, true
+	return EmitCall(call), true
 }
 
 func parseParams(source string) ([]Param, error) {

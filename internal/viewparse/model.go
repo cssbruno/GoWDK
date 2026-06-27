@@ -7,12 +7,14 @@ import (
 	"github.com/cssbruno/gowdk/internal/viewmodel"
 )
 
-type Attr = viewmodel.Attr
-type AwaitBlock = viewmodel.AwaitBlock
-type ComponentCall = viewmodel.ComponentCall
-type Element = viewmodel.Element
-type Node = viewmodel.Node
-type Text = viewmodel.Text
+type (
+	Attr          = viewmodel.Attr
+	AwaitBlock    = viewmodel.AwaitBlock
+	ComponentCall = viewmodel.ComponentCall
+	Element       = viewmodel.Element
+	Node          = viewmodel.Node
+	Text          = viewmodel.Text
+)
 
 const (
 	escapedOpenBrace  = "\x00GOWDK_OPEN_BRACE\x00"

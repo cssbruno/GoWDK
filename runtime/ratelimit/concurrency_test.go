@@ -15,7 +15,7 @@ func TestInMemoryStoreConcurrentTakeAndCleanup(t *testing.T) {
 
 	var done sync.WaitGroup
 	for worker := 0; worker < workers; worker++ {
-		worker := worker
+
 		done.Add(1)
 		go func() {
 			defer done.Done()

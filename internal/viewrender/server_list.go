@@ -113,13 +113,21 @@ func (ctx *renderContext) forDirectiveLane(node Element) (directiveLane, error) 
 		if attr.Name != "g:for" || attr.Boolean {
 			continue
 		}
-		loop, err := ParseForDirective(strings.TrimSpace(attr.Value))
-		if err != nil {
+		loop, ok := parseForDirectiveLaneInput(attr.Value)
+		if !ok {
 			return laneClient, nil
 		}
 		return ctx.resolveDirectiveLane(exprRootName(loop.Collection))
 	}
 	return laneClient, nil
+}
+
+func parseForDirectiveLaneInput(value string) (ForDirective, bool) {
+	loop, err := ParseForDirective(strings.TrimSpace(value))
+	if err != nil {
+		return ForDirective{}, false
+	}
+	return loop, true
 }
 
 // ifDirectiveLane resolves the lane of an element's g:if from its condition's

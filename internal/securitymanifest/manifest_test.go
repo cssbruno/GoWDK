@@ -60,7 +60,7 @@ func TestRelativizeLeavesNonFileAndRelativeRefsUntouched(t *testing.T) {
 			{PageID: "b", Route: "/b", Source: "already/relative.page.gwdk:3"},
 		},
 	}
-	out := manifest.Relativize(filepath.Join(string(filepath.Separator) + "root"))
+	out := manifest.Relativize(string(filepath.Separator) + "root")
 	if out.Routes[0].Source != "config:Build.SecurityHeaders" {
 		t.Fatalf("non-file source must pass through, got %q", out.Routes[0].Source)
 	}

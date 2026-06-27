@@ -8,11 +8,13 @@ import (
 // PageID, ComponentID, LayoutID, RouteID, and EndpointID are stable semantic
 // identities used across compiler stages. Legacy string fields remain for now
 // while consumers migrate toward typed stage boundaries.
-type PageID string
-type ComponentID string
-type LayoutID string
-type RouteID string
-type EndpointID string
+type (
+	PageID      string
+	ComponentID string
+	LayoutID    string
+	RouteID     string
+	EndpointID  string
+)
 
 func (id PageID) String() string      { return string(id) }
 func (id ComponentID) String() string { return string(id) }

@@ -20,6 +20,40 @@ import (
 )
 
 const gowdkRuntimeModulePath = "github.com/cssbruno/gowdk"
+const legacyGeneratedAppModulePath = "gowdk-generated-app"
+
+type generatedModuleContext struct {
+	Nested     bool
+	ImportBase string
+	BuildDir   string
+	AppRel     string
+}
+
+func resolveGeneratedModuleContext(absApp string) generatedModuleContext {
+	context := generatedModuleContext{
+		Nested:     true,
+		ImportBase: legacyGeneratedAppModulePath,
+		BuildDir:   absApp,
+	}
+	appModule, err := currentAppModule()
+	if err != nil || strings.TrimSpace(appModule.Path) == "" || strings.TrimSpace(appModule.Dir) == "" {
+		return context
+	}
+	rel, err := filepath.Rel(appModule.Dir, absApp)
+	if err != nil || rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." || filepath.IsAbs(rel) {
+		return context
+	}
+	relSlash := filepath.ToSlash(rel)
+	if relSlash != ".gowdk" && !strings.HasPrefix(relSlash, ".gowdk/") {
+		return context
+	}
+	importBase := strings.TrimRight(appModule.Path, "/") + "/" + relSlash
+	context.Nested = false
+	context.ImportBase = importBase
+	context.BuildDir = appModule.Dir
+	context.AppRel = relSlash
+	return context
+}
 
 func moduleSource(options Options) (string, error) {
 	return moduleSourceForImportPaths(appBackendImportPaths(options))
@@ -32,7 +66,7 @@ func moduleSourceForImportPaths(importPaths map[string]bool) (string, error) {
 	}
 
 	lines := []string{
-		"module gowdk-generated-app",
+		"module " + legacyGeneratedAppModulePath,
 		"",
 		"go 1.26.4",
 		"",

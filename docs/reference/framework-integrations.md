@@ -8,14 +8,17 @@ uses the same handler that other Go routers can mount or wrap.
 Generated apps include an importable package:
 
 ```go
-import "gowdk-generated-app/gowdkapp"
+import "example.com/site/.gowdk/site/gowdkapp"
 
 handler, err := gowdkapp.Handler()
 mux, err := gowdkapp.ServeMux()
 ```
 
 `Handler()` returns `http.Handler`. `ServeMux()` returns the concrete
-`*http.ServeMux`.
+`*http.ServeMux`. Replace `example.com/site` and `.gowdk/site` with the
+application module path and generated app directory. Explicit legacy app
+directories outside `.gowdk/` still use their generated module-local import
+inside that generated module.
 
 Route-aware framework adapters can also consume the generated `openapi.json`
 report:

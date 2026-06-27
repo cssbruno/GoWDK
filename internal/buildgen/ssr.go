@@ -3,8 +3,6 @@ package buildgen
 import (
 	"errors"
 	"fmt"
-	"go/ast"
-	"go/parser"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
@@ -244,10 +242,7 @@ func ssrLoadData(page gwdkir.Page, existing map[string]string) (map[string]strin
 	if !page.Blocks.Server {
 		return nil, nil, nil
 	}
-	fields, err := parseLoadFields(page.Blocks.ServerBody)
-	if err != nil {
-		return nil, nil, err
-	}
+	fields := page.Blocks.ServerFields
 	if len(fields) == 0 {
 		return nil, nil, fmt.Errorf("server {} must declare at least one field with `=> { field }`")
 	}
@@ -266,71 +261,6 @@ func ssrLoadData(page gwdkir.Page, existing map[string]string) (map[string]strin
 		replacements = append(replacements, SSRLoadReplacement{Path: path, Placeholder: placeholder})
 	}
 	return data, replacements, nil
-}
-
-func parseLoadFields(body string) ([]string, error) {
-	lines := significantBuildLines(body)
-	var fields []string
-	seen := map[string]bool{}
-	for index, line := range lines {
-		literal, ok, err := parseLoadLiteralLine(line)
-		if err != nil {
-			return nil, fmt.Errorf("load line %d: %w", index+1, err)
-		}
-		if !ok {
-			return nil, fmt.Errorf("load line %d must use `=> { field }`", index+1)
-		}
-		for _, element := range literal.Elts {
-			name, ok := loadFieldPath(element)
-			if !ok {
-				return nil, fmt.Errorf("load line %d: load fields must be identifiers or dotted paths", index+1)
-			}
-			if seen[name] {
-				return nil, fmt.Errorf("duplicate load field %q", name)
-			}
-			seen[name] = true
-			fields = append(fields, name)
-		}
-	}
-	return fields, nil
-}
-
-func parseLoadLiteralLine(line string) (*ast.CompositeLit, bool, error) {
-	body, ok := strings.CutPrefix(strings.TrimSpace(line), "=>")
-	if !ok {
-		return nil, false, nil
-	}
-	body = strings.TrimSpace(body)
-	if !strings.HasPrefix(body, "{") || !strings.HasSuffix(body, "}") {
-		return nil, false, nil
-	}
-	expr, err := parser.ParseExpr("[]string" + body)
-	if err != nil {
-		return nil, true, fmt.Errorf("parse load literal: %w", err)
-	}
-	literal, ok := expr.(*ast.CompositeLit)
-	if !ok {
-		return nil, true, fmt.Errorf("load literal must be an object")
-	}
-	return literal, true, nil
-}
-
-func loadFieldPath(expression ast.Expr) (string, bool) {
-	switch expr := expression.(type) {
-	case *ast.Ident:
-		if !isLiteralName(expr.Name) {
-			return "", false
-		}
-		return expr.Name, true
-	case *ast.SelectorExpr:
-		base, ok := loadFieldPath(expr.X)
-		if !ok || !isLiteralName(expr.Sel.Name) {
-			return "", false
-		}
-		return base + "." + expr.Sel.Name, true
-	default:
-		return "", false
-	}
 }
 
 func exportedSafe(value string) string {

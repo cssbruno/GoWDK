@@ -625,17 +625,18 @@ func TestRenderWithComponentsExpandsScopedSlots(t *testing.T) {
 func TestRenderWithComponentsEmitsDefaultJSIslandForState(t *testing.T) {
 	got, err := RenderWithComponents(`<Counter />`, map[string]Component{
 		"Counter": {
-			Name:      "Counter",
-			State:     map[string]string{"Count": "1"},
-			StateJSON: `{"Count":1}`,
-			Body:      `<button g:on:click={Count++}>{Count}</button>`,
+			Name:       "Counter",
+			State:      map[string]string{"Count": "1"},
+			StateJSON:  `{"Count":1}`,
+			StateShape: "sha256:test",
+			Body:       `<button g:on:click={Count++}>{Count}</button>`,
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`<gowdk-island data-gowdk-component="Counter" data-gowdk-island="i1" data-gowdk-runtime="js" data-gowdk-state="{&#34;Count&#34;:1}">`,
+		`<gowdk-island data-gowdk-component="Counter" data-gowdk-island="i1" data-gowdk-runtime="js" data-gowdk-state-shape="sha256:test" data-gowdk-state="{&#34;Count&#34;:1}">`,
 		`<button data-gowdk-on-click="Count++" data-gowdk-binding-on-click="b1"><span data-gowdk-bind="Count" data-gowdk-binding-text="b2">1</span></button>`,
 	} {
 		if !strings.Contains(got, want) {

@@ -423,7 +423,9 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		}); err != nil {
 			return operationErrorFromCause(err)
 		}
-		fmt.Println(app.ModulePath)
+		if app.ModulePath != "" {
+			fmt.Println(app.ModulePath)
+		}
 		fmt.Println(app.PackagePath)
 		fmt.Println(app.MainPath)
 		if strings.TrimSpace(binaryPath) != "" {
@@ -501,7 +503,9 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		}); err != nil {
 			return operationErrorFromCause(err)
 		}
-		fmt.Println(app.ModulePath)
+		if app.ModulePath != "" {
+			fmt.Println(app.ModulePath)
+		}
 		fmt.Println(app.PackagePath)
 		fmt.Println(app.MainPath)
 		if strings.TrimSpace(backendBinaryPath) != "" {

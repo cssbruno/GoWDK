@@ -96,6 +96,12 @@ swaps those island roots, remounts islands, rehydrates page stores, and emits
 `gowdk:component-hmr` plus `gowdk:dev-update`. Payloads with an unsupported
 protocol version reload the page.
 
+Each generated JavaScript island carries a deterministic state-shape marker.
+During component remount HMR, the dev bridge carries the current island state
+into the fresh root only when the old and new markers match. A missing or
+changed marker remounts from the fresh document seed instead of preserving
+potentially incompatible local state.
+
 Layout-only incremental SPA rebuilds send a route-scoped `reload` payload for
 the pages that use the changed layout. Browser tabs outside those routes do not
 reload.
@@ -103,8 +109,9 @@ reload.
 The dev bridge falls back to one full-page reload for page changes, source-set
 changes, added or removed inputs, generated app/runtime mode, WASM output or
 component WASM islands, and component changes that cannot be mapped to matching
-island boundaries on the current page. Local island state preservation is not a
-current contract.
+island boundaries on the current page. Broader cross-component state transfer,
+WASM state transfer, and page/layout DOM patching remain outside the current
+HMR contract.
 
 Generated-app rebuild and runtime 5xx overlay delivery use the dev-only proxy
 bridge. Unsupported HMR cases continue to use the full-page reload fallback

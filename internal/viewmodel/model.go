@@ -86,6 +86,7 @@ type Component struct {
 	PropDefaults  map[string]string
 	State         map[string]string
 	StateJSON     string
+	StateShape    string
 	Handlers      map[string]clientlang.Handler
 	HandlersJSON  string
 	StateTypes    map[string]clientlang.ValueType

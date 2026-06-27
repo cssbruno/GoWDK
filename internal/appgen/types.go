@@ -13,13 +13,16 @@ type Result struct {
 	AppDir      string
 	MainPath    string
 	PackagePath string
-	ModulePath  string
-	OutputDir   string
-	Files       []string
-	BinaryPath  string
-	Role        string
-	Contracts   []string
-	Jobs        []string
+	// ModulePath is the generated nested go.mod path when app generation has to
+	// fall back to module isolation. It is empty when the generated app lives
+	// inside and builds from the application module.
+	ModulePath string
+	OutputDir  string
+	Files      []string
+	BinaryPath string
+	Role       string
+	Contracts  []string
+	Jobs       []string
 }
 
 // Options configures generated app output.

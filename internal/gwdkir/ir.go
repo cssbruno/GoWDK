@@ -149,6 +149,7 @@ type Blocks struct {
 	BuildCall    *BuildCall      `json:"-"`
 	Server       bool
 	ServerBody   string
+	ServerFields []string `json:"-"`
 	Client       bool
 	ClientBody   string
 	GoBlocks     []GoBlock

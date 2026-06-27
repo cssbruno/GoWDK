@@ -35,6 +35,38 @@ func TestBuildProgramDerivesPageOwnedContractRoutes(t *testing.T) {
 	}
 }
 
+func TestBuildProgramLowersServerFields(t *testing.T) {
+	program := BuildProgram(gowdk.Config{}, Sources{Pages: []gwdkir.Page{{
+		Package: "pages",
+		ID:      "dashboard",
+		Route:   "/dashboard",
+		Blocks: gwdkir.Blocks{
+			Server: true,
+			ServerBody: `user := session.User()
+  => { title: "Dashboard", user.name, account.plan }`,
+			View:     true,
+			ViewBody: `<main>{title} {user.name} {account.plan}</main>`,
+		},
+	}}})
+
+	if len(program.Diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %#v", program.Diagnostics)
+	}
+	if len(program.Pages) != 1 {
+		t.Fatalf("expected one page, got %#v", program.Pages)
+	}
+	got := program.Pages[0].Blocks.ServerFields
+	want := []string{"title", "user.name", "account.plan"}
+	if len(got) != len(want) {
+		t.Fatalf("server fields = %#v, want %#v", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("server fields = %#v, want %#v", got, want)
+		}
+	}
+}
+
 func TestBuildProgramRejectsDynamicPageOwnedDefaultContractRoutes(t *testing.T) {
 	program := BuildProgram(gowdk.Config{}, Sources{Pages: []gwdkir.Page{{
 		Package: "pages",

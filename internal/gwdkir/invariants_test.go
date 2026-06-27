@@ -194,6 +194,13 @@ func TestCheckInvariantsReportsViolations(t *testing.T) {
 			want: `template page "home" has parsed nodes but empty body`,
 		},
 		{
+			name: "server body without typed fields",
+			corrupt: func(p *Program) {
+				p.Pages[0].Blocks = Blocks{Server: true, ServerBody: `=> { user.name }`}
+			},
+			want: `page "home" has server body but no typed load fields`,
+		},
+		{
 			name:    "unknown asset kind",
 			corrupt: func(p *Program) { p.Assets[0].Kind = "font" },
 			want:    `asset "home.css" has unknown kind "font"`,

@@ -278,8 +278,9 @@ type devComponentHMRPayload struct {
 }
 
 type devComponentHMREntry struct {
-	Name string `json:"name"`
-	ID   string `json:"id,omitempty"`
+	Name       string `json:"name"`
+	ID         string `json:"id,omitempty"`
+	StateShape string `json:"stateShape,omitempty"`
 }
 
 const (
@@ -394,8 +395,9 @@ func devComponentHMRPayloadLoaded(plan buildOptions, change inputChange) (string
 			return "", false
 		}
 		entry := devComponentHMREntry{
-			Name: component.Name,
-			ID:   component.Name,
+			Name:       component.Name,
+			ID:         component.Name,
+			StateShape: devComponentStateShape(component),
 		}
 		if component.Package != "" {
 			entry.ID = component.Package + "." + component.Name
@@ -411,6 +413,28 @@ func devComponentHMRPayloadLoaded(plan buildOptions, change inputChange) (string
 	})
 	encoded, ok := marshalDevUpdatePayload(payload)
 	return encoded, ok && len(payload.Components) > 0 && len(payload.Routes) > 0
+}
+
+func devComponentStateShape(component gwdkir.Component) string {
+	type shape struct {
+		StateType string `json:"stateType,omitempty"`
+		StateInit string `json:"stateInit,omitempty"`
+		Client    string `json:"client,omitempty"`
+	}
+	state := shape{
+		StateType: component.State.Type.Alias + "." + component.State.Type.Name,
+		StateInit: component.State.Init.Alias + "." + component.State.Init.Name,
+		Client:    strings.TrimSpace(component.Blocks.ClientBody),
+	}
+	if state.StateType == "." && state.StateInit == "." && state.Client == "" {
+		return ""
+	}
+	payload, err := json.Marshal(state)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(payload)
+	return fmt.Sprintf("sha256:%x", sum[:8])
 }
 
 func devRouteReloadPayloadLoaded(plan buildOptions, change inputChange) (string, bool) {

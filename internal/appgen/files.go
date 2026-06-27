@@ -65,7 +65,7 @@ func copyOutputFiles(sourceRoot, targetRoot string) ([]string, error) {
 		if !info.Mode().IsRegular() {
 			return nil
 		}
-		if unsafeEmbeddedFile(rel) {
+		if !safeasset.EmbeddableGeneratedOutputFile(rel) {
 			return nil
 		}
 		if err := copyFile(sourcePath, targetPath); err != nil {
@@ -80,10 +80,6 @@ func copyOutputFiles(sourceRoot, targetRoot string) ([]string, error) {
 
 func unsafeEmbeddedDirectory(rel string) bool {
 	return safeasset.UnsafeEmbeddedDirectory(rel)
-}
-
-func unsafeEmbeddedFile(rel string) bool {
-	return safeasset.UnsafeEmbeddedFile(rel)
 }
 
 func copyFile(sourcePath, targetPath string) error {

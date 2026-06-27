@@ -159,6 +159,20 @@ func TestRunCleanDoesNotFollowSymlinkOutsideRoot(t *testing.T) {
 	}
 }
 
+func TestValidateCleanArtifactOwnershipRejectsUnselectedNestedTarget(t *testing.T) {
+	config := gowdk.Config{Build: gowdk.BuildConfig{Targets: []gowdk.BuildTargetConfig{
+		{Name: "one", Output: "dist"},
+		{Name: "two", Output: "dist/two"},
+	}}}
+	candidates, err := cleanTargets(config, []string{"one"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateCleanArtifactOwnership(t.TempDir(), config, []string{"one"}, candidates); err == nil {
+		t.Fatal("expected clean ownership validation to reject nested unselected target")
+	}
+}
+
 func TestCleanCommandRejectsUnknownFlag(t *testing.T) {
 	if err := clean([]string{"--nope"}); err == nil {
 		t.Fatal("expected an error for an unknown flag")

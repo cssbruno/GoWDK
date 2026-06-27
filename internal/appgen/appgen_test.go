@@ -858,6 +858,11 @@ func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "keys", "ID_RSA"), "private key")
 	writeTestFile(t, filepath.Join(outputDir, ".npmrc"), "//registry.example/:_authToken=secret")
 	writeTestFile(t, filepath.Join(outputDir, "gowdk-security.json"), `{"endpoints":[{"path":"/admin"}]}`)
+	writeTestFile(t, filepath.Join(outputDir, "gowdk-build-report.json"), `{"events":[{"path":"src/pages/admin.page.gwdk"}]}`)
+	writeTestFile(t, filepath.Join(outputDir, "gowdk-build-timings.json"), `{"phases":[{"name":"build"}]}`)
+	writeTestFile(t, filepath.Join(outputDir, "gowdk-routes.json"), `{"routes":[{"route":"/admin"}]}`)
+	writeTestFile(t, filepath.Join(outputDir, "gowdk-assets.json"), `{"files":{"app.css":"assets/app.css"}}`)
+	writeTestFile(t, filepath.Join(outputDir, "notes.txt"), "operator notes")
 	writeTestFile(t, filepath.Join(outputDir, "assets", "scratch.tmp"), "temporary")
 	writeTestFile(t, filepath.Join(outputDir, "assets", "app.css"), "body{}")
 
@@ -866,7 +871,7 @@ func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if strings.Join(result.Files, ",") != "assets/app.css,index.html" {
+	if strings.Join(result.Files, ",") != "assets/app.css,gowdk-assets.json,gowdk-routes.json,index.html" {
 		t.Fatalf("unexpected embedded files: %#v", result.Files)
 	}
 	for _, path := range []string{
@@ -889,6 +894,9 @@ func TestGenerateSkipsUnsafeEmbeddedOutputFiles(t *testing.T) {
 		filepath.Join(result.OutputDir, "keys", "ID_RSA"),
 		filepath.Join(result.OutputDir, ".npmrc"),
 		filepath.Join(result.OutputDir, "assets", "scratch.tmp"),
+		filepath.Join(result.OutputDir, "gowdk-build-report.json"),
+		filepath.Join(result.OutputDir, "gowdk-build-timings.json"),
+		filepath.Join(result.OutputDir, "notes.txt"),
 	} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Fatalf("expected unsafe file %s to be skipped, stat err: %v", path, err)

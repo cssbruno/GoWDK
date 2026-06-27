@@ -826,7 +826,7 @@ func readSPAFile(root fs.FS, name string) ([]byte, fs.FileInfo, bool) {
 	if name == "" {
 		name = "index.html"
 	}
-	if unsafeSPAFile(name) {
+	if !publicSPAFile(name) {
 		return nil, nil, false
 	}
 	info, err := fs.Stat(root, name)
@@ -835,6 +835,9 @@ func readSPAFile(root fs.FS, name string) ([]byte, fs.FileInfo, bool) {
 	}
 	if info.IsDir() {
 		name = path.Join(name, "index.html")
+		if !publicSPAFile(name) {
+			return nil, nil, false
+		}
 		info, err = fs.Stat(root, name)
 		if err != nil || info.IsDir() {
 			return nil, nil, false
@@ -847,8 +850,42 @@ func readSPAFile(root fs.FS, name string) ([]byte, fs.FileInfo, bool) {
 	return payload, info, true
 }
 
-func unsafeSPAFile(name string) bool {
-	return strings.EqualFold(path.Base(name), "gowdk-security.json")
+func publicSPAFile(name string) bool {
+	name = strings.TrimPrefix(path.Clean("/"+name), "/")
+	if name == "" || privateSPAMetadata(name) {
+		return false
+	}
+	if strings.HasPrefix(name, "assets/") {
+		return !unsafeSPAExtension(name)
+	}
+	switch path.Base(name) {
+	case "sitemap.xml", "robots.txt", "openapi.json", "asyncapi.json":
+		return true
+	}
+	switch strings.ToLower(path.Ext(name)) {
+	case ".html", ".css", ".js", ".wasm", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".avif", ".woff", ".woff2", ".ttf", ".otf":
+		return true
+	default:
+		return false
+	}
+}
+
+func privateSPAMetadata(name string) bool {
+	switch strings.ToLower(path.Base(name)) {
+	case "gowdk-security.json", "gowdk-build-report.json", "gowdk-build-timings.json", "gowdk-routes.json", "gowdk-assets.json":
+		return true
+	default:
+		return false
+	}
+}
+
+func unsafeSPAExtension(name string) bool {
+	switch strings.ToLower(path.Ext(name)) {
+	case ".map", ".gwdk", ".go", ".tmp", ".temp", ".key", ".pem", ".p12", ".pfx":
+		return true
+	default:
+		return strings.HasSuffix(strings.ToLower(path.Base(name)), "~")
+	}
 }
 
 func unsafeRequestPath(requestPath string) bool {

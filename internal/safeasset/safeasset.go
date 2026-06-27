@@ -11,7 +11,7 @@ import (
 // UnsafeEmbeddedDirectory reports whether a directory should be skipped when
 // copying generated output into a generated app.
 func UnsafeEmbeddedDirectory(rel string) bool {
-	base := path.Base(filepath.ToSlash(rel))
+	base := strings.ToLower(path.Base(filepath.ToSlash(rel)))
 	switch base {
 	case ".git", ".hg", ".svn", "node_modules", "tmp", "temp", ".tmp", "private", ".private", "secrets", ".secrets":
 		return true
@@ -23,6 +23,45 @@ func UnsafeEmbeddedDirectory(rel string) bool {
 // UnsafeEmbeddedFile reports whether a file must not be embedded or served as
 // generated static output.
 func UnsafeEmbeddedFile(rel string) bool {
+	return unsafeEmbeddedFile(rel, true)
+}
+
+// PublicGeneratedOutputFile reports whether rel is part of the browser-facing
+// generated-output surface. Unknown files fail closed so compiler-private
+// metadata and user-added files under an output directory are not served or
+// embedded by default.
+func PublicGeneratedOutputFile(rel string) bool {
+	rel = cleanRelativeSlashPath(rel)
+	if rel == "" || unsafeEmbeddedFile(rel, false) || privateGeneratedMetadata(rel) {
+		return false
+	}
+	if strings.HasPrefix(rel, "assets/") {
+		return true
+	}
+	switch path.Base(rel) {
+	case "sitemap.xml", "robots.txt", "openapi.json", "asyncapi.json":
+		return true
+	}
+	switch strings.ToLower(path.Ext(rel)) {
+	case ".html", ".css", ".js", ".wasm", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".avif", ".woff", ".woff2", ".ttf", ".otf":
+		return true
+	default:
+		return false
+	}
+}
+
+// EmbeddableGeneratedOutputFile reports whether rel should be copied into a
+// generated app's embedded filesystem. Runtime-private manifests are embedded
+// for generated code but remain non-public in the runtime handler.
+func EmbeddableGeneratedOutputFile(rel string) bool {
+	rel = cleanRelativeSlashPath(rel)
+	if rel == "" || unsafeEmbeddedFile(rel, false) {
+		return false
+	}
+	return PublicGeneratedOutputFile(rel) || runtimePrivateGeneratedMetadata(rel)
+}
+
+func unsafeEmbeddedFile(rel string, blockMetadata bool) bool {
 	rel = filepath.ToSlash(rel)
 	base := path.Base(rel)
 	normalizedBase := strings.ToLower(base)
@@ -30,7 +69,7 @@ func UnsafeEmbeddedFile(rel string) bool {
 	switch {
 	case normalizedBase == ".env" || strings.HasPrefix(normalizedBase, ".env."):
 		return true
-	case normalizedBase == "gowdk-security.json":
+	case blockMetadata && privateGeneratedMetadata(rel):
 		return true
 	case normalizedBase == ".npmrc" || normalizedBase == ".netrc":
 		return true
@@ -47,6 +86,36 @@ func UnsafeEmbeddedFile(rel string) bool {
 	default:
 		return false
 	}
+}
+
+func privateGeneratedMetadata(rel string) bool {
+	switch strings.ToLower(path.Base(filepath.ToSlash(rel))) {
+	case "gowdk-security.json", "gowdk-build-report.json", "gowdk-build-timings.json", "gowdk-routes.json", "gowdk-assets.json":
+		return true
+	default:
+		return false
+	}
+}
+
+func runtimePrivateGeneratedMetadata(rel string) bool {
+	switch strings.ToLower(path.Base(filepath.ToSlash(rel))) {
+	case "gowdk-routes.json", "gowdk-assets.json":
+		return true
+	default:
+		return false
+	}
+}
+
+func cleanRelativeSlashPath(rel string) string {
+	rel = strings.TrimPrefix(filepath.ToSlash(strings.TrimSpace(rel)), "/")
+	if rel == "" {
+		return ""
+	}
+	clean := path.Clean(rel)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
+		return ""
+	}
+	return clean
 }
 
 // PrivateKeyFile reports common private key filenames without extension.

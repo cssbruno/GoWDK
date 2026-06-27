@@ -223,6 +223,10 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			return fmt.Errorf(buildUsage)
 		}
 	}
+	request.OutputDir = outputDir
+	if err := validateAdHocBuildTopology(options.ProjectRoot, request, timings != nil && timings.enabled); err != nil {
+		return err
+	}
 	options.Config.Build.Output = outputDir
 	paths := append([]string(nil), request.Paths...)
 	if len(paths) == 0 {
@@ -595,6 +599,9 @@ func buildConfiguredTargets(plan buildOptions, timings *buildTimingRecorder) err
 	}
 	if plan.Timings && strings.TrimSpace(plan.TimingsPath) != "" && len(targets) > 1 {
 		return fmt.Errorf("--timings=<file> cannot be used when building multiple configured targets")
+	}
+	if err := validateConfiguredBuildTopology(plan.Options.ProjectRoot, targets, timings != nil && timings.enabled, plan.TimingsPath); err != nil {
+		return err
 	}
 	for _, target := range targets {
 		targetOptions := plan.Options

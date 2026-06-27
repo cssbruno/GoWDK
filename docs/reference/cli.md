@@ -162,6 +162,12 @@ gowdk lsp [--ssr]
   timing report. Without an explicit file, the report is written to
   `gowdk-build-timings.json` in the output root. Generated paths remain the
   only stdout payload.
+- `gowdk build` validates the complete selected artifact topology before source
+  discovery or writes. Static output, generated app directories, frontend and
+  backend binaries, WASM artifacts, timing/report sidecars, Docker files, and
+  deployment recipes must have disjoint ownership unless a containment is
+  documented as compiler-owned. Binaries, WASM artifacts, and generated app
+  source trees must not be placed under served static output.
 - `gowdk build` writes `contract_reference` build-report events for
   `g:command` forms and `g:query` elements with `unknown`, `bound`, `missing`,
   or `invalid` status.
@@ -181,7 +187,7 @@ gowdk lsp [--ssr]
   `endpoints`, `inspect`, `generate stubs`, and `build`; may be repeated or
   comma-separated, and limits discovery to selected configured modules when no
   explicit file list is passed.
-- `--out`: supported by `build` and `clean`; for `build` it selects the output directory and overrides `Build.Output`, and for `clean` it adds an extra output directory to remove alongside the configured outputs. `playground export` uses `--out` as the archive path. `playground run` uses `--out` as the generated output directory and never writes build output into the source project.
+- `--out`: supported by `build` and `clean`; for `build` it selects the output directory and overrides `Build.Output`, and for `clean` it adds an extra output directory to remove alongside the configured outputs. `clean --target` refuses to remove a selected target root that contains artifacts owned by an unselected configured target. `playground export` uses `--out` as the archive path. `playground run` uses `--out` as the generated output directory and never writes build output into the source project.
 - `--app`: supported by `build`; writes generated Go app source that embeds the selected output directory.
 - `--bin`: supported by `build`; requires `--app` and compiles the generated app with `go build -o <file>`.
 - `--docker`: supported by `build`; requires `--bin` and emits `Dockerfile`
@@ -201,7 +207,7 @@ gowdk lsp [--ssr]
 - `--worker-bin`: supported by `build`; requires `--worker-app` and compiles the generated worker app with `go build -o <file>`.
 - `--cron-app`: supported by `build`; writes generated contract cron app source using configured `Build.Cron` or target cron settings.
 - `--cron-bin`: supported by `build`; requires `--cron-app` and compiles the generated cron app with `go build -o <file>`.
-- `--addr`: supported by `dev`, `preview`, and `serve`; selects the listen address and defaults to `127.0.0.1:8080`.
+- `--addr`: supported by `dev`, `preview`, and `serve`; selects the listen address and defaults to `127.0.0.1:8080`. Disk-backed serving uses the generated-output public file allowlist and rejects symlinked path components by default.
 - `--interval`: supported by `dev`; sets the polling interval, such as `500ms`, `1s`, or `2s`.
 - `--hot`: supported by `preview`; runs the dev loop against the preview output instead of serving a one-shot build.
 - `--dir`: supported by `serve`; selects the generated build output directory. `playground export` and `playground run` use `--dir` as the source project directory and require a `gowdk.config.go` file there.

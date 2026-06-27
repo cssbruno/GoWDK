@@ -215,8 +215,7 @@ func isMapStringAny(expression ast.Expr) bool {
 }
 
 func isLoadContextSelector(expression ast.Expr, imports map[string]string) bool {
-	return isSelector(expression, imports, ssrImportPath, "LoadContext") ||
-		isSelector(expression, imports, runtimeSSRImportPath, "LoadContext")
+	return isSelector(expression, imports, ssrImportPath, "LoadContext")
 }
 
 func isSelector(expression ast.Expr, imports map[string]string, importPath, name string) bool {

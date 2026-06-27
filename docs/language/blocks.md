@@ -142,7 +142,7 @@ beside the user's source files.
 Use `go server {}` for colocated SSR load handlers:
 
 ```gwdk
-import ssr "github.com/cssbruno/gowdk/addons/ssr"
+import ssr "github.com/cssbruno/gowdk/runtime/ssr"
 
 server {
   => { user.name }

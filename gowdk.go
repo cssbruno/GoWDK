@@ -769,7 +769,9 @@ func (mode RenderMode) IsBuildTime() bool {
 	return mode == SPA
 }
 
-// Feature names the capabilities that addons make available to the compiler.
+// Feature names a compiler or generator capability selected from Config.Addons.
+// A feature flag enables GOWDK-owned behavior; it does not by itself mean the
+// addon object runs request-time application code.
 type Feature string
 
 const (
@@ -789,7 +791,10 @@ const (
 	FeatureObservability Feature = "observability"
 )
 
-// Addon is the minimal contract every optional GOWDK capability implements.
+// Addon is a config declaration for a named feature set. Some addons also
+// implement build-time extension interfaces such as CSSProcessor, SEOProvider,
+// or GoBlockConsumer; request-time services remain wired by generated app hooks
+// or runtime packages.
 type Addon interface {
 	Name() string
 	Features() []Feature
@@ -845,8 +850,8 @@ type SEOProvider interface {
 	SEOOptions() SEOOptions
 }
 
-// GoBlockConsumer is an optional addon extension point for targeted go blocks
-// such as go addon.contracts {}.
+// GoBlockConsumer is an optional build-time addon extension point for targeted
+// go blocks such as go addon.contracts {}.
 type GoBlockConsumer interface {
 	GoBlockTargets() []string
 	ValidateGoBlock(target GoBlockTarget, context GoBlockContext) []GoBlockDiagnostic
@@ -902,7 +907,7 @@ type addon struct {
 	features []Feature
 }
 
-// NewAddon creates a simple addon declaration for capability registration.
+// NewAddon creates a simple config marker for feature checks.
 func NewAddon(name string, features ...Feature) Addon {
 	return addon{name: name, features: append([]Feature(nil), features...)}
 }
@@ -915,10 +920,10 @@ func (a addon) Features() []Feature {
 	return append([]Feature(nil), a.features...)
 }
 
-// FeatureSet is a lookup table of enabled addon capabilities.
+// FeatureSet is a lookup table of enabled compiler/generator capabilities.
 type FeatureSet map[Feature]bool
 
-// EnabledFeatures returns the set of capabilities enabled by a config.
+// EnabledFeatures returns the feature flags declared by Config.Addons.
 func EnabledFeatures(config Config) FeatureSet {
 	features := FeatureSet{}
 	for _, addon := range config.Addons {
@@ -934,7 +939,7 @@ func (features FeatureSet) Has(feature Feature) bool {
 	return features[feature]
 }
 
-// HasFeature reports whether a config enables a feature through an addon.
+// HasFeature reports whether Config.Addons declares a feature flag.
 func (config Config) HasFeature(feature Feature) bool {
 	return EnabledFeatures(config).Has(feature)
 }

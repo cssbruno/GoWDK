@@ -13,13 +13,12 @@ const (
 	fragmentHandlerKind = "fragment"
 	loadHandlerKind     = "load"
 
-	contextImportPath    = "context"
-	formImportPath       = "github.com/cssbruno/gowdk/runtime/form"
-	httpImportPath       = "net/http"
-	guardImportPath      = "github.com/cssbruno/gowdk/runtime/guard"
-	responseImportPath   = "github.com/cssbruno/gowdk/runtime/response"
-	ssrImportPath        = "github.com/cssbruno/gowdk/addons/ssr"
-	runtimeSSRImportPath = "github.com/cssbruno/gowdk/runtime/ssr"
+	contextImportPath  = "context"
+	formImportPath     = "github.com/cssbruno/gowdk/runtime/form"
+	httpImportPath     = "net/http"
+	guardImportPath    = "github.com/cssbruno/gowdk/runtime/guard"
+	responseImportPath = "github.com/cssbruno/gowdk/runtime/response"
+	ssrImportPath      = "github.com/cssbruno/gowdk/runtime/ssr"
 )
 
 type featurePackage struct {

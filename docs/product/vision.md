@@ -32,7 +32,7 @@ Use the names this way:
 | --- | --- |
 | GOWDK | Product name and wordmark. |
 | GOWDK Compiler | Language/compiler layer. It owns `.gwdk`, AST/analyzer/IR, generated Go adapter source, build output, manifests, route metadata, asset metadata, diagnostics, formatting, and LSP. |
-| GOWDK Runtime | Runtime/app layer. It owns `runtime/`, `addons/`, generated `net/http` serving, backend routing, form decoding, responses, actions, APIs, fragments, SSR hooks, embedded assets, contract runtime, and one-binary or split-binary wiring. |
+| GOWDK Runtime | Runtime/app layer. It owns `runtime/`, generated `net/http` serving, backend routing, form decoding, responses, actions, APIs, fragments, SSR hooks, embedded assets, contract runtime, and one-binary or split-binary wiring. |
 | `gowdk` | CLI and Go package/module spelling. The CLI drives both layers. |
 
 Avoid treating `GOWDK World`, `GOWDK Core`, or `GOWDK Framework` as separate
@@ -58,7 +58,9 @@ build-time output, CSS, islands, manifests, diagnostics, endpoint metadata, and
 generated adapter source. GOWDK Runtime owns serving, routing, request context
 helpers, form decoding, response envelopes, actions, APIs, CSRF, partial
 fragments, SSR contracts, embedded assets, contract runtime, and one-binary or
-split-binary wiring.
+split-binary wiring. Packages under `addons/` are config-facing feature gates
+and optional build-time extension packages; request-time helpers live under
+`runtime/`.
 
 User application behavior stays in Go. Separate `.go` files remain the default
 path today, and optional inline Go authoring in `.gwdk` is accepted as planned

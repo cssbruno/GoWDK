@@ -144,7 +144,13 @@ argv, protocol/version environment variables, stdout/stderr, and the exit code
 cross processes.
 
 Importable config packages must be normal Go packages inside a Go module, not
-`package main`. That means addon packages are normal Go modules:
+`package main`. `Addons` entries are normal Go values. A value that only
+implements `gowdk.Addon` declares feature IDs; build-time behavior requires an
+explicit interface such as `gowdk.CSSProcessor`, `gowdk.SEOProvider`, or
+`gowdk.GoBlockConsumer`. Request-time services are wired from generated app
+hooks or `Config.Lifecycle.Services`, not by executing arbitrary addon code.
+
+External addon packages are normal Go modules:
 
 ```go
 import brand "github.com/example/gowdk-brand"

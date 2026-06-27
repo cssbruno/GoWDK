@@ -81,9 +81,9 @@ Current behavior:
   feature packages, never the other way around.
 - `internal/appgen` emits the generated action adapter glue used by generated
   apps; user action behavior remains in normal same-package Go handlers.
-- `addons/actions.ValidateRequired` exposes the same required-field behavior as
+- `runtime/actions.ValidateRequired` exposes the same required-field behavior as
   a `runtime/validation.Result` for addon and generated-handler integrations.
-- `addons/actions.NewCSRF` provides signed double-submit CSRF tokens with an
+- `runtime/actions.NewCSRF` provides signed double-submit CSRF tokens with an
   HttpOnly, Secure, SameSite=Lax cookie by default. Local HTTP `Insecure` mode
   uses a non-prefixed `gowdk-csrf` cookie because browsers reject `__Host-`
   cookies without Secure. Normal builds do not expose a no-op CSRF validator;

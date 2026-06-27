@@ -15,11 +15,3 @@ func TestAddonRegistersSSRFeature(t *testing.T) {
 		t.Fatal("expected ssr feature")
 	}
 }
-
-func TestRuntimeReExports(t *testing.T) {
-	data := map[string]any{"user": map[string]any{"name": "Ada"}}
-	value, ok := LoadPath(data, "user.name")
-	if !ok || value != "Ada" {
-		t.Fatalf("unexpected load path result: %#v, %v", value, ok)
-	}
-}

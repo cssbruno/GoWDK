@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	gowdkapi "github.com/cssbruno/gowdk/addons/api"
+	gowdkapi "github.com/cssbruno/gowdk/runtime/api"
 	"github.com/cssbruno/gowdk/runtime/form"
 	"github.com/cssbruno/gowdk/runtime/response"
 )

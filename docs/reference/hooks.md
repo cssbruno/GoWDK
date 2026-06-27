@@ -130,8 +130,8 @@ func GOWDKGuardRegistry() gowdkguard.Registry {
 }
 ```
 
-`addons/ssr.GuardRegistry` and `addons/ssr.LoadContext` remain aliases for
-existing SSR-facing guard code.
+SSR-facing guard code should import `runtime/ssr` for `GuardRegistry` and
+`LoadContext`.
 
 Native RBAC guards reuse `guard` IDs:
 

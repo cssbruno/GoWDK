@@ -19,7 +19,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-const generateUsage = "usage: gowdk generate stubs [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]"
+const generateUsage = "usage: gowdk generate stubs [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...]"
 
 func generate(args []string) error {
 	if len(args) == 0 {

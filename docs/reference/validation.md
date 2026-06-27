@@ -8,20 +8,20 @@ Use standalone mode for a `.gwdk` file that is not inside a configured project:
 gowdk check --standalone path/to/page.gwdk
 ```
 
-When explicit files are passed and the current directory has no
-`gowdk.config.go`, `gowdk check` selects standalone mode automatically. Text
-output reports `ok (standalone)` and JSON output includes
+When explicit files are passed and neither the current directory nor any parent
+directory contains `gowdk.config.go`, `gowdk check` selects standalone mode
+automatically. Text output reports `ok (standalone)` and JSON output includes
 `"mode": "standalone"`.
 
 Standalone mode does not load or execute project config, addons, environment
 files, build functions, lifecycle hooks, or sibling Go packages. It checks
 syntax and source-local semantics independently for each file. A warning says
 `project context required` when a file uses bindings that need a configured
-project. Run the same check from the project root, or pass `--config`, for the
-authoritative project result.
+project. Run the same check from inside the project, pass `--project-root`, or
+pass `--config`, for the authoritative project result.
 
 `--standalone` cannot be combined with `--config`, `--env-file`, `--module`, or
-`--ssr`.
+`--project-root`, or `--ssr`.
 
 ## Project check and build
 

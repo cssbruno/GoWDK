@@ -15,7 +15,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/lang"
 )
 
-const doctorUsage = "usage: gowdk doctor [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...]"
+const doctorUsage = "usage: gowdk doctor [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...]"
 
 type doctorReport struct {
 	Version     int               `json:"version"`

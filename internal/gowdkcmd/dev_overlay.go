@@ -108,6 +108,10 @@ func devOverlayDiagnosticsFromError(err error) []devOverlayDiagnostic {
 	if errors.As(err, &diagnosticErr) {
 		out = append(out, diagnosticErr.diagnostics...)
 	}
+	var operationErr *OperationError
+	if errors.As(err, &operationErr) {
+		out = append(out, operationErr.Diagnostics...)
+	}
 	var buildErr *buildgen.BuildError
 	if errors.As(err, &buildErr) {
 		out = append(out, devOverlayDiagnosticsFromBuildgen(buildErr.Diagnostics)...)

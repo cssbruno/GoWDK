@@ -3,9 +3,11 @@
 ## Current Inputs
 
 Project-level CLI commands require `gowdk.config.go` in the current directory,
-or an explicit config passed with `--config <file>`, before they compile,
-validate, or inspect `.gwdk` code. Explicit `.gwdk` file paths narrow the input
-set, but they do not bypass the config requirement:
+a parent directory, the directory passed with `--project-root <dir>`, or an
+explicit config passed with `--config <file>`, before they compile, validate,
+or inspect `.gwdk` code. Explicit `.gwdk` file paths narrow the input set, but
+they do not bypass the config requirement. Explicit paths outside the selected
+project root are rejected:
 
 ```sh
 go run ./cmd/gowdk check examples/pages/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk

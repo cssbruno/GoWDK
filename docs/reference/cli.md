@@ -13,23 +13,23 @@ gowdk add <addon> [--config <file>] [--base-url <url>]
 gowdk add --list [--registry] [--json]
 gowdk tokens <file.gwdk>
 gowdk fmt [--write] <files>
-gowdk check [--config <file>] [--env-file <file>] [--module <name>] [--json] [--warnings-as-errors] [--ssr] [files...]
-gowdk fix [--dry-run] [--code <diagnostic-code>] [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
-gowdk manifest [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
-gowdk sitemap [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
-gowdk routes [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
-gowdk endpoints [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
-gowdk inspect ir|tree|endpoint-graph|asset-graph|go-bindings [--config <file>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...]
-gowdk generate stubs [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]
+gowdk check [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--json] [--warnings-as-errors] [--ssr] [files...]
+gowdk fix [--dry-run] [--code <diagnostic-code>] [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...]
+gowdk manifest [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...]
+gowdk sitemap [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...]
+gowdk routes [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...]
+gowdk endpoints [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...]
+gowdk inspect ir|tree|endpoint-graph|asset-graph|go-bindings [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...]
+gowdk generate stubs [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...]
 gowdk explain [--json] <diagnostic-code>
-gowdk doctor [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...]
+gowdk doctor [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...]
 gowdk test [--config <file>] [--env-file <file>] [--module <name>] [--target <name>] [--stage <unit|app|binary|browser>] [--run <pattern>] [--timeout <duration>] [--count <n>] [--cover] [--json] [--keep-workdir] [--browser-command <command>] [--ssr] [files...]
-gowdk audit [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--sarif[=<file>]] [--diff <previous-report>] [--schema[=report|security]] [--emit-tests[=<file>]] [--check-tests[=<file>]] [--force] [--run] [--run-timeout=<duration>] [files...]
+gowdk audit [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--sarif[=<file>]] [--diff <previous-report>] [--schema[=report|security]] [--emit-tests[=<file>]] [--check-tests[=<file>]] [--force] [--run] [--run-timeout=<duration>] [files...]
 gowdk contracts [--json] [dir]
 gowdk graph [--json] [dir]
 gowdk trace <contract> [--json] [dir]
 gowdk list commands|queries|events|jobs [--json] [dir]
-gowdk build [--config <file>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [--worker-app <dir>] [--worker-bin <file>] [--cron-app <dir>] [--cron-bin <file>] [files...]
+gowdk build [--config <file>] [--project-root <dir>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [--worker-app <dir>] [--worker-bin <file>] [--cron-app <dir>] [--cron-bin <file>] [files...]
 gowdk clean [--config <file>] [--target <name>] [--out <dir>] [--dry-run] [--json]
 gowdk dev [--addr <addr>] [--interval <duration>] [build flags...]
 gowdk preview [--addr <addr>] [--hot] [build flags...]
@@ -37,7 +37,7 @@ gowdk serve --dir <dir> [--addr <addr>]
 gowdk playground policy [--json]
 gowdk playground export --dir <project> --out <project.zip> [--json]
 gowdk playground run --dir <project> --out <dir> --allow-hosted-execution (--module-cache <dir> | --allow-shared-module-cache)
-gowdk lsp [--ssr]
+gowdk lsp [--config <file>] [--project-root <dir>] [--ssr]
 ```
 
 ## Flags
@@ -148,6 +148,11 @@ gowdk lsp [--ssr]
   config file. Project-aware `build`, `check`, and `dev` execute importable
   configs through the generated native helper instead of the required default
   `gowdk.config.go`.
+- `--project-root`: supported by project-aware commands and `lsp`; selects the
+  directory that owns `gowdk.config.go`. Without it, project-aware commands
+  discover the root by walking upward from the current directory or explicit
+  source paths. Explicit input files outside the selected project root are
+  rejected.
 - `--env-file`: supported by project-aware compile/report commands that load
   `gowdk.config.go`, including `check`, `doctor`, `test`, `audit`, `manifest`,
   `sitemap`, `routes`, `endpoints`, `inspect`, `generate stubs`, and `build`;
@@ -310,9 +315,10 @@ generated outputs. The target's intermediate build output is inferred as
 writes only the config, `.gitignore`, one page, and one CSS file.
 
 `check`, `audit`, `manifest`, `sitemap`, `routes`, `build`, and `dev` require a config
-file before they compile or validate `.gwdk` code. By default they load
-`gowdk.config.go` from the current directory; `--config <file>` can point at a
-different config for project examples or one-off checks.
+file before they compile or validate `.gwdk` code. By default they discover
+`gowdk.config.go` by walking upward from the current directory or explicit
+source paths; `--project-root <dir>` selects a root directory, and `--config
+<file>` can point at a different config for project examples or one-off checks.
 
 These commands accept explicit file paths, but explicit paths do not remove the
 config requirement. If no files are passed, commands discover configured root

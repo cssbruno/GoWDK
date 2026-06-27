@@ -21,7 +21,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-const buildUsage = "usage: gowdk build [--config <file>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [--worker-app <dir>] [--worker-bin <file>] [--cron-app <dir>] [--cron-bin <file>] [files...]"
+const buildUsage = "usage: gowdk build [--config <file>] [--project-root <dir>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [--worker-app <dir>] [--worker-bin <file>] [--cron-app <dir>] [--cron-bin <file>] [files...]"
 
 func build(args []string) error {
 	started := time.Now()
@@ -90,7 +90,7 @@ func loadBuildOptions(args []string) (buildOptions, error) {
 	if err != nil {
 		return buildOptions{}, err
 	}
-	if err := loadBuildConfig(&plan.Options, plan.ConfigPath); err != nil {
+	if err := loadBuildConfig(&plan.Options, plan.ConfigPath, plan.Paths); err != nil {
 		return buildOptions{}, err
 	}
 	if len(plan.TargetNames) > 0 && plan.hasAdHocArgs() {
@@ -232,7 +232,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			discovered, discoverErr = discoverBuildFiles(options.Config, outputDir, request.Modules, options.ProjectRoot)
 			return discoverErr
 		}); err != nil {
-			return err
+			return operationErrorFromCause("build failed", err)
 		}
 		if len(discovered) == 0 && !request.hasRoleArtifacts() {
 			return fmt.Errorf("no .gwdk files found")
@@ -247,11 +247,11 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		app, diagnostics = lang.ParseBuildFiles(paths)
 		return nil
 	})
+	if diagnostics.HasErrors() {
+		return operationErrorFromLang("build failed", diagnostics)
+	}
 	for _, diagnostic := range diagnostics {
 		fmt.Fprintln(os.Stderr, diagnostic.String())
-	}
-	if diagnostics.HasErrors() {
-		return newDevDiagnosticError("build failed", devOverlayDiagnosticsFromLang(diagnostics))
 	}
 	var ir gwdkir.Program
 	timings.measure("ir_assembly", func() error {
@@ -268,8 +268,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		bindings, bindErr = compiler.EnrichProgram(options.Config, &ir)
 		return bindErr
 	}); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return fmt.Errorf("build failed")
+		return operationErrorFromCause("build failed", err)
 	}
 	var report compiler.ValidationErrors
 	timings.measure("ir_validation", func() error {
@@ -277,15 +276,15 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		report = append(report, compiler.BackendBindingDiagnostics(bindings)...)
 		return nil
 	})
+	if report.HasErrors() {
+		return operationErrorFromCompiler("build failed", report, report)
+	}
 	for _, diagnostic := range report {
 		prefix := ""
 		if diagnostic.Severity == compiler.SeverityWarning {
 			prefix = "warning: "
 		}
 		fmt.Fprintln(os.Stderr, prefix+diagnostic.Error())
-	}
-	if report.HasErrors() {
-		return newDevDiagnosticError("build failed", devOverlayDiagnosticsFromCompiler(report))
 	}
 	var contractReport contractscan.Report
 	if err := timings.measure("contract_validation", func() error {
@@ -303,12 +302,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		}
 		return compiler.ValidateQueryInvalidations(options.Config, ir.QueryInvalidations)
 	}); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		var report compiler.ValidationErrors
-		if errors.As(err, &report) {
-			return newDevDiagnosticError("build failed", devOverlayDiagnosticsFromCompiler(report))
-		}
-		return fmt.Errorf("build failed")
+		return operationErrorFromCause("build failed", err)
 	}
 
 	if err := timings.measure("security_audit", func() error {
@@ -324,12 +318,12 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		return buildErr
 	}); err != nil {
 		printBuildgenBuildErrorReport(err, options.Debug)
-		return err
+		return operationErrorFromCause("build failed", err)
 	}
 	if err := timings.measure("final_security_audit", func() error {
 		return enforceFinalBuildArtifactSecurityAudit(options, result)
 	}); err != nil {
-		return err
+		return operationErrorFromCause("build failed", err)
 	}
 	timings.counter("artifacts", len(result.Artifacts))
 	timings.counter("css_artifacts", len(result.CSSArtifacts))
@@ -369,7 +363,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		asyncAPIPath, writeErr = contractscan.WriteAsyncAPI(outputDir, contractReport, contractscan.AsyncAPIOptions{})
 		return writeErr
 	}); err != nil {
-		return err
+		return operationErrorFromCause("build failed", err)
 	}
 	if asyncAPIPath != "" {
 		fmt.Println(asyncAPIPath)
@@ -397,7 +391,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			app, appErr = appgen.GenerateWithOptions(outputDir, appDir, appOptions)
 			return appErr
 		}); err != nil {
-			return err
+			return operationErrorFromCause("build failed", err)
 		}
 		fmt.Println(app.ModulePath)
 		fmt.Println(app.PackagePath)
@@ -409,7 +403,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 				built, buildErr = appgen.BuildBinary(app.AppDir, binaryPath)
 				return buildErr
 			}); err != nil {
-				return err
+				return operationErrorFromCause("build failed", err)
 			}
 			fmt.Println(built)
 			buildReportEvents = append(buildReportEvents, buildgen.BuildEvent{
@@ -426,7 +420,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 					artifacts, dockerErr = writeDockerArtifacts(built, request.DockerBase)
 					return dockerErr
 				}); err != nil {
-					return err
+					return operationErrorFromCause("build failed", err)
 				}
 				fmt.Println(artifacts.DockerfilePath)
 				fmt.Println(artifacts.DockerignorePath)
@@ -459,7 +453,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 				built, buildErr = appgen.BuildWASM(app.AppDir, wasmPath)
 				return buildErr
 			}); err != nil {
-				return err
+				return operationErrorFromCause("build failed", err)
 			}
 			fmt.Println(built)
 		}
@@ -471,7 +465,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			app, appErr = appgen.GenerateBackendWithOptions(backendAppDir, appgen.OptionsFromIR(options.Config, &ir))
 			return appErr
 		}); err != nil {
-			return err
+			return operationErrorFromCause("build failed", err)
 		}
 		fmt.Println(app.ModulePath)
 		fmt.Println(app.PackagePath)
@@ -483,7 +477,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 				built, buildErr = appgen.BuildBinary(app.AppDir, backendBinaryPath)
 				return buildErr
 			}); err != nil {
-				return err
+				return operationErrorFromCause("build failed", err)
 			}
 			fmt.Println(built)
 		}
@@ -495,7 +489,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			app, appErr = appgen.GenerateContractWorker(workerAppDir, contractReport, request.Worker)
 			return appErr
 		}); err != nil {
-			return err
+			return operationErrorFromCause("build failed", err)
 		}
 		fmt.Println(app.ModulePath)
 		fmt.Println(app.PackagePath)
@@ -508,7 +502,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 				built, buildErr = appgen.BuildWorkerBinary(app.AppDir, workerBinaryPath)
 				return buildErr
 			}); err != nil {
-				return err
+				return operationErrorFromCause("build failed", err)
 			}
 			fmt.Println(built)
 			buildReportEvents = append(buildReportEvents, buildgen.BuildEvent{
@@ -530,7 +524,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			app, appErr = appgen.GenerateContractCron(cronAppDir, contractReport, request.Cron)
 			return appErr
 		}); err != nil {
-			return err
+			return operationErrorFromCause("build failed", err)
 		}
 		fmt.Println(app.ModulePath)
 		fmt.Println(app.PackagePath)
@@ -543,7 +537,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 				built, buildErr = appgen.BuildCronBinary(app.AppDir, cronBinaryPath)
 				return buildErr
 			}); err != nil {
-				return err
+				return operationErrorFromCause("build failed", err)
 			}
 			fmt.Println(built)
 			buildReportEvents = append(buildReportEvents, buildgen.BuildEvent{
@@ -572,7 +566,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			})
 			return recipeErr
 		}); err != nil {
-			return err
+			return operationErrorFromCause("build failed", err)
 		}
 		for _, artifact := range recipeArtifacts {
 			fmt.Println(artifact.Path)
@@ -580,10 +574,10 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		buildReportEvents = append(buildReportEvents, deploymentRecipeBuildEvents(recipeArtifacts)...)
 	}
 	if err := appendBuildReportEvents(result.BuildReportPath, buildReportEvents...); err != nil {
-		return err
+		return operationErrorFromCause("build failed", err)
 	}
 	if _, err := timings.write(outputDir, request.TimingsPath); err != nil {
-		return err
+		return operationErrorFromCause("build failed", err)
 	}
 	return nil
 }
@@ -936,6 +930,14 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 				return buildOptions{}, fmt.Errorf(buildUsage)
 			}
 			plan.ConfigPath = value
+			i = next
+			continue
+		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--project-root", false); ok {
+			if missing {
+				return buildOptions{}, fmt.Errorf(buildUsage)
+			}
+			plan.Options.ProjectRoot = value
 			i = next
 			continue
 		}

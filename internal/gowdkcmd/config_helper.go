@@ -115,6 +115,10 @@ func normalizeProjectCommandPathArgs(args []string, cwd string, start int) []str
 			index = next
 			continue
 		}
+		if next, ok := normalizeHelperValueFlag(out, index, cwd, "--project-root"); ok {
+			index = next
+			continue
+		}
 		if next, ok := normalizeHelperValueFlag(out, index, cwd, "--env-file"); ok {
 			index = next
 			continue
@@ -217,7 +221,8 @@ func projectHelperConfigPath(args []string) (string, bool, error) {
 		if err != nil {
 			return "", true, err
 		}
-		return plan.ConfigPath, true, nil
+		_, configPath, err := resolveProjectRoot(plan.ConfigPath, plan.Options.ProjectRoot, plan.Paths)
+		return configPath, true, err
 	case "dev":
 		options, err := parseDevOptions(args[1:])
 		if err != nil {
@@ -227,7 +232,8 @@ func projectHelperConfigPath(args []string) (string, bool, error) {
 		if err != nil {
 			return "", true, err
 		}
-		return plan.ConfigPath, true, nil
+		_, configPath, err := resolveProjectRoot(plan.ConfigPath, plan.Options.ProjectRoot, plan.Paths)
+		return configPath, true, err
 	case "check":
 		options, configPath, moduleNames, paths, err := parseProjectOptions(args[1:], "check", true)
 		if err != nil {
@@ -240,7 +246,8 @@ func projectHelperConfigPath(args []string) (string, bool, error) {
 		if standalone {
 			return "", false, nil
 		}
-		return configPath, true, nil
+		_, resolvedConfigPath, err := resolveProjectRoot(configPath, options.ProjectRoot, paths)
+		return resolvedConfigPath, true, err
 	default:
 		return "", false, nil
 	}

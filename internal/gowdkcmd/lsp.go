@@ -8,10 +8,9 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/internal/lsp"
-	"github.com/cssbruno/gowdk/internal/project"
 )
 
-const lspUsage = "usage: gowdk lsp [--config <file>] [--ssr]"
+const lspUsage = "usage: gowdk lsp [--config <file>] [--project-root <dir>] [--ssr]"
 
 func languageServer(args []string) error {
 	config, err := languageServerConfig(args)
@@ -38,6 +37,14 @@ func languageServerConfig(args []string) (gowdk.Config, error) {
 			i = next
 			continue
 		}
+		if value, next, ok, missing := consumeValueFlag(args, i, "--project-root", true); ok {
+			if missing {
+				return gowdk.Config{}, errors.New(lspUsage)
+			}
+			options.ProjectRoot = value
+			i = next
+			continue
+		}
 		switch {
 		case arg == "--ssr":
 			options.Config.Addons = append(options.Config.Addons, ssr.Addon())
@@ -46,8 +53,8 @@ func languageServerConfig(args []string) (gowdk.Config, error) {
 		}
 	}
 	if strings.TrimSpace(configPath) == "" {
-		if _, err := os.Stat(project.DefaultConfigFile); err != nil {
-			if os.IsNotExist(err) {
+		if _, _, err := resolveProjectRoot(configPath, options.ProjectRoot, nil); err != nil {
+			if strings.TrimSpace(options.ProjectRoot) == "" && strings.Contains(err.Error(), "gowdk.config.go is required") {
 				return options.Config, nil
 			}
 			return gowdk.Config{}, err

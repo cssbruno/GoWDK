@@ -3,6 +3,7 @@ package gowdkcmd
 import (
 	"archive/zip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -91,6 +92,92 @@ view {
 	}
 	if _, err := os.Stat(filepath.Join(root, "dist", "index.html")); err != nil {
 		t.Fatalf("expected dynamic config build output: %v", err)
+	}
+}
+
+func TestProjectCommandsDiscoverRootUpward(t *testing.T) {
+	root := t.TempDir()
+	writeCLITestModule(t, root, "example.com/discover-root")
+	writeMinimalCLIConfig(t, root)
+	source := filepath.Join(root, "src", "pages", "home.page.gwdk")
+	writeCLIFile(t, source, `package app
+
+page home
+route "/"
+
+view {
+  <main>discovered</main>
+}
+`)
+	nested := filepath.Join(root, "src")
+
+	if err := runInDir(nested, func() error {
+		return run([]string{"check", "pages/home.page.gwdk"})
+	}); err != nil {
+		t.Fatalf("expected check to discover project root upward: %v", err)
+	}
+
+	if err := runInDir(nested, func() error {
+		return run([]string{"build", "--out", "dist", "pages/home.page.gwdk"})
+	}); err != nil {
+		t.Fatalf("expected build to discover project root upward: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "dist", "index.html")); err != nil {
+		t.Fatalf("expected build output under project root: %v", err)
+	}
+}
+
+func TestProjectRootRejectsOutsideExplicitInput(t *testing.T) {
+	root := t.TempDir()
+	writeCLITestModule(t, root, "example.com/project-root")
+	writeMinimalCLIConfig(t, root)
+	outside := filepath.Join(t.TempDir(), "outside.page.gwdk")
+	writeCLIFile(t, outside, `package app
+
+page outside
+route "/outside"
+
+view {
+  <main>outside</main>
+}
+`)
+
+	err := run([]string{"check", "--project-root", root, outside})
+	if err == nil || !strings.Contains(err.Error(), "outside project root") {
+		t.Fatalf("expected outside project root error, got %v", err)
+	}
+}
+
+func TestBuildValidationReturnsOperationErrorDiagnostics(t *testing.T) {
+	root := t.TempDir()
+	writeCLITestModule(t, root, "example.com/build-diagnostics")
+	config := writeMinimalCLIConfig(t, root)
+	source := filepath.Join(root, "home.page.gwdk")
+	writeCLIFile(t, source, `package app
+
+page home
+route "/"
+
+server {
+  => { title: "request time" }
+}
+
+view {
+  <main>{title}</main>
+}
+`)
+	t.Setenv(helperActiveEnv, "1")
+
+	err := run([]string{"build", "--config", config, "--out", filepath.Join(root, "dist"), source})
+	var operationErr *OperationError
+	if !errors.As(err, &operationErr) {
+		t.Fatalf("expected OperationError, got %T: %v", err, err)
+	}
+	if len(operationErr.Diagnostics) == 0 {
+		t.Fatalf("expected structured diagnostics, got %#v", operationErr)
+	}
+	if operationErr.Diagnostics[0].Code != "missing_ssr_addon" {
+		t.Fatalf("expected missing_ssr_addon diagnostic, got %#v", operationErr.Diagnostics)
 	}
 }
 
@@ -8510,6 +8597,38 @@ var Config = gowdk.Config{
 		if len(config.Addons) != 1 || config.Addons[0].Name() != "ssr" {
 			t.Fatalf("languageServerConfig(%v): expected ssr addon, got %#v", args, config.Addons)
 		}
+	}
+}
+
+func TestLanguageServerConfigSupportsProjectRootFlag(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/addons/ssr"
+)
+
+var Config = gowdk.Config{
+	Addons: []gowdk.Addon{
+		ssr.Addon(),
+	},
+}
+`)
+
+	config, err := languageServerConfig([]string{"--project-root", root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Addons) != 1 || config.Addons[0].Name() != "ssr" {
+		t.Fatalf("expected project-root config addon, got %#v", config.Addons)
+	}
+}
+
+func TestLanguageServerConfigRejectsProjectRootWithoutConfig(t *testing.T) {
+	root := t.TempDir()
+	if _, err := languageServerConfig([]string{"--project-root", root}); err == nil || !strings.Contains(err.Error(), "gowdk.config.go is required") {
+		t.Fatalf("expected missing config error, got %v", err)
 	}
 }
 

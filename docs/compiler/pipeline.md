@@ -24,7 +24,7 @@ builds, and the flag may be repeated or comma-separated. Discovery uses
 `**/*.gwdk` defaults when no root/module source is configured in the loaded
 config.
 
-`gowdk build [--config <file>] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--worker-app <dir>] [--worker-bin <file>] [--cron-app <dir>] [--cron-bin <file>] [files...]` currently
+`gowdk build [--config <file>] [--project-root <dir>] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--worker-app <dir>] [--worker-bin <file>] [--cron-app <dir>] [--cron-bin <file>] [files...]` currently
 emits app-shell HTML, `gowdk-routes.json`, `gowdk-assets.json`, generated
 embedded app source, optional web/backend binaries, and optional contract
 worker/cron binaries for the selected source set. The current rendered page

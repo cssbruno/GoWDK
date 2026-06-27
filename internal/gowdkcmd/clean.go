@@ -79,6 +79,9 @@ func clean(args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := validateCleanArtifactOwnership(options.ProjectRoot, options.Config, cleanNames(targetNames), candidates); err != nil {
+		return err
+	}
 
 	result, err := runClean(options.ProjectRoot, candidates, dryRun)
 	if err != nil {

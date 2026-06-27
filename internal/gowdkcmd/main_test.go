@@ -7676,9 +7676,43 @@ func TestOutputFileHandlerDoesNotListDirectories(t *testing.T) {
 func TestOutputFileHandlerDoesNotServeSecurityManifest(t *testing.T) {
 	root := t.TempDir()
 	writeCLIFile(t, filepath.Join(root, "gowdk-security.json"), `{"endpoints":[{"path":"/admin"}]}`)
+	writeCLIFile(t, filepath.Join(root, "gowdk-build-report.json"), `{"events":[{"path":"src/pages/admin.page.gwdk"}]}`)
+	writeCLIFile(t, filepath.Join(root, "gowdk-build-timings.json"), `{"phases":[{"name":"build"}]}`)
+	writeCLIFile(t, filepath.Join(root, "gowdk-routes.json"), `{"routes":[{"route":"/admin"}]}`)
+	writeCLIFile(t, filepath.Join(root, "gowdk-assets.json"), `{"files":{"app.css":"assets/app.css"}}`)
+
+	for _, name := range []string{"gowdk-security.json", "gowdk-build-report.json", "gowdk-build-timings.json", "gowdk-routes.json", "gowdk-assets.json"} {
+		response := httptest.NewRecorder()
+		outputFileHandler(root).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/"+name, nil))
+
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("%s: expected 404, got %d with body %s", name, response.Code, response.Body.String())
+		}
+	}
+}
+
+func TestOutputFileHandlerRejectsUnplannedRegularFiles(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "notes.txt"), "private notes")
 
 	response := httptest.NewRecorder()
-	outputFileHandler(root).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/gowdk-security.json", nil))
+	outputFileHandler(root).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/notes.txt", nil))
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d with body %s", response.Code, response.Body.String())
+	}
+}
+
+func TestOutputFileHandlerRejectsSymlinkEscape(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	writeCLIFile(t, filepath.Join(outside, "secret.html"), "<main>secret</main>")
+	if err := os.Symlink(filepath.Join(outside, "secret.html"), filepath.Join(root, "linked.html")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	response := httptest.NewRecorder()
+	outputFileHandler(root).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/linked.html", nil))
 
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d with body %s", response.Code, response.Body.String())

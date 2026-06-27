@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cssbruno/gowdk/internal/safeasset"
 	gowdkroute "github.com/cssbruno/gowdk/runtime/route"
 )
 
@@ -85,19 +86,25 @@ func parseServeOptions(args []string) (string, string, error) {
 }
 
 func outputFileHandler(root string) http.Handler {
+	files, err := newRootedOutputFiles(root)
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if err != nil {
+			http.Error(w, "static output unavailable", http.StatusInternalServerError)
+			return
+		}
 		if request.Method != http.MethodGet && request.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
 			http.Error(w, staticMethodNotAllowedMessage(root, request), http.StatusMethodNotAllowed)
 			return
 		}
 
-		filePath, ok := outputFilePath(root, request.URL.Path)
+		file, info, _, ok := files.Open(request.URL.Path)
 		if !ok {
 			http.NotFound(w, request)
 			return
 		}
-		http.ServeFile(w, request, filePath)
+		defer file.Close()
+		http.ServeContent(w, request, info.Name(), info.ModTime(), file)
 	})
 }
 
@@ -174,6 +181,7 @@ func readStaticRouteManifest(root string) (staticRouteManifest, bool) {
 }
 
 func liveReloadFileHandler(root string, reload *liveReloadBroker) http.Handler {
+	rooted, rootedErr := newRootedOutputFiles(root)
 	files := outputFileHandler(root)
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path == "/__gowdk/reload" {
@@ -184,12 +192,17 @@ func liveReloadFileHandler(root string, reload *liveReloadBroker) http.Handler {
 			files.ServeHTTP(w, request)
 			return
 		}
-		filePath, ok := outputFilePath(root, request.URL.Path)
-		if !ok || filepath.Ext(filePath) != ".html" {
+		if rootedErr != nil {
 			files.ServeHTTP(w, request)
 			return
 		}
-		payload, err := os.ReadFile(filePath)
+		file, _, rel, ok := rooted.Open(request.URL.Path)
+		if !ok || path.Ext(rel) != ".html" {
+			files.ServeHTTP(w, request)
+			return
+		}
+		defer file.Close()
+		payload, err := io.ReadAll(file)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -541,7 +554,19 @@ func writeLiveReloadEvent(w io.Writer, event liveReloadEvent) {
 	_, _ = fmt.Fprintln(w)
 }
 
-func outputFilePath(root, requestPath string) (string, bool) {
+type rootedOutputFiles struct {
+	root *os.Root
+}
+
+func newRootedOutputFiles(root string) (*rootedOutputFiles, error) {
+	opened, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	return &rootedOutputFiles{root: opened}, nil
+}
+
+func (files *rootedOutputFiles) Open(requestPath string) (*os.File, os.FileInfo, string, bool) {
 	clean := path.Clean("/" + requestPath)
 	candidates := []string{clean}
 	if strings.HasSuffix(requestPath, "/") {
@@ -551,38 +576,66 @@ func outputFilePath(root, requestPath string) (string, bool) {
 	}
 
 	for _, candidate := range candidates {
-		filePath, ok := outputCandidatePath(root, candidate)
+		file, info, rel, ok := files.openCandidate(candidate)
 		if ok {
-			return filePath, true
+			return file, info, rel, true
 		}
 	}
-	return "", false
+	return nil, nil, "", false
 }
 
-func outputCandidatePath(root, candidate string) (string, bool) {
+func (files *rootedOutputFiles) openCandidate(candidate string) (*os.File, os.FileInfo, string, bool) {
 	rel := strings.TrimPrefix(path.Clean("/"+candidate), "/")
-	if unsafeServedOutputFile(rel) {
-		return "", false
+	if rel == "" {
+		rel = "index.html"
 	}
-	filePath := filepath.Join(root, filepath.FromSlash(rel))
-	relative, err := filepath.Rel(root, filePath)
-	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return "", false
+	file, info, ok := files.openPublicRegularFile(rel)
+	if ok {
+		return file, info, rel, true
 	}
-	info, err := os.Stat(filePath)
-	if err != nil {
-		return "", false
+	indexRel := path.Join(rel, "index.html")
+	file, info, ok = files.openPublicRegularFile(indexRel)
+	if ok {
+		return file, info, indexRel, true
 	}
-	if info.IsDir() {
-		indexPath := filepath.Join(filePath, "index.html")
-		if indexInfo, err := os.Stat(indexPath); err == nil && !indexInfo.IsDir() {
-			return indexPath, true
-		}
-		return "", false
-	}
-	return filePath, true
+	return nil, nil, "", false
 }
 
-func unsafeServedOutputFile(rel string) bool {
-	return strings.EqualFold(path.Base(filepath.ToSlash(rel)), "gowdk-security.json")
+func (files *rootedOutputFiles) openPublicRegularFile(rel string) (*os.File, os.FileInfo, bool) {
+	rel = strings.TrimPrefix(path.Clean("/"+rel), "/")
+	if !safeasset.PublicGeneratedOutputFile(rel) || files.pathContainsLink(rel) {
+		return nil, nil, false
+	}
+	file, err := files.root.Open(rel)
+	if err != nil {
+		return nil, nil, false
+	}
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		file.Close()
+		return nil, nil, false
+	}
+	return file, info, true
+}
+
+func (files *rootedOutputFiles) pathContainsLink(rel string) bool {
+	rel = strings.Trim(path.Clean("/"+rel), "/")
+	if rel == "" {
+		return false
+	}
+	var current string
+	for _, segment := range strings.Split(rel, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return true
+		}
+		current = path.Join(current, segment)
+		info, err := files.root.Lstat(current)
+		if err != nil {
+			return false
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return true
+		}
+	}
+	return false
 }

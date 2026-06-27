@@ -7,7 +7,7 @@ surfaces. Generated directories are outputs, not authoring locations.
 
 | Output | Purpose |
 | --- | --- |
-| `<out>/` | Static/SPA HTML, assets, route metadata, asset metadata, build report, and optional SEO files |
+| `<out>/` | Static/SPA HTML, assets, runtime-private manifests, build-private reports, and optional SEO files |
 | `<app>/` | Generated Go application source for embedded assets and request-time handlers |
 | `<bin>` | Optional compiled generated application binary |
 | `<wasm>` | Optional Go `js/wasm` deploy artifact |
@@ -19,8 +19,17 @@ The default scaffold writes `.gowdk/output/<target>`, `.gowdk/<target>`, and
 ## Static Output
 
 Build-time pages can emit route-derived `index.html` files, content-hashed CSS
-and asset files, generated browser runtime assets, `gowdk-routes.json`,
-`gowdk-assets.json`, and `gowdk-build-report.json`.
+and asset files, generated browser runtime assets, runtime-private manifests
+such as `gowdk-routes.json` and `gowdk-assets.json`, and build-private reports
+such as `gowdk-build-report.json`.
+
+Only browser-facing artifacts are served by `gowdk serve` and generated app
+static handlers. HTML, generated assets under `assets/`, `sitemap.xml`,
+`robots.txt`, `openapi.json`, and `asyncapi.json` are public by default.
+`gowdk-routes.json` and `gowdk-assets.json` are embedded for generated runtime
+use but are not public URLs. Build reports, timings, security/audit data,
+source maps, source files, and unknown files under the output directory are not
+served by default.
 
 Dynamic SPA routes emit concrete files only for supported `paths {}` entries.
 Request-time SSR or hybrid pages are listed in metadata but are served by the
@@ -50,11 +59,12 @@ storage, process supervision, and backups remain deployment responsibilities.
 
 | File | Source |
 | --- | --- |
-| `gowdk-build-report.json` | Build planning, writes, cache policy, security posture, contracts, OpenAPI/AsyncAPI metadata, and diagnostics |
-| `gowdk-routes.json` | Emitted page routes and generated output paths |
-| `gowdk-assets.json` | Generated assets, cache policy, CSS, JS, WASM, and component assets |
+| `gowdk-build-report.json` | Build-private planning, writes, cache policy, security posture, contracts, OpenAPI/AsyncAPI metadata, and diagnostics |
+| `gowdk-routes.json` | Runtime-private emitted page routes and generated output paths |
+| `gowdk-assets.json` | Runtime-private generated assets, cache policy, CSS, JS, WASM, and component assets |
 | `gowdk-security.json` | Non-served posture report for generated-app security checks |
-| `sitemap.xml` / `robots.txt` | Optional SEO addon output |
+| `sitemap.xml` / `robots.txt` | Optional public SEO addon output |
+| `openapi.json` / `asyncapi.json` | Public API documentation artifacts when generated |
 
 The public `gowdk manifest` command is documented in
 [Reference Manifest](../reference/manifest.md). Build-report details live in
@@ -69,6 +79,13 @@ The public `gowdk manifest` command is documented in
   assets or explicit page code.
 - Document new generated files in this page, the build report page, or the
   reference page that owns the public contract.
+- New generated artifact kinds must declare whether they are public,
+  runtime-private, or build-private before they are embedded, served, or
+  packaged.
+- Build destination topology is validated before filesystem writes. Selected
+  targets must not share output/app/binary/WASM/report/recipe destinations, put
+  binaries or WASM under served static output, put generated apps under static
+  output, or nest one selected target output inside another.
 - Generated output ownership and license policy are documented in
   [LICENSE](../../LICENSE) and
   [Generated Code Policy](../engineering/generated-code-policy.md).

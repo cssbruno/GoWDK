@@ -1,6 +1,8 @@
 package gowdkcmd
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -160,6 +162,92 @@ func TestSelectBuildTargetsAppliesBuildOnlyDefaultsAndValidation(t *testing.T) {
 	}
 	if _, err := selectBuildTargets([]gowdk.BuildTargetConfig{{Name: "site", CronBinary: "bin/cron"}}, nil); err == nil || !strings.Contains(err.Error(), "cron binary requires cron app") {
 		t.Fatalf("cron binary without app error = %v", err)
+	}
+}
+
+func TestValidateConfiguredBuildTopologyRejectsUnsafeLayouts(t *testing.T) {
+	tests := []struct {
+		name    string
+		targets []gowdk.BuildTargetConfig
+		want    string
+	}{
+		{
+			name: "duplicate output",
+			targets: []gowdk.BuildTargetConfig{
+				{Name: "admin", Output: "dist/site"},
+				{Name: "public", Output: "dist/site"},
+			},
+			want: "build_output_collision",
+		},
+		{
+			name: "nested outputs",
+			targets: []gowdk.BuildTargetConfig{
+				{Name: "one", Output: "dist"},
+				{Name: "two", Output: "dist/two"},
+			},
+			want: "build_output_overlap",
+		},
+		{
+			name: "binary under static output",
+			targets: []gowdk.BuildTargetConfig{
+				{Name: "site", Output: "dist/site", App: ".gowdk/app", Binary: "dist/site/server"},
+			},
+			want: "build_output_overlap",
+		},
+		{
+			name: "frontend and backend apps share directory",
+			targets: []gowdk.BuildTargetConfig{
+				{Name: "site", Output: "dist/site", App: ".gowdk/app", BackendApp: ".gowdk/app"},
+			},
+			want: "build_output_collision",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			targets, err := selectBuildTargets(tt.targets, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = validateConfiguredBuildTopology(t.TempDir(), targets, false, "")
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("topology error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateConfiguredBuildTopologyAcceptsDisjointTargets(t *testing.T) {
+	targets, err := selectBuildTargets([]gowdk.BuildTargetConfig{
+		{Name: "site", Output: "dist/site", App: ".gowdk/site", Binary: "bin/site", WASM: "bin/site.wasm"},
+		{Name: "admin", Output: "dist/admin", BackendApp: ".gowdk/admin-backend", BackendBinary: "bin/admin-backend"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateConfiguredBuildTopology(t.TempDir(), targets, true, ""); err != nil {
+		t.Fatalf("expected valid topology: %v", err)
+	}
+}
+
+func TestValidateConfiguredBuildTopologyRejectsExistingSymlinkAliases(t *testing.T) {
+	root := t.TempDir()
+	realOutput := filepath.Join(root, "real-output")
+	if err := os.MkdirAll(realOutput, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(realOutput, filepath.Join(root, "linked-output")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	targets, err := selectBuildTargets([]gowdk.BuildTargetConfig{
+		{Name: "one", Output: "real-output"},
+		{Name: "two", Output: "linked-output"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = validateConfiguredBuildTopology(root, targets, false, "")
+	if err == nil || !strings.Contains(err.Error(), "build_output_collision") {
+		t.Fatalf("topology error = %v, want symlink alias collision", err)
 	}
 }
 

@@ -613,18 +613,24 @@ func TestHandlerAppliesAssetManifestCachePolicy(t *testing.T) {
 func TestHandlerDoesNotServeSecurityManifest(t *testing.T) {
 	handler := Handler{
 		Root: fstest.MapFS{
-			"gowdk-security.json": {Data: []byte(`{"endpoints":[{"path":"/admin"}]}`)},
+			"gowdk-security.json":      {Data: []byte(`{"endpoints":[{"path":"/admin"}]}`)},
+			"gowdk-build-report.json":  {Data: []byte(`{"events":[{"path":"src/pages/admin.page.gwdk"}]}`)},
+			"gowdk-build-timings.json": {Data: []byte(`{"phases":[{"name":"build"}]}`)},
+			"gowdk-routes.json":        {Data: []byte(`{"routes":[{"route":"/admin"}]}`)},
+			"gowdk-assets.json":        {Data: []byte(`{"files":{"app.css":"assets/app.css"}}`)},
 		},
 		Identity: Identity{AppID: "clinic", ModuleName: "frontend", InstanceID: "frontend-1"},
 		Assets:   asset.Manifest{Version: 1, Files: map[string]string{}},
 	}
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/gowdk-security.json", nil)
+	for _, name := range []string{"gowdk-security.json", "gowdk-build-report.json", "gowdk-build-timings.json", "gowdk-routes.json", "gowdk-assets.json"} {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/"+name, nil)
 
-	handler.ServeHTTP(recorder, request)
+		handler.ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d with body %s", recorder.Code, recorder.Body.String())
+		if recorder.Code != http.StatusNotFound {
+			t.Fatalf("%s: expected 404, got %d with body %s", name, recorder.Code, recorder.Body.String())
+		}
 	}
 }
 

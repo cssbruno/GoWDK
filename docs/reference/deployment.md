@@ -60,18 +60,29 @@ gowdk build --out dist/site
 ```
 
 Deploy the contents of `dist/site` with any asset host that can serve
-directory indexes:
+directory indexes. Browser-public files are the generated HTML, assets under
+`assets/`, optional SEO files, and explicitly generated API documentation:
 
 ```text
 dist/site/
   index.html
   routes...
   assets...
-  gowdk-routes.json
-  gowdk-assets.json
+  sitemap.xml
+  robots.txt
   openapi.json
   asyncapi.json
+```
+
+The same output directory may also contain compiler/runtime metadata that is
+not part of the browser-facing static surface:
+
+```text
+dist/site/
+  gowdk-routes.json
+  gowdk-assets.json
   gowdk-build-report.json
+  gowdk-build-timings.json
 ```
 
 Local smoke test:
@@ -80,8 +91,13 @@ Local smoke test:
 gowdk serve --dir dist/site --addr 127.0.0.1:8080
 ```
 
-`gowdk serve` serves generated build output from disk. It does not run generated
-request-time features.
+`gowdk serve` serves only the public generated-output allowlist from disk. It
+does not expose `gowdk-routes.json`, `gowdk-assets.json`, build reports,
+timings, security/audit data, source maps, source files, or manually added
+unknown files. It rejects symlinked path components by default and returns a
+generic 404 for unsafe paths. It does not run generated request-time features.
+
+Keep local preview listeners on loopback unless you intentionally expose them.
 
 ## Single Binary
 

@@ -2306,6 +2306,7 @@ func TestBoundaryAbortsConnectionAfterResponseStarted(t *testing.T) {
 func TestLocalTraceAccessRejectsForwardedLoopbackProxyRequest(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "http://example.com/_gowdk/traces", nil)
 	request.RemoteAddr = "127.0.0.1:4567"
+	request = requestWithLocalAddr(t, request, "127.0.0.1:8080")
 	request.Header.Set("X-Forwarded-For", "203.0.113.10")
 
 	if LocalTraceAccess(request) {
@@ -2318,6 +2319,7 @@ func TestLocalTraceAccessRejectsAnyXForwardedProxyHeader(t *testing.T) {
 		t.Run(header, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodGet, "http://localhost:8080/_gowdk/traces", nil)
 			request.RemoteAddr = "127.0.0.1:4567"
+			request = requestWithLocalAddr(t, request, "127.0.0.1:8080")
 			request.Header.Set(header, "localhost")
 
 			if LocalTraceAccess(request) {
@@ -2327,13 +2329,119 @@ func TestLocalTraceAccessRejectsAnyXForwardedProxyHeader(t *testing.T) {
 	}
 }
 
-func TestLocalTraceAccessAllowsDirectLocalhostRequest(t *testing.T) {
+func TestBrowserTraceIngestAccessOnlyAllowsBrowserPOST(t *testing.T) {
+	allowed := httptest.NewRequest(http.MethodPost, "http://public.example/_gowdk/traces/browser", nil)
+	if !BrowserTraceIngestAccess(allowed) {
+		t.Fatal("expected browser trace ingest POST to be allowed")
+	}
+	for _, tc := range []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{name: "viewer", method: http.MethodGet, path: "/_gowdk/traces"},
+		{name: "data", method: http.MethodGet, path: "/_gowdk/traces/data"},
+		{name: "events", method: http.MethodGet, path: "/_gowdk/traces/events"},
+		{name: "browser get", method: http.MethodGet, path: "/_gowdk/traces/browser"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := httptest.NewRequest(tc.method, "http://public.example"+tc.path, nil)
+			if BrowserTraceIngestAccess(request) {
+				t.Fatalf("expected %s %s to be rejected", tc.method, tc.path)
+			}
+		})
+	}
+}
+
+func TestLocalTraceAccessRejectsSpoofedLoopbackHostWithoutLocalAddr(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "http://localhost:8080/_gowdk/traces", nil)
 	request.RemoteAddr = "127.0.0.1:4567"
+
+	if LocalTraceAccess(request) {
+		t.Fatal("expected loopback Host and RemoteAddr without server local address to be rejected")
+	}
+}
+
+func TestLocalTraceAccessRejectsLoopbackPeerOnPublicListener(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "http://localhost:8080/_gowdk/traces", nil)
+	request.RemoteAddr = "127.0.0.1:4567"
+	request = requestWithLocalAddr(t, request, "192.0.2.10:8080")
+
+	if LocalTraceAccess(request) {
+		t.Fatal("expected loopback peer on non-loopback listener to be rejected")
+	}
+}
+
+func TestLocalTraceAccessAllowsDirectLocalhostRequest(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/_gowdk/traces", nil)
+	request.RemoteAddr = "127.0.0.1:4567"
+	request = requestWithLocalAddr(t, request, "127.0.0.1:8080")
 
 	if !LocalTraceAccess(request) {
 		t.Fatal("expected direct localhost request to be allowed")
 	}
+}
+
+func TestLocalTraceViewerServiceServesOnLoopbackListener(t *testing.T) {
+	started := make(chan net.Addr, 1)
+	paths := make(chan string, 1)
+	service := localTraceViewerService{
+		handler: http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			paths <- request.URL.Path
+			response.WriteHeader(http.StatusNoContent)
+		}),
+		onStart: func(addr net.Addr) {
+			started <- addr
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- service.Run(ctx, ServiceContext{})
+	}()
+
+	var addr net.Addr
+	select {
+	case addr = <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("local trace viewer service did not start")
+	}
+	response, err := http.Get("http://" + addr.String() + "/_gowdk/traces")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("unexpected trace viewer status: %d", response.StatusCode)
+	}
+	select {
+	case path := <-paths:
+		if path != "" && path != "/" {
+			t.Fatalf("expected trace prefix to be stripped, got %q", path)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("local trace viewer handler was not called")
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("local trace viewer service did not stop")
+	}
+}
+
+func requestWithLocalAddr(t *testing.T, request *http.Request, address string) *http.Request {
+	t.Helper()
+	tcpAddr, err := net.ResolveTCPAddr("tcp", address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return request.WithContext(context.WithValue(request.Context(), http.LocalAddrContextKey, tcpAddr))
 }
 
 func TestTracedBackendRouteMarksServerStatusError(t *testing.T) {

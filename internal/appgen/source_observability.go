@@ -21,6 +21,19 @@ func observabilityDecls(options Options) []ast.Decl {
 	}
 }
 
+func observabilityServiceStmts(options Options) []ast.Stmt {
+	if !generatedObservabilityEnabled(options) {
+		return nil
+	}
+	viewerService := call(
+		sel("gowdkruntime", "LocalTraceViewerService"),
+		call(selExpr(id("traceCollector"), "ViewerHandler")),
+	)
+	return []ast.Stmt{
+		assign([]ast.Expr{id("services")}, call(id("append"), id("services"), viewerService)),
+	}
+}
+
 func traceCollectorVarDecl() ast.Decl {
 	return &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
 		Names:  []*ast.Ident{id("traceCollector")},

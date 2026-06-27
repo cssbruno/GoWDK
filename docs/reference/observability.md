@@ -24,10 +24,13 @@ Generated development builds mount the local trace viewer at:
 ```
 
 The viewer is off unless the addon is enabled and `Build.DebugAssets()` is true
-(`Build.Mode != gowdk.Production`). Outside dev, generated apps mount the viewer
-behind `runtime/app.LocalTraceAccess`, which only allows direct localhost or
-loopback requests and rejects forwarded reverse-proxy requests unless the app
-supplies an explicit `TraceAccess` function.
+(`Build.Mode != gowdk.Production`). Generated apps keep browser trace ingest on
+`POST /_gowdk/traces/browser` through
+`runtime/app.BrowserTraceIngestAccess`, but serve the readable viewer, JSON
+data, and SSE stream from `runtime/app.LocalTraceViewerService` on a separate
+loopback listener. The generated binary prints that local viewer URL at startup.
+Do not proxy that listener to public traffic. If an app mounts trace handlers on
+its own routes, use an explicit app-owned `TraceAccess` function.
 
 Current generated instrumentation:
 
@@ -66,8 +69,8 @@ and app-owned trace events.
 
 | Mode | Generated spans | Local collector/viewer | Intended access |
 | --- | --- | --- | --- |
-| `gowdk dev` / local debug | Enabled when the addon is present and debug assets are on. | Mounted at `/_gowdk/traces`. | Localhost only by default. |
-| Preview/debug app builds | Enabled when `Build.DebugAssets()` is true. | Mounted only when the addon is present. | Keep behind `LocalTraceAccess` or an app-owned gate. |
+| `gowdk dev` / local debug | Enabled when the addon is present and debug assets are on. | Browser ingest on the app route; readable viewer on a generated loopback listener. | Open the printed local viewer URL. |
+| Preview/debug app builds | Enabled when `Build.DebugAssets()` is true. | Mounted only when the addon is present. | Keep the generated viewer listener local or provide an app-owned gate. |
 | Production builds | Disabled by default because debug assets are off. | Not mounted by generated code. | Use app-owned telemetry export and access policy. |
 | Direct `runtime/trace` use | App-controlled. | App-controlled. | The app must wrap public routes with auth, TLS, proxy, and rate-limit policy. |
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
@@ -133,7 +134,7 @@ func TestBuildWritesSPAHTMLForSimpleRoute(t *testing.T) {
 
 func TestRouteManifestIncludesTypedDynamicEndpointParams(t *testing.T) {
 	outputDir := t.TempDir()
-	ir := gwdkir.Program{
+	ir := analyzedIRFixture(t, gwdkir.Program{
 		Pages: []gwdkir.Page{{
 			ID:     "patients",
 			Route:  "/patients",
@@ -155,7 +156,7 @@ func TestRouteManifestIncludesTypedDynamicEndpointParams(t *testing.T) {
 			RouteParams:   []source.RouteParam{{Name: "id", Type: "int"}},
 			Guards:        []string{"public"},
 		}},
-	}
+	})
 
 	if _, err := BuildFromIR(gowdk.Config{}, ir, outputDir); err != nil {
 		t.Fatal(err)
@@ -657,7 +658,7 @@ func TestBuildReportIncludesQueryContractReferences(t *testing.T) {
 
 func TestBuildReportIncludesBoundContractReferenceRoles(t *testing.T) {
 	outputDir := t.TempDir()
-	result, err := BuildFromIR(gowdk.Config{}, gwdkir.Program{
+	result, err := BuildFromIR(gowdk.Config{}, analyzedIRFixture(t, gwdkir.Program{
 		Pages: []gwdkir.Page{{
 			Source: "pages/patients.page.gwdk",
 			ID:     "patients",
@@ -683,7 +684,7 @@ func TestBuildReportIncludesBoundContractReferenceRoles(t *testing.T) {
 			OwnerID:   "patients",
 			Source:    "pages/patients.page.gwdk",
 		}},
-	}, outputDir)
+	}), outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -698,7 +699,7 @@ func TestBuildReportIncludesBoundContractReferenceRoles(t *testing.T) {
 
 func TestBuildReportIncludesRealtimeSubscriptions(t *testing.T) {
 	outputDir := t.TempDir()
-	result, err := BuildFromIR(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("realtime", gowdk.FeatureRealtime)}}, gwdkir.Program{
+	result, err := BuildFromIR(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("realtime", gowdk.FeatureRealtime)}}, analyzedIRFixture(t, gwdkir.Program{
 		Pages: []gwdkir.Page{{
 			Source: "pages/patients.page.gwdk",
 			ID:     "patients",
@@ -725,7 +726,7 @@ func TestBuildReportIncludesRealtimeSubscriptions(t *testing.T) {
 			OwnerID:          "patients",
 			Source:           "pages/patients.page.gwdk",
 		}},
-	}, outputDir)
+	}), outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -743,7 +744,7 @@ func TestBuildReportIncludesRealtimeSubscriptions(t *testing.T) {
 
 func TestBuildReportIncludesQueryInvalidations(t *testing.T) {
 	outputDir := t.TempDir()
-	result, err := BuildFromIR(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("realtime", gowdk.FeatureRealtime)}}, gwdkir.Program{
+	result, err := BuildFromIR(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("realtime", gowdk.FeatureRealtime)}}, analyzedIRFixture(t, gwdkir.Program{
 		Pages: []gwdkir.Page{{
 			Source: "pages/patients.page.gwdk",
 			ID:     "patients",
@@ -765,7 +766,7 @@ func TestBuildReportIncludesQueryInvalidations(t *testing.T) {
 			OwnerID:       "patients",
 			Source:        "pages/patients.page.gwdk",
 		}},
-	}, outputDir)
+	}), outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -783,7 +784,8 @@ func TestBuildReportIncludesQueryInvalidations(t *testing.T) {
 
 func TestBuildEmitsRealtimeRuntimeForSubscribedRegions(t *testing.T) {
 	outputDir := t.TempDir()
-	result, err := BuildFromValidatedIR(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("realtime", gowdk.FeatureRealtime)}}, gwdkir.Program{
+	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("realtime", gowdk.FeatureRealtime)}}
+	validated, err := compiler.ValidateIR(config, analyzedIRFixture(t, gwdkir.Program{
 		Pages: []gwdkir.Page{{
 			Source: "pages/patients.page.gwdk",
 			ID:     "patients",
@@ -805,7 +807,11 @@ func TestBuildEmitsRealtimeRuntimeForSubscribedRegions(t *testing.T) {
 			OwnerID:         "patients",
 			Source:          "pages/patients.page.gwdk",
 		}},
-	}, outputDir)
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := BuildFromValidatedProgram(config, validated, outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -827,7 +833,8 @@ func TestBuildEmitsRealtimeRuntimeForSubscribedRegions(t *testing.T) {
 
 func TestBuildEmitsRealtimeRuntimeForInvalidatedQueryRegions(t *testing.T) {
 	outputDir := t.TempDir()
-	result, err := BuildFromValidatedIR(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("realtime", gowdk.FeatureRealtime)}}, gwdkir.Program{
+	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("realtime", gowdk.FeatureRealtime)}}
+	validated, err := compiler.ValidateIR(config, analyzedIRFixture(t, gwdkir.Program{
 		Pages: []gwdkir.Page{{
 			Source: "pages/patients.page.gwdk",
 			ID:     "patients",
@@ -849,7 +856,11 @@ func TestBuildEmitsRealtimeRuntimeForInvalidatedQueryRegions(t *testing.T) {
 			OwnerID:       "patients",
 			Source:        "pages/patients.page.gwdk",
 		}},
-	}, outputDir)
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := BuildFromValidatedProgram(config, validated, outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -955,7 +966,11 @@ func TestBuildReportIncludesHybridRequestTimeSkipMode(t *testing.T) {
 		},
 	}}})
 
-	result, err := buildFromIR(config, ir, nil, outputDir, true)
+	validated, err := compiler.ValidateIR(config, ir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := BuildFromValidatedProgram(config, validated, outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -993,11 +1008,11 @@ func TestBuildReportIncludesBackendBindingEndpointMetadata(t *testing.T) {
 		Route:        "/login",
 		PackageName:  "auth",
 		FunctionName: "Login",
-		Status:       source.BackendBindingMissing,
+		Status:       source.BackendBindingBound,
 		Message:      "GOWDK action handler auth.Login is not implemented",
 	}}
 
-	result, err := buildFromIR(gowdk.Config{}, ir, bindings, outputDir, true)
+	result, err := BuildFromAnalyzedProgram(gowdk.Config{}, compiler.AnalyzedProgramWithBindings(ir, bindings), outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1014,7 +1029,7 @@ func TestBuildReportIncludesBackendBindingEndpointMetadata(t *testing.T) {
 		"method":   "POST",
 		"package":  "auth",
 		"function": "Login",
-		"status":   "missing",
+		"status":   "bound",
 		"message":  "GOWDK action handler auth.Login is not implemented",
 	} {
 		if event.Data[key] != expected {

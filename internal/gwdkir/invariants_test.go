@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/cssbruno/gowdk/internal/viewmodel"
 )
 
 func validProgram() Program {
@@ -157,6 +159,41 @@ func TestCheckInvariantsReportsViolations(t *testing.T) {
 			name:    "template to missing layout",
 			corrupt: func(p *Program) { p.Templates[2].OwnerID = "ghost" },
 			want:    `template references unknown layout "ghost"`,
+		},
+		{
+			name: "page view without parsed nodes",
+			corrupt: func(p *Program) {
+				p.Pages[0].Blocks = Blocks{View: true, ViewBody: `<main>Home</main>`}
+			},
+			want: `page "home" has view body but no parsed nodes`,
+		},
+		{
+			name: "component view without parsed nodes",
+			corrupt: func(p *Program) {
+				p.Components[0].Blocks = Blocks{View: true, ViewBody: `<section>Product</section>`}
+			},
+			want: `component "ProductCard" has view body but no parsed nodes`,
+		},
+		{
+			name: "layout view without parsed nodes",
+			corrupt: func(p *Program) {
+				p.Layouts[0].Blocks = Blocks{View: true, ViewBody: `<slot />`}
+			},
+			want: `layout "base" has view body but no parsed nodes`,
+		},
+		{
+			name: "template view without parsed nodes",
+			corrupt: func(p *Program) {
+				p.Templates[0].Body = `<main>Home</main>`
+			},
+			want: `template page "home" has view body but no parsed nodes`,
+		},
+		{
+			name: "template nodes without body",
+			corrupt: func(p *Program) {
+				p.Templates[0].Nodes = []viewmodel.Node{viewmodel.Text{Value: "Home"}}
+			},
+			want: `template page "home" has parsed nodes but empty body`,
 		},
 		{
 			name:    "unknown asset kind",

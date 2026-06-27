@@ -93,29 +93,3 @@ func isCSSInputName(value string) bool {
 	}
 	return true
 }
-
-func layoutSlotIndexes(source string) [][2]int {
-	var matches [][2]int
-	for index := 0; index < len(source); index++ {
-		if source[index] != '<' || !strings.HasPrefix(source[index:], "<slot") {
-			continue
-		}
-		cursor := index + len("<slot")
-		for cursor < len(source) && (source[cursor] == ' ' || source[cursor] == '\t' || source[cursor] == '\n' || source[cursor] == '\r') {
-			cursor++
-		}
-		if cursor >= len(source) || source[cursor] != '/' {
-			continue
-		}
-		cursor++
-		for cursor < len(source) && (source[cursor] == ' ' || source[cursor] == '\t' || source[cursor] == '\n' || source[cursor] == '\r') {
-			cursor++
-		}
-		if cursor >= len(source) || source[cursor] != '>' {
-			continue
-		}
-		matches = append(matches, [2]int{index, cursor + 1})
-		index = cursor
-	}
-	return matches
-}

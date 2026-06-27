@@ -99,6 +99,18 @@ func CheckInvariants(program Program) error {
 		}
 	}
 
+	for _, page := range program.Pages {
+		reportViewBlockNodes("page", page.ID, page.Blocks, report)
+	}
+
+	for _, component := range program.Components {
+		reportViewBlockNodes("component", component.Name, component.Blocks, report)
+	}
+
+	for _, layout := range program.Layouts {
+		reportViewBlockNodes("layout", layout.ID, layout.Blocks, report)
+	}
+
 	for _, endpoint := range program.GoEndpoints {
 		switch endpoint.SourceKind {
 		case EndpointSourceGOWDK, EndpointSourceGo:
@@ -109,6 +121,9 @@ func CheckInvariants(program Program) error {
 
 	for _, template := range program.Templates {
 		reportOwnerReference("template", template.OwnerKind, template.OwnerID, pages, components, layouts, report)
+		if strings.TrimSpace(template.Body) != "" && len(template.Nodes) == 0 {
+			report("template %s %q has view body but no parsed nodes", template.OwnerKind, template.OwnerID)
+		}
 		if len(template.Nodes) > 0 && strings.TrimSpace(template.Body) == "" {
 			report("template %s %q has parsed nodes but empty body", template.OwnerKind, template.OwnerID)
 		}
@@ -179,6 +194,13 @@ func CheckInvariants(program Program) error {
 		return nil
 	}
 	return fmt.Errorf("invalid IR: %s", strings.Join(violations, "; "))
+}
+
+func reportViewBlockNodes(kind, id string, blocks Blocks, report func(string, ...any)) {
+	if !blocks.View || strings.TrimSpace(blocks.ViewBody) == "" || len(blocks.ViewNodes) > 0 {
+		return
+	}
+	report("%s %q has view body but no parsed nodes", kind, id)
 }
 
 func reportOwnerReference(what string, kind SourceKind, ownerID string, pages, components, layouts map[string]bool, report func(string, ...any)) {

@@ -14,7 +14,11 @@ import (
 func BenchmarkGeneratedOutputFromValidatedIR(b *testing.B) {
 	config := gowdk.Config{}
 	sources := benchmarkBuildSources(`<main><h1>Home</h1></main>`)
-	ir, _, err := compiler.AssembleProgram(config, sources)
+	analyzed, err := compiler.AnalyzeProgram(config, sources)
+	if err != nil {
+		b.Fatal(err)
+	}
+	validated, err := compiler.ValidateAnalyzedProgram(config, analyzed)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -22,7 +26,7 @@ func BenchmarkGeneratedOutputFromValidatedIR(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		if _, err := BuildFromValidatedIR(config, ir, outputDir); err != nil {
+		if _, err := BuildFromValidatedProgram(config, validated, outputDir); err != nil {
 			b.Fatal(err)
 		}
 	}

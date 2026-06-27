@@ -45,7 +45,7 @@ func TestBuildLowersGPostDirectiveForSPAPage(t *testing.T) {
 
 func TestBuildSynthesizesActionInputAttrsFromBindingFields(t *testing.T) {
 	outputDir := t.TempDir()
-	ir := gwdkir.Program{Pages: []gwdkir.Page{{
+	ir := analyzedIRFixture(t, gwdkir.Program{Pages: []gwdkir.Page{{
 		ID:     "signup",
 		Route:  "/signup",
 		Render: gowdk.SPA,
@@ -66,7 +66,7 @@ func TestBuildSynthesizesActionInputAttrsFromBindingFields(t *testing.T) {
 			{FieldName: "Age", FormName: "age", Type: "uint8"},
 			{FieldName: "Score", FormName: "score", Type: "int16"},
 		}},
-	}}}
+	}}})
 
 	_, err := BuildFromIR(gowdk.Config{}, ir, outputDir)
 	if err != nil {

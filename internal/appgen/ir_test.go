@@ -6,15 +6,22 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
+	view "github.com/cssbruno/gowdk/internal/viewrender"
 )
 
 func TestActionEndpointsFromIR(t *testing.T) {
+	nodes, err := view.Parse(`<form g:post={Subscribe}><input name="email" required /></form>`)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ir := gwdkir.Program{
 		Pages: []gwdkir.Page{{
 			ID:    "newsletter",
 			Route: "/newsletter",
 			Blocks: gwdkir.Blocks{
-				ViewBody: `<form g:post={Subscribe}><input name="email" required /></form>`,
+				View:      true,
+				ViewBody:  `<form g:post={Subscribe}><input name="email" required /></form>`,
+				ViewNodes: nodes,
 				Actions: []gwdkir.Action{{
 					Name:           "Subscribe",
 					InputName:      "input",
@@ -60,12 +67,18 @@ func TestActionEndpointsFromIR(t *testing.T) {
 }
 
 func TestActionEndpointsFromIRLocalizesInheritedRoutes(t *testing.T) {
+	nodes, err := view.Parse(`<form g:post={Submit}><input name="email" required /></form>`)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ir := gwdkir.Program{
 		Pages: []gwdkir.Page{{
 			ID:    "contact",
 			Route: "/contact",
 			Blocks: gwdkir.Blocks{
-				ViewBody: `<form g:post={Submit}><input name="email" required /></form>`,
+				View:      true,
+				ViewBody:  `<form g:post={Submit}><input name="email" required /></form>`,
+				ViewNodes: nodes,
 				Actions: []gwdkir.Action{{
 					Name: "Submit",
 				}},

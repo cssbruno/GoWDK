@@ -130,12 +130,17 @@ func TestBuildEmitsJSIslandAssetsForStatefulComponent(t *testing.T) {
 }
 
 func TestPageScriptsReportsComponentTraversalErrors(t *testing.T) {
+	nodes, err := view.Parse(`<main><Broken /></main>`)
+	if err != nil {
+		t.Fatal(err)
+	}
 	page := gwdkir.Page{
 		ID:    "home",
 		Route: "/",
 		Blocks: gwdkir.Blocks{
-			View:     true,
-			ViewBody: `<main><Broken /></main>`,
+			View:      true,
+			ViewBody:  `<main><Broken /></main>`,
+			ViewNodes: nodes,
 		},
 	}
 	components := map[string]view.Component{
@@ -145,7 +150,7 @@ func TestPageScriptsReportsComponentTraversalErrors(t *testing.T) {
 		},
 	}
 
-	_, err := pageScripts(gowdk.Config{}, page, page.Blocks.ViewBody, nil, components, nil, renderModeSPA)
+	_, err = pageScripts(gowdk.Config{}, page, page.Blocks.ViewNodes, components, nil, renderModeSPA)
 	if err == nil {
 		t.Fatal("expected component traversal error")
 	}

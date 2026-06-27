@@ -15,33 +15,79 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
+// BuildPlan is the normalized static output plan consumed by build emission.
+// Construct it through PlanBuildFromValidatedProgram so validation, route
+// defaults, localized page outputs, CSS/assets, fragments, schemas, and report
+// metadata are finalized before files are written.
+type BuildPlan struct {
+	reporter  *buildReporter
+	planned   buildPlan
+	config    gowdk.Config
+	ir        gwdkir.Program
+	outputDir string
+	valid     bool
+}
+
 func Build(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (Result, error) {
-	ir, bindings, err := compiler.AssembleProgram(config, sources)
+	analyzed, err := compiler.AnalyzeProgram(config, sources)
 	if err != nil {
 		return Result{}, err
 	}
-	return buildFromIR(config, ir, bindings, outputDir, true)
+	return BuildFromAnalyzedProgram(config, analyzed, outputDir)
 }
 
 // BuildFromIR writes SPA build artifacts from normalized compiler IR.
 func BuildFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (Result, error) {
-	return buildFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir, true)
+	return BuildFromAnalyzedProgram(config, compiler.AnalyzedProgramFromIR(ir), outputDir)
 }
 
-// BuildFromValidatedIR is BuildFromIR for orchestrators that already ran
-// compiler.ValidateProgram on the IR (the CLI build path). It skips the
-// defensive re-validation, which type-checks feature Go packages on disk and
-// is too expensive to run twice per build, but still runs cheap IR invariant
-// checks before planning generated output.
-func BuildFromValidatedIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (Result, error) {
-	return buildFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir, false)
+// BuildFromAnalyzedProgram validates analyzed compiler IR before emission.
+func BuildFromAnalyzedProgram(config gowdk.Config, analyzed compiler.AnalyzedProgram, outputDir string) (Result, error) {
+	validated, err := compiler.ValidateAnalyzedProgram(config, analyzed)
+	if err != nil {
+		reporter := newBuildReporter("build", outputDir)
+		return Result{}, reporter.fail("validate", err)
+	}
+	return BuildFromValidatedProgram(config, validated, outputDir)
 }
 
-func buildFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []source.BackendBinding, outputDir string, validate bool) (Result, error) {
-	reporter, planned, err := prepareBuildPlan("build", "SPA build started", outputDir, config, ir, backendBindings, validate, true)
+// BuildFromValidatedProgram emits SPA build artifacts from compiler-validated
+// IR. The only way to obtain the phase token is through compiler validation.
+func BuildFromValidatedProgram(config gowdk.Config, validated compiler.ValidatedProgram, outputDir string) (Result, error) {
+	plan, err := PlanBuildFromValidatedProgram(config, validated, outputDir)
 	if err != nil {
 		return Result{}, err
 	}
+	return BuildFromPlan(plan)
+}
+
+// PlanBuildFromValidatedProgram plans SPA build artifacts from
+// compiler-validated IR without writing files.
+func PlanBuildFromValidatedProgram(config gowdk.Config, validated compiler.ValidatedProgram, outputDir string) (BuildPlan, error) {
+	reporter, planned, err := prepareBuildPlan("build", "SPA build started", outputDir, config, validated, true)
+	if err != nil {
+		return BuildPlan{}, err
+	}
+	return BuildPlan{
+		reporter:  reporter,
+		planned:   planned,
+		config:    config,
+		ir:        validated.Program(),
+		outputDir: outputDir,
+		valid:     true,
+	}, nil
+}
+
+// BuildFromPlan emits SPA build artifacts from a normalized build plan.
+func BuildFromPlan(plan BuildPlan) (Result, error) {
+	if !plan.valid || plan.reporter == nil {
+		return Result{}, fmt.Errorf("build plan was not constructed by buildgen planning")
+	}
+	reporter := plan.reporter
+	planned := plan.planned
+	config := plan.config
+	ir := plan.ir
+	outputDir := plan.outputDir
 
 	result := Result{
 		Artifacts:      make([]Artifact, 0, len(planned.pages)),
@@ -171,33 +217,61 @@ func finalizeAssetArtifact(artifact *plannedAssetArtifact) {
 }
 
 func BuildMemory(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (MemoryResult, error) {
-	ir, bindings, err := compiler.AssembleProgram(config, sources)
+	analyzed, err := compiler.AnalyzeProgram(config, sources)
 	if err != nil {
 		return MemoryResult{}, err
 	}
-	return buildMemoryFromIR(config, ir, bindings, outputDir, true)
+	return BuildMemoryFromAnalyzedProgram(config, analyzed, outputDir)
 }
 
 // BuildMemoryWithOptions plans SPA build artifacts without requiring a real
 // output directory. Empty MemoryBuildOptions.OutputBase defaults to ".".
 func BuildMemoryWithOptions(config gowdk.Config, sources gwdkanalysis.Sources, options MemoryBuildOptions) (MemoryResult, error) {
-	ir, bindings, err := compiler.AssembleProgram(config, sources)
+	analyzed, err := compiler.AnalyzeProgram(config, sources)
 	if err != nil {
 		return MemoryResult{}, err
 	}
-	return buildMemoryFromIR(config, ir, bindings, memoryOutputBase(options), false)
+	return BuildMemoryFromAnalyzedProgramWithOptions(config, analyzed, options)
 }
 
 // BuildMemoryFromIR plans SPA build artifacts from normalized compiler IR
 // without writing them to disk.
 func BuildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string) (MemoryResult, error) {
-	return buildMemoryFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir, true)
+	return BuildMemoryFromAnalyzedProgram(config, compiler.AnalyzedProgramFromIR(ir), outputDir)
 }
 
 // BuildMemoryFromIRWithOptions is BuildMemoryWithOptions for orchestrators
 // that already have normalized compiler IR.
 func BuildMemoryFromIRWithOptions(config gowdk.Config, ir gwdkir.Program, options MemoryBuildOptions) (MemoryResult, error) {
-	return buildMemoryFromIR(config, ir, compiler.BackendBindingsFromIR(ir), memoryOutputBase(options), false)
+	return BuildMemoryFromAnalyzedProgramWithOptions(config, compiler.AnalyzedProgramFromIR(ir), options)
+}
+
+// BuildMemoryFromAnalyzedProgram validates analyzed compiler IR before planning
+// in-memory artifacts.
+func BuildMemoryFromAnalyzedProgram(config gowdk.Config, analyzed compiler.AnalyzedProgram, outputDir string) (MemoryResult, error) {
+	validated, err := compiler.ValidateAnalyzedProgram(config, analyzed)
+	if err != nil {
+		reporter := newBuildReporter("memory", outputDir)
+		return MemoryResult{}, reporter.fail("validate", err)
+	}
+	return BuildMemoryFromValidatedProgram(config, validated, outputDir)
+}
+
+// BuildMemoryFromAnalyzedProgramWithOptions is BuildMemoryWithOptions for
+// callers that already have analyzed compiler IR.
+func BuildMemoryFromAnalyzedProgramWithOptions(config gowdk.Config, analyzed compiler.AnalyzedProgram, options MemoryBuildOptions) (MemoryResult, error) {
+	validated, err := compiler.ValidateAnalyzedProgram(config, analyzed)
+	if err != nil {
+		reporter := newBuildReporter("memory", memoryOutputBase(options))
+		return MemoryResult{}, reporter.fail("validate", err)
+	}
+	return buildMemoryFromValidatedProgram(config, validated, memoryOutputBase(options), false)
+}
+
+// BuildMemoryFromValidatedProgram plans in-memory SPA artifacts from
+// compiler-validated IR.
+func BuildMemoryFromValidatedProgram(config gowdk.Config, validated compiler.ValidatedProgram, outputDir string) (MemoryResult, error) {
+	return buildMemoryFromValidatedProgram(config, validated, outputDir, true)
 }
 
 func memoryOutputBase(options MemoryBuildOptions) string {
@@ -207,8 +281,9 @@ func memoryOutputBase(options MemoryBuildOptions) string {
 	return options.OutputBase
 }
 
-func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []source.BackendBinding, outputDir string, requireOutputDir bool) (MemoryResult, error) {
-	reporter, planned, err := prepareBuildPlan("memory", "in-memory SPA build started", outputDir, config, ir, backendBindings, true, requireOutputDir)
+func buildMemoryFromValidatedProgram(config gowdk.Config, validated compiler.ValidatedProgram, outputDir string, requireOutputDir bool) (MemoryResult, error) {
+	ir := validated.Program()
+	reporter, planned, err := prepareBuildPlan("memory", "in-memory SPA build started", outputDir, config, validated, requireOutputDir)
 	if err != nil {
 		return MemoryResult{}, err
 	}
@@ -319,7 +394,9 @@ func buildMemoryFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings [
 	return result, nil
 }
 
-func prepareBuildPlan(kind string, startMessage string, outputDir string, config gowdk.Config, ir gwdkir.Program, backendBindings []source.BackendBinding, validate bool, requireOutputDir bool) (*buildReporter, buildPlan, error) {
+func prepareBuildPlan(kind string, startMessage string, outputDir string, config gowdk.Config, validated compiler.ValidatedProgram, requireOutputDir bool) (*buildReporter, buildPlan, error) {
+	ir := validated.Program()
+	backendBindings := validated.BackendBindings()
 	reporter := newBuildReporter(kind, outputDir)
 	reporter.info("start", "build_started", startMessage, BuildEvent{
 		Data: map[string]string{
@@ -331,12 +408,8 @@ func prepareBuildPlan(kind string, startMessage string, outputDir string, config
 	if requireOutputDir && strings.TrimSpace(outputDir) == "" {
 		return reporter, buildPlan{}, reporter.fail("validate", fmt.Errorf("build output directory is required"))
 	}
-	if validate {
-		if err := compiler.ValidateProgram(config, ir); err != nil {
-			return reporter, buildPlan{}, reporter.fail("validate", err)
-		}
-	} else if err := gwdkir.CheckInvariants(ir); err != nil {
-		return reporter, buildPlan{}, reporter.fail("validate", fmt.Errorf("internal compiler error: %w", err))
+	if !validated.Valid() {
+		return reporter, buildPlan{}, reporter.fail("validate", fmt.Errorf("validated program was not constructed by compiler validation"))
 	}
 	reporter.info("validate", "ir_valid", "compiler IR validation completed", BuildEvent{})
 	reportBackendBindings(reporter, backendBindings)
@@ -597,20 +670,35 @@ func reportStructuredData(reporter *buildReporter, ir gwdkir.Program) {
 }
 
 func BuildIncremental(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string, changedPageSources []string) (Result, error) {
-	ir, bindings, err := compiler.AssembleProgram(config, sources)
+	analyzed, err := compiler.AnalyzeProgram(config, sources)
 	if err != nil {
 		return Result{}, err
 	}
-	return buildIncrementalFromIR(config, ir, bindings, outputDir, changedPageSources)
+	return BuildIncrementalFromAnalyzedProgram(config, analyzed, outputDir, changedPageSources)
 }
 
 // BuildIncrementalFromIR incrementally renders changed SPA page outputs from
 // normalized compiler IR.
 func BuildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, outputDir string, changedPageSources []string) (Result, error) {
-	return buildIncrementalFromIR(config, ir, compiler.BackendBindingsFromIR(ir), outputDir, changedPageSources)
+	return BuildIncrementalFromAnalyzedProgram(config, compiler.AnalyzedProgramFromIR(ir), outputDir, changedPageSources)
 }
 
-func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, backendBindings []source.BackendBinding, outputDir string, changedPageSources []string) (Result, error) {
+// BuildIncrementalFromAnalyzedProgram validates analyzed compiler IR before
+// incrementally rendering changed SPA pages.
+func BuildIncrementalFromAnalyzedProgram(config gowdk.Config, analyzed compiler.AnalyzedProgram, outputDir string, changedPageSources []string) (Result, error) {
+	validated, err := compiler.ValidateAnalyzedProgram(config, analyzed)
+	if err != nil {
+		reporter := newBuildReporter("incremental", outputDir)
+		return Result{}, reporter.fail("validate", err)
+	}
+	return BuildIncrementalFromValidatedProgram(config, validated, outputDir, changedPageSources)
+}
+
+// BuildIncrementalFromValidatedProgram incrementally renders changed SPA pages
+// from compiler-validated IR.
+func BuildIncrementalFromValidatedProgram(config gowdk.Config, validated compiler.ValidatedProgram, outputDir string, changedPageSources []string) (Result, error) {
+	ir := validated.Program()
+	backendBindings := validated.BackendBindings()
 	reporter := newBuildReporter("incremental", outputDir)
 	reporter.info("start", "build_started", "incremental SPA build started", BuildEvent{
 		Data: map[string]string{
@@ -621,8 +709,8 @@ func buildIncrementalFromIR(config gowdk.Config, ir gwdkir.Program, backendBindi
 	if strings.TrimSpace(outputDir) == "" {
 		return Result{}, reporter.fail("validate", fmt.Errorf("build output directory is required"))
 	}
-	if err := compiler.ValidateProgram(config, ir); err != nil {
-		return Result{}, reporter.fail("validate", err)
+	if !validated.Valid() {
+		return Result{}, reporter.fail("validate", fmt.Errorf("validated program was not constructed by compiler validation"))
 	}
 	reporter.info("validate", "ir_valid", "compiler IR validation completed", BuildEvent{})
 	reportBackendBindings(reporter, backendBindings)

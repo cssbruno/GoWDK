@@ -266,18 +266,21 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	timings.counter("components", len(ir.Components))
 	timings.counter("layouts", len(ir.Layouts))
 	timings.counter("endpoints", len(ir.Endpoints))
-	var bindings []source.BackendBinding
+	var analyzed compiler.AnalyzedProgram
 	if err := timings.measure("go_binding", func() error {
 		var bindErr error
+		var bindings []source.BackendBinding
 		bindings, bindErr = compiler.EnrichProgram(options.Config, &ir)
+		if bindErr == nil {
+			analyzed = compiler.AnalyzedProgramWithBindings(ir, bindings)
+		}
 		return bindErr
 	}); err != nil {
 		return operationErrorFromCause("build failed", err)
 	}
 	var report compiler.ValidationErrors
 	timings.measure("ir_validation", func() error {
-		report = compiler.ValidateProgramReport(options.Config, ir)
-		report = append(report, compiler.BackendBindingDiagnostics(bindings)...)
+		_, report = compiler.ValidateAnalyzedProgramReport(options.Config, analyzed)
 		return nil
 	})
 	if report.HasErrors() {
@@ -309,8 +312,17 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		return operationErrorFromCause("build failed", err)
 	}
 
+	var validated compiler.ValidatedProgram
+	if err := timings.measure("validated_snapshot", func() error {
+		var validateErr error
+		validated, validateErr = compiler.ValidateIR(options.Config, ir)
+		return validateErr
+	}); err != nil {
+		return operationErrorFromCause("build failed", err)
+	}
+
 	if err := timings.measure("security_audit", func() error {
-		return enforceBuildSecurityAudit(options, ir)
+		return enforceBuildSecurityAudit(options, validated)
 	}); err != nil {
 		return err
 	}
@@ -318,7 +330,11 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	var result buildgen.Result
 	if err := timings.measure("output_plan_writes", func() error {
 		var buildErr error
-		result, buildErr = buildgen.BuildFromValidatedIR(options.Config, ir, outputDir)
+		outputPlan, buildErr := buildgen.PlanBuildFromValidatedProgram(options.Config, validated, outputDir)
+		if buildErr != nil {
+			return buildErr
+		}
+		result, buildErr = buildgen.BuildFromPlan(outputPlan)
 		return buildErr
 	}); err != nil {
 		printBuildgenBuildErrorReport(err, options.Debug)
@@ -390,9 +406,13 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		var app appgen.Result
 		if err := timings.measure("app_generation", func() error {
 			var appErr error
-			appOptions := appgen.OptionsFromIR(options.Config, &ir)
+			appOptions := appgen.OptionsFromValidatedProgram(options.Config, validated)
 			appOptions.ProxyBackend = strings.TrimSpace(backendAppDir) != ""
-			app, appErr = appgen.GenerateWithOptions(outputDir, appDir, appOptions)
+			appPlan, appErr := appgen.PlanApplication(outputDir, appOptions)
+			if appErr != nil {
+				return appErr
+			}
+			app, appErr = appgen.GenerateWithPlan(outputDir, appDir, appPlan)
 			return appErr
 		}); err != nil {
 			return operationErrorFromCause("build failed", err)
@@ -466,7 +486,11 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		var app appgen.Result
 		if err := timings.measure("backend_app_generation", func() error {
 			var appErr error
-			app, appErr = appgen.GenerateBackendWithOptions(backendAppDir, appgen.OptionsFromIR(options.Config, &ir))
+			appPlan, appErr := appgen.PlanBackendApplication(appgen.OptionsFromValidatedProgram(options.Config, validated))
+			if appErr != nil {
+				return appErr
+			}
+			app, appErr = appgen.GenerateBackendWithPlan(backendAppDir, appPlan)
 			return appErr
 		}); err != nil {
 			return operationErrorFromCause("build failed", err)

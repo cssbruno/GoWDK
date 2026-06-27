@@ -9,6 +9,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/seo"
 	"github.com/cssbruno/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
@@ -254,7 +255,7 @@ func TestRuntimeSitemapPlanIncludesStaticPublicURLsAndDynamicHook(t *testing.T) 
 		}),
 		ssr.Addon(),
 	}}
-	plan, err := RuntimeSitemapPlanFromIR(config, gwdkir.Program{Pages: []gwdkir.Page{
+	plan, err := RuntimeSitemapPlanFromIR(config, analyzedIRFixture(t, gwdkir.Program{Pages: []gwdkir.Page{
 		seoHomePage(),
 		{
 			ID:     "post",
@@ -289,7 +290,7 @@ func TestRuntimeSitemapPlanIncludesStaticPublicURLsAndDynamicHook(t *testing.T) 
 				ViewBody: `<main>Draft</main>`,
 			},
 		},
-	}})
+	}}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,11 +326,21 @@ func TestRuntimeSitemapPlanRejectsPartialDynamicHook(t *testing.T) {
 			},
 		}),
 	}}
-	_, err := RuntimeSitemapPlanFromIR(config, gwdkir.Program{Pages: []gwdkir.Page{seoHomePage()}})
+	_, err := RuntimeSitemapPlanFromIR(config, analyzedIRFixture(t, gwdkir.Program{Pages: []gwdkir.Page{seoHomePage()}}))
 	if err == nil {
 		t.Fatal("expected partial dynamic sitemap hook to fail")
 	}
 	if !strings.Contains(err.Error(), "DynamicSitemap.ImportPath") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRuntimeSitemapPlanFromValidatedProgramRejectsZeroValue(t *testing.T) {
+	_, err := RuntimeSitemapPlanFromValidatedProgram(gowdk.Config{}, compiler.ValidatedProgram{})
+	if err == nil {
+		t.Fatal("expected zero-value validated program error")
+	}
+	if !strings.Contains(err.Error(), "not constructed by compiler validation") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

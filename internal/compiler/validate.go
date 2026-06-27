@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/diagnostics"
@@ -78,8 +79,9 @@ func asError(report ValidationErrors) error {
 }
 
 func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) ValidationErrors {
-	if err := gwdkir.CheckInvariants(ir); err != nil {
-		return normalizeValidationErrors([]ValidationError{{Message: fmt.Sprintf("internal compiler error: %v", err)}})
+	invariantErr := gwdkir.CheckInvariants(ir)
+	if invariantErr != nil && !onlyMissingViewNodesInvariant(invariantErr) {
+		return normalizeValidationErrors([]ValidationError{{Message: fmt.Sprintf("internal compiler error: %v", invariantErr)}})
 	}
 	var diagnostics ValidationErrors
 	diagnostics = append(diagnostics, validateIRDiagnostics(ir.Diagnostics)...)
@@ -109,7 +111,23 @@ func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) Val
 		diagnostics = append(diagnostics, ValidatePage(config, page)...)
 		diagnostics = append(diagnostics, validatePageServerLists(page)...)
 	}
+	if invariantErr != nil && !diagnostics.HasErrors() {
+		diagnostics = append(diagnostics, ValidationError{Message: fmt.Sprintf("internal compiler error: %v", invariantErr)})
+	}
 	return normalizeValidationErrors(diagnostics)
+}
+
+func onlyMissingViewNodesInvariant(err error) bool {
+	message := strings.TrimPrefix(err.Error(), "invalid IR: ")
+	if message == "" {
+		return false
+	}
+	for _, part := range strings.Split(message, "; ") {
+		if !strings.Contains(part, "has view body but no parsed nodes") {
+			return false
+		}
+	}
+	return true
 }
 
 func validateIRDiagnostics(items []gwdkir.Diagnostic) []ValidationError {

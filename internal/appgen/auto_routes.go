@@ -39,11 +39,21 @@ func resolveOptions(outputDir string, options Options) (Options, error) {
 	if err != nil {
 		return Options{}, err
 	}
-	ssrArtifacts, err := buildgen.SSRArtifactsFromIR(options.Config, ir, outputDir)
+	var ssrArtifacts []buildgen.SSRArtifact
+	if options.Program != nil {
+		ssrArtifacts, err = buildgen.SSRArtifactsFromValidatedProgram(options.Config, *options.Program, outputDir)
+	} else {
+		ssrArtifacts, err = buildgen.SSRArtifactsFromIR(options.Config, ir, outputDir)
+	}
 	if err != nil {
 		return Options{}, err
 	}
-	sitemap, err := buildgen.RuntimeSitemapPlanFromIR(options.Config, ir)
+	var sitemap buildgen.RuntimeSitemapPlan
+	if options.Program != nil {
+		sitemap, err = buildgen.RuntimeSitemapPlanFromValidatedProgram(options.Config, *options.Program)
+	} else {
+		sitemap, err = buildgen.RuntimeSitemapPlanFromIR(options.Config, ir)
+	}
 	if err != nil {
 		return Options{}, err
 	}
@@ -91,6 +101,12 @@ func resolveBackendOptions(options Options) (Options, error) {
 }
 
 func optionsIR(options Options) (gwdkir.Program, error) {
+	if options.Program != nil {
+		if !options.Program.Valid() {
+			return gwdkir.Program{}, fmt.Errorf("validated program was not constructed by compiler validation")
+		}
+		return options.Program.Program(), nil
+	}
 	if options.IR != nil {
 		if err := gwdkir.CheckInvariants(*options.IR); err != nil {
 			return gwdkir.Program{}, fmt.Errorf("invalid compiler IR: %w", err)

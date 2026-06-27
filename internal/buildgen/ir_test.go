@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
@@ -79,14 +80,14 @@ func TestBuildFromIRWritesArtifacts(t *testing.T) {
 	}
 }
 
-func TestBuildFromValidatedIRChecksInvariants(t *testing.T) {
+func TestBuildFromAnalyzedProgramChecksInvariants(t *testing.T) {
 	invalidIR := gwdkir.Program{Routes: []gwdkir.Route{{
 		Kind:   gwdkir.RouteSPA,
 		Method: "GET",
 		Path:   "/",
 		PageID: "missing",
 	}}}
-	_, err := BuildFromValidatedIR(gowdk.Config{}, invalidIR, t.TempDir())
+	_, err := BuildFromAnalyzedProgram(gowdk.Config{}, compiler.AnalyzedProgramFromIR(invalidIR), t.TempDir())
 	if err == nil {
 		t.Fatal("expected invalid IR error")
 	}
@@ -98,6 +99,26 @@ func TestBuildFromValidatedIRChecksInvariants(t *testing.T) {
 		t.Fatalf("expected invariant error, got %v", err)
 	}
 	requireBuildReportEvent(t, buildErr.Report, "validate", "failed")
+}
+
+func TestBuildFromValidatedProgramRejectsZeroValue(t *testing.T) {
+	_, err := BuildFromValidatedProgram(gowdk.Config{}, compiler.ValidatedProgram{}, t.TempDir())
+	if err == nil {
+		t.Fatal("expected zero-value validated program error")
+	}
+	if !strings.Contains(err.Error(), "not constructed by compiler validation") {
+		t.Fatalf("expected validated program construction error, got %v", err)
+	}
+}
+
+func TestBuildFromPlanRejectsZeroValue(t *testing.T) {
+	_, err := BuildFromPlan(BuildPlan{})
+	if err == nil {
+		t.Fatal("expected zero-value build plan error")
+	}
+	if !strings.Contains(err.Error(), "build plan was not constructed") {
+		t.Fatalf("expected build plan construction error, got %v", err)
+	}
 }
 
 func TestBuildMemoryFromIRCollectsArtifacts(t *testing.T) {

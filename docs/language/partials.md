@@ -19,8 +19,8 @@ Current support:
 - Action bodies parse `fragment "#id" { ... }` metadata and capture the raw
   fragment body for generated render functions and first-slice generated action
   responses.
-- Runtime/addon package boundaries exist for partial responses and swaps.
-- `addons/partial` exposes server fragment helpers. The underlying
+- Runtime package boundaries exist for partial responses and swaps.
+- `runtime/partial` exposes server fragment helpers. The underlying
   `runtime/response` envelope carries target and swap metadata through
   `X-GOWDK-Fragment-Target` and `X-GOWDK-Fragment-Swap` when written to HTTP.
 - Page files can declare standalone fragment endpoints:

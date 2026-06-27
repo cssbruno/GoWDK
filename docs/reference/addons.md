@@ -1,12 +1,17 @@
 # Addons Reference
 
-Addons register feature IDs with the compiler. Core framework capabilities
-such as SSR, actions, APIs, auth, DB, contracts, and rate limiting are fixed
-GOWDK-owned features; enabling their feature IDs selects compiler and generator
-logic in GOWDK itself. External addon behavior is limited to documented public
-interfaces: `gowdk.CSSProcessor` for build-time CSS output,
-`gowdk.SEOProvider` for build-time SEO files, and `gowdk.GoBlockConsumer` for
-targeted `go addon.<name> {}` blocks.
+An addon entry in `gowdk.config.go` is first a feature declaration:
+`ssr.Addon()` declares the `ssr` feature, `api.Addon()` declares the `api`
+feature, and so on. Most built-in addons are markers that select GOWDK-owned
+compiler and generator behavior. They do not make arbitrary package code run at
+request time.
+
+Some addon packages also implement explicit extension interfaces:
+`gowdk.CSSProcessor` for build-time CSS output, `gowdk.SEOProvider` for
+build-time SEO files, and `gowdk.GoBlockConsumer` for targeted
+`go addon.<name> {}` blocks. Runtime helpers live under `runtime/` and
+application runtime services are wired through generated app hooks or
+`Config.Lifecycle.Services`.
 
 Project-aware `build`, `check`, and `dev` run importable `gowdk.config.go`
 packages through the generated native helper. The helper imports the project
@@ -17,13 +22,13 @@ supported extension interfaces in the same process as the compiler operation.
 
 An addon participates in up to four ordered phases. Each phase corresponds to a
 specific interface, and an addon implements only the interfaces for the phases
-it needs. The base `gowdk.Addon` (`Name()`, `Features()`) is always required;
-the rest are opt-in extension points.
+it needs. The base `gowdk.Addon` (`Name()`, `Features()`) only declares a name
+and feature IDs; the rest are opt-in extension points.
 
 1. **Config loading** — `gowdk.Addon`. Project-aware commands execute
    `gowdk.config.go` as normal Go through the native helper and read
-   `Features()`. Feature IDs gate compiler and generator logic through
-   `Config.HasFeature`.
+   `Features()`. Feature IDs select GOWDK-owned compiler and generator logic
+   through `Config.HasFeature`.
 2. **Compiler validation** — `gowdk.GoBlockConsumer.ValidateGoBlock` validates
    `go addon.<name> {}` blocks and may return addon-owned diagnostics. Built-in
    feature gates also run here (for example, a page using `server {}` or
@@ -58,6 +63,21 @@ The registry records this in each entry's `publicInterfaces`:
 
 A single addon can span categories (for example `addons/css` implements both
 `gowdk.Addon` and `gowdk.CSSProcessor`).
+
+## Boundary Rules
+
+- `addons/<name>.Addon()` belongs in `gowdk.config.go` and declares features or
+  build-time extension options.
+- `runtime/<name>` packages provide request-time helpers used by generated apps
+  and application Go.
+- Generated app hooks such as `RegisterRateLimiter` and `GOWDKAuthProvider`
+  wire application-owned runtime objects. External addons are not implicit
+  background services.
+- `gowdk.NewAddon(name, features...)` is only a marker for feature checks unless
+  the returned value also implements a documented extension interface.
+- Built-in marker addons may enable large compiler/generator slices because
+  those slices are part of GOWDK itself, not behavior loaded from the marker
+  package.
 
 ## Version and Feature Handshake
 
@@ -148,9 +168,8 @@ for helpers:
 | `addons/realtime` | `runtime/realtime` |
 | `addons/ssr` | `runtime/ssr` |
 
-The addon packages re-export their runtime helpers for 0.x compatibility, but
-new generated app code imports `runtime/<name>` so request-time binaries do not
-pull in the root build-time config package through addon markers.
+The addon packages above are config-facing feature packages only. Import
+`runtime/<name>` for request-time helpers.
 
 `addons/static` is the build-time static page output boundary. `addons/spa`
 remains available for existing configs and static-first SPA navigation; both
@@ -231,7 +250,8 @@ available for tooling to warn.
 It does not by itself make the compiler, app generator, or runtime call
 third-party code; implement `CSSProcessor`, `SEOProvider`, or
 `GoBlockConsumer` when the addon needs build-time behavior. Runtime background
-services stay app-owned and are imported through `Config.Lifecycle.Services`.
+services stay app-owned and are imported through generated app hooks or
+`Config.Lifecycle.Services`.
 
 The current compiler validator checks whether SSR is enabled when a page uses
 `server {}` or `go server {}`. SPA builds invoke addons that implement
@@ -276,10 +296,9 @@ adapter, scheduler, and supervision infrastructure stays app-owned.
 
 `addons/realtime` registers the browser presentation-event fanout feature. It
 does not import the optional WebSocket transport dependency or patch the DOM.
-Use dependency-free `runtime/contracts/sse` through `realtime.NewSSE` for
+Use dependency-free `runtime/realtime` for
 one-way browser notifications, including buffer, retry, replay, server-owned
-audience scoping through `WithSSEAudienceFromRequest`, and audience-based
-stream revocation, or opt into the nested
+audience scoping, and audience-based stream revocation, or opt into the nested
 `runtime/contracts/websocketfanout` module when the app needs WebSocket
 sessions. See `docs/reference/realtime.md`.
 

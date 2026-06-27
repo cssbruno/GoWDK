@@ -2,7 +2,7 @@
 
 Date: 2026-06-16
 
-Status: Proposed
+Status: Accepted
 
 ## Context
 
@@ -30,9 +30,9 @@ package remains the config-facing package.
 | `addons/realtime` | `runtime/realtime` | Presentation fanout aliases and dependency-free SSE helpers |
 | `addons/ssr` | `runtime/ssr` | Load context, redirects, layouts, guards, region rendering |
 
-Generated app source imports the runtime packages. Existing user imports of the
-addon packages remain source-compatible through aliases while users migrate to
-runtime helper imports.
+Generated app source imports the runtime packages. The migration aliases for
+`actions`, `api`, `partial`, `ratelimit`, and `ssr` have ended; those addon
+packages now remain config-facing feature packages.
 
 ## Consequences
 
@@ -46,14 +46,13 @@ runtime helper imports.
 
 ### Negative
 
-- Preferred helper import paths changed, so docs and examples need migration
-  notes even though compatibility re-exports remain.
+- Existing helper imports from those addon packages must move to the matching
+  `runtime/<name>` package.
 
 ### Neutral
 
 - Config files still import `addons/<name>` and call `<name>.Addon()`.
-- The compiler accepts both `addons/ssr.LoadContext` and
-  `runtime/ssr.LoadContext` for load handler signatures during migration.
+- The compiler accepts `runtime/ssr.LoadContext` for load handler signatures.
 
 ## Alternatives Considered
 
@@ -67,4 +66,4 @@ runtime helper imports.
 
 - Prefer `runtime/<name>` imports in docs, examples, and generated-app extension
   snippets for request-time helpers.
-- Keep `addons/<name>` re-exports during the 0.x migration window.
+- Do not add new request-time helper aliases to config-facing addon packages.

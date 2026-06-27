@@ -198,8 +198,11 @@ Run `gowdk --help` or `gowdk <command> --help` for the complete command surface.
 
 ## Addons
 
-Capabilities are enabled explicitly in `gowdk.config.go`. The CLI can list and
-wire supported built-in addons:
+Capabilities are enabled explicitly in `gowdk.config.go` with addon
+constructors such as `ssr.Addon()` or `api.Addon()`. For most built-ins this is
+a feature declaration that selects GOWDK-owned compiler and generator behavior;
+request-time helpers live under `runtime/`, and application services are wired
+from normal Go. The CLI can list and wire supported built-in addons:
 
 ```sh
 gowdk add --list

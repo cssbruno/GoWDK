@@ -349,7 +349,7 @@ func TestBindBackendHandlersClassifiesSSRLoadSignatures(t *testing.T) {
 	writeCompilerTestModule(t, root)
 	writeCompilerTestFile(t, filepath.Join(root, "dashboard.go"), `package dashboard
 
-import "github.com/cssbruno/gowdk/addons/ssr"
+import "github.com/cssbruno/gowdk/runtime/ssr"
 
 func LoadDashboard(ssr.LoadContext) (map[string]any, error) {
 	return map[string]any{"user": "Ada"}, nil

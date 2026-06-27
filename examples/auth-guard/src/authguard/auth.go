@@ -10,9 +10,9 @@ import (
 	"time"
 
 	gowdkauth "github.com/cssbruno/gowdk/addons/auth"
-	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/runtime/form"
 	"github.com/cssbruno/gowdk/runtime/response"
+	"github.com/cssbruno/gowdk/runtime/ssr"
 )
 
 const (

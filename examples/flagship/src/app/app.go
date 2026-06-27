@@ -15,10 +15,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/runtime/form"
 	"github.com/cssbruno/gowdk/runtime/guard"
 	"github.com/cssbruno/gowdk/runtime/response"
+	"github.com/cssbruno/gowdk/runtime/ssr"
 )
 
 const sessionCookie = "gowdk_flagship_session"

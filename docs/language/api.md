@@ -63,7 +63,7 @@ packages, never the other way around.
 
 ## Handler Helpers
 
-API handlers can use `github.com/cssbruno/gowdk/addons/api` for the current
+API handlers can use `github.com/cssbruno/gowdk/runtime/api` for the current
 public helper contract:
 
 ```go
@@ -73,7 +73,7 @@ import (
 	"context"
 	"net/http"
 
-	gowdkapi "github.com/cssbruno/gowdk/addons/api"
+	gowdkapi "github.com/cssbruno/gowdk/runtime/api"
 	"github.com/cssbruno/gowdk/runtime/response"
 )
 
@@ -188,7 +188,7 @@ rendering; build-time SPA HTML cannot enforce frontend page access.
 
 - API handlers own authentication, backend authorization, domain validation,
   storage, service calls, and response shape in normal Go.
-- `addons/api` helpers cover strict JSON body decoding, typed query access,
+- `runtime/api` helpers cover strict JSON body decoding, typed query access,
   typed result status selection, and JSON response envelopes without requiring
   framework-specific adapters.
 - Bound raw API handlers return `runtime/response.Response`; typed API handlers

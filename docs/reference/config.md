@@ -21,14 +21,16 @@ type Config struct {
 
 `gowdk.config.go` is required for CLI commands that compile, validate, inspect,
 or serve a development loop for `.gwdk` code: `check`, `manifest`, `sitemap`,
-`routes`, `inspect ir`, `build`, and `dev`. Those commands load
-`gowdk.config.go` from the current directory by default, or the file passed
-with `--config <file>`.
+`routes`, `inspect ir`, `build`, and `dev`. Those commands discover
+`gowdk.config.go` by walking upward from the current directory, use the
+directory passed with `--project-root <dir>`, or load the exact file passed with
+`--config <file>`.
 
 `SourceConfig` has include and exclude patterns. Discovery support exists in
 `internal/discover`, and `gowdk build` reads `Source.Include` and
 `Source.Exclude` fields from the loaded config when no explicit files are
-supplied. Explicit file paths still require a loaded config.
+supplied. Explicit file paths still require a loaded config and must stay under
+the selected project root.
 
 `Modules` declares named source groups. Build discovery treats modules as
 source selectors. Generated app and binary composition is controlled by the

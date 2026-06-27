@@ -82,7 +82,7 @@ func parseFixOptions(args []string) (fixOptions, error) {
 	return options, nil
 }
 
-const fixUsage = "usage: gowdk fix [--dry-run] [--code <diagnostic-code>] [--config <file>] [--env-file <file>] [--module <name>] [--ssr] [files...]"
+const fixUsage = "usage: gowdk fix [--dry-run] [--code <diagnostic-code>] [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...]"
 
 type fileFixes struct {
 	source string

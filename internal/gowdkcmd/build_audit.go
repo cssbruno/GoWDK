@@ -109,7 +109,8 @@ func enforceBuildSecurityFindings(options cliOptions, findings []auditspec.Findi
 
 	if options.Config.Build.Mode == gowdk.Production {
 		if blocking > 0 {
-			return buildSecurityAuditError{errors: blocking}
+			cause := buildSecurityAuditError{errors: blocking}
+			return operationErrorFromAuditFindings(cause.Error(), findings, cause)
 		}
 		return nil
 	}

@@ -1393,6 +1393,72 @@ func TestHandlerInjectsCSRFHiddenInputsIntoPOSTForms(t *testing.T) {
 	}
 }
 
+func TestCSRFInjectHTMLSkipsOffOriginPOSTFormActions(t *testing.T) {
+	csrf := &fakeCSRFTokenSource{field: "_csrf", token: "signed-token"}
+	payload := []byte(`<main>` +
+		`<form method="post" action="https://payments.example/checkout"></form>` +
+		`<form method="post" action="//evil.example/collect"></form>` +
+		`<form method="post" action="http://example.com/signup"></form>` +
+		`<form method="post" action="/local"></form>` +
+		`</main>`)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/page", nil)
+
+	updated, ok := CSRFInjectHTML(recorder, request, payload, csrf)
+
+	if !ok {
+		t.Fatal("expected csrf injection to succeed")
+	}
+	body := string(updated)
+	for _, external := range []string{
+		`<form method="post" action="https://payments.example/checkout"></form>`,
+		`<form method="post" action="//evil.example/collect"></form>`,
+	} {
+		if !strings.Contains(body, external) {
+			t.Fatalf("expected off-origin form to remain without csrf input: %s", body)
+		}
+	}
+	for _, local := range []string{
+		`<form method="post" action="http://example.com/signup"><input type="hidden" name="_csrf" value="signed-token">`,
+		`<form method="post" action="/local"><input type="hidden" name="_csrf" value="signed-token">`,
+	} {
+		if !strings.Contains(body, local) {
+			t.Fatalf("expected same-origin form to receive csrf input %q in %s", local, body)
+		}
+	}
+	if count := strings.Count(body, `name="_csrf"`); count != 2 {
+		t.Fatalf("expected csrf input only for same-origin forms, got %d: %s", count, body)
+	}
+	if csrf.calls != 1 {
+		t.Fatalf("expected one token generation call, got %d", csrf.calls)
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != "no-store" {
+		t.Fatalf("expected no-store for csrf-personalized HTML, got %q", cache)
+	}
+}
+
+func TestCSRFInjectHTMLDoesNotGenerateTokenForOnlyOffOriginPOSTForms(t *testing.T) {
+	csrf := &fakeCSRFTokenSource{field: "_csrf", token: "signed-token"}
+	payload := []byte(`<main><form method="post" action="https://payments.example/checkout"></form></main>`)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/page", nil)
+
+	updated, ok := CSRFInjectHTML(recorder, request, payload, csrf)
+
+	if !ok {
+		t.Fatal("expected csrf injection to succeed")
+	}
+	if string(updated) != string(payload) {
+		t.Fatalf("expected off-origin form payload to remain unchanged, got %s", updated)
+	}
+	if csrf.calls != 0 {
+		t.Fatalf("expected no token generation for off-origin form, got %d", csrf.calls)
+	}
+	if cache := recorder.Header().Get("Cache-Control"); cache != "" {
+		t.Fatalf("expected no cache-control mutation without injected token, got %q", cache)
+	}
+}
+
 func TestHandlerReturnsNoStoreErrorWhenCSRFTokenGenerationFails(t *testing.T) {
 	handler := Handler{
 		Root: fstest.MapFS{

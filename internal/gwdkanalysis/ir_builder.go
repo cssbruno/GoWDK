@@ -156,6 +156,9 @@ func parseServerFields(body string) ([]string, error) {
 			fields = append(fields, name)
 		}
 	}
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("server load must include `=> { field }`")
+	}
 	return fields, nil
 }
 
@@ -177,6 +180,13 @@ func parseServerLoadFieldsLine(line string) ([]string, bool, error) {
 		name := element
 		if colon := indexTopLevelByte(element, ':'); colon >= 0 {
 			name = element[:colon]
+			value := strings.TrimSpace(element[colon+1:])
+			if value == "" {
+				return nil, true, fmt.Errorf("keyed load field %q is missing a value", strings.TrimSpace(name))
+			}
+			if !topLevelExpressionBalanced(value) {
+				return nil, true, fmt.Errorf("keyed load field %q has malformed expression", strings.TrimSpace(name))
+			}
 		}
 		name = strings.TrimSpace(name)
 		if !serverLoadFieldPath(name) {
@@ -191,7 +201,10 @@ func splitServerLiteralElements(inner string) ([]string, error) {
 	if strings.TrimSpace(inner) == "" {
 		return nil, nil
 	}
-	parts := splitTopLevel(inner, ',')
+	parts, err := splitTopLevel(inner, ',')
+	if err != nil {
+		return nil, err
+	}
 	if last := len(parts) - 1; last >= 0 && strings.TrimSpace(parts[last]) == "" {
 		parts = parts[:last]
 	}
@@ -216,7 +229,7 @@ func indexTopLevelByte(source string, target byte) int {
 	return -1
 }
 
-func splitTopLevel(source string, sep byte) []string {
+func splitTopLevel(source string, sep byte) ([]string, error) {
 	var parts []string
 	scanner := newTopLevelScanner()
 	start := 0
@@ -226,13 +239,25 @@ func splitTopLevel(source string, sep byte) []string {
 			start = index + 1
 		}
 	}
-	return append(parts, source[start:])
+	if !scanner.balanced() {
+		return nil, fmt.Errorf("malformed load declaration")
+	}
+	return append(parts, source[start:]), nil
+}
+
+func topLevelExpressionBalanced(source string) bool {
+	scanner := newTopLevelScanner()
+	for index := 0; index < len(source); index++ {
+		scanner.step(source[index])
+	}
+	return scanner.balanced()
 }
 
 type topLevelScanner struct {
 	depth   int
 	quote   byte
 	escaped bool
+	invalid bool
 }
 
 func newTopLevelScanner() *topLevelScanner {
@@ -264,11 +289,17 @@ func (scanner *topLevelScanner) step(char byte) bool {
 	case '}', ']', ')':
 		if scanner.depth > 0 {
 			scanner.depth--
+		} else {
+			scanner.invalid = true
 		}
 		return false
 	default:
 		return scanner.depth == 0
 	}
+}
+
+func (scanner *topLevelScanner) balanced() bool {
+	return scanner.depth == 0 && scanner.quote == 0 && !scanner.escaped && !scanner.invalid
 }
 
 func serverLoadFieldPath(path string) bool {

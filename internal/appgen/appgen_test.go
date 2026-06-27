@@ -5298,7 +5298,7 @@ func Save(context.Context) (response.Response, error) {
 }
 `)
 	writeTestFile(t, filepath.Join(appDir, "go.mod"), "module stale-generated\n")
-	t.Chdir(root)
+	t.Chdir(t.TempDir())
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
 		PageID:     "home",

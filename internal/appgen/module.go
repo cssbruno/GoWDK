@@ -35,7 +35,7 @@ func resolveGeneratedModuleContext(absApp string) generatedModuleContext {
 		ImportBase: legacyGeneratedAppModulePath,
 		BuildDir:   absApp,
 	}
-	appModule, err := currentAppModule()
+	appModule, err := currentAppModuleForGeneratedApp(absApp)
 	if err != nil || strings.TrimSpace(appModule.Path) == "" || strings.TrimSpace(appModule.Dir) == "" {
 		return context
 	}
@@ -53,6 +53,26 @@ func resolveGeneratedModuleContext(absApp string) generatedModuleContext {
 	context.BuildDir = appModule.Dir
 	context.AppRel = relSlash
 	return context
+}
+
+func currentAppModuleForGeneratedApp(absApp string) (appModuleInfo, error) {
+	if projectRoot, ok := generatedAppProjectRoot(absApp); ok {
+		return currentAppModuleInDir(projectRoot)
+	}
+	return currentAppModule()
+}
+
+func generatedAppProjectRoot(absApp string) (string, bool) {
+	for dir := filepath.Clean(absApp); dir != "." && dir != string(filepath.Separator); dir = filepath.Dir(dir) {
+		if filepath.Base(dir) == ".gowdk" {
+			return filepath.Dir(dir), true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+	}
+	return "", false
 }
 
 func moduleSource(options Options) (string, error) {
@@ -115,12 +135,19 @@ type appModuleInfo struct {
 }
 
 func currentAppModule() (appModuleInfo, error) {
+	return currentAppModuleInDir("")
+}
+
+func currentAppModuleInDir(dir string) (appModuleInfo, error) {
 	command := exec.Command("go", "list", "-m", "-json")
+	command.Dir = dir
 	output, err := command.Output()
 	if err != nil {
 		return appModuleInfo{}, goListModuleError(err)
 	}
-	goModOutput, err := exec.Command("go", "env", "GOMOD").Output()
+	goModCommand := exec.Command("go", "env", "GOMOD")
+	goModCommand.Dir = dir
+	goModOutput, err := goModCommand.Output()
 	if err != nil {
 		return appModuleInfo{}, goListModuleError(err)
 	}

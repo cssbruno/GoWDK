@@ -20,6 +20,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/auditschema"
 	"github.com/cssbruno/gowdk/internal/auditspec"
 	"github.com/cssbruno/gowdk/internal/buildgen"
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/diagnostics"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
@@ -191,11 +192,25 @@ func audit(args []string) error {
 	if err := linkIRContractReferences(&ir, options.ProjectRoot); err != nil {
 		return err
 	}
+	var manifest securitymanifest.SecurityManifest
+	if checked.Validated != nil {
+		validated, err := compiler.ValidateIR(options.Config, ir)
+		if err != nil {
+			return err
+		}
+		ir = validated.Program()
+		manifest, err = securitymanifest.BuildFromValidatedProgram(options.Config, validated)
+		if err != nil {
+			return err
+		}
+	} else {
+		manifest = securitymanifest.Build(options.Config, ir)
+	}
 
 	// Relativize source locations to the project root so the posture — and the
 	// digests, findings, and emitted tests derived from it — are identical
 	// regardless of where the project is checked out.
-	manifest := securitymanifest.Build(options.Config, ir).Relativize(options.ProjectRoot)
+	manifest = manifest.Relativize(options.ProjectRoot)
 	declared := auditspec.PoliciesFromIR(ir.AuditSpecs)
 	policies := relativizeAuditPolicies(auditspec.ComposeBaseline(declared), options.ProjectRoot)
 	waiverCtx := auditspec.WaiverContext{
@@ -495,7 +510,12 @@ func standaloneAuditPackageName(dir string) string {
 // infrastructure failure (build or generation); test execution outcomes,
 // including non-zero exit and timeout, are reported through auditRunResult.
 func runGeneratedAppAuditTests(options cliOptions, ir gwdkir.Program, runOptions auditRunOptions) (string, auditRunResult, error) {
-	source, err := appgen.GeneratedAuditTestSource(appgen.OptionsFromIR(options.Config, &ir))
+	validated, err := compiler.ValidateIR(options.Config, ir)
+	if err != nil {
+		return "", auditRunResult{}, err
+	}
+	appOptions := appgen.OptionsFromValidatedProgram(options.Config, validated)
+	source, err := appgen.GeneratedAuditTestSource(appOptions)
 	if err != nil || len(source) == 0 {
 		return "", auditRunResult{}, err
 	}
@@ -508,10 +528,14 @@ func runGeneratedAppAuditTests(options cliOptions, ir gwdkir.Program, runOptions
 
 	outputDir := filepath.Join(tempRoot, "output")
 	appDir := filepath.Join(tempRoot, "app")
-	if _, err := buildgen.BuildFromValidatedIR(options.Config, ir, outputDir); err != nil {
+	if _, err := buildgen.BuildFromValidatedProgram(options.Config, validated, outputDir); err != nil {
 		return "", auditRunResult{}, err
 	}
-	app, err := appgen.GenerateWithOptions(outputDir, appDir, appgen.OptionsFromIR(options.Config, &ir))
+	appPlan, err := appgen.PlanApplication(outputDir, appOptions)
+	if err != nil {
+		return "", auditRunResult{}, err
+	}
+	app, err := appgen.GenerateWithPlan(outputDir, appDir, appPlan)
 	if err != nil {
 		return "", auditRunResult{}, err
 	}

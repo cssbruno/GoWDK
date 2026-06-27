@@ -3,6 +3,7 @@ package gowdkcmd
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -97,19 +98,35 @@ func buildIncrementalSPALoaded(plan buildOptions, change inputChange) (bool, err
 	timings.counter("incremental_component_changes", incrementalPlan.ComponentChanges)
 	timings.counter("incremental_layout_changes", incrementalPlan.LayoutChanges)
 	timings.counter("incremental_affected_pages", len(incrementalPlan.PageSources))
-	var ir gwdkir.Program
+	var analyzed compiler.AnalyzedProgram
 	if err := timings.measure("ir_assembly", func() error {
 		var assembleErr error
-		ir, _, assembleErr = compiler.AssembleProgram(options.Config, app)
+		analyzed, assembleErr = compiler.AnalyzeProgram(options.Config, app)
 		return assembleErr
 	}); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return true, fmt.Errorf("build failed")
+	}
+	var validated compiler.ValidatedProgram
+	if err := timings.measure("ir_validation", func() error {
+		var report compiler.ValidationErrors
+		validated, report = compiler.ValidateAnalyzedProgramReport(options.Config, analyzed)
+		if report.HasErrors() {
+			return report
+		}
+		return nil
+	}); err != nil {
+		var report compiler.ValidationErrors
+		if errors.As(err, &report) {
+			return true, newDevDiagnosticError("build failed", devOverlayDiagnosticsFromCompiler(report))
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return true, fmt.Errorf("build failed")
 	}
 	var result buildgen.Result
 	if err := timings.measure("output_plan_writes", func() error {
 		var buildErr error
-		result, buildErr = buildgen.BuildIncrementalFromIR(options.Config, ir, outputDir, incrementalPlan.PageSources)
+		result, buildErr = buildgen.BuildIncrementalFromValidatedProgram(options.Config, validated, outputDir, incrementalPlan.PageSources)
 		return buildErr
 	}); err != nil {
 		printBuildgenBuildErrorReport(err, options.Debug)

@@ -322,6 +322,15 @@ func Build(config gowdk.Config, ir gwdkir.Program) SecurityManifest {
 	return manifest
 }
 
+// BuildFromValidatedProgram projects compiler-validated IR into a
+// SecurityManifest.
+func BuildFromValidatedProgram(config gowdk.Config, validated compiler.ValidatedProgram) (SecurityManifest, error) {
+	if !validated.Valid() {
+		return SecurityManifest{}, fmt.Errorf("validated program was not constructed by compiler validation")
+	}
+	return Build(config, validated.Program()), nil
+}
+
 // declaredWaivers projects the declared `waive` rules from the audit specs into
 // the manifest so gowdk-security.json records every suppression decision.
 func declaredWaivers(ir gwdkir.Program) []WaiverDeclaration {

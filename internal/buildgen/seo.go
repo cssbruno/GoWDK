@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
 	runtimeseo "github.com/cssbruno/gowdk/runtime/seo"
@@ -82,6 +83,20 @@ func planSEOArtifacts(config gowdk.Config, ir gwdkir.Program, artifacts []Artifa
 }
 
 func RuntimeSitemapPlanFromIR(config gowdk.Config, ir gwdkir.Program) (RuntimeSitemapPlan, error) {
+	validated, err := compiler.ValidateIR(config, ir)
+	if err != nil {
+		return RuntimeSitemapPlan{}, err
+	}
+	return RuntimeSitemapPlanFromValidatedProgram(config, validated)
+}
+
+// RuntimeSitemapPlanFromValidatedProgram builds the generated app runtime
+// sitemap plan from compiler-validated IR.
+func RuntimeSitemapPlanFromValidatedProgram(config gowdk.Config, validated compiler.ValidatedProgram) (RuntimeSitemapPlan, error) {
+	if !validated.Valid() {
+		return RuntimeSitemapPlan{}, fmt.Errorf("validated program was not constructed by compiler validation")
+	}
+	ir := validated.Program()
 	options, enabled, err := seoOptionsFromConfig(config)
 	if err != nil || !enabled {
 		return RuntimeSitemapPlan{}, err

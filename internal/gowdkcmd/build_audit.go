@@ -10,8 +10,8 @@ import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/auditspec"
 	"github.com/cssbruno/gowdk/internal/buildgen"
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/diagnostics"
-	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/securitymanifest"
 	"github.com/cssbruno/gowdk/internal/securitytext"
 )
@@ -68,11 +68,16 @@ func buildErrorIsBypassed(options cliOptions, code string) bool {
 // builds print a prominent summary so the exposure is visible without breaking
 // dev iteration. The --allow-insecure flag downgrades the production gate to a
 // warning for 0.x experimentation.
-func enforceBuildSecurityAudit(options cliOptions, ir gwdkir.Program) error {
+func enforceBuildSecurityAudit(options cliOptions, validated compiler.ValidatedProgram) error {
+	ir := validated.Program()
 	// Relativize source locations to the project root so the posture digest the
 	// build-time gate computes (and the digests a waiver pins) match what gowdk
 	// audit produces regardless of checkout location.
-	manifest := securitymanifest.Build(options.Config, ir).Relativize(options.ProjectRoot)
+	manifest, err := securitymanifest.BuildFromValidatedProgram(options.Config, validated)
+	if err != nil {
+		return err
+	}
+	manifest = manifest.Relativize(options.ProjectRoot)
 	declared := auditspec.PoliciesFromIR(ir.AuditSpecs)
 	policies := relativizeAuditPolicies(auditspec.ComposeBaseline(declared), options.ProjectRoot)
 	waiverCtx := auditspec.WaiverContext{
@@ -99,9 +104,8 @@ func enforceBuildSecurityFindings(options cliOptions, findings []auditspec.Findi
 		return nil
 	}
 
-	printBuildSecurityFindings(findings)
-
 	bypassedCodes, blocking := partitionBuildErrorBypass(options, findings)
+	printBuildSecurityFindings(findings)
 	if len(bypassedCodes) > 0 {
 		fmt.Fprintf(os.Stderr, "security bypass: %d error finding(s) downgraded by --allow-insecure (codes: %s); this is recorded provenance, not a fix\n",
 			summary.Errors-blocking, strings.Join(bypassedCodes, ", "))

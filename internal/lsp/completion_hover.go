@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
@@ -135,6 +136,9 @@ func (server *Server) openProjectIR() (gwdkir.Program, map[string]document) {
 		}
 	}
 	ir := gwdkanalysis.BuildProgram(server.config, sources)
+	if analyzed, err := compiler.AnalyzeProgram(server.config, sources); err == nil {
+		ir = analyzed.Program()
+	}
 	server.projectCache = projectIRCache{
 		key:          key,
 		ir:           ir,

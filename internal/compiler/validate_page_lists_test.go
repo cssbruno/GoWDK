@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -22,7 +23,8 @@ func validatePageListsFor(t *testing.T, page gwdkir.Page) []ValidationError {
 		page.Render = gowdk.SSR
 	}
 	config := gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}
-	report := ValidateProgramReport(config, gwdkir.Program{Pages: []gwdkir.Page{page}})
+	program := gwdkanalysis.BuildProgram(config, gwdkanalysis.Sources{Pages: []gwdkir.Page{page}})
+	report := ValidateProgramReport(config, program)
 	return report
 }
 

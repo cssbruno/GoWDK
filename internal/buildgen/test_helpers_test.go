@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	view "github.com/cssbruno/gowdk/internal/viewrender"
 )
 
 // irComponent converts a gwdkir.Component fixture into the IR component the
@@ -20,6 +22,42 @@ func irComponent(component gwdkir.Component) gwdkir.Component {
 		return gwdkir.Component{}
 	}
 	return ir.Components[0]
+}
+
+func analyzedIRFixture(t *testing.T, program gwdkir.Program) gwdkir.Program {
+	t.Helper()
+	parseBlocks := func(blocks *gwdkir.Blocks) {
+		t.Helper()
+		if strings.TrimSpace(blocks.ViewBody) == "" {
+			return
+		}
+		blocks.View = true
+		nodes, err := view.Parse(blocks.ViewBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		blocks.ViewNodes = nodes
+	}
+	for index := range program.Pages {
+		parseBlocks(&program.Pages[index].Blocks)
+	}
+	for index := range program.Components {
+		parseBlocks(&program.Components[index].Blocks)
+	}
+	for index := range program.Layouts {
+		parseBlocks(&program.Layouts[index].Blocks)
+	}
+	for index := range program.Templates {
+		if strings.TrimSpace(program.Templates[index].Body) == "" {
+			continue
+		}
+		nodes, err := view.Parse(program.Templates[index].Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		program.Templates[index].Nodes = nodes
+	}
+	return program
 }
 
 type testRouteManifest struct {

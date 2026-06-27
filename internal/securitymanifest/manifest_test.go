@@ -9,6 +9,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	authaddon "github.com/cssbruno/gowdk/addons/auth"
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -130,6 +131,16 @@ func TestBuildProjectsRoutesAndEndpoints(t *testing.T) {
 	}
 	if submit.Source != "signup.page.gwdk:8" {
 		t.Fatalf("Submit source should be file:line, got %q", submit.Source)
+	}
+}
+
+func TestBuildFromValidatedProgramRejectsZeroValue(t *testing.T) {
+	_, err := BuildFromValidatedProgram(gowdk.Config{}, compiler.ValidatedProgram{})
+	if err == nil {
+		t.Fatal("expected zero-value validated program error")
+	}
+	if err.Error() != "validated program was not constructed by compiler validation" {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

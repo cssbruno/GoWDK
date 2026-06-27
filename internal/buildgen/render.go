@@ -39,19 +39,18 @@ func renderPage(config gowdk.Config, page gwdkir.Page, route string, components 
 	if strings.TrimSpace(page.Blocks.ViewBody) == "" {
 		return "", ssrRegions{}, fmt.Errorf("%s: view {} is empty", page.ID)
 	}
-	viewSource, err := composePageViewSource(page, layouts)
+	viewNodes, err := composePageViewNodes(page, layouts)
 	if err != nil {
 		return "", ssrRegions{}, fmt.Errorf("%s: %w", page.ID, err)
 	}
-	viewNodes := composedPageViewNodes(page)
-	if err := validateViewParamReferences(page, viewSource, viewNodes); err != nil {
+	if err := validateViewParamReferences(page, viewNodes); err != nil {
 		return "", ssrRegions{}, fmt.Errorf("%s: %w", page.ID, err)
 	}
 
 	pageComponents := componentRegistryForPage(page, components)
 	var lists []view.SSRListReplacement
 	var conds []view.SSRCondReplacement
-	body, err := renderPageView(viewSource, viewNodes, pageComponents, data, view.Options{
+	body, err := renderPageView(viewNodes, pageComponents, data, view.Options{
 		Actions:                actionRoutes(page, route, data),
 		ActionInputFields:      actionFields,
 		Package:                page.Package,
@@ -68,7 +67,7 @@ func renderPage(config gowdk.Config, page gwdkir.Page, route string, components 
 	if err != nil {
 		return "", ssrRegions{}, fmt.Errorf("%s: %w", page.ID, err)
 	}
-	scripts, err := pageScripts(config, page, viewSource, viewNodes, pageComponents, queryTypeNames, policy)
+	scripts, err := pageScripts(config, page, viewNodes, pageComponents, queryTypeNames, policy)
 	if err != nil {
 		return "", ssrRegions{}, fmt.Errorf("%s: %w", page.ID, err)
 	}
@@ -145,18 +144,8 @@ func convertSSRListFields(fields []view.SSRListField) []source.SSRListField {
 	return out
 }
 
-func composedPageViewNodes(page gwdkir.Page) []view.Node {
-	if len(page.Layouts) > 0 || len(page.Blocks.ViewNodes) == 0 {
-		return nil
-	}
-	return page.Blocks.ViewNodes
-}
-
-func renderPageView(source string, nodes []view.Node, components map[string]view.Component, data map[string]string, options view.Options) (string, error) {
-	if len(nodes) > 0 {
-		return view.RenderNodesWithOptions(nodes, components, data, options)
-	}
-	return view.RenderWithOptions(source, components, data, options)
+func renderPageView(nodes []view.Node, components map[string]view.Component, data map[string]string, options view.Options) (string, error) {
+	return view.RenderNodesWithOptions(nodes, components, data, options)
 }
 
 // requestTimeTaintedFields returns the interpolation names that carry
@@ -181,52 +170,55 @@ func requestTimeTaintedFields(page gwdkir.Page, policy renderModePolicy) map[str
 	return tainted
 }
 
-func composePageViewSource(page gwdkir.Page, layouts map[string]gwdkir.Layout) (string, error) {
-	source := page.Blocks.ViewBody
+func composePageViewNodes(page gwdkir.Page, layouts map[string]gwdkir.Layout) ([]view.Node, error) {
+	nodes := cloneViewNodes(page.Blocks.ViewNodes)
+	if len(nodes) == 0 && strings.TrimSpace(page.Blocks.ViewBody) != "" {
+		return nil, fmt.Errorf("view {} has source body but no parsed nodes")
+	}
 	if len(layouts) == 0 {
-		return source, nil
+		return nodes, nil
 	}
 	for index := len(page.Layouts) - 1; index >= 0; index-- {
 		layoutRef := page.Layouts[index]
 		layout, ok := resolvePageLayout(page, layouts, layoutRef)
 		if !ok {
-			return "", fmt.Errorf("layout %q is not available for app-shell composition", layoutRef)
+			return nil, fmt.Errorf("layout %q is not available for app-shell composition", layoutRef)
 		}
-		next, err := composeLayoutWithParents(layout, source, layouts, map[string]bool{})
+		next, err := composeLayoutNodesWithParents(layout, nodes, layouts, map[string]bool{})
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		source = next
+		nodes = next
 	}
-	return source, nil
+	return nodes, nil
 }
 
 // composeLayoutWithParents wraps child in layout's slot, then wraps the result
 // in layout's own layout parent chain (outermost last). The visiting set
 // guards against cyclic inheritance, which validation also rejects.
-func composeLayoutWithParents(layout gwdkir.Layout, child string, layouts map[string]gwdkir.Layout, visiting map[string]bool) (string, error) {
+func composeLayoutNodesWithParents(layout gwdkir.Layout, child []view.Node, layouts map[string]gwdkir.Layout, visiting map[string]bool) ([]view.Node, error) {
 	key := layoutRegistryKey(layout.Package, layout.ID)
 	if visiting[key] {
-		return "", fmt.Errorf("cyclic layout reference at %q", layout.ID)
+		return nil, fmt.Errorf("cyclic layout reference at %q", layout.ID)
 	}
 	visiting[key] = true
 	defer delete(visiting, key)
 
-	source, err := composeLayoutSource(layout, child)
+	nodes, err := composeLayoutNodes(layout, child)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	for index := len(layout.Layouts) - 1; index >= 0; index-- {
 		parent, ok := resolveLayoutParent(layout, layouts, layout.Layouts[index])
 		if !ok {
-			return "", fmt.Errorf("parent layout %q is not available for app-shell composition", layout.Layouts[index])
+			return nil, fmt.Errorf("parent layout %q is not available for app-shell composition", layout.Layouts[index])
 		}
-		source, err = composeLayoutWithParents(parent, source, layouts, visiting)
+		nodes, err = composeLayoutNodesWithParents(parent, nodes, layouts, visiting)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 	}
-	return source, nil
+	return nodes, nil
 }
 
 func resolveLayoutParent(layout gwdkir.Layout, layouts map[string]gwdkir.Layout, ref string) (gwdkir.Layout, bool) {
@@ -261,26 +253,83 @@ func resolvePageLayout(page gwdkir.Page, layouts map[string]gwdkir.Layout, layou
 	return layout, ok
 }
 
-func composeLayoutSource(layout gwdkir.Layout, child string) (string, error) {
-	matches := layoutSlotIndexes(layout.Blocks.ViewBody)
-	if len(matches) != 1 {
-		return "", fmt.Errorf("layout %s must contain exactly one <slot /> placeholder", layout.ID)
+func composeLayoutNodes(layout gwdkir.Layout, child []view.Node) ([]view.Node, error) {
+	if len(layout.Blocks.ViewNodes) == 0 && strings.TrimSpace(layout.Blocks.ViewBody) != "" {
+		return nil, fmt.Errorf("layout %s has source body but no parsed nodes", layout.ID)
 	}
-	match := matches[0]
-	return layout.Blocks.ViewBody[:match[0]] + child + layout.Blocks.ViewBody[match[1]:], nil
+	nodes, slots := replaceLayoutSlotNodes(layout.Blocks.ViewNodes, child)
+	if slots != 1 {
+		return nil, fmt.Errorf("layout %s must contain exactly one <slot /> placeholder", layout.ID)
+	}
+	return nodes, nil
 }
 
-func validateViewParamReferences(page gwdkir.Page, source string, nodes []view.Node) error {
-	var refs []string
-	if len(nodes) > 0 {
-		refs = viewanalysis.ParamReferencesFromNodes(nodes)
-	} else {
-		var err error
-		refs, err = viewanalysis.ParamReferences(source)
-		if err != nil {
-			return err
+func replaceLayoutSlotNodes(nodes []view.Node, child []view.Node) ([]view.Node, int) {
+	var out []view.Node
+	slots := 0
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case view.Element:
+			if isDefaultLayoutSlot(typed) {
+				out = append(out, cloneViewNodes(child)...)
+				slots++
+				continue
+			}
+			typed.Children, slots = replaceLayoutSlotChildren(typed.Children, child, slots)
+			out = append(out, typed)
+		case view.ComponentCall:
+			typed.Children, slots = replaceLayoutSlotChildren(typed.Children, child, slots)
+			out = append(out, typed)
+		case view.AwaitBlock:
+			typed.Pending, slots = replaceLayoutSlotChildren(typed.Pending, child, slots)
+			typed.Then, slots = replaceLayoutSlotChildren(typed.Then, child, slots)
+			typed.Catch, slots = replaceLayoutSlotChildren(typed.Catch, child, slots)
+			out = append(out, typed)
+		default:
+			out = append(out, node)
 		}
 	}
+	return out, slots
+}
+
+func replaceLayoutSlotChildren(nodes []view.Node, child []view.Node, slots int) ([]view.Node, int) {
+	replaced, count := replaceLayoutSlotNodes(nodes, child)
+	return replaced, slots + count
+}
+
+func isDefaultLayoutSlot(node view.Element) bool {
+	return node.Name == "slot" && len(node.Attrs) == 0 && len(node.Children) == 0
+}
+
+func cloneViewNodes(nodes []view.Node) []view.Node {
+	if len(nodes) == 0 {
+		return nil
+	}
+	out := make([]view.Node, 0, len(nodes))
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case view.Element:
+			typed.Attrs = append([]view.Attr(nil), typed.Attrs...)
+			typed.Children = cloneViewNodes(typed.Children)
+			out = append(out, typed)
+		case view.ComponentCall:
+			typed.Attrs = append([]view.Attr(nil), typed.Attrs...)
+			typed.Children = cloneViewNodes(typed.Children)
+			out = append(out, typed)
+		case view.AwaitBlock:
+			typed.Pending = cloneViewNodes(typed.Pending)
+			typed.Then = cloneViewNodes(typed.Then)
+			typed.Catch = cloneViewNodes(typed.Catch)
+			out = append(out, typed)
+		default:
+			out = append(out, node)
+		}
+	}
+	return out
+}
+
+func validateViewParamReferences(page gwdkir.Page, nodes []view.Node) error {
+	refs := viewanalysis.ParamReferencesFromNodes(nodes)
 	if len(refs) == 0 {
 		return nil
 	}
@@ -309,21 +358,21 @@ func actionRoutes(page gwdkir.Page, pageRoute string, data map[string]string) ma
 	return routes
 }
 
-func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component, queryTypeNames map[string]string, policy renderModePolicy) ([]gowdk.Script, error) {
+func pageScripts(config gowdk.Config, page gwdkir.Page, viewNodes []view.Node, components map[string]view.Component, queryTypeNames map[string]string, policy renderModePolicy) ([]gowdk.Script, error) {
 	scripts := append([]gowdk.Script{}, nonEmptyScripts(config.Build.Scripts)...)
-	hrefs, err := scopedScriptHrefs(page, viewSource, viewNodes, components)
+	hrefs, err := scopedScriptHrefs(page, "", viewNodes, components)
 	if err != nil {
 		return nil, err
 	}
 	for _, href := range hrefs {
 		scripts = append(scripts, gowdk.Script{Src: href, Type: "module"})
 	}
-	usesPartial := pageUsesPartialRuntime(page, viewSource)
-	usesRealtime, err := pageUsesRealtimeRuntime(page, viewSource, viewNodes, components, queryTypeNames)
+	usesPartial := pageUsesPartialRuntime(page, viewNodes)
+	usesRealtime, err := pageUsesRealtimeRuntime(page, viewNodes, components, queryTypeNames)
 	if err != nil {
 		return nil, err
 	}
-	usesCommand, err := pageUsesCommandRuntime(page, viewSource, viewNodes, components)
+	usesCommand, err := pageUsesCommandRuntime(page, viewNodes, components)
 	if err != nil {
 		return nil, err
 	}
@@ -341,7 +390,7 @@ func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, viewN
 		}
 		return scripts, nil
 	}
-	usesSPANavigation, err := pageUsesSPANavigationRuntime(config, page, viewSource, viewNodes, components)
+	usesSPANavigation, err := pageUsesSPANavigationRuntime(config, page, viewNodes, components)
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +400,7 @@ func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, viewN
 	if len(page.Stores) > 0 {
 		scripts = append(scripts, gowdk.Script{Src: storeRuntimeHref})
 	}
-	islandScripts, err := islandScriptHrefsForView(viewSource, viewNodes, components, page.Package, componentUses(page.Uses))
+	islandScripts, err := islandScriptHrefsForView("", viewNodes, components, page.Package, componentUses(page.Uses))
 	if err != nil {
 		return nil, err
 	}
@@ -364,29 +413,26 @@ func pageScripts(config gowdk.Config, page gwdkir.Page, viewSource string, viewN
 	return scripts, nil
 }
 
-func pageUsesPartialRuntime(page gwdkir.Page, viewSource string) bool {
-	if !strings.Contains(viewSource, "g:target") {
-		return false
-	}
-	return len(page.Blocks.Actions) > 0
+func pageUsesPartialRuntime(page gwdkir.Page, viewNodes []view.Node) bool {
+	return len(page.Blocks.Actions) > 0 && nodesHaveAttr(viewNodes, "g:target")
 }
 
-func pageUsesRealtimeRuntime(page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component, queryTypeNames map[string]string) (bool, error) {
-	if viewHasRealtimeSubscription(viewSource, viewNodes) {
+func pageUsesRealtimeRuntime(page gwdkir.Page, viewNodes []view.Node, components map[string]view.Component, queryTypeNames map[string]string) (bool, error) {
+	if viewHasRealtimeSubscription(viewNodes) {
 		return true, nil
 	}
-	if viewHasInvalidatedQuery(viewSource, viewNodes, queryTypeNames) {
+	if viewHasInvalidatedQuery(viewNodes, queryTypeNames) {
 		return true, nil
 	}
-	usages, err := recursiveViewComponentCallUsagesForView(viewSource, viewNodes, components, page.Package, componentUses(page.Uses))
+	usages, err := recursiveViewComponentCallUsagesForView("", viewNodes, components, page.Package, componentUses(page.Uses))
 	if err != nil {
 		return false, err
 	}
 	for _, usage := range usages {
-		if viewHasRealtimeSubscription(usage.component.Body, usage.component.Nodes) {
+		if viewHasRealtimeSubscription(usage.component.Nodes) {
 			return true, nil
 		}
-		if viewHasInvalidatedQuery(usage.component.Body, usage.component.Nodes, queryTypeNames) {
+		if viewHasInvalidatedQuery(usage.component.Nodes, queryTypeNames) {
 			return true, nil
 		}
 	}
@@ -397,62 +443,37 @@ func pageUsesRealtimeRuntime(page gwdkir.Page, viewSource string, viewNodes []vi
 // declares a g:command write form. Such forms need the client interceptor so a
 // submit posts in the background and applies the server's region refresh,
 // instead of natively navigating to the adapter's raw JSON response.
-func pageUsesCommandRuntime(page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component) (bool, error) {
-	if viewHasCommandForm(viewSource, viewNodes) {
+func pageUsesCommandRuntime(page gwdkir.Page, viewNodes []view.Node, components map[string]view.Component) (bool, error) {
+	if viewHasCommandForm(viewNodes) {
 		return true, nil
 	}
-	usages, err := recursiveViewComponentCallUsagesForView(viewSource, viewNodes, components, page.Package, componentUses(page.Uses))
+	usages, err := recursiveViewComponentCallUsagesForView("", viewNodes, components, page.Package, componentUses(page.Uses))
 	if err != nil {
 		return false, err
 	}
 	for _, usage := range usages {
-		if viewHasCommandForm(usage.component.Body, usage.component.Nodes) {
+		if viewHasCommandForm(usage.component.Nodes) {
 			return true, nil
 		}
 	}
 	return false, nil
 }
 
-func viewHasCommandForm(source string, nodes []view.Node) bool {
-	if !strings.Contains(source, "g:command") && len(nodes) == 0 {
-		return false
-	}
-	var refs []viewanalysis.CommandReference
-	var err error
-	if len(nodes) > 0 {
-		refs, err = viewanalysis.CommandReferencesFromNodes(nodes)
-	} else {
-		refs, err = viewanalysis.CommandReferences(source)
-	}
+func viewHasCommandForm(nodes []view.Node) bool {
+	refs, err := viewanalysis.CommandReferencesFromNodes(nodes)
 	return err == nil && len(refs) > 0
 }
 
-func viewHasRealtimeSubscription(source string, nodes []view.Node) bool {
-	if !strings.Contains(source, "g:subscribe") && len(nodes) == 0 {
-		return false
-	}
-	if len(nodes) > 0 {
-		refs, err := viewanalysis.SubscriptionReferencesFromNodes(nodes)
-		return err == nil && len(refs) > 0
-	}
-	refs, err := viewanalysis.SubscriptionReferences(source)
+func viewHasRealtimeSubscription(nodes []view.Node) bool {
+	refs, err := viewanalysis.SubscriptionReferencesFromNodes(nodes)
 	return err == nil && len(refs) > 0
 }
 
-func viewHasInvalidatedQuery(source string, nodes []view.Node, queryTypeNames map[string]string) bool {
+func viewHasInvalidatedQuery(nodes []view.Node, queryTypeNames map[string]string) bool {
 	if len(queryTypeNames) == 0 {
 		return false
 	}
-	if !strings.Contains(source, "g:query") && len(nodes) == 0 {
-		return false
-	}
-	var refs []viewanalysis.QueryReference
-	var err error
-	if len(nodes) > 0 {
-		refs, err = viewanalysis.QueryReferencesFromNodes(nodes)
-	} else {
-		refs, err = viewanalysis.QueryReferences(source)
-	}
+	refs, err := viewanalysis.QueryReferencesFromNodes(nodes)
 	if err != nil {
 		return false
 	}
@@ -464,35 +485,24 @@ func viewHasInvalidatedQuery(source string, nodes []view.Node, queryTypeNames ma
 	return false
 }
 
-func pageUsesSPANavigationRuntime(config gowdk.Config, page gwdkir.Page, viewSource string, viewNodes []view.Node, components map[string]view.Component) (bool, error) {
+func pageUsesSPANavigationRuntime(config gowdk.Config, page gwdkir.Page, viewNodes []view.Node, components map[string]view.Component) (bool, error) {
 	mode := page.RenderMode(config.Render.DefaultMode())
 	if mode != gowdk.SPA {
 		return false, nil
 	}
-	if viewHasInternalLink(viewSource, viewNodes) {
+	if nodesHaveInternalLink(viewNodes) {
 		return true, nil
 	}
-	usages, err := recursiveViewComponentCallUsagesForView(viewSource, viewNodes, components, page.Package, componentUses(page.Uses))
+	usages, err := recursiveViewComponentCallUsagesForView("", viewNodes, components, page.Package, componentUses(page.Uses))
 	if err != nil {
 		return false, err
 	}
 	for _, usage := range usages {
-		if viewHasInternalLink(usage.component.Body, usage.component.Nodes) {
+		if nodesHaveInternalLink(usage.component.Nodes) {
 			return true, nil
 		}
 	}
 	return false, nil
-}
-
-func viewHasInternalLink(source string, nodes []view.Node) bool {
-	if len(nodes) > 0 {
-		return nodesHaveInternalLink(nodes)
-	}
-	nodes, err := view.Parse(source)
-	if err != nil {
-		return false
-	}
-	return nodesHaveInternalLink(nodes)
 }
 
 func nodesHaveInternalLink(nodes []view.Node) bool {
@@ -511,6 +521,36 @@ func nodesHaveInternalLink(nodes []view.Node) bool {
 			}
 		case view.ComponentCall:
 			if nodesHaveInternalLink(typed.Children) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func nodesHaveAttr(nodes []view.Node, name string) bool {
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case view.Element:
+			for _, attr := range typed.Attrs {
+				if attr.Name == name {
+					return true
+				}
+			}
+			if nodesHaveAttr(typed.Children, name) {
+				return true
+			}
+		case view.ComponentCall:
+			for _, attr := range typed.Attrs {
+				if attr.Name == name {
+					return true
+				}
+			}
+			if nodesHaveAttr(typed.Children, name) {
+				return true
+			}
+		case view.AwaitBlock:
+			if nodesHaveAttr(typed.Pending, name) || nodesHaveAttr(typed.Then, name) || nodesHaveAttr(typed.Catch, name) {
 				return true
 			}
 		}

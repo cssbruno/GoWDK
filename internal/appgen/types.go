@@ -3,6 +3,7 @@ package appgen
 import (
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/buildgen"
+	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 )
@@ -30,8 +31,36 @@ type Options struct {
 	AutoRoutes   bool
 	ProxyBackend bool
 	Config       gowdk.Config
-	IR           *gwdkir.Program
-	Sitemap      buildgen.RuntimeSitemapPlan
+	Program      *compiler.ValidatedProgram
+	// IR is the legacy raw-IR option path. Production auto-routing should pass
+	// Program so generation receives a compiler-validated phase token.
+	IR      *gwdkir.Program
+	Sitemap buildgen.RuntimeSitemapPlan
+}
+
+// ApplicationPlan is the normalized generated-application plan consumed by
+// appgen emission. Construct it through PlanApplication or
+// PlanBackendApplication so route defaults, endpoint projections, SSR artifacts,
+// sitemap data, and generator-local validation are finalized before writes.
+type ApplicationPlan struct {
+	options     Options
+	outputDir   string
+	backendOnly bool
+	valid       bool
+}
+
+func (plan ApplicationPlan) optionsForEmit() (Options, error) {
+	if !plan.valid {
+		return Options{}, errInvalidApplicationPlan
+	}
+	return plan.options, nil
+}
+
+// OptionsFromValidatedProgram returns production generator options for
+// compiler-validated IR-driven route generation.
+func OptionsFromValidatedProgram(config gowdk.Config, program compiler.ValidatedProgram) Options {
+	ir := program.Program()
+	return Options{AutoRoutes: true, Config: config, Program: &program, IR: &ir}
 }
 
 // OptionsFromIR returns the production generator options for compiler IR-driven

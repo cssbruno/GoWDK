@@ -86,9 +86,7 @@ func CheckInvariants(program Program) error {
 			report("endpoint %q has semantic id %q, want %q", endpoint.Path, endpoint.ID, endpoint.ExpectedID())
 		}
 		endpointID := endpoint.SemanticID()
-		if previous, exists := endpointIDs[endpointID]; exists {
-			report("endpoint %q duplicates semantic id %q from endpoint %q", endpoint.Path, endpointID, previous.Path)
-		} else if endpointID != "" {
+		if _, exists := endpointIDs[endpointID]; !exists && endpointID != "" {
 			endpointIDs[endpointID] = endpoint
 		}
 		if index > 0 {

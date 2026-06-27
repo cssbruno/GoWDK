@@ -68,7 +68,7 @@ func (endpoint Endpoint) SemanticID() EndpointID {
 func joinIdentityParts(parts ...string) string {
 	escaped := make([]string, 0, len(parts))
 	for _, part := range parts {
-		escaped = append(escaped, url.PathEscape(part))
+		escaped = append(escaped, strings.ReplaceAll(url.PathEscape(part), ":", "%3A"))
 	}
 	return strings.Join(escaped, ":")
 }

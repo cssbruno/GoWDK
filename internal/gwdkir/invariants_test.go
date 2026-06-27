@@ -122,13 +122,6 @@ func TestCheckInvariantsReportsViolations(t *testing.T) {
 			want:    `has semantic id "wrong"`,
 		},
 		{
-			name: "duplicate endpoint semantic id",
-			corrupt: func(p *Program) {
-				p.Endpoints[1].ID = p.Endpoints[0].SemanticID()
-			},
-			want: "duplicates semantic id",
-		},
-		{
 			name: "unsorted endpoints",
 			corrupt: func(p *Program) {
 				p.Endpoints[0], p.Endpoints[1] = p.Endpoints[1], p.Endpoints[0]
@@ -283,6 +276,22 @@ func TestCheckInvariantsReportsViolations(t *testing.T) {
 				t.Fatalf("CheckInvariants() = %q, want error containing %q", err, test.want)
 			}
 		})
+	}
+}
+
+func TestCheckInvariantsAllowsDuplicateEndpointSemanticIDs(t *testing.T) {
+	program := validProgram()
+	program.SourceMap.Endpoints = nil
+	program.Endpoints = []Endpoint{
+		{Kind: EndpointAction, Source: EndpointSourceGOWDK, PageID: "home", Symbol: "Save", Method: "POST", Path: "/profile"},
+		{Kind: EndpointAction, Source: EndpointSourceGOWDK, PageID: "home", Symbol: "Save", Method: "POST", Path: "/profile"},
+	}
+	for index := range program.Endpoints {
+		program.Endpoints[index].ID = program.Endpoints[index].ExpectedID()
+	}
+
+	if err := CheckInvariants(program); err != nil {
+		t.Fatalf("CheckInvariants() = %v, want nil", err)
 	}
 }
 

@@ -5581,7 +5581,7 @@ type appFixture struct {
 	Pages           []gwdkir.Page
 	Components      []gwdkir.Component
 	Layouts         []gwdkir.Layout
-	Endpoints       []gwdkir.GoEndpoint
+	Endpoints       []gwdkir.StandaloneEndpointDeclaration
 	BackendBindings []source.BackendBinding
 }
 

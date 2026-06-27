@@ -67,10 +67,10 @@ func duplicateRouteMessage(route, firstID, firstSource, duplicateID, duplicateSo
 	return message
 }
 
-func validateAmbiguousDynamicPageRoutes(config gowdk.Config, pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs []gwdkir.ContractReference) []ValidationError {
+func validateAmbiguousDynamicPageRoutes(config gowdk.Config, pages []gwdkir.Page, endpoints []gwdkir.Endpoint, sourceMap gwdkir.SourceMap, refs []gwdkir.ContractReference) []ValidationError {
 	var registered []routeRegistration
 	var diagnostics []ValidationError
-	for _, current := range routeRegistrations(config, pages, endpoints, refs) {
+	for _, current := range routeRegistrations(config, pages, endpoints, sourceMap, refs) {
 		for _, previous := range registered {
 			if current.Pattern == previous.Pattern {
 				// Exact duplicates are reported by the duplicate-route and
@@ -188,10 +188,10 @@ func routePatternSegments(pattern string) []string {
 	return strings.Split(trimmed, "/")
 }
 
-func validateRouteMethodConflicts(config gowdk.Config, pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs []gwdkir.ContractReference) []ValidationError {
+func validateRouteMethodConflicts(config gowdk.Config, pages []gwdkir.Page, endpoints []gwdkir.Endpoint, sourceMap gwdkir.SourceMap, refs []gwdkir.ContractReference) []ValidationError {
 	seen := map[string][]routeRegistration{}
 	var diagnostics []ValidationError
-	for _, registration := range routeRegistrations(config, pages, endpoints, refs) {
+	for _, registration := range routeRegistrations(config, pages, endpoints, sourceMap, refs) {
 		key := registration.Method + " " + registration.Pattern
 		for _, previous := range seen[key] {
 			if previous.Kind == "page" && registration.Kind == "page" {
@@ -239,7 +239,7 @@ type routeRegistration struct {
 	Span     source.SourceSpan
 }
 
-func routeRegistrations(config gowdk.Config, pages []gwdkir.Page, endpoints []gwdkir.GoEndpoint, refs []gwdkir.ContractReference) []routeRegistration {
+func routeRegistrations(config gowdk.Config, pages []gwdkir.Page, endpoints []gwdkir.Endpoint, sourceMap gwdkir.SourceMap, refs []gwdkir.ContractReference) []routeRegistration {
 	var registrations []routeRegistration
 	for _, page := range pages {
 		for _, route := range localizedPageRoutes(config.I18N, page) {
@@ -338,24 +338,28 @@ func routeRegistrations(config gowdk.Config, pages []gwdkir.Page, endpoints []gw
 		}
 	}
 	for _, endpoint := range endpoints {
-		info, issues := parseRoute(endpoint.Route)
+		if endpoint.Source != gwdkir.EndpointSourceGo {
+			continue
+		}
+		endpointSource, _ := sourceMap.Endpoint(endpoint.SemanticID())
+		info, issues := parseRoute(endpoint.Path)
 		if len(issues) > 0 {
 			continue
 		}
-		kind := strings.TrimSpace(endpoint.Kind)
+		kind := strings.TrimSpace(standaloneEndpointKindLabel(endpoint, endpointSource))
 		if kind == "" {
 			kind = "endpoint"
 		}
 		method := strings.ToUpper(strings.TrimSpace(endpoint.Method))
 		registrations = append(registrations, routeRegistration{
 			Kind:    kind,
-			Owner:   fmt.Sprintf("%s %s.%s", kind, endpoint.Package, endpoint.Name),
+			Owner:   fmt.Sprintf("%s %s.%s", kind, endpoint.Package, endpoint.Symbol),
 			Method:  method,
-			Route:   endpoint.Route,
+			Route:   endpoint.Path,
 			Pattern: info.Pattern,
-			PageID:  standaloneEndpointPageID(endpoint.Package, endpoint.Name),
-			Source:  endpoint.Source,
-			Span:    firstSpan(endpoint.RouteSpan, endpoint.Span),
+			PageID:  endpoint.PageID,
+			Source:  endpoint.SourceFile,
+			Span:    firstSpan(endpointSource.RouteSpan, endpoint.Span),
 		})
 	}
 	for _, ref := range refs {
@@ -435,59 +439,59 @@ func pageOwnedQueryRouteConflict(page routeRegistration, query routeRegistration
 		query.Route == page.Route
 }
 
-func validateStandaloneEndpoints(endpoints []gwdkir.GoEndpoint) []ValidationError {
+func validateStandaloneEndpoints(program gwdkir.Program) []ValidationError {
 	var diagnostics []ValidationError
-	for _, endpoint := range endpoints {
-		page := gwdkir.Page{ID: standaloneEndpointPageID(endpoint.Package, endpoint.Name), Source: endpoint.Source}
-		if !isExportedHandlerName(endpoint.Name) {
+	for _, endpoint := range program.Endpoints {
+		if endpoint.Source != gwdkir.EndpointSourceGo {
+			continue
+		}
+		endpointSource, _ := program.EndpointSource(endpoint.SemanticID())
+		page := gwdkir.Page{ID: endpoint.PageID, Source: endpoint.SourceFile}
+		if !isExportedHandlerName(endpoint.Symbol) {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:    "invalid_backend_handler_name",
 				PageID:  page.ID,
-				Source:  endpoint.Source,
+				Source:  endpoint.SourceFile,
 				Span:    endpoint.Span,
-				Message: fmt.Sprintf("%s endpoint handler %q must be an exported Go identifier", endpoint.Kind, endpoint.Name),
+				Message: fmt.Sprintf("%s endpoint handler %q must be an exported Go identifier", standaloneEndpointKindLabel(endpoint, endpointSource), endpoint.Symbol),
 			})
 		}
 		method := strings.ToUpper(strings.TrimSpace(endpoint.Method))
-		if method == "" {
-			if endpoint.Kind == "act" || endpoint.Kind == "action" {
-				method = "POST"
-			} else {
-				method = "GET"
-			}
-		}
-		if endpoint.Kind == "act" || endpoint.Kind == "action" {
+		if endpoint.Kind == gwdkir.EndpointAction {
 			if method != "POST" {
 				diagnostics = append(diagnostics, ValidationError{
 					Code:    "unsupported_action_method",
 					PageID:  page.ID,
-					Source:  endpoint.Source,
+					Source:  endpoint.SourceFile,
 					Span:    endpoint.Span,
-					Message: fmt.Sprintf("Go action endpoint %s uses unsupported method %s; actions currently require POST", endpoint.Name, method),
+					Message: fmt.Sprintf("Go action endpoint %s uses unsupported method %s; actions currently require POST", endpoint.Symbol, method),
 				})
 			}
 		}
-		info, issues := parseRoute(endpoint.Route)
-		label := fmt.Sprintf("Go %s endpoint path", endpoint.Kind)
-		diagnostics = append(diagnostics, routeDiagnostics(page, label, issues, firstSpan(endpoint.RouteSpan, endpoint.Span), endpoint.RouteParams)...)
+		info, issues := parseRoute(endpoint.Path)
+		label := fmt.Sprintf("Go %s endpoint path", standaloneEndpointKindLabel(endpoint, endpointSource))
+		diagnostics = append(diagnostics, routeDiagnostics(page, label, issues, firstSpan(endpointSource.RouteSpan, endpoint.Span), endpointSource.RouteParams)...)
 		if len(issues) == 0 && info.RestParam != "" {
 			diagnostics = append(diagnostics, ValidationError{
 				Code:    "malformed_route",
 				PageID:  page.ID,
-				Source:  endpoint.Source,
-				Span:    firstSpan(endpoint.RouteSpan, endpoint.Span),
-				Message: fmt.Sprintf("%s declares invalid %s: route %q uses rest route parameter {%s...}; rest parameters are only supported on page routes", page.ID, label, endpoint.Route, info.RestParam),
+				Source:  endpoint.SourceFile,
+				Span:    firstSpan(endpointSource.RouteSpan, endpoint.Span),
+				Message: fmt.Sprintf("%s declares invalid %s: route %q uses rest route parameter {%s...}; rest parameters are only supported on page routes", page.ID, label, endpoint.Path, info.RestParam),
 			})
 		}
 	}
 	return diagnostics
 }
 
-func standaloneEndpointPageID(packageName, name string) string {
-	if packageName == "" {
-		return name
+func standaloneEndpointKindLabel(endpoint gwdkir.Endpoint, endpointSource gwdkir.EndpointSourceMap) string {
+	if endpointSource.Kind != "" {
+		return endpointSource.Kind
 	}
-	return packageName + "." + name
+	if endpoint.Kind == gwdkir.EndpointAction {
+		return "act"
+	}
+	return string(endpoint.Kind)
 }
 
 func routeDiagnostics(page gwdkir.Page, label string, issues []routeIssue, routeSpan source.SourceSpan, paramSpans []source.NamedSpan) []ValidationError {

@@ -35,6 +35,13 @@ request-time lane selected with `server {}` or `go server {}`.
 `internal/gwdkir.Program` is the compiler handoff. New generated-output work
 should consume that IR or add fields there first.
 
+Semantic records carry stable typed IDs for pages, routes, components, layouts,
+and endpoints. Exact source spelling and spans that are only needed for
+diagnostics or inspection belong in source-map records instead of duplicate raw
+semantic entities. Build output and generated app code use explicit target plans
+(`buildgen.BuildPlan`, `appgen.ApplicationPlan`) so target-only decisions do not
+expand the shared semantic program.
+
 Current handoff path:
 
 ```text

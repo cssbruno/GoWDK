@@ -25,7 +25,7 @@ func DiscoverGoEndpoints(config gowdk.Config, ir *gwdkir.Program) error {
 	if len(dirs) == 0 {
 		return nil
 	}
-	var endpoints []gwdkir.GoEndpoint
+	var endpoints []gwdkir.StandaloneEndpointDeclaration
 	var diagnostics []ValidationError
 	for _, dir := range dirs {
 		discovered, found := discoverGoEndpointsInDir(dir)
@@ -76,7 +76,7 @@ func endpointSourceDirs(ir gwdkir.Program) []string {
 	return dirs
 }
 
-func discoverGoEndpointsInDir(dir string) ([]gwdkir.GoEndpoint, []ValidationError) {
+func discoverGoEndpointsInDir(dir string) ([]gwdkir.StandaloneEndpointDeclaration, []ValidationError) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		// A source directory that simply does not exist is not an error - the
@@ -89,7 +89,7 @@ func discoverGoEndpointsInDir(dir string) ([]gwdkir.GoEndpoint, []ValidationErro
 		return nil, []ValidationError{goEndpointDiagnostic(token.NewFileSet(), dir, nil, "go_endpoint_read_error", fmt.Sprintf("read Go endpoint directory: %v", err))}
 	}
 	fileSet := token.NewFileSet()
-	var endpoints []gwdkir.GoEndpoint
+	var endpoints []gwdkir.StandaloneEndpointDeclaration
 	var diagnostics []ValidationError
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
@@ -131,8 +131,8 @@ func discoverGoEndpointsInDir(dir string) ([]gwdkir.GoEndpoint, []ValidationErro
 	return endpoints, diagnostics
 }
 
-func endpointCommentsForFunction(fileSet *token.FileSet, path string, packageName string, function *ast.FuncDecl) ([]gwdkir.GoEndpoint, []ValidationError) {
-	var endpoints []gwdkir.GoEndpoint
+func endpointCommentsForFunction(fileSet *token.FileSet, path string, packageName string, function *ast.FuncDecl) ([]gwdkir.StandaloneEndpointDeclaration, []ValidationError) {
+	var endpoints []gwdkir.StandaloneEndpointDeclaration
 	var diagnostics []ValidationError
 	for _, comment := range function.Doc.List {
 		text := strings.TrimSpace(strings.TrimPrefix(comment.Text, "//"))
@@ -154,7 +154,7 @@ func endpointCommentsForFunction(fileSet *token.FileSet, path string, packageNam
 		}
 		method := strings.ToUpper(methodText)
 		route := strings.Trim(routeText, `"`)
-		endpoints = append(endpoints, gwdkir.GoEndpoint{
+		endpoints = append(endpoints, gwdkir.StandaloneEndpointDeclaration{
 			Kind:        kind,
 			SourceKind:  gwdkir.EndpointSourceGo,
 			Package:     packageName,

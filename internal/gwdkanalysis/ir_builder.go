@@ -386,7 +386,7 @@ func cloneEndpointCORS(cors gwdkir.EndpointCORS) gwdkir.EndpointCORS {
 	return cors
 }
 
-func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.GoEndpoint) {
+func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.StandaloneEndpointDeclaration) {
 	kind := gwdkir.EndpointAPI
 	if endpoint.Kind == "act" || endpoint.Kind == "action" {
 		kind = gwdkir.EndpointAction
@@ -413,18 +413,16 @@ func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.GoEndpoint) {
 	}
 	normalized.ID = normalized.ExpectedID()
 	builder.program.Endpoints = append(builder.program.Endpoints, normalized)
-	// Preserve the raw declaration losslessly for validation, which needs the
-	// exact kind, method, and spans before normalization.
 	endpoint.ID = normalized.ID
-	builder.program.GoEndpoints = append(builder.program.GoEndpoints, endpoint)
+	builder.program.SourceMap.Endpoints = append(builder.program.SourceMap.Endpoints, endpoint)
 }
 
 // AddStandaloneEndpoints appends discovered standalone Go endpoint declarations
-// to an already-built program: each declaration is preserved losslessly in
-// Program.GoEndpoints and normalized into Program.Endpoints, which is then
+// to an already-built program: each declaration is normalized into
+// Program.Endpoints and preserved losslessly in Program.SourceMap, which is then
 // re-sorted with the same ordering BuildIR produces so post-build discovery
 // yields the same program as build-time discovery.
-func AddStandaloneEndpoints(config gowdk.Config, program *gwdkir.Program, endpoints []gwdkir.GoEndpoint) {
+func AddStandaloneEndpoints(config gowdk.Config, program *gwdkir.Program, endpoints []gwdkir.StandaloneEndpointDeclaration) {
 	if len(endpoints) == 0 {
 		return
 	}
@@ -463,6 +461,9 @@ func (builder *irBuilder) sortOutput() {
 			return builder.program.Endpoints[i].Method < builder.program.Endpoints[j].Method
 		}
 		return builder.program.Endpoints[i].Path < builder.program.Endpoints[j].Path
+	})
+	sort.Slice(builder.program.SourceMap.Endpoints, func(i, j int) bool {
+		return builder.program.SourceMap.Endpoints[i].ID < builder.program.SourceMap.Endpoints[j].ID
 	})
 }
 

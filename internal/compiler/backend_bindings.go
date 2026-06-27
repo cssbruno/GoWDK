@@ -74,17 +74,20 @@ func computeBackendBindings(ir gwdkir.Program) []source.BackendBinding {
 			}
 		}
 	}
-	for _, endpoint := range ir.GoEndpoints {
-		dir := sourceDir(endpoint.Source)
+	for _, endpoint := range ir.Endpoints {
+		if endpoint.Source != gwdkir.EndpointSourceGo {
+			continue
+		}
+		dir := sourceDir(endpoint.SourceFile)
 		pkg, ok := cache[dir]
 		if !ok {
 			pkg = inspectFeaturePackage(dir)
 			cache[dir] = pkg
 		}
 		switch endpoint.Kind {
-		case "act", "action":
+		case gwdkir.EndpointAction:
 			bindings = append(bindings, bindStandaloneAction(endpoint, pkg))
-		case "api":
+		case gwdkir.EndpointAPI:
 			bindings = append(bindings, bindStandaloneAPI(endpoint, pkg))
 		}
 	}
@@ -156,12 +159,8 @@ func bindLoadFromPackage(page gwdkir.Page, functionName string, pkg featurePacka
 	return binding
 }
 
-func bindStandaloneAction(endpoint gwdkir.GoEndpoint, pkg featurePackage) source.BackendBinding {
-	method := endpoint.Method
-	if method == "" {
-		method = "POST"
-	}
-	return bindActionEndpoint(baseStandaloneBackendBinding(endpoint, actionHandlerKind, method, pkg), pkg)
+func bindStandaloneAction(endpoint gwdkir.Endpoint, pkg featurePackage) source.BackendBinding {
+	return bindActionEndpoint(baseStandaloneBackendBinding(endpoint, actionHandlerKind, endpoint.Method, pkg), pkg)
 }
 
 func bindActionEndpoint(binding source.BackendBinding, pkg featurePackage) source.BackendBinding {
@@ -193,12 +192,8 @@ func bindActionEndpoint(binding source.BackendBinding, pkg featurePackage) sourc
 	return binding
 }
 
-func bindStandaloneAPI(endpoint gwdkir.GoEndpoint, pkg featurePackage) source.BackendBinding {
-	method := endpoint.Method
-	if method == "" {
-		method = "GET"
-	}
-	return bindAPIEndpoint(baseStandaloneBackendBinding(endpoint, apiHandlerKind, method, pkg), pkg)
+func bindStandaloneAPI(endpoint gwdkir.Endpoint, pkg featurePackage) source.BackendBinding {
+	return bindAPIEndpoint(baseStandaloneBackendBinding(endpoint, apiHandlerKind, endpoint.Method, pkg), pkg)
 }
 
 func bindAPIEndpoint(binding source.BackendBinding, pkg featurePackage) source.BackendBinding {
@@ -315,18 +310,18 @@ func baseBackendBinding(page gwdkir.Page, kind, blockName, method, route string,
 	}
 }
 
-func baseStandaloneBackendBinding(endpoint gwdkir.GoEndpoint, kind, method string, pkg featurePackage) source.BackendBinding {
+func baseStandaloneBackendBinding(endpoint gwdkir.Endpoint, kind, method string, pkg featurePackage) source.BackendBinding {
 	return source.BackendBinding{
 		Kind:         kind,
-		PageID:       standaloneEndpointPageID(endpoint.Package, endpoint.Name),
-		Source:       endpoint.Source,
+		PageID:       endpoint.PageID,
+		Source:       endpoint.SourceFile,
 		Span:         endpoint.Span,
-		BlockName:    endpoint.Name,
+		BlockName:    endpoint.Symbol,
 		Method:       method,
-		Route:        endpoint.Route,
+		Route:        endpoint.Path,
 		ImportPath:   pkg.ImportPath,
 		PackageName:  bindingPackageName(pkg.Name, endpoint.Package),
-		FunctionName: endpoint.Name,
+		FunctionName: endpoint.Symbol,
 		Status:       source.BackendBindingMissing,
 	}
 }

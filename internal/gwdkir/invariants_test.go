@@ -21,9 +21,9 @@ func validProgram() Program {
 			{Kind: EndpointAction, Source: EndpointSourceGOWDK, PageID: "home", Method: "POST", Path: "/actions/save"},
 			{Kind: EndpointAPI, Source: EndpointSourceGo, Method: "GET", Path: "/api/items"},
 		},
-		GoEndpoints: []GoEndpoint{
-			{Kind: "api", SourceKind: EndpointSourceGo, Name: "ListItems", Route: "/api/items"},
-		},
+		SourceMap: SourceMap{Endpoints: []EndpointSourceMap{
+			{ID: EndpointIdentity(EndpointAPI, "", "", "GET", "/api/items"), Kind: "api", SourceKind: EndpointSourceGo, Name: "ListItems", Route: "/api/items"},
+		}},
 		Templates: []Template{
 			{OwnerKind: SourcePage, OwnerID: "home"},
 			{OwnerKind: SourceComponent, OwnerID: "ProductCard"},
@@ -136,9 +136,14 @@ func TestCheckInvariantsReportsViolations(t *testing.T) {
 			want: "endpoints are not sorted",
 		},
 		{
-			name:    "unknown go endpoint source",
-			corrupt: func(p *Program) { p.GoEndpoints[0].SourceKind = "yaml" },
+			name:    "unknown source map endpoint source",
+			corrupt: func(p *Program) { p.SourceMap.Endpoints[0].SourceKind = "yaml" },
 			want:    `go endpoint "ListItems" has unknown source "yaml"`,
+		},
+		{
+			name:    "source map endpoint to missing endpoint",
+			corrupt: func(p *Program) { p.SourceMap.Endpoints[0].ID = EndpointID("missing") },
+			want:    `source map endpoint "missing" references unknown endpoint`,
 		},
 		{
 			name:    "template with unknown owner kind",

@@ -111,7 +111,10 @@ func CheckInvariants(program Program) error {
 		reportViewBlockNodes("layout", layout.ID, layout.Blocks, report)
 	}
 
-	for _, endpoint := range program.GoEndpoints {
+	for _, endpoint := range program.SourceMap.Endpoints {
+		if _, exists := endpointIDs[endpoint.ID]; !exists {
+			report("source map endpoint %q references unknown endpoint", endpoint.ID)
+		}
 		switch endpoint.SourceKind {
 		case EndpointSourceGOWDK, EndpointSourceGo:
 		default:

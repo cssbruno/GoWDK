@@ -603,8 +603,8 @@ func Refresh(context.Context, *http.Request) (response.Response, error) {
 	if err := DiscoverGoEndpoints(gowdk.Config{}, &ir); err != nil {
 		t.Fatal(err)
 	}
-	if len(ir.GoEndpoints) != 3 {
-		t.Fatalf("expected three Go comment endpoints, got %#v", ir.GoEndpoints)
+	if len(ir.SourceMap.Endpoints) != 3 {
+		t.Fatalf("expected three Go comment endpoint source-map entries, got %#v", ir.SourceMap.Endpoints)
 	}
 	for _, endpoint := range ir.Endpoints {
 		switch endpoint.Symbol {
@@ -733,8 +733,8 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 	if err := DiscoverGoEndpoints(gowdk.Config{}, &ir); err != nil {
 		t.Fatal(err)
 	}
-	if len(ir.GoEndpoints) != 1 || ir.GoEndpoints[0].Route != "/api/session" {
-		t.Fatalf("expected only the valid GOWDK endpoint, got %#v", ir.GoEndpoints)
+	if len(ir.SourceMap.Endpoints) != 1 || ir.SourceMap.Endpoints[0].Route != "/api/session" {
+		t.Fatalf("expected only the valid GOWDK endpoint source-map entry, got %#v", ir.SourceMap.Endpoints)
 	}
 }
 
@@ -788,7 +788,7 @@ func TestValidateManifestRejectsGoEndpointConflictWithGOWDKEndpoint(t *testing.T
 				APIs:     []gwdkir.API{{Name: "Session", Method: "GET", Route: "/api/session"}},
 			},
 		}},
-		Endpoints: []gwdkir.GoEndpoint{{
+		Endpoints: []gwdkir.StandaloneEndpointDeclaration{{
 			Kind:       "api",
 			SourceKind: gwdkir.EndpointSourceGo,
 			Package:    "api",

@@ -61,6 +61,12 @@ The IR models packages, source files, page routes, backend endpoints from
 source-selected assets, asset scope/hash metadata, parsed view nodes, typed
 literal records, and imported build-data call metadata.
 
+Standalone Go endpoint comments lower into normalized `Program.Endpoints`
+records with stable `EndpointID` values. Exact source spelling and route-param
+spans for those comments live in `Program.SourceMap`; validators can use that
+source map for diagnostics, but generated-output planners consume the normalized
+endpoint record and carry the semantic ID into target-specific plans.
+
 `gwdkir.Blocks` retains source bodies for spans, formatting, inspection, and
 compatibility only. Parser/analyzer lowering must populate parsed `view {}`
 nodes, ordered literal `paths {}`/`build {}` records, and imported build-data

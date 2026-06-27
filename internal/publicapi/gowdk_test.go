@@ -36,6 +36,51 @@ func TestConfigHasFeature(t *testing.T) {
 	}
 }
 
+func TestValidateAddonsRejectsInvalidIdentityAndOwnership(t *testing.T) {
+	tests := []struct {
+		name   string
+		addons []gowdk.Addon
+		want   string
+	}{
+		{name: "nil", addons: []gowdk.Addon{nil}, want: "Addons[0] is nil"},
+		{name: "empty name", addons: []gowdk.Addon{gowdk.NewAddon("", gowdk.FeatureCSS)}, want: "Name is required"},
+		{name: "empty features", addons: []gowdk.Addon{gowdk.NewAddon("empty")}, want: "at least one feature"},
+		{name: "empty feature", addons: []gowdk.Addon{gowdk.NewAddon("empty-feature", gowdk.Feature(""))}, want: "empty feature"},
+		{name: "duplicate names", addons: []gowdk.Addon{
+			gowdk.NewAddon("css", gowdk.FeatureCSS),
+			gowdk.NewAddon("css", gowdk.FeatureSEO),
+		}, want: "duplicates Addons[0]"},
+		{name: "duplicate features", addons: []gowdk.Addon{
+			gowdk.NewAddon("css-a", gowdk.FeatureCSS),
+			gowdk.NewAddon("css-b", gowdk.FeatureCSS),
+		}, want: "duplicates feature"},
+		{name: "seo provider mismatch", addons: []gowdk.Addon{
+			gowdk.NewAddon("seo-marker", gowdk.FeatureSEO),
+		}, want: "does not implement gowdk.SEOProvider"},
+		{name: "auth provider mismatch", addons: []gowdk.Addon{
+			gowdk.NewAddon("auth-marker", gowdk.FeatureAuth),
+		}, want: "does not implement gowdk.AuthSessionProvider"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := gowdk.ValidateAddons(test.addons)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("expected %q error, got %v", test.want, err)
+			}
+		})
+	}
+}
+
+func TestValidateAddonsAllowsExplicitSPAAliasFeatureOverlap(t *testing.T) {
+	err := gowdk.ValidateAddons([]gowdk.Addon{
+		gowdk.NewAddon("spa", gowdk.FeatureSPA),
+		gowdk.NewAddon("static", gowdk.FeatureSPA),
+	})
+	if err != nil {
+		t.Fatalf("expected legacy SPA/static feature overlap to be allowed, got %v", err)
+	}
+}
+
 func TestRenderConfigDefaultMode(t *testing.T) {
 	if got := (gowdk.RenderConfig{}).DefaultMode(); got != gowdk.SPA {
 		t.Fatalf("expected spa default, got %q", got)

@@ -32,11 +32,20 @@ func planCSS(config gowdk.Config, ir gwdkir.Program, outputDir string, component
 	var failures []string
 	seen := map[string]bool{}
 	pageIDs := pageIDSet(ir.Pages)
+	root, rootErr := os.Getwd()
+	if rootErr != nil {
+		failures = append(failures, rootErr.Error())
+		root = "."
+	}
 	context := gowdk.CSSContext{
-		Sources:   cssSources(ir),
-		OutputDir: outputDir,
-		Build:     config.Build,
-		CSS:       config.CSS,
+		ProjectRoot: root,
+		ConfigDir:   root,
+		SourceRoot:  root,
+		WorkingDir:  root,
+		Sources:     cssSources(ir),
+		OutputDir:   outputDir,
+		Build:       config.Build,
+		CSS:         config.CSS,
 	}
 	for _, addon := range config.Addons {
 		processor, ok := addon.(gowdk.CSSProcessor)

@@ -230,6 +230,9 @@ type CSSProcessor interface {
 
 `CSSContext` includes:
 
+- `ProjectRoot`, `ConfigDir`, `SourceRoot`, and `WorkingDir`: explicit root
+  paths for processors that need deterministic relative path handling. In CLI
+  builds these point at the loaded project/config root.
 - `Sources`: discovered page/component source metadata.
 - `Sources[*].CSSClasses`: extracted literal class names from the current view
   subset.
@@ -296,7 +299,9 @@ Defaults:
 At build time the addon creates a temporary Tailwind input file that imports the
 configured `Input` CSS and adds `@source` declarations for discovered GOWDK
 source files. This follows Tailwind v4's CSS/source directive model. It then
-runs the standalone executable with `-i <temp-input> -o <temp-output>`.
+runs the standalone executable with `-i <temp-input> -o <temp-output>` from the
+CSS context working directory. Relative `Input` and source paths resolve from
+that directory instead of the caller's process working directory.
 
 The addon does not use npm, run `npx`, or run through a shell. If `Command` is
 omitted and `tailwindcss` is not available on `PATH`, `gowdk build` fails with

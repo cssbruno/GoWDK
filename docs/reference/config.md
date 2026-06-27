@@ -273,11 +273,18 @@ type CORSConfig struct {
 ```
 
 `AllowedOrigins` accepts literal `http` or `https` origins, or `"*"` only when
-`AllowCredentials` is false. Preflight requests must match a generated
-API/command/query route and must request a method and headers allowed by the
-policy. `AllowedMethods` is optional; when omitted, the matched route method is
-returned. `AllowedHeaders` must include non-simple request headers such as
-`Content-Type` for JSON APIs and any configured CSRF header.
+`AllowCredentials` is false. Origin validation canonicalizes host case, strips
+explicit default ports (`http:80`, `https:443`), strips a trailing DNS dot, and
+handles bracketed IPv6 hosts. Unicode hostnames are rejected; use ASCII
+punycode. Invalid ports, userinfo, paths, query strings, and fragments are
+rejected with the offending origin in the diagnostic. Runtime request matching
+uses the same canonical form as config validation.
+
+Preflight requests must match a generated API/command/query route and must
+request a method and headers allowed by the policy. `AllowedMethods` is
+optional; when omitted, the matched route method is returned. `AllowedHeaders`
+must include non-simple request headers such as `Content-Type` for JSON APIs and
+any configured CSRF header.
 
 `.gwdk` API declarations can attach endpoint-local CORS with a trailing `cors`
 clause:
@@ -731,6 +738,13 @@ embed, CSS, contracts, realtime, auth, DB helpers, rate limiting, and SEO
 output. Current validation uses feature registration for render-mode,
 realtime, and other compiler checks; SPA builds invoke addons that implement
 `gowdk.CSSProcessor` or `gowdk.SEOProvider`.
+
+Config loading rejects nil addons, empty addon names, duplicate addon names,
+empty feature IDs, addons with no features, and duplicate feature ownership
+except for the legacy `spa`/`static` `FeatureSPA` alias overlap. External addon
+feature names are allowed when they are non-empty. Behaviorful built-in features
+must provide their matching extension contract: `FeatureSEO` requires
+`gowdk.SEOProvider`, and `FeatureAuth` requires `gowdk.AuthSessionProvider`.
 
 DB helper usage is ordinary Go code around `database/sql`; see [db.md](db.md)
 for migrations, transactions, readiness, and sqlc usage.

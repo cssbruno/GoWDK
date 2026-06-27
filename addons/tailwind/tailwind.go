@@ -75,9 +75,10 @@ func (p processor) ProcessCSS(context gowdk.CSSContext) (gowdk.CSSResult, error)
 	defer os.RemoveAll(tempDir)
 
 	tempOutput := filepath.Join(tempDir, "app.css")
-	input := options.Input
+	workingDir := cssWorkingDir(context)
+	input := resolveCSSPath(workingDir, options.Input)
 	if len(context.Sources) > 0 {
-		generatedInput, err := writeInputWithSources(tempDir, options.Input, context.Sources)
+		generatedInput, err := writeInputWithSources(tempDir, workingDir, input, context.Sources)
 		if err != nil {
 			return gowdk.CSSResult{}, err
 		}
@@ -91,6 +92,7 @@ func (p processor) ProcessCSS(context gowdk.CSSContext) (gowdk.CSSResult, error)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	command := exec.Command(commandPath, args...)
+	command.Dir = workingDir
 	command.Stdout = &stdout
 	command.Stderr = &stderr
 	if err := command.Run(); err != nil {
@@ -111,11 +113,8 @@ func (p processor) ProcessCSS(context gowdk.CSSContext) (gowdk.CSSResult, error)
 	}, nil
 }
 
-func writeInputWithSources(tempDir string, input string, sources []gowdk.CSSSource) (string, error) {
-	inputPath, err := filepath.Abs(input)
-	if err != nil {
-		return "", err
-	}
+func writeInputWithSources(tempDir string, workingDir string, input string, sources []gowdk.CSSSource) (string, error) {
+	inputPath := resolveCSSPath(workingDir, input)
 	relInput, err := filepath.Rel(tempDir, inputPath)
 	if err != nil {
 		return "", err
@@ -130,10 +129,7 @@ func writeInputWithSources(tempDir string, input string, sources []gowdk.CSSSour
 			continue
 		}
 		seen[sourcePath] = true
-		absoluteSource, err := filepath.Abs(sourcePath)
-		if err != nil {
-			return "", err
-		}
+		absoluteSource := resolveCSSPath(workingDir, sourcePath)
 		relativeSource, err := filepath.Rel(tempDir, absoluteSource)
 		if err != nil {
 			return "", err
@@ -146,6 +142,28 @@ func writeInputWithSources(tempDir string, input string, sources []gowdk.CSSSour
 		return "", err
 	}
 	return generatedInput, nil
+}
+
+func cssWorkingDir(context gowdk.CSSContext) string {
+	for _, candidate := range []string{context.WorkingDir, context.ConfigDir, context.ProjectRoot, context.SourceRoot} {
+		candidate = strings.TrimSpace(candidate)
+		if candidate != "" {
+			return candidate
+		}
+	}
+	return "."
+}
+
+func resolveCSSPath(workingDir string, path string) string {
+	path = strings.TrimSpace(path)
+	if filepath.IsAbs(path) {
+		return path
+	}
+	absolute, err := filepath.Abs(filepath.Join(workingDir, path))
+	if err != nil {
+		return filepath.Join(workingDir, path)
+	}
+	return absolute
 }
 
 func cssPath(path string) string {

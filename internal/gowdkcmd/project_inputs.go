@@ -131,6 +131,9 @@ func validateNativeProjectConfigStructure(path string, config gowdk.Config) erro
 	if err := config.Build.CORS.Validate(); err != nil {
 		return fmt.Errorf("%s CORS policy: %w", path, err)
 	}
+	if err := gowdk.ValidateAddons(config.Addons); err != nil {
+		return fmt.Errorf("%s addons: %w", path, err)
+	}
 	return nil
 }
 

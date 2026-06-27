@@ -1398,6 +1398,10 @@ func TestCSRFInjectHTMLSkipsOffOriginPOSTFormActions(t *testing.T) {
 	payload := []byte(`<main>` +
 		`<form method="post" action="https://payments.example/checkout"></form>` +
 		`<form method="post" action="//evil.example/collect"></form>` +
+		`<form method="post" action="///evil.example/collect"></form>` +
+		`<form method="post" action="/\evil.example/collect"></form>` +
+		`<form method="post" action="\/evil.example/collect"></form>` +
+		`<form method="post" action="\\evil.example/collect"></form>` +
 		`<form method="post" action="http://example.com/signup"></form>` +
 		`<form method="post" action="/local"></form>` +
 		`</main>`)
@@ -1413,6 +1417,10 @@ func TestCSRFInjectHTMLSkipsOffOriginPOSTFormActions(t *testing.T) {
 	for _, external := range []string{
 		`<form method="post" action="https://payments.example/checkout"></form>`,
 		`<form method="post" action="//evil.example/collect"></form>`,
+		`<form method="post" action="///evil.example/collect"></form>`,
+		`<form method="post" action="/\evil.example/collect"></form>`,
+		`<form method="post" action="\/evil.example/collect"></form>`,
+		`<form method="post" action="\\evil.example/collect"></form>`,
 	} {
 		if !strings.Contains(body, external) {
 			t.Fatalf("expected off-origin form to remain without csrf input: %s", body)
@@ -1434,6 +1442,28 @@ func TestCSRFInjectHTMLSkipsOffOriginPOSTFormActions(t *testing.T) {
 	}
 	if cache := recorder.Header().Get("Cache-Control"); cache != "no-store" {
 		t.Fatalf("expected no-store for csrf-personalized HTML, got %q", cache)
+	}
+}
+
+func TestCSRFInjectHTMLUsesForwardedHTTPSForSameOriginActions(t *testing.T) {
+	csrf := &fakeCSRFTokenSource{field: "_csrf", token: "signed-token"}
+	payload := []byte(`<main><form method="post" action="https://example.com/signup"></form></main>`)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/page", nil)
+	request.Header.Set("X-Forwarded-Proto", "https")
+
+	updated, ok := CSRFInjectHTML(recorder, request, payload, csrf)
+
+	if !ok {
+		t.Fatal("expected csrf injection to succeed")
+	}
+	body := string(updated)
+	expected := `<form method="post" action="https://example.com/signup"><input type="hidden" name="_csrf" value="signed-token">`
+	if !strings.Contains(body, expected) {
+		t.Fatalf("expected forwarded HTTPS same-origin form to receive csrf input, got %s", body)
+	}
+	if csrf.calls != 1 {
+		t.Fatalf("expected one token generation call, got %d", csrf.calls)
 	}
 }
 

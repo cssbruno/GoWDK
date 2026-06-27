@@ -560,6 +560,9 @@ func formStartTagHasSameOriginAction(request *http.Request, tag []byte) bool {
 	if action == "" {
 		return true
 	}
+	if formActionHasBrowserNetworkPath(action) {
+		return false
+	}
 	if request == nil {
 		return false
 	}
@@ -578,21 +581,28 @@ func formStartTagHasSameOriginAction(request *http.Request, tag []byte) bool {
 
 func requestOrigin(request *http.Request) (string, string) {
 	scheme := ""
-	if request.URL != nil {
+	if requestIsHTTPS(request) {
+		scheme = "https"
+	} else if request.URL != nil {
 		scheme = request.URL.Scheme
 	}
 	if scheme == "" {
-		if request.TLS != nil {
-			scheme = "https"
-		} else {
-			scheme = "http"
-		}
+		scheme = "http"
 	}
 	host := request.Host
 	if host == "" && request.URL != nil {
 		host = request.URL.Host
 	}
 	return scheme, host
+}
+
+func formActionHasBrowserNetworkPath(action string) bool {
+	if len(action) < 2 {
+		return false
+	}
+	first := action[0]
+	second := action[1]
+	return (first == '/' || first == '\\') && (second == '/' || second == '\\')
 }
 
 func canonicalOriginHost(scheme string, host string) string {

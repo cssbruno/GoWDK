@@ -603,8 +603,8 @@ func Refresh(context.Context, *http.Request) (response.Response, error) {
 	if err := DiscoverGoEndpoints(gowdk.Config{}, &ir); err != nil {
 		t.Fatal(err)
 	}
-	if len(ir.GoEndpoints) != 3 {
-		t.Fatalf("expected three Go comment endpoints, got %#v", ir.GoEndpoints)
+	if len(ir.SourceMap.Endpoints) != 3 {
+		t.Fatalf("expected three Go comment endpoint source-map entries, got %#v", ir.SourceMap.Endpoints)
 	}
 	for _, endpoint := range ir.Endpoints {
 		switch endpoint.Symbol {
@@ -733,8 +733,8 @@ func Session(context.Context, *http.Request) (response.Response, error) {
 	if err := DiscoverGoEndpoints(gowdk.Config{}, &ir); err != nil {
 		t.Fatal(err)
 	}
-	if len(ir.GoEndpoints) != 1 || ir.GoEndpoints[0].Route != "/api/session" {
-		t.Fatalf("expected only the valid GOWDK endpoint, got %#v", ir.GoEndpoints)
+	if len(ir.SourceMap.Endpoints) != 1 || ir.SourceMap.Endpoints[0].Route != "/api/session" {
+		t.Fatalf("expected only the valid GOWDK endpoint source-map entry, got %#v", ir.SourceMap.Endpoints)
 	}
 }
 
@@ -788,7 +788,7 @@ func TestValidateManifestRejectsGoEndpointConflictWithGOWDKEndpoint(t *testing.T
 				APIs:     []gwdkir.API{{Name: "Session", Method: "GET", Route: "/api/session"}},
 			},
 		}},
-		Endpoints: []gwdkir.GoEndpoint{{
+		Endpoints: []gwdkir.StandaloneEndpointDeclaration{{
 			Kind:       "api",
 			SourceKind: gwdkir.EndpointSourceGo,
 			Package:    "api",
@@ -802,6 +802,49 @@ func TestValidateManifestRejectsGoEndpointConflictWithGOWDKEndpoint(t *testing.T
 	err := validateManifest(gowdk.Config{}, app)
 	if err == nil {
 		t.Fatal("expected route conflict diagnostic")
+	}
+	if !hasDiagnosticCode(err.(ValidationErrors), "route_method_conflict") {
+		t.Fatalf("missing route_method_conflict diagnostic: %#v", err)
+	}
+}
+
+func TestValidateManifestReportsDuplicateStandaloneEndpointsAsAuthorDiagnostic(t *testing.T) {
+	root := t.TempDir()
+	app := appFixture{
+		Pages: []gwdkir.Page{{
+			ID:     "home",
+			Source: filepath.Join(root, "home.page.gwdk"),
+			Route:  "/",
+			Blocks: gwdkir.Blocks{View: true, ViewBody: "<main>Home</main>"},
+		}},
+		Endpoints: []gwdkir.StandaloneEndpointDeclaration{
+			{
+				Kind:       "act",
+				SourceKind: gwdkir.EndpointSourceGo,
+				Package:    "actions",
+				Source:     filepath.Join(root, "handlers.go"),
+				Name:       "Save",
+				Method:     "POST",
+				Route:      "/profile",
+			},
+			{
+				Kind:       "act",
+				SourceKind: gwdkir.EndpointSourceGo,
+				Package:    "actions",
+				Source:     filepath.Join(root, "handlers.go"),
+				Name:       "Save",
+				Method:     "POST",
+				Route:      "/profile",
+			},
+		},
+	}
+
+	err := validateManifest(gowdk.Config{}, app)
+	if err == nil {
+		t.Fatal("expected route conflict diagnostic")
+	}
+	if strings.Contains(err.Error(), "internal compiler error") {
+		t.Fatalf("duplicate standalone endpoints should not produce internal compiler error: %v", err)
 	}
 	if !hasDiagnosticCode(err.(ValidationErrors), "route_method_conflict") {
 		t.Fatalf("missing route_method_conflict diagnostic: %#v", err)

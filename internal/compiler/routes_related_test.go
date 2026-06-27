@@ -93,7 +93,7 @@ func TestContractRouteConflictCarriesRelatedFirstDeclaration(t *testing.T) {
 		{Kind: gwdkir.ContractQuery, Name: "Summary", Method: "GET", Path: "/reports", Source: "summary.gwdk", Span: span(7, 1, 12)},
 	}
 
-	diagnostic, ok := findByCode(validateRouteMethodConflicts(gowdk.Config{}, nil, nil, refs), "route_method_conflict")
+	diagnostic, ok := findByCode(validateRouteMethodConflicts(gowdk.Config{}, nil, nil, gwdkir.SourceMap{}, refs), "route_method_conflict")
 	if !ok {
 		t.Fatal("expected a route_method_conflict diagnostic")
 	}

@@ -11,6 +11,7 @@ import (
 func TestBackendAdapterIRCapturesRouteAndHandlerMetadata(t *testing.T) {
 	ir := backendAdapterIR(Options{
 		Actions: []ActionEndpoint{{
+			EndpointID:  gwdkir.EndpointID("action-id"),
 			PageID:      "newsletter",
 			ActionName:  "Subscribe",
 			Method:      "POST",
@@ -32,11 +33,12 @@ func TestBackendAdapterIRCapturesRouteAndHandlerMetadata(t *testing.T) {
 			BackendAlias: "newsletter",
 		}},
 		APIs: []APIEndpoint{{
-			PageID:  "status",
-			APIName: "Health",
-			Method:  "GET",
-			Route:   "/api/health",
-			Guards:  []string{"public"},
+			EndpointID: gwdkir.EndpointID("api-id"),
+			PageID:     "status",
+			APIName:    "Health",
+			Method:     "GET",
+			Route:      "/api/health",
+			Guards:     []string{"public"},
 			Binding: source.BackendBinding{
 				Status:       source.BackendBindingBound,
 				ImportPath:   "example.com/app/status",
@@ -46,6 +48,7 @@ func TestBackendAdapterIRCapturesRouteAndHandlerMetadata(t *testing.T) {
 			BackendAlias: "status",
 		}},
 		Fragments: []FragmentEndpoint{{
+			EndpointID:   gwdkir.EndpointID("fragment-id"),
 			PageID:       "patients",
 			FragmentName: "List",
 			Method:       "GET",
@@ -77,6 +80,9 @@ func TestBackendAdapterIRCapturesRouteAndHandlerMetadata(t *testing.T) {
 	}
 	if ir.Registrations[0].Kind != BackendEndpointAction || ir.Registrations[0].Path != "/newsletter" || ir.Registrations[0].Handler != "action" {
 		t.Fatalf("unexpected action registration: %#v", ir.Registrations[0])
+	}
+	if ir.Registrations[0].ID != gwdkir.EndpointID("action-id") || ir.Registrations[1].ID != gwdkir.EndpointID("api-id") || ir.Registrations[2].ID != gwdkir.EndpointID("fragment-id") {
+		t.Fatalf("expected semantic endpoint IDs in registrations, got %#v", ir.Registrations)
 	}
 	if ir.Registrations[1].Kind != BackendEndpointAPI || ir.Registrations[1].Path != "/api/health" || ir.Registrations[1].Handler != "api" {
 		t.Fatalf("unexpected API registration: %#v", ir.Registrations[1])

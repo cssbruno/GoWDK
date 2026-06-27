@@ -43,3 +43,28 @@ func TestBuildProgramMarksStateChangingAPIsCSRFProtected(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildProgramAssignsStableSemanticIdentities(t *testing.T) {
+	program := BuildProgram(gowdk.Config{}, Sources{Pages: []gwdkir.Page{{
+		ID:      "newsletter",
+		Package: "pages",
+		Source:  "newsletter.page.gwdk",
+		Route:   "/newsletter",
+		Blocks: gwdkir.Blocks{Actions: []gwdkir.Action{
+			{Name: "Subscribe", Method: "POST", Route: "/newsletter"},
+		}},
+	}}})
+
+	if len(program.Routes) != 1 {
+		t.Fatalf("expected one route, got %#v", program.Routes)
+	}
+	if got, want := program.Routes[0].ID, program.Routes[0].ExpectedID(); got != want {
+		t.Fatalf("route ID = %q, want %q", got, want)
+	}
+	if len(program.Endpoints) != 1 {
+		t.Fatalf("expected one endpoint, got %#v", program.Endpoints)
+	}
+	if got, want := program.Endpoints[0].ID, program.Endpoints[0].ExpectedID(); got != want {
+		t.Fatalf("endpoint ID = %q, want %q", got, want)
+	}
+}

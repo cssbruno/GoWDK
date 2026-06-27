@@ -32,6 +32,7 @@ const (
 )
 
 type BackendEndpointRegistration struct {
+	ID      gwdkir.EndpointID
 	Kind    BackendEndpointKind
 	Method  string
 	Path    string
@@ -149,6 +150,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 	var ir BackendAdapterIR
 	for _, action := range sortedActionEndpoints(options.Actions) {
 		endpoint := BackendEndpointRegistration{
+			ID:      action.EndpointID,
 			Kind:    BackendEndpointAction,
 			Method:  actionMethod(action),
 			Path:    action.Route,
@@ -223,6 +225,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 	}
 	for _, api := range sortedAPIEndpoints(options.APIs) {
 		endpoint := BackendEndpointRegistration{
+			ID:      api.EndpointID,
 			Kind:    BackendEndpointAPI,
 			Method:  api.Method,
 			Path:    api.Route,
@@ -268,6 +271,7 @@ func backendAdapterIR(options Options) BackendAdapterIR {
 	}
 	for _, fragment := range sortedFragmentEndpoints(options.Fragments) {
 		endpoint := BackendEndpointRegistration{
+			ID:      fragment.EndpointID,
 			Kind:    BackendEndpointFragment,
 			Method:  fragment.Method,
 			Path:    fragment.Route,

@@ -21,9 +21,9 @@ func validProgram() Program {
 			{Kind: EndpointAction, Source: EndpointSourceGOWDK, PageID: "home", Method: "POST", Path: "/actions/save"},
 			{Kind: EndpointAPI, Source: EndpointSourceGo, Method: "GET", Path: "/api/items"},
 		},
-		GoEndpoints: []GoEndpoint{
-			{Kind: "api", SourceKind: EndpointSourceGo, Name: "ListItems", Route: "/api/items"},
-		},
+		SourceMap: SourceMap{Endpoints: []EndpointSourceMap{
+			{ID: EndpointIdentity(EndpointAPI, "", "", "GET", "/api/items"), Kind: "api", SourceKind: EndpointSourceGo, Name: "ListItems", Route: "/api/items"},
+		}},
 		Templates: []Template{
 			{OwnerKind: SourcePage, OwnerID: "home"},
 			{OwnerKind: SourceComponent, OwnerID: "ProductCard"},
@@ -86,6 +86,11 @@ func TestCheckInvariantsReportsViolations(t *testing.T) {
 			want:    `route "/" references unknown page "ghost"`,
 		},
 		{
+			name:    "mismatched route semantic id",
+			corrupt: func(p *Program) { p.Routes[0].ID = RouteID("wrong") },
+			want:    `has semantic id "wrong"`,
+		},
+		{
 			name: "unsorted routes",
 			corrupt: func(p *Program) {
 				p.Pages = append(p.Pages, Page{ID: "about", Route: "/about"})
@@ -112,6 +117,11 @@ func TestCheckInvariantsReportsViolations(t *testing.T) {
 			want:    "has no method",
 		},
 		{
+			name:    "mismatched endpoint semantic id",
+			corrupt: func(p *Program) { p.Endpoints[0].ID = EndpointID("wrong") },
+			want:    `has semantic id "wrong"`,
+		},
+		{
 			name: "unsorted endpoints",
 			corrupt: func(p *Program) {
 				p.Endpoints[0], p.Endpoints[1] = p.Endpoints[1], p.Endpoints[0]
@@ -119,9 +129,14 @@ func TestCheckInvariantsReportsViolations(t *testing.T) {
 			want: "endpoints are not sorted",
 		},
 		{
-			name:    "unknown go endpoint source",
-			corrupt: func(p *Program) { p.GoEndpoints[0].SourceKind = "yaml" },
+			name:    "unknown source map endpoint source",
+			corrupt: func(p *Program) { p.SourceMap.Endpoints[0].SourceKind = "yaml" },
 			want:    `go endpoint "ListItems" has unknown source "yaml"`,
+		},
+		{
+			name:    "source map endpoint to missing endpoint",
+			corrupt: func(p *Program) { p.SourceMap.Endpoints[0].ID = EndpointID("missing") },
+			want:    `source map endpoint "missing" references unknown endpoint`,
 		},
 		{
 			name:    "template with unknown owner kind",
@@ -261,6 +276,22 @@ func TestCheckInvariantsReportsViolations(t *testing.T) {
 				t.Fatalf("CheckInvariants() = %q, want error containing %q", err, test.want)
 			}
 		})
+	}
+}
+
+func TestCheckInvariantsAllowsDuplicateEndpointSemanticIDs(t *testing.T) {
+	program := validProgram()
+	program.SourceMap.Endpoints = nil
+	program.Endpoints = []Endpoint{
+		{Kind: EndpointAction, Source: EndpointSourceGOWDK, PageID: "home", Symbol: "Save", Method: "POST", Path: "/profile"},
+		{Kind: EndpointAction, Source: EndpointSourceGOWDK, PageID: "home", Symbol: "Save", Method: "POST", Path: "/profile"},
+	}
+	for index := range program.Endpoints {
+		program.Endpoints[index].ID = program.Endpoints[index].ExpectedID()
+	}
+
+	if err := CheckInvariants(program); err != nil {
+		t.Fatalf("CheckInvariants() = %v, want nil", err)
 	}
 }
 

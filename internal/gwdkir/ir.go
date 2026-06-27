@@ -18,7 +18,6 @@ type Program struct {
 	Layouts               []Layout
 	Routes                []Route
 	Endpoints             []Endpoint
-	GoEndpoints           []GoEndpoint
 	Templates             []Template
 	ContractRefs          []ContractReference
 	RealtimeSubscriptions []RealtimeSubscription
@@ -26,6 +25,7 @@ type Program struct {
 	AuditSpecs            []AuditSpec
 	ClientBehaviors       []ClientBehavior
 	Assets                []Asset
+	SourceMap             SourceMap
 	Diagnostics           []Diagnostic
 }
 
@@ -398,6 +398,7 @@ func GoRefFromLiteral(literal string) GoRef {
 // Route is page/file route metadata. Endpoint behavior is represented by
 // Endpoint, not by route kinds.
 type Route struct {
+	ID            RouteID
 	Kind          RouteKind
 	Method        string
 	Path          string
@@ -424,6 +425,7 @@ const (
 
 // Endpoint is framework-neutral backend endpoint metadata.
 type Endpoint struct {
+	ID            EndpointID
 	Kind          EndpointKind
 	Source        EndpointSource
 	Package       string
@@ -443,14 +445,17 @@ type Endpoint struct {
 	Binding       Binding
 }
 
-// GoEndpoint preserves a standalone Go endpoint declaration (discovered from
-// `//gowdk:` comments) in its raw source-level form. Program.Endpoints holds the
-// normalized, codegen-ready endpoints with bindings attached, which is lossy for
-// validation (it collapses the raw kind, normalizes the method, and drops the
-// route/error-page spans). Keeping the raw declaration here lets validation read
-// the exact kind, method, and spans the author wrote with no information loss.
-// Fields mirror the parser/discovery output one-to-one.
-type GoEndpoint struct {
+// SourceMap keeps exact source spelling and spans outside semantic IR records.
+// Generators consume normalized semantic fields and use source-map entries only
+// for diagnostics, inspection, formatting, and trace metadata.
+type SourceMap struct {
+	Endpoints []EndpointSourceMap
+}
+
+// EndpointSourceMap records the exact standalone endpoint declaration that
+// lowered into a normalized Program.Endpoints entry.
+type EndpointSourceMap struct {
+	ID            EndpointID
 	Kind          string
 	SourceKind    EndpointSource
 	Package       string
@@ -463,6 +468,26 @@ type GoEndpoint struct {
 	RouteSpan     source.SourceSpan
 	RouteParams   []source.NamedSpan
 	ErrorPageSpan source.SourceSpan
+}
+
+// StandaloneEndpointDeclaration is the lossless discovery input for
+// `//gowdk:` Go endpoint comments. Program assembly lowers it into a normalized
+// Endpoint plus an EndpointSourceMap entry.
+type StandaloneEndpointDeclaration = EndpointSourceMap
+
+// EndpointSource returns the source-map entry for a normalized endpoint ID.
+func (program Program) EndpointSource(id EndpointID) (EndpointSourceMap, bool) {
+	return program.SourceMap.Endpoint(id)
+}
+
+// Endpoint returns the source-map entry for a normalized endpoint ID.
+func (sourceMap SourceMap) Endpoint(id EndpointID) (EndpointSourceMap, bool) {
+	for _, endpoint := range sourceMap.Endpoints {
+		if endpoint.ID == id {
+			return endpoint, true
+		}
+	}
+	return EndpointSourceMap{}, false
 }
 
 type EndpointKind string

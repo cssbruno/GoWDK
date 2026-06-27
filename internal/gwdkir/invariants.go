@@ -43,6 +43,7 @@ func CheckInvariants(program Program) error {
 		}
 	}
 
+	routeIDs := map[RouteID]Route{}
 	for index, route := range program.Routes {
 		switch route.Kind {
 		case RouteStatic, RouteSPA, RouteSSR, RouteHybrid:
@@ -52,11 +53,21 @@ func CheckInvariants(program Program) error {
 		if !pages[route.PageID] {
 			report("route %q references unknown page %q", route.Path, route.PageID)
 		}
+		if route.ID != "" && route.ID != route.ExpectedID() {
+			report("route %q has semantic id %q, want %q", route.Path, route.ID, route.ExpectedID())
+		}
+		routeID := route.SemanticID()
+		if previous, exists := routeIDs[routeID]; exists {
+			report("route %q duplicates semantic id %q from route %q", route.Path, routeID, previous.Path)
+		} else if routeID != "" {
+			routeIDs[routeID] = route
+		}
 		if index > 0 && route.Path < program.Routes[index-1].Path {
 			report("routes are not sorted: %q after %q", route.Path, program.Routes[index-1].Path)
 		}
 	}
 
+	endpointIDs := map[EndpointID]Endpoint{}
 	for index, endpoint := range program.Endpoints {
 		switch endpoint.Kind {
 		case EndpointAction, EndpointAPI, EndpointFragment:
@@ -70,6 +81,13 @@ func CheckInvariants(program Program) error {
 		}
 		if endpoint.Method == "" {
 			report("endpoint %q has no method", endpoint.Path)
+		}
+		if endpoint.ID != "" && endpoint.ID != endpoint.ExpectedID() {
+			report("endpoint %q has semantic id %q, want %q", endpoint.Path, endpoint.ID, endpoint.ExpectedID())
+		}
+		endpointID := endpoint.SemanticID()
+		if _, exists := endpointIDs[endpointID]; !exists && endpointID != "" {
+			endpointIDs[endpointID] = endpoint
 		}
 		if index > 0 {
 			previous := program.Endpoints[index-1]
@@ -91,7 +109,10 @@ func CheckInvariants(program Program) error {
 		reportViewBlockNodes("layout", layout.ID, layout.Blocks, report)
 	}
 
-	for _, endpoint := range program.GoEndpoints {
+	for _, endpoint := range program.SourceMap.Endpoints {
+		if _, exists := endpointIDs[endpoint.ID]; !exists {
+			report("source map endpoint %q references unknown endpoint", endpoint.ID)
+		}
 		switch endpoint.SourceKind {
 		case EndpointSourceGOWDK, EndpointSourceGo:
 		default:

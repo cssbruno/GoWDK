@@ -8,7 +8,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func standaloneEndpointPageID(endpoint gwdkir.GoEndpoint) string {
+func standaloneEndpointPageID(endpoint gwdkir.StandaloneEndpointDeclaration) string {
 	if endpoint.Package == "" {
 		return endpoint.Name
 	}

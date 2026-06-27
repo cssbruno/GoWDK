@@ -92,7 +92,7 @@ func (builder *irBuilder) addPage(page gwdkir.Page) {
 	appendPackageStores(pkg, page.Stores)
 
 	mode := page.RenderMode(builder.config.Render.DefaultMode())
-	builder.program.Routes = append(builder.program.Routes, gwdkir.Route{
+	route := gwdkir.Route{
 		Kind:          routeKind(mode),
 		Method:        "GET",
 		Path:          page.Route,
@@ -106,7 +106,9 @@ func (builder *irBuilder) addPage(page gwdkir.Page) {
 		Guards:        append([]string(nil), page.Guards...),
 		Source:        page.Source,
 		Span:          page.Spans.Route,
-	})
+	}
+	route.ID = route.ExpectedID()
+	builder.program.Routes = append(builder.program.Routes, route)
 	builder.addPageTemplate(page)
 	builder.addPageAssets(page)
 	builder.addPageEndpoints(page)
@@ -179,7 +181,7 @@ func (builder *irBuilder) addPageAssets(page gwdkir.Page) {
 func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 	for _, action := range page.Blocks.Actions {
 		path := endpointPath(action.Route, page.Route)
-		builder.program.Endpoints = append(builder.program.Endpoints, gwdkir.Endpoint{
+		endpoint := gwdkir.Endpoint{
 			Kind:          gwdkir.EndpointAction,
 			Source:        gwdkir.EndpointSourceGOWDK,
 			Package:       page.Package,
@@ -195,12 +197,14 @@ func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 			RouteParams:   copyRouteParams(gwdkir.RouteParamsFromPath(path)),
 			SourceFile:    page.Source,
 			Span:          action.Span,
-		})
+		}
+		endpoint.ID = endpoint.ExpectedID()
+		builder.program.Endpoints = append(builder.program.Endpoints, endpoint)
 	}
 	for _, api := range page.Blocks.APIs {
 		path := endpointPath(api.Route, page.Route)
 		method := endpointMethod(api.Method, "GET")
-		builder.program.Endpoints = append(builder.program.Endpoints, gwdkir.Endpoint{
+		endpoint := gwdkir.Endpoint{
 			Kind:          gwdkir.EndpointAPI,
 			Source:        gwdkir.EndpointSourceGOWDK,
 			Package:       page.Package,
@@ -217,10 +221,12 @@ func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 			RouteParams:   copyRouteParams(gwdkir.RouteParamsFromPath(path)),
 			SourceFile:    page.Source,
 			Span:          api.Span,
-		})
+		}
+		endpoint.ID = endpoint.ExpectedID()
+		builder.program.Endpoints = append(builder.program.Endpoints, endpoint)
 	}
 	for _, fragment := range page.Blocks.Fragments {
-		builder.program.Endpoints = append(builder.program.Endpoints, gwdkir.Endpoint{
+		endpoint := gwdkir.Endpoint{
 			Kind:          gwdkir.EndpointFragment,
 			Source:        gwdkir.EndpointSourceGOWDK,
 			Package:       page.Package,
@@ -234,7 +240,9 @@ func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 			RouteParams:   copyRouteParams(gwdkir.RouteParamsFromPath(fragment.Route)),
 			SourceFile:    page.Source,
 			Span:          fragment.Span,
-		})
+		}
+		endpoint.ID = endpoint.ExpectedID()
+		builder.program.Endpoints = append(builder.program.Endpoints, endpoint)
 	}
 }
 
@@ -378,7 +386,7 @@ func cloneEndpointCORS(cors gwdkir.EndpointCORS) gwdkir.EndpointCORS {
 	return cors
 }
 
-func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.GoEndpoint) {
+func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.StandaloneEndpointDeclaration) {
 	kind := gwdkir.EndpointAPI
 	if endpoint.Kind == "act" || endpoint.Kind == "action" {
 		kind = gwdkir.EndpointAction
@@ -388,7 +396,7 @@ func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.GoEndpoint) {
 		defaultMethod = "POST"
 	}
 	method := endpointMethod(endpoint.Method, defaultMethod)
-	builder.program.Endpoints = append(builder.program.Endpoints, gwdkir.Endpoint{
+	normalized := gwdkir.Endpoint{
 		Kind:          kind,
 		Source:        endpoint.SourceKind,
 		Package:       endpoint.Package,
@@ -402,18 +410,19 @@ func (builder *irBuilder) addStandaloneEndpoint(endpoint gwdkir.GoEndpoint) {
 		RouteParams:   copyRouteParams(gwdkir.RouteParamsFromPath(endpoint.Route)),
 		SourceFile:    endpoint.Source,
 		Span:          endpoint.Span,
-	})
-	// Preserve the raw declaration losslessly for validation, which needs the
-	// exact kind, method, and spans before normalization.
-	builder.program.GoEndpoints = append(builder.program.GoEndpoints, endpoint)
+	}
+	normalized.ID = normalized.ExpectedID()
+	builder.program.Endpoints = append(builder.program.Endpoints, normalized)
+	endpoint.ID = normalized.ID
+	builder.program.SourceMap.Endpoints = append(builder.program.SourceMap.Endpoints, endpoint)
 }
 
 // AddStandaloneEndpoints appends discovered standalone Go endpoint declarations
-// to an already-built program: each declaration is preserved losslessly in
-// Program.GoEndpoints and normalized into Program.Endpoints, which is then
+// to an already-built program: each declaration is normalized into
+// Program.Endpoints and preserved losslessly in Program.SourceMap, which is then
 // re-sorted with the same ordering BuildIR produces so post-build discovery
 // yields the same program as build-time discovery.
-func AddStandaloneEndpoints(config gowdk.Config, program *gwdkir.Program, endpoints []gwdkir.GoEndpoint) {
+func AddStandaloneEndpoints(config gowdk.Config, program *gwdkir.Program, endpoints []gwdkir.StandaloneEndpointDeclaration) {
 	if len(endpoints) == 0 {
 		return
 	}
@@ -452,6 +461,9 @@ func (builder *irBuilder) sortOutput() {
 			return builder.program.Endpoints[i].Method < builder.program.Endpoints[j].Method
 		}
 		return builder.program.Endpoints[i].Path < builder.program.Endpoints[j].Path
+	})
+	sort.Slice(builder.program.SourceMap.Endpoints, func(i, j int) bool {
+		return builder.program.SourceMap.Endpoints[i].ID < builder.program.SourceMap.Endpoints[j].ID
 	})
 }
 

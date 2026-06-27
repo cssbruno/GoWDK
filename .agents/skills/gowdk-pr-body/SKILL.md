@@ -12,6 +12,9 @@ Explain the net change and why it belongs in GOWDK.
 - Title format: conventional commits as used in this repo's history —
   `feat(compiler): ...`, `fix(parser): ...`, `refactor(appgen): ...`,
   `docs: ...`, `chore: ...`. Scope is the package or surface, not the file.
+  Do not add a `[codex]` prefix. For code changes, prefer a scoped title such
+  as `fix(build): ...`; use unscoped `docs:` or `chore:` only when that matches
+  the whole PR.
 - Body structure: `.github/pull_request_template.md` — Summary, Verification
   checklist, and an LLM Assistance section (session summary, human-reviewed
   assumptions, follow-up work). Honor it; `.agents/templates/pr-description.md`

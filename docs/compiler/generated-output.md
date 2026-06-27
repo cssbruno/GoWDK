@@ -98,6 +98,14 @@ The generated server uses `GOWDK_ADDR`, applies bounded HTTP server timeouts,
 serves `/_gowdk/health`, loads optional generated error pages, and emits
 configured security and identity headers.
 
+When the generated frontend or backend app directory is under `.gowdk/` inside
+the application module, GOWDK emits it as normal package source in that module
+and does not write a nested `go.mod`. Its imports use the application module
+path, so app-owned `internal/` packages, `replace` directives, vendoring, and
+workspace settings resolve the same way as the rest of the app. Explicit legacy
+app directories outside `.gowdk/`, plus generated worker and cron role apps,
+keep a nested generated module.
+
 Generated backend routes are registered through `runtime/app.BackendRouter`.
 Action, API, fragment, command, query, SSR, hybrid, realtime, guard, rate-limit,
 CSRF, CORS, and tracing behavior is included only when declared, enabled, and

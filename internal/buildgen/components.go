@@ -1,8 +1,10 @@
 package buildgen
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -88,6 +90,7 @@ func buildComponents(components []gwdkir.Component) (map[string]view.Component, 
 			PropDefaults:  propDefaults,
 			State:         state,
 			StateJSON:     stateJSON,
+			StateShape:    componentStateShape(stateTypes, handlersJSON),
 			Handlers:      handlers,
 			HandlersJSON:  handlersJSON,
 			StateTypes:    stateTypes,
@@ -104,6 +107,26 @@ func buildComponents(components []gwdkir.Component) (map[string]view.Component, 
 		}
 	}
 	return registry, failures
+}
+
+func componentStateShape(stateTypes map[string]clientlang.ValueType, handlersJSON string) string {
+	if len(stateTypes) == 0 && strings.TrimSpace(handlersJSON) == "" {
+		return ""
+	}
+	fields := make([]string, 0, len(stateTypes))
+	for name, typ := range stateTypes {
+		fields = append(fields, name+":"+string(typ))
+	}
+	sort.Strings(fields)
+	payload, err := json.Marshal(struct {
+		Fields   []string `json:"fields,omitempty"`
+		Handlers string   `json:"handlers,omitempty"`
+	}{Fields: fields, Handlers: strings.TrimSpace(handlersJSON)})
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(payload)
+	return fmt.Sprintf("sha256:%x", sum[:8])
 }
 
 func viewInlineScripts(scripts []source.InlineScript) []view.InlineScript {

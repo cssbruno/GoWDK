@@ -20,6 +20,60 @@ import (
 )
 
 const gowdkRuntimeModulePath = "github.com/cssbruno/gowdk"
+const legacyGeneratedAppModulePath = "gowdk-generated-app"
+
+type generatedModuleContext struct {
+	Nested     bool
+	ImportBase string
+	BuildDir   string
+	AppRel     string
+}
+
+func resolveGeneratedModuleContext(absApp string) generatedModuleContext {
+	context := generatedModuleContext{
+		Nested:     true,
+		ImportBase: legacyGeneratedAppModulePath,
+		BuildDir:   absApp,
+	}
+	appModule, err := currentAppModuleForGeneratedApp(absApp)
+	if err != nil || strings.TrimSpace(appModule.Path) == "" || strings.TrimSpace(appModule.Dir) == "" {
+		return context
+	}
+	rel, err := filepath.Rel(appModule.Dir, absApp)
+	if err != nil || rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." || filepath.IsAbs(rel) {
+		return context
+	}
+	relSlash := filepath.ToSlash(rel)
+	if relSlash != ".gowdk" && !strings.HasPrefix(relSlash, ".gowdk/") {
+		return context
+	}
+	importBase := strings.TrimRight(appModule.Path, "/") + "/" + relSlash
+	context.Nested = false
+	context.ImportBase = importBase
+	context.BuildDir = appModule.Dir
+	context.AppRel = relSlash
+	return context
+}
+
+func currentAppModuleForGeneratedApp(absApp string) (appModuleInfo, error) {
+	if projectRoot, ok := generatedAppProjectRoot(absApp); ok {
+		return currentAppModuleInDir(projectRoot)
+	}
+	return currentAppModule()
+}
+
+func generatedAppProjectRoot(absApp string) (string, bool) {
+	for dir := filepath.Clean(absApp); dir != "." && dir != string(filepath.Separator); dir = filepath.Dir(dir) {
+		if filepath.Base(dir) == ".gowdk" {
+			return filepath.Dir(dir), true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+	}
+	return "", false
+}
 
 func moduleSource(options Options) (string, error) {
 	return moduleSourceForImportPaths(appBackendImportPaths(options))
@@ -32,7 +86,7 @@ func moduleSourceForImportPaths(importPaths map[string]bool) (string, error) {
 	}
 
 	lines := []string{
-		"module gowdk-generated-app",
+		"module " + legacyGeneratedAppModulePath,
 		"",
 		"go 1.26.4",
 		"",
@@ -81,12 +135,19 @@ type appModuleInfo struct {
 }
 
 func currentAppModule() (appModuleInfo, error) {
+	return currentAppModuleInDir("")
+}
+
+func currentAppModuleInDir(dir string) (appModuleInfo, error) {
 	command := exec.Command("go", "list", "-m", "-json")
+	command.Dir = dir
 	output, err := command.Output()
 	if err != nil {
 		return appModuleInfo{}, goListModuleError(err)
 	}
-	goModOutput, err := exec.Command("go", "env", "GOMOD").Output()
+	goModCommand := exec.Command("go", "env", "GOMOD")
+	goModCommand.Dir = dir
+	goModOutput, err := goModCommand.Output()
 	if err != nil {
 		return appModuleInfo{}, goListModuleError(err)
 	}

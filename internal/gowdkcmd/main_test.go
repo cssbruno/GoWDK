@@ -2907,6 +2907,9 @@ view {
 	if len(decoded.Components) != 1 || decoded.Components[0].Name != "Brand" || decoded.Components[0].ID != "app.Brand" {
 		t.Fatalf("unexpected HMR components: %#v", decoded.Components)
 	}
+	if decoded.Components[0].StateShape == "" {
+		t.Fatalf("expected HMR component compatibility token: %#v", decoded.Components[0])
+	}
 	if decoded.Version != devUpdateProtocolVersion || decoded.Action != devUpdateActionComponentRemount {
 		t.Fatalf("unexpected HMR protocol fields: %#v", decoded)
 	}
@@ -7851,6 +7854,7 @@ func TestLiveReloadFileHandlerInjectsScript(t *testing.T) {
 		`events.addEventListener("component-hmr"`,
 		`gowdk:dev-update`,
 		`DEV_UPDATE_VERSION = 1`,
+		`carryCompatibleIslandState`,
 		`component-remount`,
 		`payload.action === "reload"`,
 		`routes.some((route) => pathMatchesRoute(route, window.location.pathname))`,

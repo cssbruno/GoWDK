@@ -130,6 +130,7 @@ func GenerateWithPlan(outputDir, appDir string, plan ApplicationPlan) (result Re
 	if err := os.MkdirAll(absApp, 0o755); err != nil {
 		return Result{}, err
 	}
+	moduleContext := resolveGeneratedModuleContext(absApp)
 	if err := os.MkdirAll(targetOutput, 0o755); err != nil {
 		return Result{}, err
 	}
@@ -141,11 +142,8 @@ func GenerateWithPlan(outputDir, appDir string, plan ApplicationPlan) (result Re
 	if err := removeStaleOutputFiles(targetOutput, files); err != nil {
 		return Result{}, err
 	}
-	modulePayload, err := moduleSource(options)
+	modulePath, err := writeGeneratedModuleFile(absApp, moduleContext, options)
 	if err != nil {
-		return Result{}, err
-	}
-	if err := writeFileIfChanged(filepath.Join(absApp, modFileName), []byte(modulePayload)); err != nil {
 		return Result{}, err
 	}
 	packageSource, err := appPackageSource(options)
@@ -184,7 +182,7 @@ func GenerateWithPlan(outputDir, appDir string, plan ApplicationPlan) (result Re
 	}
 	files = append(files, scriptFiles...)
 	files = append(files, addonGoBlockFiles...)
-	mainSource, err := serverMainSource()
+	mainSource, err := serverMainSource(moduleContext.ImportBase + "/" + appPackageDirName)
 	if err != nil {
 		return Result{}, err
 	}
@@ -196,7 +194,7 @@ func GenerateWithPlan(outputDir, appDir string, plan ApplicationPlan) (result Re
 		AppDir:      absApp,
 		MainPath:    filepath.Join(absApp, mainFileName),
 		PackagePath: filepath.Join(absApp, appFileName),
-		ModulePath:  filepath.Join(absApp, modFileName),
+		ModulePath:  modulePath,
 		OutputDir:   targetOutput,
 		Files:       files,
 	}, nil
@@ -234,11 +232,9 @@ func GenerateBackendWithPlan(appDir string, plan ApplicationPlan) (result Result
 	if err := os.MkdirAll(absApp, 0o755); err != nil {
 		return Result{}, err
 	}
-	modulePayload, err := moduleSource(options)
+	moduleContext := resolveGeneratedModuleContext(absApp)
+	modulePath, err := writeGeneratedModuleFile(absApp, moduleContext, options)
 	if err != nil {
-		return Result{}, err
-	}
-	if err := writeFileIfChanged(filepath.Join(absApp, modFileName), []byte(modulePayload)); err != nil {
 		return Result{}, err
 	}
 	packageSource, err := backendAppPackageSource(options)
@@ -261,7 +257,7 @@ func GenerateBackendWithPlan(appDir string, plan ApplicationPlan) (result Result
 	if _, err := writeAddonGoBlockFiles(absApp, options); err != nil {
 		return Result{}, err
 	}
-	mainSource, err := serverMainSource()
+	mainSource, err := serverMainSource(moduleContext.ImportBase + "/" + appPackageDirName)
 	if err != nil {
 		return Result{}, err
 	}
@@ -272,8 +268,26 @@ func GenerateBackendWithPlan(appDir string, plan ApplicationPlan) (result Result
 		AppDir:      absApp,
 		MainPath:    filepath.Join(absApp, mainFileName),
 		PackagePath: filepath.Join(absApp, appFileName),
-		ModulePath:  filepath.Join(absApp, modFileName),
+		ModulePath:  modulePath,
 	}, nil
+}
+
+func writeGeneratedModuleFile(absApp string, context generatedModuleContext, options Options) (string, error) {
+	nestedPath := filepath.Join(absApp, modFileName)
+	if !context.Nested {
+		if err := os.Remove(nestedPath); err != nil && !os.IsNotExist(err) {
+			return "", err
+		}
+		return "", nil
+	}
+	modulePayload, err := moduleSource(options)
+	if err != nil {
+		return "", err
+	}
+	if err := writeFileIfChanged(nestedPath, []byte(modulePayload)); err != nil {
+		return "", err
+	}
+	return nestedPath, nil
 }
 
 func writeLifecycleServiceFiles(absApp string, options Options) error {

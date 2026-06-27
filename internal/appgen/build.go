@@ -41,13 +41,28 @@ func buildGeneratedCommand(appDir, binaryPath string, packagePath string, label 
 	if err := os.MkdirAll(filepath.Dir(absBinary), 0o755); err != nil {
 		return "", err
 	}
-	goEnv := generatedAppGoEnv(nil)
-	if err := tidyGeneratedApp(absApp, goEnv); err != nil {
-		return "", err
+	context := resolveGeneratedModuleContext(absApp)
+	if packagePath != "./cmd/server" {
+		context = generatedModuleContext{
+			Nested:     true,
+			ImportBase: legacyGeneratedAppModulePath,
+			BuildDir:   absApp,
+		}
+	}
+	goEnv := generatedAppGoEnv(nil, context.Nested)
+	buildDir := context.BuildDir
+	buildPackage := packagePath
+	if context.Nested {
+		if err := tidyGeneratedApp(absApp, goEnv); err != nil {
+			return "", err
+		}
+	} else {
+		buildPackage = "./" + pathJoinSlash(context.AppRel, strings.TrimPrefix(packagePath, "./"))
 	}
 
 	command := exec.Command("go", "build", "-buildvcs=false", "-o", absBinary, packagePath)
-	command.Dir = absApp
+	command.Args[len(command.Args)-1] = buildPackage
+	command.Dir = buildDir
 	command.Env = goEnv
 	output, err := command.CombinedOutput()
 	if err != nil {
@@ -75,13 +90,20 @@ func BuildWASM(appDir, wasmPath string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(absWASM), 0o755); err != nil {
 		return "", err
 	}
-	wasmEnv := append(generatedAppGoEnv(buildEnvWithout(os.Environ(), "GOOS", "GOARCH")), "GOOS=js", "GOARCH=wasm")
-	if err := tidyGeneratedApp(absApp, wasmEnv); err != nil {
-		return "", err
+	context := resolveGeneratedModuleContext(absApp)
+	wasmEnv := append(generatedAppGoEnv(buildEnvWithout(os.Environ(), "GOOS", "GOARCH"), context.Nested), "GOOS=js", "GOARCH=wasm")
+	buildDir := context.BuildDir
+	buildPackage := "./cmd/server"
+	if context.Nested {
+		if err := tidyGeneratedApp(absApp, wasmEnv); err != nil {
+			return "", err
+		}
+	} else {
+		buildPackage = "./" + pathJoinSlash(context.AppRel, "cmd/server")
 	}
 
-	command := exec.Command("go", "build", "-buildvcs=false", "-o", absWASM, "./cmd/server")
-	command.Dir = absApp
+	command := exec.Command("go", "build", "-buildvcs=false", "-o", absWASM, buildPackage)
+	command.Dir = buildDir
 	command.Env = wasmEnv
 	output, err := command.CombinedOutput()
 	if err != nil {
@@ -103,11 +125,25 @@ func tidyGeneratedApp(appDir string, env []string) error {
 	return nil
 }
 
-func generatedAppGoEnv(env []string) []string {
+func generatedAppGoEnv(env []string, disableWorkspace bool) []string {
 	if env == nil {
 		env = os.Environ()
 	}
+	if !disableWorkspace {
+		return env
+	}
 	return append(buildEnvWithout(env, "GOWORK"), "GOWORK=off")
+}
+
+func pathJoinSlash(parts ...string) string {
+	var cleaned []string
+	for _, part := range parts {
+		part = strings.Trim(strings.TrimSpace(filepath.ToSlash(part)), "/")
+		if part != "" && part != "." {
+			cleaned = append(cleaned, part)
+		}
+	}
+	return strings.Join(cleaned, "/")
 }
 
 func buildEnvWithout(env []string, names ...string) []string {

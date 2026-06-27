@@ -99,6 +99,7 @@ func CheckInvariants(program Program) error {
 
 	for _, page := range program.Pages {
 		reportViewBlockNodes("page", page.ID, page.Blocks, report)
+		reportServerBlockFields(page.ID, page.Blocks, report)
 	}
 
 	for _, component := range program.Components {
@@ -195,6 +196,13 @@ func CheckInvariants(program Program) error {
 		return nil
 	}
 	return fmt.Errorf("invalid IR: %s", strings.Join(violations, "; "))
+}
+
+func reportServerBlockFields(id string, blocks Blocks, report func(string, ...any)) {
+	if !blocks.Server || strings.TrimSpace(blocks.ServerBody) == "" || len(blocks.ServerFields) > 0 {
+		return
+	}
+	report("page %q has server body but no typed load fields", id)
 }
 
 func reportViewBlockNodes(kind, id string, blocks Blocks, report func(string, ...any)) {

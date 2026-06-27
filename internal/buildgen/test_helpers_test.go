@@ -40,6 +40,12 @@ func analyzedIRFixture(t *testing.T, program gwdkir.Program) gwdkir.Program {
 	}
 	for index := range program.Pages {
 		parseBlocks(&program.Pages[index].Blocks)
+		if program.Pages[index].Blocks.Server && len(program.Pages[index].Blocks.ServerFields) == 0 && strings.TrimSpace(program.Pages[index].Blocks.ServerBody) != "" {
+			lowered := gwdkanalysis.BuildProgram(gowdk.Config{}, gwdkanalysis.Sources{Pages: []gwdkir.Page{program.Pages[index]}})
+			if len(lowered.Pages) == 1 {
+				program.Pages[index].Blocks.ServerFields = lowered.Pages[0].Blocks.ServerFields
+			}
+		}
 	}
 	for index := range program.Components {
 		parseBlocks(&program.Components[index].Blocks)

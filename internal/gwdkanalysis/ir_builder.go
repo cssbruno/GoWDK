@@ -1,6 +1,7 @@
 package gwdkanalysis
 
 import (
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -79,7 +80,8 @@ func (builder *irBuilder) addAuditSpec(audit gwdkir.AuditSpec) {
 }
 
 func (builder *irBuilder) addPage(page gwdkir.Page) {
-	ensureViewNodes(&page.Blocks)
+	builder.ensureViewNodes("page", page.ID, page.Source, page.Blocks.Spans.View, &page.Blocks)
+	builder.ensureServerFields(page.ID, page.Source, &page.Blocks)
 	// Normalize route params once at program assembly: explicit declarations
 	// win, otherwise they are derived from the route pattern, and untyped
 	// params default to string.
@@ -112,6 +114,219 @@ func (builder *irBuilder) addPage(page gwdkir.Page) {
 	builder.addPageTemplate(page)
 	builder.addPageAssets(page)
 	builder.addPageEndpoints(page)
+}
+
+func (builder *irBuilder) ensureServerFields(id, src string, blocks *gwdkir.Blocks) {
+	if !blocks.Server || len(blocks.ServerFields) > 0 || strings.TrimSpace(blocks.ServerBody) == "" {
+		return
+	}
+	fields, err := parseServerFields(blocks.ServerBody)
+	if err != nil {
+		builder.program.Diagnostics = append(builder.program.Diagnostics, gwdkir.Diagnostic{
+			Code:    "view_parse_error",
+			Source:  src,
+			Span:    blocks.Spans.Server,
+			Message: id + ": " + err.Error(),
+		})
+		return
+	}
+	blocks.ServerFields = fields
+}
+
+func parseServerFields(body string) ([]string, error) {
+	var fields []string
+	seen := map[string]bool{}
+	for index, rawLine := range strings.Split(body, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+		names, ok, err := parseServerLoadFieldsLine(line)
+		if err != nil {
+			return nil, fmt.Errorf("load line %d: %w", index+1, err)
+		}
+		if !ok {
+			continue
+		}
+		for _, name := range names {
+			if seen[name] {
+				return nil, fmt.Errorf("duplicate load field %q", name)
+			}
+			seen[name] = true
+			fields = append(fields, name)
+		}
+	}
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("server load must include `=> { field }`")
+	}
+	return fields, nil
+}
+
+func parseServerLoadFieldsLine(line string) ([]string, bool, error) {
+	body, ok := strings.CutPrefix(strings.TrimSpace(line), "=>")
+	if !ok {
+		return nil, false, nil
+	}
+	body = strings.TrimSpace(body)
+	if !strings.HasPrefix(body, "{") || !strings.HasSuffix(body, "}") {
+		return nil, true, fmt.Errorf("load declaration must use `=> { field }`")
+	}
+	elements, err := splitServerLiteralElements(strings.TrimSpace(body[1 : len(body)-1]))
+	if err != nil {
+		return nil, true, err
+	}
+	names := make([]string, 0, len(elements))
+	for _, element := range elements {
+		name := element
+		if colon := indexTopLevelByte(element, ':'); colon >= 0 {
+			name = element[:colon]
+			value := strings.TrimSpace(element[colon+1:])
+			if value == "" {
+				return nil, true, fmt.Errorf("keyed load field %q is missing a value", strings.TrimSpace(name))
+			}
+			if !topLevelExpressionBalanced(value) {
+				return nil, true, fmt.Errorf("keyed load field %q has malformed expression", strings.TrimSpace(name))
+			}
+		}
+		name = strings.TrimSpace(name)
+		if !serverLoadFieldPath(name) {
+			return nil, true, fmt.Errorf("load fields must be identifiers or dotted paths")
+		}
+		names = append(names, name)
+	}
+	return names, true, nil
+}
+
+func splitServerLiteralElements(inner string) ([]string, error) {
+	if strings.TrimSpace(inner) == "" {
+		return nil, nil
+	}
+	parts, err := splitTopLevel(inner, ',')
+	if err != nil {
+		return nil, err
+	}
+	if last := len(parts) - 1; last >= 0 && strings.TrimSpace(parts[last]) == "" {
+		parts = parts[:last]
+	}
+	elements := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			return nil, fmt.Errorf("empty load field")
+		}
+		elements = append(elements, trimmed)
+	}
+	return elements, nil
+}
+
+func indexTopLevelByte(source string, target byte) int {
+	scanner := newTopLevelScanner()
+	for index := 0; index < len(source); index++ {
+		if scanner.step(source[index]) && source[index] == target {
+			return index
+		}
+	}
+	return -1
+}
+
+func splitTopLevel(source string, sep byte) ([]string, error) {
+	var parts []string
+	scanner := newTopLevelScanner()
+	start := 0
+	for index := 0; index < len(source); index++ {
+		if scanner.step(source[index]) && source[index] == sep {
+			parts = append(parts, source[start:index])
+			start = index + 1
+		}
+	}
+	if !scanner.balanced() {
+		return nil, fmt.Errorf("malformed load declaration")
+	}
+	return append(parts, source[start:]), nil
+}
+
+func topLevelExpressionBalanced(source string) bool {
+	scanner := newTopLevelScanner()
+	for index := 0; index < len(source); index++ {
+		scanner.step(source[index])
+	}
+	return scanner.balanced()
+}
+
+type topLevelScanner struct {
+	depth   int
+	quote   byte
+	escaped bool
+	invalid bool
+}
+
+func newTopLevelScanner() *topLevelScanner {
+	return &topLevelScanner{}
+}
+
+func (scanner *topLevelScanner) step(char byte) bool {
+	if scanner.escaped {
+		scanner.escaped = false
+		return false
+	}
+	if scanner.quote != 0 {
+		if char == '\\' && scanner.quote != '`' {
+			scanner.escaped = true
+			return false
+		}
+		if char == scanner.quote {
+			scanner.quote = 0
+		}
+		return false
+	}
+	switch char {
+	case '\'', '"', '`':
+		scanner.quote = char
+		return false
+	case '{', '[', '(':
+		scanner.depth++
+		return false
+	case '}', ']', ')':
+		if scanner.depth > 0 {
+			scanner.depth--
+		} else {
+			scanner.invalid = true
+		}
+		return false
+	default:
+		return scanner.depth == 0
+	}
+}
+
+func (scanner *topLevelScanner) balanced() bool {
+	return scanner.depth == 0 && scanner.quote == 0 && !scanner.escaped && !scanner.invalid
+}
+
+func serverLoadFieldPath(path string) bool {
+	for _, part := range strings.Split(path, ".") {
+		if !isServerFieldName(part) {
+			return false
+		}
+	}
+	return path != ""
+}
+
+func isServerFieldName(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, r := range value {
+		if index == 0 {
+			if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
+				return false
+			}
+			continue
+		}
+		if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func (builder *irBuilder) addPageTemplate(page gwdkir.Page) {
@@ -247,7 +462,7 @@ func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 }
 
 func (builder *irBuilder) addComponent(component gwdkir.Component) {
-	ensureViewNodes(&component.Blocks)
+	builder.ensureViewNodes("component", component.Name, component.Source, component.Blocks.Spans.View, &component.Blocks)
 	builder.program.Components = append(builder.program.Components, component)
 	pkg := builder.ensurePackage(component.Package, component.Source)
 	pkg.Files = append(pkg.Files, gwdkir.SourceFile{Path: component.Source, Kind: gwdkir.SourceComponent, Package: component.Package, Name: component.Name, Span: component.Span})
@@ -347,7 +562,7 @@ func (builder *irBuilder) addComponentTemplate(component gwdkir.Component) {
 }
 
 func (builder *irBuilder) addLayout(layout gwdkir.Layout) {
-	ensureViewNodes(&layout.Blocks)
+	builder.ensureViewNodes("layout", layout.ID, layout.Source, layout.Blocks.Spans.View, &layout.Blocks)
 	builder.program.Layouts = append(builder.program.Layouts, layout)
 	pkg := builder.ensurePackage(layout.Package, layout.Source)
 	pkg.Files = append(pkg.Files, gwdkir.SourceFile{Path: layout.Source, Kind: gwdkir.SourceLayout, Package: layout.Package, Name: layout.ID, Span: layout.Span})
@@ -367,12 +582,22 @@ func (builder *irBuilder) addLayout(layout gwdkir.Layout) {
 	})
 }
 
-func ensureViewNodes(blocks *gwdkir.Blocks) {
+func (builder *irBuilder) ensureViewNodes(kind, id, src string, span source.SourceSpan, blocks *gwdkir.Blocks) {
 	if !blocks.View || len(blocks.ViewNodes) > 0 || strings.TrimSpace(blocks.ViewBody) == "" {
 		return
 	}
 	nodes, err := viewparse.Parse(blocks.ViewBody)
 	if err != nil {
+		code := "view_parse_error"
+		if kind == "component" {
+			code = "component_field_error"
+		}
+		builder.program.Diagnostics = append(builder.program.Diagnostics, gwdkir.Diagnostic{
+			Code:    code,
+			Source:  src,
+			Span:    span,
+			Message: id + ": " + err.Error(),
+		})
 		return
 	}
 	blocks.ViewNodes = nodes

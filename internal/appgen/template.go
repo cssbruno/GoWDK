@@ -5,10 +5,10 @@ import (
 	"go/token"
 )
 
-func serverMainSource() (string, error) {
+func serverMainSource(gowdkappImportPath string) (string, error) {
 	return printGoFile("main", map[string]string{
 		"context":      "context",
-		"gowdkapp":     "gowdk-generated-app/gowdkapp",
+		"gowdkapp":     gowdkappImportPath,
 		"gowdkruntime": "github.com/cssbruno/gowdk/runtime/app",
 		"log":          "log",
 		"http":         "net/http",

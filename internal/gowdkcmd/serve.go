@@ -394,6 +394,15 @@ const liveReloadScriptTemplate = `<script>
     if (type && !type.includes("text/html")) throw new Error("HMR document fetch did not return HTML");
     return new DOMParser().parseFromString(await response.text(), "text/html");
   };
+  const carryCompatibleIslandState = (current, replacement) => {
+    const currentShape = current.getAttribute("data-gowdk-state-shape") || "";
+    const nextShape = replacement.getAttribute("data-gowdk-state-shape") || "";
+    if (currentShape && currentShape === nextShape) {
+      replacement.setAttribute("data-gowdk-state", current.getAttribute("data-gowdk-state") || "{}");
+      return true;
+    }
+    return false;
+  };
   const applyComponentHMR = async (payload) => {
     payload = typeof payload === "string" ? parsePayload(payload) : (payload || {});
     if (payload.version && payload.version !== DEV_UPDATE_VERSION) {
@@ -425,6 +434,7 @@ const liveReloadScriptTemplate = `<script>
       currentRoots.forEach((root, index) => {
         const replacement = nextRoots[index] && nextRoots[index].cloneNode(true);
         if (!replacement || !root.parentNode) return;
+        carryCompatibleIslandState(root, replacement);
         if (typeof window.__gowdkDestroyIslands === "function") window.__gowdkDestroyIslands(root, true);
         root.parentNode.replaceChild(replacement, root);
         replaced++;

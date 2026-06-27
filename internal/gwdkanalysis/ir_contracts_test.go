@@ -1,6 +1,7 @@
 package gwdkanalysis
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/cssbruno/gowdk"
@@ -33,6 +34,88 @@ func TestBuildProgramDerivesPageOwnedContractRoutes(t *testing.T) {
 	if ref := refs["patients.GetPatientPage"]; ref.Method != "GET" || ref.Path != "/patients" {
 		t.Fatalf("page query method/path = %s %s, want GET /patients", ref.Method, ref.Path)
 	}
+}
+
+func TestBuildProgramLowersServerFields(t *testing.T) {
+	program := BuildProgram(gowdk.Config{}, Sources{Pages: []gwdkir.Page{{
+		Package: "pages",
+		ID:      "dashboard",
+		Route:   "/dashboard",
+		Blocks: gwdkir.Blocks{
+			Server: true,
+			ServerBody: `user := session.User()
+  => { title: "Dashboard", user.name, account.plan }`,
+			View:     true,
+			ViewBody: `<main>{title} {user.name} {account.plan}</main>`,
+		},
+	}}})
+
+	if len(program.Diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %#v", program.Diagnostics)
+	}
+	if len(program.Pages) != 1 {
+		t.Fatalf("expected one page, got %#v", program.Pages)
+	}
+	got := program.Pages[0].Blocks.ServerFields
+	want := []string{"title", "user.name", "account.plan"}
+	if len(got) != len(want) {
+		t.Fatalf("server fields = %#v, want %#v", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("server fields = %#v, want %#v", got, want)
+		}
+	}
+}
+
+func TestBuildProgramReportsServerBodyWithoutLoadFields(t *testing.T) {
+	program := BuildProgram(gowdk.Config{}, Sources{Pages: []gwdkir.Page{{
+		Package: "pages",
+		ID:      "dashboard",
+		Route:   "/dashboard",
+		Blocks: gwdkir.Blocks{
+			Server:     true,
+			ServerBody: `user := session.User()`,
+			View:       true,
+			ViewBody:   `<main>Dashboard</main>`,
+		},
+	}}})
+
+	assertIRDiagnostic(t, program, "view_parse_error", "server load must include")
+}
+
+func TestBuildProgramReportsMalformedKeyedServerFields(t *testing.T) {
+	cases := map[string]string{
+		`=> { title: }`:          "missing a value",
+		`=> { title: missing( }`: "malformed",
+	}
+	for body, want := range cases {
+		t.Run(body, func(t *testing.T) {
+			program := BuildProgram(gowdk.Config{}, Sources{Pages: []gwdkir.Page{{
+				Package: "pages",
+				ID:      "dashboard",
+				Route:   "/dashboard",
+				Blocks: gwdkir.Blocks{
+					Server:     true,
+					ServerBody: body,
+					View:       true,
+					ViewBody:   `<main>{title}</main>`,
+				},
+			}}})
+
+			assertIRDiagnostic(t, program, "view_parse_error", want)
+		})
+	}
+}
+
+func assertIRDiagnostic(t *testing.T, program gwdkir.Program, code string, contains string) {
+	t.Helper()
+	for _, diagnostic := range program.Diagnostics {
+		if diagnostic.Code == code && strings.Contains(diagnostic.Message, contains) {
+			return
+		}
+	}
+	t.Fatalf("expected %s diagnostic containing %q, got %#v", code, contains, program.Diagnostics)
 }
 
 func TestBuildProgramRejectsDynamicPageOwnedDefaultContractRoutes(t *testing.T) {

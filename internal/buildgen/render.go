@@ -159,12 +159,11 @@ func requestTimeTaintedFields(page gwdkir.Page, policy renderModePolicy) map[str
 	if policy != renderModeRequestTime || !page.Blocks.Server {
 		return nil
 	}
-	fields, err := parseLoadFields(page.Blocks.ServerBody)
-	if err != nil {
+	if len(page.Blocks.ServerFields) == 0 {
 		return nil
 	}
-	tainted := make(map[string]bool, len(fields))
-	for _, path := range fields {
+	tainted := make(map[string]bool, len(page.Blocks.ServerFields))
+	for _, path := range page.Blocks.ServerFields {
 		tainted[path] = true
 	}
 	return tainted

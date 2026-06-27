@@ -5326,7 +5326,7 @@ func Services() ([]gowdkapp.Service, error) {
 }
 
 func TestGeneratedAppGoEnvDisablesParentWorkspace(t *testing.T) {
-	env := generatedAppGoEnv([]string{"PATH=/bin", "GOWORK=/repo/go.work", "GOOS=linux"})
+	env := generatedAppGoEnv([]string{"PATH=/bin", "GOWORK=/repo/go.work", "GOOS=linux"}, true)
 	if !containsString(env, "PATH=/bin") || !containsString(env, "GOOS=linux") {
 		t.Fatalf("expected unrelated env vars to be preserved: %#v", env)
 	}
@@ -5335,6 +5335,78 @@ func TestGeneratedAppGoEnvDisablesParentWorkspace(t *testing.T) {
 	}
 	if !containsString(env, "GOWORK=off") {
 		t.Fatalf("expected generated app builds to disable workspace mode: %#v", env)
+	}
+}
+
+func TestGeneratedAppUsesApplicationModuleWhenInsideProject(t *testing.T) {
+	root := t.TempDir()
+	repoRoot, ok := gowdkRuntimeModuleRoot()
+	if !ok {
+		t.Fatal("could not locate GOWDK module root")
+	}
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/site
+
+go 1.26.4
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+filepath.ToSlash(repoRoot)+`
+`)
+	outputDir := filepath.Join(root, ".gowdk", "output", "site")
+	appDir := filepath.Join(root, ".gowdk", "site")
+	binaryPath := filepath.Join(root, "bin", "site")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	writeTestFile(t, filepath.Join(outputDir, "gowdk-assets.json"), `{"version":1,"files":{}}`)
+	writeTestFile(t, filepath.Join(root, "internal", "backend", "actions.go"), `package backend
+
+import (
+	"context"
+
+	"github.com/cssbruno/gowdk/runtime/response"
+)
+
+func Save(context.Context) (response.Response, error) {
+	return response.RedirectTo("/?saved=1"), nil
+}
+`)
+	writeTestFile(t, filepath.Join(appDir, "go.mod"), "module stale-generated\n")
+	t.Chdir(t.TempDir())
+
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+		PageID:     "home",
+		ActionName: "Save",
+		Method:     "POST",
+		Route:      "/save",
+		Guards:     []string{"public"},
+		Binding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "example.com/site/internal/backend",
+			PackageName:  "backend",
+			FunctionName: "Save",
+			Signature:    source.BackendSignatureAction0,
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ModulePath != "" {
+		t.Fatalf("expected in-module generated app not to write nested go.mod, got %q", result.ModulePath)
+	}
+	if _, err := os.Stat(filepath.Join(appDir, "go.mod")); !os.IsNotExist(err) {
+		t.Fatalf("expected stale nested go.mod to be removed, stat err: %v", err)
+	}
+	mainPayload, err := os.ReadFile(result.MainPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(mainPayload), `"example.com/site/.gowdk/site/gowdkapp"`) {
+		t.Fatalf("expected server main to import generated app inside project module:\n%s", mainPayload)
+	}
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(binaryPath); err != nil {
+		t.Fatal(err)
 	}
 }
 

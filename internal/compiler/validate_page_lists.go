@@ -59,22 +59,13 @@ func collectPageLoads(page gwdkir.Page) pageLoads {
 	if !page.Blocks.Server {
 		return loads
 	}
-	for _, line := range strings.Split(page.Blocks.ServerBody, "\n") {
-		_, body, ok := strings.Cut(line, "=>")
-		if !ok {
+	for _, field := range page.Blocks.ServerFields {
+		field = strings.TrimSpace(field)
+		if field == "" {
 			continue
 		}
-		body = strings.TrimSpace(body)
-		body = strings.TrimPrefix(body, "{")
-		body = strings.TrimSuffix(body, "}")
-		for _, field := range strings.Split(body, ",") {
-			field = strings.TrimSpace(field)
-			if field == "" {
-				continue
-			}
-			loads.fields[field] = true
-			loads.roots[exprRoot(field)] = true
-		}
+		loads.fields[field] = true
+		loads.roots[exprRoot(field)] = true
 	}
 	return loads
 }

@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -34,7 +35,11 @@ func TestValidateManifestRejectsMissingPackageDeclaration(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected missing package diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "missing_package_declaration") {
 		t.Fatalf("missing package diagnostic: %#v", diagnostics)
 	}
@@ -62,7 +67,11 @@ func TestValidateManifestRejectsPackageMismatchWithSiblingGoFile(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected package mismatch diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticMessage(diagnostics, "package_mismatch", "views", "app") {
 		t.Fatalf("missing package mismatch diagnostic: %#v", diagnostics)
 	}
@@ -138,7 +147,11 @@ func TestValidateManifestReportsGoPackageParseErrors(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Go package error diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "go_package_error") {
 		t.Fatalf("missing Go package error diagnostic: %#v", diagnostics)
 	}
@@ -166,7 +179,11 @@ func TestValidateManifestReportsGoPackageTypeErrors(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Go package type-check diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	diagnostic := firstDiagnostic(diagnostics, "go_package_error")
 	if diagnostic == nil {
 		t.Fatalf("missing Go package error diagnostic: %#v", diagnostics)
@@ -272,7 +289,11 @@ func TestValidateManifestReportsDefaultScriptTypeErrors(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected inline go block type-check diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	diagnostic := firstDiagnostic(diagnostics, "go_package_error")
 	if diagnostic == nil {
 		t.Fatalf("missing Go package error diagnostic: %#v", diagnostics)
@@ -290,17 +311,17 @@ func TestValidateManifestReportsDefaultScriptTypeErrors(t *testing.T) {
 
 func TestGoBlockPackageSourceForValidationPreservesLineDirective(t *testing.T) {
 	sourcePath := filepath.Join(t.TempDir(), "home.page.gwdk")
-	payload, err := goBlockPackageSourceForValidation(packageDeclaration{
+	payload, ok := goBlockPackageSourceForValidation(packageDeclaration{
 		Source:  sourcePath,
 		Package: "app",
 	}, gwdkir.GoBlock{
 		Span: source.SourceSpan{Start: source.SourcePosition{Line: 8, Column: 1}},
 		Body: `func BrokenCopy() string {
-	return MissingTitle
+		return MissingTitle
 }`,
 	})
-	if err != nil {
-		t.Fatal(err)
+	if !ok {
+		t.Fatal("expected validation source")
 	}
 	if !strings.Contains(payload, "//line "+filepath.ToSlash(sourcePath)+":8") {
 		t.Fatalf("missing line directive in validation source:\n%s", payload)
@@ -450,7 +471,11 @@ func TestValidateManifestRejectsUnknownGOWDKUsePackage(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown use package diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_use_package") {
 		t.Fatalf("missing unknown package diagnostic: %#v", diagnostics)
 	}
@@ -471,7 +496,11 @@ func TestValidateManifestRejectsUnknownGOWDKUseAlias(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown use alias diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_use_alias") {
 		t.Fatalf("missing unknown alias diagnostic: %#v", diagnostics)
 	}
@@ -499,7 +528,11 @@ func TestValidateManifestUnknownGOWDKUseAliasPointsToComponentTag(t *testing.T) 
 	if err == nil {
 		t.Fatal("expected unknown use alias diagnostic")
 	}
-	diagnostic := firstDiagnostic(err.(ValidationErrors), "unknown_gowdk_use_alias")
+	diagnostic := firstDiagnostic(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "unknown_gowdk_use_alias")
 	if diagnostic == nil {
 		t.Fatalf("missing unknown alias diagnostic: %#v", err)
 	}
@@ -522,7 +555,11 @@ func TestValidateManifestRejectsUnknownQualifiedComponent(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown component diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_component") {
 		t.Fatalf("missing unknown component diagnostic: %#v", diagnostics)
 	}
@@ -551,7 +588,11 @@ func TestValidateManifestUnknownQualifiedComponentPointsToComponentTag(t *testin
 	if err == nil {
 		t.Fatal("expected unknown component diagnostic")
 	}
-	diagnostic := firstDiagnostic(err.(ValidationErrors), "unknown_gowdk_component")
+	diagnostic := firstDiagnostic(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "unknown_gowdk_component")
 	if diagnostic == nil {
 		t.Fatalf("missing unknown component diagnostic: %#v", err)
 	}
@@ -574,7 +615,11 @@ func TestValidateManifestRejectsComponentRefToLayoutOnlyUsePackage(t *testing.T)
 	if err == nil {
 		t.Fatal("expected unknown component diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_component") {
 		t.Fatalf("missing unknown component diagnostic: %#v", diagnostics)
 	}
@@ -609,7 +654,11 @@ func TestValidateManifestRejectsComponentScopedComponentRefToStoreOnlyUsePackage
 	if err == nil {
 		t.Fatal("expected unknown component diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_component") {
 		t.Fatalf("missing unknown component diagnostic: %#v", diagnostics)
 	}
@@ -646,7 +695,11 @@ func TestValidateManifestRejectsUnknownComponentScopedGOWDKUseAlias(t *testing.T
 	if err == nil {
 		t.Fatal("expected unknown component use alias diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_use_alias") {
 		t.Fatalf("missing unknown alias diagnostic: %#v", diagnostics)
 	}
@@ -664,7 +717,11 @@ func TestValidateManifestRejectsUnknownComponentScopedGOWDKUsePackage(t *testing
 	if err == nil {
 		t.Fatal("expected unknown component use package diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_use_package") {
 		t.Fatalf("missing unknown package diagnostic: %#v", diagnostics)
 	}
@@ -891,7 +948,8 @@ func TestValidateManifestRejectsDuplicatePageIDsAndComponentNames(t *testing.T) 
 	if err == nil {
 		t.Fatal("expected duplicate identity diagnostics")
 	}
-	diagnostics, ok := err.(ValidationErrors)
+	var diagnostics ValidationErrors
+	ok := errors.As(err, &diagnostics)
 	if !ok {
 		t.Fatalf("expected ValidationErrors, got %T", err)
 	}
@@ -956,7 +1014,11 @@ func TestValidateManifestRejectsDuplicatePageStore(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected duplicate store diagnostic")
 	}
-	diagnostic := firstDiagnostic(err.(ValidationErrors), "duplicate_page_store")
+	diagnostic := firstDiagnostic(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "duplicate_page_store")
 	if diagnostic == nil {
 		t.Fatalf("Missing duplicate_page_store diagnostic: %v", err)
 	}
@@ -989,7 +1051,11 @@ func TestValidateManifestRejectsUnknownComponentStoreUse(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown store diagnostic")
 	}
-	diagnostic := firstDiagnostic(err.(ValidationErrors), "unknown_component_store")
+	diagnostic := firstDiagnostic(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "unknown_component_store")
 	if diagnostic == nil {
 		t.Fatalf("Missing unknown_component_store diagnostic: %v", err)
 	}
@@ -1137,7 +1203,11 @@ func TestValidateManifestComputedConflictUsesComputedSpan(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected computed conflict diagnostic")
 	}
-	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_client_error")
+	diagnostic := firstDiagnostic(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "component_client_error")
 	if diagnostic == nil {
 		t.Fatalf("missing component_client_error diagnostic: %#v", err)
 	}
@@ -1175,7 +1245,11 @@ func TestValidateManifestRejectsInvalidTypedUseStoreType(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected diagnostic for an unresolvable store type annotation")
 	}
-	if !hasDiagnosticCode(err.(ValidationErrors), "component_client_error") || !strings.Contains(err.Error(), "NoSuchType") {
+	if !hasDiagnosticCode(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "component_client_error") || !strings.Contains(err.Error(), "NoSuchType") {
 		t.Fatalf("unexpected diagnostics: %v", err)
 	}
 }
@@ -1218,7 +1292,11 @@ func TestValidateManifestRejectsTypedUseConflictingWithLocalState(t *testing.T) 
 	if err == nil {
 		t.Fatal("expected diagnostic for store/state field type mismatch")
 	}
-	if !hasDiagnosticCode(err.(ValidationErrors), "component_client_error") || !strings.Contains(err.Error(), `field "Count"`) {
+	if !hasDiagnosticCode(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "component_client_error") || !strings.Contains(err.Error(), `field "Count"`) {
 		t.Fatalf("unexpected diagnostics: %v", err)
 	}
 }
@@ -1302,7 +1380,11 @@ fn Checkout() {
 	if err == nil {
 		t.Fatal("expected diagnostic for clearing an unused store")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), `clear references store "prefs"`) {
 		t.Fatalf("unexpected diagnostics: %v", err)
 	}
@@ -1333,7 +1415,11 @@ func TestValidateManifestRejectsUnknownQualifiedComponentStoreUseAlias(t *testin
 	if err == nil {
 		t.Fatal("expected unknown store alias diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_use_alias") {
 		t.Fatalf("missing unknown alias diagnostic: %#v", diagnostics)
 	}
@@ -1365,7 +1451,11 @@ func TestValidateManifestRejectsUnknownQualifiedComponentStoreName(t *testing.T)
 	if err == nil {
 		t.Fatal("expected unknown store diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "unknown_component_store") {
 		t.Fatalf("missing unknown store diagnostic: %#v", diagnostics)
 	}
@@ -1394,7 +1484,11 @@ func TestValidateManifestRejectsRedundantComponentImplementations(t *testing.T) 
 	if err == nil {
 		t.Fatal("expected redundant component diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "redundant_component_implementation") {
 		t.Fatalf("Missing redundant component diagnostic: %#v", diagnostics)
 	}
@@ -1420,7 +1514,11 @@ func TestValidateManifestRejectsRedundantComponentImplementationsWithNormalizedA
 	if err == nil {
 		t.Fatal("expected redundant component diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "redundant_component_implementation") {
 		t.Fatalf("Missing redundant component diagnostic: %#v", diagnostics)
 	}
@@ -1462,7 +1560,11 @@ func TestValidateManifestRejectsRedundantTypedComponentsWithCanonicalImportsAndE
 	if err == nil {
 		t.Fatal("expected redundant component diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "redundant_component_implementation") {
 		t.Fatalf("Missing redundant component diagnostic: %#v", diagnostics)
 	}
@@ -1584,7 +1686,11 @@ func TestValidateManifestRejectsBadEventModifier(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unsupported event modifier diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -1609,7 +1715,11 @@ func TestValidateManifestRejectsBadDebounceDuration(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected invalid debounce duration diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -1634,7 +1744,11 @@ func TestValidateManifestRejectsDebounceThrottleCombination(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected debounce/throttle compatibility diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -1683,7 +1797,11 @@ func TestValidateManifestRejectsMissingGoTypedComponentField(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Missing field diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -1708,7 +1826,11 @@ func TestValidateManifestRejectsMissingGoTypedComponentPackage(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Missing package diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_contract_error") {
 		t.Fatalf("Missing component_contract_error diagnostic: %#v", diagnostics)
 	}
@@ -1733,7 +1855,11 @@ func TestValidateManifestRejectsMissingGoTypedComponentType(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Missing type diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_contract_error") {
 		t.Fatalf("Missing component_contract_error diagnostic: %#v", diagnostics)
 	}
@@ -1760,7 +1886,11 @@ func TestValidateManifestRejectsReservedActiveExportName(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected reserved export diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	diagnostic := firstDiagnostic(diagnostics, "component_contract_error")
 	if diagnostic == nil {
 		t.Fatalf("missing component_contract_error diagnostic: %#v", diagnostics)
@@ -1849,7 +1979,11 @@ func TestValidateManifestRejectsDuplicateComponentEmitNames(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected duplicate component emit diagnostic")
 	}
-	diagnostic := firstDiagnostic(err.(ValidationErrors), "duplicate_component_emit")
+	diagnostic := firstDiagnostic(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "duplicate_component_emit")
 	if diagnostic == nil {
 		t.Fatalf("Missing duplicate_component_emit diagnostic: %v", err)
 	}
@@ -1882,7 +2016,11 @@ func TestValidateManifestRejectsUnknownComponentEmit(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown component emit diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), `unknown component event "select"`) {
 		t.Fatalf("unexpected diagnostics: %v", err)
 	}
@@ -1910,7 +2048,11 @@ func TestValidateManifestClientParseErrorPointsToClientLine(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected client parse diagnostic")
 	}
-	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_client_error")
+	diagnostic := firstDiagnostic(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "component_client_error")
 	if diagnostic == nil {
 		t.Fatalf("Missing component_client_error diagnostic: %v", err)
 	}
@@ -1947,7 +2089,11 @@ func TestValidateManifestRejectsComponentEmitPayloadTypeMismatch(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected component emit payload type diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), "component event select argument 1 expects string, got int") {
 		t.Fatalf("unexpected diagnostics: %v", err)
 	}
@@ -2062,7 +2208,11 @@ fn Add() {
 	if err == nil {
 		t.Fatal("expected helper local mismatch diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), "local next expects int, got bool") {
 		t.Fatalf("Missing helper local mismatch diagnostic: %#v", diagnostics)
 	}
@@ -2143,7 +2293,11 @@ func TestValidateManifestRejectsAwaitOutsideAsyncClientFunction(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected await outside async diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), "await is only supported inside async client functions") {
 		t.Fatalf("Missing async await diagnostic: %#v", diagnostics)
 	}
@@ -2172,7 +2326,11 @@ func TestValidateManifestRejectsAsyncFetchJSONNonStringURL(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected fetchJSON URL diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), "fetchJSON url must be string") {
 		t.Fatalf("Missing fetchJSON URL diagnostic: %#v", diagnostics)
 	}
@@ -2201,7 +2359,11 @@ func TestValidateManifestRejectsBadClientBuiltinArg(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Bad built-in argument diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
@@ -2230,7 +2392,11 @@ func TestValidateManifestRejectsHelperAsEventHandler(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected helper event handler diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -2263,7 +2429,11 @@ fn Add() {
 	if err == nil {
 		t.Fatal("expected helper return mismatch diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
@@ -2300,7 +2470,11 @@ fn Add() {
 	if err == nil {
 		t.Fatal("expected helper call cycle diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
@@ -2338,7 +2512,11 @@ fn Add() {
 	if err == nil {
 		t.Fatal("expected helper local call cycle diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), "helper call graph is invalid") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
@@ -2367,7 +2545,11 @@ func TestValidateManifestRejectsClientExpressionTypeMismatch(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected expression type mismatch diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
@@ -2396,7 +2578,11 @@ func TestValidateManifestRejectsClientFunctionArgumentMismatch(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected argument mismatch diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -2425,7 +2611,11 @@ func TestValidateManifestRejectsUnknownClientFunctionEventCall(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown client function diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -2454,7 +2644,11 @@ func TestValidateManifestRejectsClientFunctionUnknownStateField(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected client function field diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
@@ -2487,7 +2681,11 @@ func TestValidateManifestRejectsClientFunctionMutatingProp(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected prop mutation diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
@@ -2551,7 +2749,11 @@ func TestValidateManifestRejectsEffectUnknownDependency(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown effect dependency diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
@@ -2604,7 +2806,11 @@ func TestValidateManifestRejectsUnknownDOMRefBinding(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown DOM ref binding diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -2631,7 +2837,11 @@ func TestValidateManifestRejectsDuplicateDOMRefBinding(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected duplicate DOM ref binding diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -2665,7 +2875,11 @@ fn FocusSearch() {
 	if err == nil {
 		t.Fatal("expected unbound DOM ref diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
@@ -2732,7 +2946,11 @@ func TestValidateManifestRejectsGElseIfNonBoolExpression(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected g:else-if non-bool diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -2757,7 +2975,11 @@ func TestValidateManifestRejectsGIfNonBoolExpression(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected g:if non-bool diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -2878,7 +3100,11 @@ func TestValidateManifestRejectsBadAppendItemField(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Bad append item diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), "unknown field") {
 		t.Fatalf("Missing Bad append field diagnostic: %#v", diagnostics)
 	}
@@ -2903,7 +3129,11 @@ func TestValidateManifestRejectsGForWithoutKey(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Missing g:key diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") || !strings.Contains(err.Error(), "g:for requires g:key") {
 		t.Fatalf("Missing g:for Missing key diagnostic: %#v", diagnostics)
 	}
@@ -2928,7 +3158,11 @@ func TestValidateManifestRejectsUnknownGForItemField(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown item field diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") || !strings.Contains(err.Error(), "item.Missing") {
 		t.Fatalf("Missing unknown item field diagnostic: %#v", diagnostics)
 	}
@@ -2960,7 +3194,11 @@ func TestValidateManifestLoopBodyEventDiagnosticPointsToExpression(t *testing.T)
 	if err == nil {
 		t.Fatal("expected invalid loop-body event expression diagnostic")
 	}
-	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_field_error")
+	diagnostic := firstDiagnostic(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "component_field_error")
 	if diagnostic == nil || !strings.Contains(diagnostic.Message, "Missing()") {
 		t.Fatalf("Missing loop-body event diagnostic: %#v", err)
 	}
@@ -2991,7 +3229,11 @@ func TestValidateManifestLoopBodyInterpolationDiagnosticPointsToTextNode(t *test
 	if err == nil {
 		t.Fatal("expected unknown loop-item field diagnostic")
 	}
-	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_field_error")
+	diagnostic := firstDiagnostic(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "component_field_error")
 	if diagnostic == nil || !strings.Contains(diagnostic.Message, "item.Missing") {
 		t.Fatalf("Missing loop-body interpolation diagnostic: %#v", err)
 	}
@@ -3020,7 +3262,11 @@ func TestValidateManifestViewEventDiagnosticPointsToExpression(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected invalid event expression diagnostic")
 	}
-	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_field_error")
+	diagnostic := firstDiagnostic(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "component_field_error")
 	if diagnostic == nil || !strings.Contains(diagnostic.Message, "Missing()") {
 		t.Fatalf("Missing event expression diagnostic: %#v", err)
 	}
@@ -3044,7 +3290,11 @@ func TestValidateManifestUnknownViewFieldDiagnosticPointsToIdentifier(t *testing
 	if err == nil {
 		t.Fatal("expected unknown field diagnostic")
 	}
-	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_field_error")
+	diagnostic := firstDiagnostic(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "component_field_error")
 	if diagnostic == nil || !strings.Contains(diagnostic.Message, `"Missing"`) {
 		t.Fatalf("Missing unknown field diagnostic: %#v", err)
 	}
@@ -3074,7 +3324,11 @@ func TestValidateManifestRepeatedViewExpressionDiagnosticPointsToOccurrence(t *t
 	if err == nil {
 		t.Fatal("expected class toggle diagnostic")
 	}
-	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_field_error")
+	diagnostic := firstDiagnostic(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "component_field_error")
 	if diagnostic == nil || !strings.Contains(diagnostic.Message, "class toggle") {
 		t.Fatalf("Missing class toggle diagnostic: %#v", err)
 	}
@@ -3098,7 +3352,11 @@ func TestValidateManifestBadGForDiagnosticPointsToDirectiveValue(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Bad g:for diagnostic")
 	}
-	diagnostic := firstDiagnostic(err.(ValidationErrors), "component_field_error")
+	diagnostic := firstDiagnostic(func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}(), "component_field_error")
 	if diagnostic == nil || !strings.Contains(diagnostic.Message, `g:for must use`) {
 		t.Fatalf("Missing Bad g:for diagnostic: %#v", err)
 	}
@@ -3178,7 +3436,11 @@ func TestValidateManifestRejectsLocalVariableBeforeDeclaration(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected local-before-declaration diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") || !strings.Contains(err.Error(), "next") {
 		t.Fatalf("Missing local-before-declaration diagnostic: %#v", diagnostics)
 	}
@@ -3207,7 +3469,11 @@ func TestValidateManifestRejectsGoishConditionalTypeMismatch(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected conditional branch mismatch diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
@@ -3327,7 +3593,11 @@ computed Second string {
 	if err == nil {
 		t.Fatal("expected computed cycle diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
@@ -3356,7 +3626,11 @@ func TestValidateManifestRejectsComputedMutation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected computed mutation diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_client_error") {
 		t.Fatalf("Missing component_client_error diagnostic: %#v", diagnostics)
 	}
@@ -3381,7 +3655,11 @@ func TestValidateManifestRejectsUnknownNestedField(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown nested field diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -3426,7 +3704,11 @@ func TestValidateManifestRejectsValueBindingToNonStringState(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected non-string value binding diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -3471,7 +3753,11 @@ func TestValidateManifestRejectsNumericValueBindingOutsideNumberInput(t *testing
 	if err == nil {
 		t.Fatal("expected numeric value binding target diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -3516,7 +3802,11 @@ func TestValidateManifestRejectsRadioValueBindingWithoutValue(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected radio Missing value diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -3541,7 +3831,11 @@ func TestValidateManifestRejectsValueBindingToProp(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected prop value binding diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -3586,7 +3880,11 @@ func TestValidateManifestRejectsCheckedBindingToNonBoolState(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected non-bool checked binding diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -3634,7 +3932,11 @@ func TestValidateManifestRejectsNonBoolReactiveBooleanAttribute(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected non-bool boolean attr diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -3661,7 +3963,11 @@ func TestValidateManifestRejectsUnsafeReactiveURLAttribute(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unsafe reactive URL attr diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -3709,7 +4015,11 @@ func TestValidateManifestRejectsNonBoolClassToggle(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected non-bool class toggle diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -3759,7 +4069,11 @@ func TestValidateManifestRejectsBoolStyleBinding(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected bool style binding diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_field_error") {
 		t.Fatalf("Missing component_field_error diagnostic: %#v", diagnostics)
 	}
@@ -3782,7 +4096,11 @@ func TestValidateManifestRejectsRelativeGoTypedImportPath(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected invalid import diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "invalid_go_import") {
 		t.Fatalf("Missing invalid_go_import diagnostic: %#v", diagnostics)
 	}
@@ -3807,7 +4125,11 @@ func TestValidateManifestRejectsStateInitReturnMismatch(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected state init mismatch diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "component_contract_error") {
 		t.Fatalf("Missing component_contract_error diagnostic: %#v", diagnostics)
 	}
@@ -3832,7 +4154,11 @@ func TestValidateManifestResolvesLayoutsByID(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown layout diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "unknown_layout_id") {
 		t.Fatalf("Missing unknown_layout_id diagnostic: %#v", diagnostics)
 	}
@@ -3881,7 +4207,11 @@ func TestValidateManifestRejectsUnqualifiedCrossPackageLayout(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown layout diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "unknown_layout_id") {
 		t.Fatalf("Missing unknown_layout_id diagnostic: %#v", diagnostics)
 	}
@@ -3899,7 +4229,11 @@ func TestValidateManifestRejectsDuplicateLayoutIDs(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected duplicate layout diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "duplicate_layout_id") {
 		t.Fatalf("Missing duplicate_layout_id diagnostic: %#v", diagnostics)
 	}
@@ -3930,7 +4264,11 @@ func TestValidateManifestRejectsDuplicateLayoutIDsInSamePackage(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected duplicate layout diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "duplicate_layout_id") {
 		t.Fatalf("Missing duplicate_layout_id diagnostic: %#v", diagnostics)
 	}
@@ -3947,7 +4285,11 @@ func TestValidateManifestRejectsLayoutSelfReference(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected layout self-reference diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "layout_self_reference") {
 		t.Fatalf("Missing layout_self_reference diagnostic: %#v", diagnostics)
 	}
@@ -3965,7 +4307,11 @@ func TestValidateManifestRejectsCyclicLayoutInheritance(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected cyclic layout diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "cyclic_layout_reference") {
 		t.Fatalf("Missing cyclic_layout_reference diagnostic: %#v", diagnostics)
 	}
@@ -4011,7 +4357,11 @@ func TestValidateManifestRejectsLayoutFileUseAndQualifiedParentLayout(t *testing
 	if err == nil {
 		t.Fatal("expected layout use diagnostics")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "unsupported_gowdk_use_scope") {
 		t.Fatalf("Missing unsupported_gowdk_use_scope diagnostic: %#v", diagnostics)
 	}
@@ -4046,7 +4396,11 @@ func TestValidateManifestRejectsUnknownLayoutParent(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown layout parent diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "unknown_layout_id") {
 		t.Fatalf("Missing unknown_layout_id diagnostic: %#v", diagnostics)
 	}
@@ -4070,7 +4424,11 @@ func TestValidateManifestReportsContractReferenceParseErrors(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected contract reference parse diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "contract_reference_parse_error") {
 		t.Fatalf("Missing contract_reference_parse_error diagnostic: %#v", diagnostics)
 	}
@@ -4127,7 +4485,11 @@ func TestValidateManifestRejectsInvalidContractReferenceRoutes(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected invalid contract route diagnostic")
 			}
-			diagnostics := err.(ValidationErrors)
+			diagnostics := func() ValidationErrors {
+				var target ValidationErrors
+				_ = errors.As(err, &target)
+				return target
+			}()
 			if !hasDiagnosticCode(diagnostics, "contract_route_invalid") {
 				t.Fatalf("Missing contract_route_invalid diagnostic: %#v", diagnostics)
 			}
@@ -4160,7 +4522,11 @@ func TestValidateManifestRejectsDefaultContractRouteOnDynamicPage(t *testing.T) 
 	if err == nil {
 		t.Fatal("expected invalid dynamic default contract route diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticMessage(diagnostics, "contract_route_invalid", "dynamic page route", "/blog/{slug}") {
 		t.Fatalf("Missing dynamic default contract_route_invalid diagnostic: %#v", diagnostics)
 	}
@@ -4184,7 +4550,11 @@ func TestValidateManifestRejectsDefaultQueryRouteWithDynamicParams(t *testing.T)
 	if err == nil {
 		t.Fatal("expected invalid contract query route diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "contract_route_invalid") {
 		t.Fatalf("Missing contract_route_invalid diagnostic: %#v", diagnostics)
 	}
@@ -4204,7 +4574,11 @@ func TestValidateManifestRejectsLayoutWithoutSlot(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected layout slot diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "layout_slot_count") {
 		t.Fatalf("Missing layout_slot_count diagnostic: %#v", diagnostics)
 	}
@@ -4221,7 +4595,11 @@ func TestValidateManifestRejectsLayoutWithMultipleSlots(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected layout slot diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "layout_slot_count") {
 		t.Fatalf("Missing layout_slot_count diagnostic: %#v", diagnostics)
 	}
@@ -4239,7 +4617,11 @@ func TestValidateManifestRejectsDuplicatePageRoutes(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected duplicate route diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "duplicate_route") {
 		t.Fatalf("Missing duplicate_route diagnostic: %#v", diagnostics)
 	}
@@ -4276,7 +4658,11 @@ func TestValidateManifestRejectsAmbiguousDynamicPageRoutes(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected ambiguous dynamic route diagnostic")
 			}
-			diagnostics := err.(ValidationErrors)
+			diagnostics := func() ValidationErrors {
+				var target ValidationErrors
+				_ = errors.As(err, &target)
+				return target
+			}()
 			if !hasDiagnosticCode(diagnostics, "ambiguous_dynamic_route") {
 				t.Fatalf("Missing ambiguous_dynamic_route diagnostic: %#v", diagnostics)
 			}
@@ -4344,7 +4730,11 @@ func TestValidateManifestRejectsDynamicFragmentEndpointOverlap(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected ambiguous dynamic route diagnostic")
 			}
-			diagnostics := err.(ValidationErrors)
+			diagnostics := func() ValidationErrors {
+				var target ValidationErrors
+				_ = errors.As(err, &target)
+				return target
+			}()
 			if !hasDiagnosticMessage(diagnostics, "ambiguous_dynamic_route", test.expectMsg...) {
 				t.Fatalf("Missing ambiguous_dynamic_route diagnostic: %#v", diagnostics)
 			}
@@ -4377,7 +4767,11 @@ func TestValidateManifestRejectsDynamicFragmentContractOverlap(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected ambiguous dynamic route diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticMessage(diagnostics, "ambiguous_dynamic_route", "/patients/42/vitals", "query contract patients.GetVitals", "fragment patients.Vitals") {
 		t.Fatalf("Missing ambiguous_dynamic_route diagnostic: %#v", diagnostics)
 	}
@@ -4425,7 +4819,11 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected route method conflict")
 		}
-		diagnostics := err.(ValidationErrors)
+		diagnostics := func() ValidationErrors {
+			var target ValidationErrors
+			_ = errors.As(err, &target)
+			return target
+		}()
 		if !hasDiagnosticCode(diagnostics, "route_method_conflict") {
 			t.Fatalf("Missing route_method_conflict diagnostic: %#v", diagnostics)
 		}
@@ -4447,7 +4845,11 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected route method conflict")
 		}
-		diagnostics := err.(ValidationErrors)
+		diagnostics := func() ValidationErrors {
+			var target ValidationErrors
+			_ = errors.As(err, &target)
+			return target
+		}()
 		if !hasDiagnosticCode(diagnostics, "route_method_conflict") {
 			t.Fatalf("Missing route_method_conflict diagnostic: %#v", diagnostics)
 		}
@@ -4470,7 +4872,11 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected command/action route method conflict")
 		}
-		diagnostics := err.(ValidationErrors)
+		diagnostics := func() ValidationErrors {
+			var target ValidationErrors
+			_ = errors.As(err, &target)
+			return target
+		}()
 		if !hasDiagnosticMessage(diagnostics, "route_method_conflict", "POST", "/patients", "command contract patients.CreatePatient", "action patients.CreatePatient") {
 			t.Fatalf("Missing command/action route_method_conflict diagnostic: %#v", diagnostics)
 		}
@@ -4493,7 +4899,11 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected default command/action route method conflict")
 		}
-		diagnostics := err.(ValidationErrors)
+		diagnostics := func() ValidationErrors {
+			var target ValidationErrors
+			_ = errors.As(err, &target)
+			return target
+		}()
 		if !hasDiagnosticMessage(diagnostics, "route_method_conflict", "POST", "/patients", "command contract patients.CreatePatient", "action patients.Save") {
 			t.Fatalf("Missing default command/action route_method_conflict diagnostic: %#v", diagnostics)
 		}
@@ -4518,7 +4928,11 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected duplicate command route method conflict")
 		}
-		diagnostics := err.(ValidationErrors)
+		diagnostics := func() ValidationErrors {
+			var target ValidationErrors
+			_ = errors.As(err, &target)
+			return target
+		}()
 		if !hasDiagnosticMessage(diagnostics, "route_method_conflict", "POST", "/patients", "command contract patients.UpdatePatient", "command contract patients.CreatePatient") {
 			t.Fatalf("Missing duplicate command route_method_conflict diagnostic: %#v", diagnostics)
 		}
@@ -4561,7 +4975,11 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected query/api route method conflict")
 		}
-		diagnostics := err.(ValidationErrors)
+		diagnostics := func() ValidationErrors {
+			var target ValidationErrors
+			_ = errors.As(err, &target)
+			return target
+		}()
 		if !hasDiagnosticMessage(diagnostics, "route_method_conflict", "GET", "/patients", "query contract patients.ListPatients", "api patients.ListPatients") {
 			t.Fatalf("Missing query/api route_method_conflict diagnostic: %#v", diagnostics)
 		}
@@ -4586,7 +5004,11 @@ func TestValidateManifestRejectsRouteMethodConflicts(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected duplicate query route method conflict")
 		}
-		diagnostics := err.(ValidationErrors)
+		diagnostics := func() ValidationErrors {
+			var target ValidationErrors
+			_ = errors.As(err, &target)
+			return target
+		}()
 		if !hasDiagnosticMessage(diagnostics, "route_method_conflict", "GET", "/patients", "query contract patients.SearchPatients", "query contract patients.ListPatients") {
 			t.Fatalf("Missing duplicate query route_method_conflict diagnostic: %#v", diagnostics)
 		}
@@ -4642,7 +5064,11 @@ func TestValidateManifestRejectsLocalizedRouteMethodConflicts(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected localized route conflict")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticMessage(diagnostics, "route_method_conflict", "GET", "/en", "api api.Status", "page home") {
 		t.Fatalf("missing localized route conflict diagnostic: %#v", diagnostics)
 	}
@@ -4958,7 +5384,11 @@ func TestValidateManifestRejectsDuplicateRestRoutes(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected duplicate route diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "duplicate_route") {
 		t.Fatalf("Missing duplicate_route diagnostic: %#v", diagnostics)
 	}
@@ -4987,7 +5417,11 @@ func TestValidateManifestRejectsAmbiguousRestRoutes(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected ambiguous dynamic route diagnostic")
 			}
-			diagnostics := err.(ValidationErrors)
+			diagnostics := func() ValidationErrors {
+				var target ValidationErrors
+				_ = errors.As(err, &target)
+				return target
+			}()
 			if !hasDiagnosticCode(diagnostics, "ambiguous_dynamic_route") {
 				t.Fatalf("Missing ambiguous_dynamic_route diagnostic: %#v", diagnostics)
 			}
@@ -5077,7 +5511,11 @@ func TestValidateManifestRejectsEndpointInsideRestRouteNamespace(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected ambiguous dynamic route diagnostic for endpoint inside rest namespace")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "ambiguous_dynamic_route") {
 		t.Fatalf("Missing ambiguous_dynamic_route diagnostic: %#v", diagnostics)
 	}
@@ -5431,7 +5869,11 @@ func TestValidateManifestRejectsUnknownQualifiedCSSAssetUseAlias(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown CSS asset alias diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "unknown_gowdk_use_alias") {
 		t.Fatalf("missing unknown alias diagnostic: %#v", diagnostics)
 	}
@@ -5660,7 +6102,11 @@ func TestValidateSourceProgramKeepsSingleFileUseChecks(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected duplicate alias diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if !hasDiagnosticCode(diagnostics, "duplicate_gowdk_use_alias") {
 		t.Fatalf("missing duplicate alias diagnostic: %#v", diagnostics)
 	}

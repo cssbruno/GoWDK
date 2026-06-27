@@ -42,14 +42,14 @@ func TestValidateAddonsRejectsInvalidIdentityAndOwnership(t *testing.T) {
 		addons []gowdk.Addon
 		want   string
 	}{
-		{name: "nil", addons: []gowdk.Addon{nil}, want: "Addons[0] is nil"},
+		{name: "nil", addons: []gowdk.Addon{nil}, want: "addons[0] is nil"},
 		{name: "empty name", addons: []gowdk.Addon{gowdk.NewAddon("", gowdk.FeatureCSS)}, want: "Name is required"},
 		{name: "empty features", addons: []gowdk.Addon{gowdk.NewAddon("empty")}, want: "at least one feature"},
 		{name: "empty feature", addons: []gowdk.Addon{gowdk.NewAddon("empty-feature", gowdk.Feature(""))}, want: "empty feature"},
 		{name: "duplicate names", addons: []gowdk.Addon{
 			gowdk.NewAddon("css", gowdk.FeatureCSS),
 			gowdk.NewAddon("css", gowdk.FeatureSEO),
-		}, want: "duplicates Addons[0]"},
+		}, want: "duplicates addons[0]"},
 		{name: "duplicate features", addons: []gowdk.Addon{
 			gowdk.NewAddon("css-a", gowdk.FeatureCSS),
 			gowdk.NewAddon("css-b", gowdk.FeatureCSS),

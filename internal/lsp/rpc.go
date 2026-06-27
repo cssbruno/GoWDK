@@ -90,7 +90,7 @@ func (server *Server) logf(format string, args ...any) {
 	if server.log == nil {
 		return
 	}
-	fmt.Fprintf(server.log, format+"\n", args...)
+	_, _ = fmt.Fprintf(server.log, format+"\n", args...)
 }
 
 func readMessage(reader *bufio.Reader) ([]byte, error) {

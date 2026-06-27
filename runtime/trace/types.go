@@ -125,8 +125,10 @@ const (
 
 const maxTracestateMembers = 32
 
-type contextKey struct{}
-type tracerContextKey struct{}
+type (
+	contextKey       struct{}
+	tracerContextKey struct{}
+)
 
 // NewTraceID returns a valid W3C trace ID from the default ID generator
 // (CryptoIDGenerator). It returns "" only when the system CSPRNG cannot

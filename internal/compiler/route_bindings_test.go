@@ -48,8 +48,8 @@ func TestBuildRouteMetadataSeparatesRoutesFromEndpoints(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assertRoute(t, metadata.Routes, RouteSPA, "GET", "/newsletter", `embedded.SPA("pages/newsletter.html")`)
-	assertRoute(t, metadata.Routes, RouteSSR, "GET", "/dashboard", "ssr.RenderDashboard")
+	assertRoute(t, metadata.Routes, RouteSPA, "/newsletter", `embedded.SPA("pages/newsletter.html")`)
+	assertRoute(t, metadata.Routes, RouteSSR, "/dashboard", "ssr.RenderDashboard")
 	assertEndpoint(t, metadata.Endpoints, EndpointAction, "POST", "/newsletter", "actions.NewsletterSubscribe")
 	assertEndpoint(t, metadata.Endpoints, EndpointAPI, "GET", "/api/patients", "api.PatientsIndexList")
 	fragment := findEndpoint(t, metadata.Endpoints, EndpointFragment, "GET", "/patients/{id:int}/table", "fragments.PatientsIndexTable")
@@ -111,7 +111,7 @@ func TestBuildRouteMetadataMapsHybridWithoutExplicitLoadToHybridRoute(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertRoute(t, metadata.Routes, RouteHybrid, "GET", "/dashboard", "hybrid.RenderDashboard")
+	assertRoute(t, metadata.Routes, RouteHybrid, "/dashboard", "hybrid.RenderDashboard")
 }
 
 func TestBuildRouteMetadataMapsHybridWithLoadToHybridRoute(t *testing.T) {
@@ -129,7 +129,7 @@ func TestBuildRouteMetadataMapsHybridWithLoadToHybridRoute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertRoute(t, metadata.Routes, RouteHybrid, "GET", "/dashboard", "hybrid.RenderDashboard")
+	assertRoute(t, metadata.Routes, RouteHybrid, "/dashboard", "hybrid.RenderDashboard")
 }
 
 func TestBuildRouteMetadataFromIR(t *testing.T) {
@@ -184,8 +184,8 @@ func TestBuildRouteMetadataFromIR(t *testing.T) {
 		}},
 	})
 
-	assertRoute(t, metadata.Routes, RouteSPA, "GET", "/newsletter", `embedded.SPA("pages/newsletter.html")`)
-	assertRoute(t, metadata.Routes, RouteSSR, "GET", "/dashboard", "ssr.RenderDashboard")
+	assertRoute(t, metadata.Routes, RouteSPA, "/newsletter", `embedded.SPA("pages/newsletter.html")`)
+	assertRoute(t, metadata.Routes, RouteSSR, "/dashboard", "ssr.RenderDashboard")
 	assertEndpoint(t, metadata.Endpoints, EndpointAction, "POST", "/newsletter", "actions.NewsletterSubscribe")
 	assertEndpoint(t, metadata.Endpoints, EndpointFragment, "GET", "/newsletter/list", "fragments.NewsletterList")
 	assertEndpoint(t, metadata.Endpoints, EndpointCommand, "POST", "/patients", "contracts.command.patients.CreatePatient")
@@ -241,13 +241,13 @@ func TestBuildRouteMetadataIncludesDerivedCommandEndpointRoute(t *testing.T) {
 	}
 }
 
-func assertRoute(t *testing.T, routes []RouteBinding, kind RouteKind, method, route, handler string) {
+func assertRoute(t *testing.T, routes []RouteBinding, kind RouteKind, route, handler string) {
 	t.Helper()
-	binding := findRoute(t, routes, kind, method, route)
+	binding := findRoute(t, routes, kind, "GET", route)
 	if binding.Handler == handler {
 		return
 	}
-	t.Fatalf("Missing route kind=%s method=%s route=%s handler=%s in %#v", kind, method, route, handler, routes)
+	t.Fatalf("Missing route kind=%s method=%s route=%s handler=%s in %#v", kind, "GET", route, handler, routes)
 }
 
 func findRoute(t *testing.T, routes []RouteBinding, kind RouteKind, method, route string) RouteBinding {

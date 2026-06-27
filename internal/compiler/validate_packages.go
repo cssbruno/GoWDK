@@ -3,6 +3,7 @@ package compiler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/importer"
@@ -257,8 +258,8 @@ func inspectGoPackageForValidation(dir string, group []packageDeclaration) goPac
 }
 
 func parseGoBlockPackageFileForValidation(fileSet *token.FileSet, declaration packageDeclaration, block gwdkir.GoBlock) (*ast.File, *ValidationError) {
-	src, err := goBlockPackageSourceForValidation(declaration, block)
-	if err != nil {
+	src, ok := goBlockPackageSourceForValidation(declaration, block)
+	if !ok {
 		return nil, nil
 	}
 	file, parseErr := parser.ParseFile(fileSet, declaration.Source, src, parser.AllErrors|parser.ParseComments)
@@ -276,19 +277,19 @@ func parseGoBlockPackageFileForValidation(fileSet *token.FileSet, declaration pa
 	return file, nil
 }
 
-func goBlockPackageSourceForValidation(declaration packageDeclaration, block gwdkir.GoBlock) (string, error) {
+func goBlockPackageSourceForValidation(declaration packageDeclaration, block gwdkir.GoBlock) (string, bool) {
 	packageName := strings.TrimSpace(declaration.Package)
 	if packageName == "" {
-		return "", fmt.Errorf("go block package is missing")
+		return "", false
 	}
 	body := strings.TrimSpace(block.Body)
 	if body == "" {
-		return "package " + packageName + "\n", nil
+		return "package " + packageName + "\n", true
 	}
 	bodyFileSet := token.NewFileSet()
 	bodyFile, err := parser.ParseFile(bodyFileSet, declaration.Source, "package "+packageName+"\n\n"+block.Body, parser.AllErrors)
 	if err != nil {
-		return "", err
+		return "", false
 	}
 
 	file := &ast.File{
@@ -310,9 +311,9 @@ func goBlockPackageSourceForValidation(declaration packageDeclaration, block gwd
 
 	var buffer bytes.Buffer
 	if err := printer.Fprint(&buffer, bodyFileSet, file); err != nil {
-		return "", fmt.Errorf("print go block package source: %w", err)
+		return "", false
 	}
-	return buffer.String(), nil
+	return buffer.String(), true
 }
 
 func goBlockGOWDKImportSpecsForValidation(imports []gwdkir.Import, bodyFile *ast.File) []ast.Spec {
@@ -542,16 +543,20 @@ func goTypeCheckDiagnostic(fileSet *token.FileSet, err error) ValidationError {
 		Message: fmt.Sprintf("Go package failed type-check: %v", err),
 	}
 	var typeError types.Error
-	switch typed := err.(type) {
-	case types.Error:
-		typeError = typed
-	case *types.Error:
-		if typed == nil {
+	{
+		var typed types.Error
+		var typed1 *types.Error
+		switch {
+		case errors.As(err, &typed):
+			typeError = typed
+		case errors.As(err, &typed1):
+			if typed1 == nil {
+				return diagnostic
+			}
+			typeError = *typed1
+		default:
 			return diagnostic
 		}
-		typeError = *typed
-	default:
-		return diagnostic
 	}
 	position := fileSet.PositionFor(typeError.Pos, true)
 	if position.IsValid() {

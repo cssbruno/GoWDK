@@ -59,7 +59,9 @@ func TestExportArchiveWritesNormalProjectFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
+	defer func() {
+		_ = reader.Close()
+	}()
 	var names []string
 	for _, file := range reader.File {
 		names = append(names, file.Name)
@@ -83,7 +85,9 @@ func TestStageWorkspaceCopiesAllowedFilesOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cleanup()
+	defer func() {
+		_ = cleanup()
+	}()
 	if _, err := os.Stat(filepath.Join(workspace.Root, "src", "pages", "home.page.gwdk")); err != nil {
 		t.Fatalf("expected staged source file: %v", err)
 	}

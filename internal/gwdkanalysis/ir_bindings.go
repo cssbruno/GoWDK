@@ -18,9 +18,10 @@ func AttachBackendBindings(program *gwdkir.Program, bindings []source.BackendBin
 			continue
 		}
 		kind := gwdkir.EndpointAction
-		if binding.Kind == "api" {
+		switch binding.Kind {
+		case "api":
 			kind = gwdkir.EndpointAPI
-		} else if binding.Kind == "fragment" {
+		case "fragment":
 			kind = gwdkir.EndpointFragment
 		}
 		byEndpoint[gwdkir.EndpointIdentity(kind, binding.PageID, binding.BlockName, binding.Method, binding.Route)] = binding

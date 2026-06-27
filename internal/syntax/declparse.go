@@ -76,8 +76,8 @@ func ParseTopLevel(src string) TopLevel {
 
 		line := tokens[index:lineEnd]
 		first := line[0]
-		switch {
-		case first.Kind == TokenIdentifier:
+		switch first.Kind {
+		case TokenIdentifier:
 			// ParseSyntax requires eof() after every identifier-led
 			// declaration, but the shared tokenizer strips // comments, so a
 			// trailing comment leaves a clean token line here. Reject any line
@@ -123,7 +123,7 @@ func ParseTopLevel(src string) TopLevel {
 					result.APIs = append(result.APIs, endpoint)
 				}
 			}
-		case first.Kind == TokenMetadata:
+		case TokenMetadata:
 			result.applyMetadata(first, line, metadataValue(src, first, tokens[lineEnd]))
 		}
 		index = lineEnd

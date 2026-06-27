@@ -77,9 +77,9 @@ func (recorder *buildTimingRecorder) counter(name string, value int) {
 	recorder.counters[name] += value
 }
 
-func (recorder *buildTimingRecorder) write(outputDir string, explicitPath string) (string, error) {
+func (recorder *buildTimingRecorder) write(outputDir string, explicitPath string) error {
 	if recorder == nil || !recorder.enabled {
-		return "", nil
+		return nil
 	}
 	path := strings.TrimSpace(explicitPath)
 	if path == "" {
@@ -94,16 +94,16 @@ func (recorder *buildTimingRecorder) write(outputDir string, explicitPath string
 	}
 	payload, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
-		return "", err
+		return err
 	}
 	payload = append(payload, '\n')
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return "", err
+		return err
 	}
 	if err := os.WriteFile(path, payload, 0o644); err != nil {
-		return "", err
+		return err
 	}
-	return path, nil
+	return nil
 }
 
 func sortedTimingCounters(counters map[string]int) map[string]int {

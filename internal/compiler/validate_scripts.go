@@ -18,7 +18,7 @@ func validateGoBlocks(config gowdk.Config, app gwdkir.Program) []ValidationError
 		mode := page.RenderMode(config.Render.DefaultMode())
 		for _, block := range page.Blocks.GoBlocks {
 			diagnostics = append(diagnostics, validateGoBlockSyntax(page.Package, page.Source, page.ID, "", block)...)
-			diagnostics = append(diagnostics, validateGoBlockTarget(config, enabledAddons, page.ID, "", page.Source, page.Package, mode, page.Blocks.Server, block)...)
+			diagnostics = append(diagnostics, validateGoBlockTarget(enabledAddons, page.ID, "", page.Source, page.Package, mode, block)...)
 		}
 	}
 	for _, component := range app.Components {
@@ -57,7 +57,7 @@ func validateGoBlockSyntax(packageName string, sourcePath string, pageID string,
 	}}
 }
 
-func validateGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.Addon, pageID string, componentName string, sourcePath string, packageName string, mode gowdk.RenderMode, hasLoad bool, block gwdkir.GoBlock) []ValidationError {
+func validateGoBlockTarget(enabledAddons map[string]gowdk.Addon, pageID string, componentName string, sourcePath string, packageName string, mode gowdk.RenderMode, block gwdkir.GoBlock) []ValidationError {
 	target := strings.TrimSpace(block.Target)
 	switch {
 	case target == "" || target == "client":

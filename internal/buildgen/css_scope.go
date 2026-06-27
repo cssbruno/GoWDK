@@ -212,13 +212,13 @@ func scopeCSSRules(contents string, scopeSelector string) string {
 			break
 		}
 		open += cursor
-		close := matchingCSSBrace(contents, open)
-		if close < 0 {
+		closeIndex := matchingCSSBrace(contents, open)
+		if closeIndex < 0 {
 			parts = append(parts, contents[cursor:])
 			break
 		}
 		prefix := contents[cursor:open]
-		body := contents[open+1 : close]
+		body := contents[open+1 : closeIndex]
 		selector := strings.TrimSpace(prefix)
 		switch {
 		case selector == "":
@@ -236,7 +236,7 @@ func scopeCSSRules(contents string, scopeSelector string) string {
 			trailing := prefix[len(strings.TrimRight(prefix, " \n\r\t\f")):]
 			parts = append(parts, leading, scopeCSSSelectorList(selector, scopeSelector), trailing, "{", body, "}")
 		}
-		cursor = close + 1
+		cursor = closeIndex + 1
 	}
 	return strings.Join(parts, "")
 }

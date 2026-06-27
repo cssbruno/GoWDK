@@ -269,8 +269,7 @@ func listAddons(registryList bool, jsonOutput bool) error {
 			fmt.Println(string(payload))
 			return nil
 		}
-		writeAddonRegistryList(os.Stdout, registry.Addons)
-		return nil
+		return writeAddonRegistryList(os.Stdout, registry.Addons)
 	}
 	if jsonOutput {
 		var addable []addonregistry.Entry
@@ -298,16 +297,23 @@ func listAddons(registryList bool, jsonOutput bool) error {
 	return nil
 }
 
-func writeAddonRegistryList(writer io.Writer, entries []addonregistry.Entry) {
-	fmt.Fprintln(writer, "Addon registry (metadata only; external installation stays explicit):")
-	fmt.Fprintf(writer, "  %-14s %-19s %-12s %-13s %-5s %s\n", "NAME", "KIND", "LIFECYCLE", "COMPAT", "ADD", "SUMMARY")
+func writeAddonRegistryList(writer io.Writer, entries []addonregistry.Entry) error {
+	if _, err := fmt.Fprintln(writer, "Addon registry (metadata only; external installation stays explicit):"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(writer, "  %-14s %-19s %-12s %-13s %-5s %s\n", "NAME", "KIND", "LIFECYCLE", "COMPAT", "ADD", "SUMMARY"); err != nil {
+		return err
+	}
 	for _, entry := range entries {
 		addable := "no"
 		if entry.Constructor.Addable {
 			addable = "yes"
 		}
-		fmt.Fprintf(writer, "  %-14s %-19s %-12s %-13s %-5s %s\n", entry.Name, entry.Kind, entry.Lifecycle, entry.Compatibility, addable, entry.Summary)
+		if _, err := fmt.Fprintf(writer, "  %-14s %-19s %-12s %-13s %-5s %s\n", entry.Name, entry.Kind, entry.Lifecycle, entry.Compatibility, addable, entry.Summary); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // findConfigLiteral returns the composite literal for `var Config = ...`.

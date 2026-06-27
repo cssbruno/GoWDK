@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	goformat "go/format"
 	"os"
@@ -65,7 +66,8 @@ func runProjectHelperIfNeeded(args []string) (bool, error) {
 		"GOWDK_CLI_VERSION="+version,
 	)
 	if err := cmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		exitErr := &exec.ExitError{}
+		if errors.As(err, &exitErr) {
 			return true, helperExitError{code: exitErr.ExitCode()}
 		}
 		return true, err
@@ -81,7 +83,7 @@ func normalizeProjectHelperArgs(args []string) ([]string, error) {
 	out := append([]string(nil), args...)
 	switch out[0] {
 	case "build", "check":
-		return normalizeProjectCommandPathArgs(out, cwd, 1), nil
+		return normalizeProjectCommandPathArgs(out, cwd), nil
 	case "dev":
 		return normalizeDevHelperArgs(out, cwd), nil
 	default:
@@ -101,16 +103,16 @@ func normalizeDevHelperArgs(args []string, cwd string) []string {
 			continue
 		}
 		buildArgs := append([]string{"build"}, out[index:]...)
-		buildArgs = normalizeProjectCommandPathArgs(buildArgs, cwd, 1)
+		buildArgs = normalizeProjectCommandPathArgs(buildArgs, cwd)
 		copy(out[index:], buildArgs[1:])
 		return out
 	}
 	return out
 }
 
-func normalizeProjectCommandPathArgs(args []string, cwd string, start int) []string {
+func normalizeProjectCommandPathArgs(args []string, cwd string) []string {
 	out := append([]string(nil), args...)
-	for index := start; index < len(out); index++ {
+	for index := 1; index < len(out); index++ {
 		if next, ok := normalizeHelperValueFlag(out, index, cwd, "--config"); ok {
 			index = next
 			continue
@@ -280,7 +282,8 @@ func (err helperUnavailableError) Unwrap() error {
 }
 
 func helperUnavailable(err error) bool {
-	_, ok := err.(helperUnavailableError)
+	var helperUnavailableError helperUnavailableError
+	ok := errors.As(err, &helperUnavailableError)
 	return ok
 }
 
@@ -293,10 +296,7 @@ func ensureProjectHelper(configPath string) (helperPath string, projectRoot stri
 	if err != nil {
 		return "", "", err
 	}
-	key, err := projectHelperCacheKey(packageInfo, configPath, source)
-	if err != nil {
-		return "", "", err
-	}
+	key := projectHelperCacheKey(packageInfo, configPath, source)
 	cacheDir := filepath.Join(packageInfo.Module.Dir, ".gowdk", "helper", key)
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return "", "", err
@@ -422,7 +422,7 @@ func main() {
 	return string(formatted), nil
 }
 
-func projectHelperCacheKey(packageInfo helperPackage, configPath string, source string) (string, error) {
+func projectHelperCacheKey(packageInfo helperPackage, configPath string, source string) string {
 	hash := sha256.New()
 	writeHash := func(value string) {
 		_, _ = hash.Write([]byte(value))
@@ -446,7 +446,7 @@ func projectHelperCacheKey(packageInfo helperPackage, configPath string, source 
 		_, _ = hash.Write([]byte{0})
 	}
 	sum := hash.Sum(nil)
-	return hex.EncodeToString(sum[:12]), nil
+	return hex.EncodeToString(sum[:12])
 }
 
 func helperGoVersion(dir string) (string, error) {

@@ -92,7 +92,8 @@ func operationErrorFromCompiler(summary string, diagnostics compiler.ValidationE
 	}
 }
 
-func operationErrorFromCause(summary string, cause error) error {
+func operationErrorFromCause(cause error) error {
+	const summary = "build failed"
 	if cause == nil {
 		return &OperationError{Summary: summary}
 	}

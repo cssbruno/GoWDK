@@ -68,12 +68,10 @@ func sourceMapMappings(component gwdkir.Component, generatedSource string) strin
 	}
 
 	mappings := make([]string, 0, maxLine)
-	previousGeneratedColumn := 0
 	previousSourceIndex := 0
 	previousSourceLine := 0
 	previousSourceColumn := 0
 	for line := 1; line <= maxLine; line++ {
-		previousGeneratedColumn = 0
 		anchor, ok := byLine[line]
 		if !ok {
 			mappings = append(mappings, "")
@@ -82,12 +80,11 @@ func sourceMapMappings(component gwdkir.Component, generatedSource string) strin
 		sourceLine := anchor.sourceLine - 1
 		sourceColumn := anchor.sourceColumn - 1
 		mappings = append(mappings,
-			sourceMapVLQ(0-previousGeneratedColumn)+
+			sourceMapVLQ(0)+
 				sourceMapVLQ(0-previousSourceIndex)+
 				sourceMapVLQ(sourceLine-previousSourceLine)+
 				sourceMapVLQ(sourceColumn-previousSourceColumn),
 		)
-		previousGeneratedColumn = 0
 		previousSourceIndex = 0
 		previousSourceLine = sourceLine
 		previousSourceColumn = sourceColumn

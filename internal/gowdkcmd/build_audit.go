@@ -2,6 +2,7 @@ package gowdkcmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -253,11 +254,14 @@ func classifyFinalArtifact(path string) (finalArtifactScanDecision, error) {
 	if err != nil {
 		return finalArtifactScanDecision{}, err
 	}
-	defer file.Close()
 	header := make([]byte, 512)
 	n, err := file.Read(header)
-	if err != nil && err != io.EOF {
+	closeErr := file.Close()
+	if err != nil && !errors.Is(err, io.EOF) {
 		return finalArtifactScanDecision{}, err
+	}
+	if closeErr != nil {
+		return finalArtifactScanDecision{}, closeErr
 	}
 	return finalArtifactScanDecision{
 		scanText: finalArtifactHeaderIsText(header[:n]),
@@ -294,13 +298,16 @@ func readFinalArtifactText(path string, size int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
 	limit := size
 	if limit > finalArtifactMaxTextBytes {
 		limit = finalArtifactMaxTextBytes
 	}
 	payload, err := io.ReadAll(io.LimitReader(file, limit))
 	if err != nil {
+		_ = file.Close()
+		return "", err
+	}
+	if err := file.Close(); err != nil {
 		return "", err
 	}
 	return string(payload), nil

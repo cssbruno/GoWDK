@@ -307,7 +307,7 @@ type expressionConformanceResult struct {
 
 func runIslandExpressionConformanceHarness(t *testing.T, node string, cases []expressionConformanceCase) []expressionConformanceResult {
 	t.Helper()
-	script := islandExpressionConformanceHarness(t, string(IslandRuntimeSource()), cases)
+	script := islandExpressionConformanceHarness(t, IslandRuntimeSource(), cases)
 	path := filepath.Join(t.TempDir(), "gowdk-expression-conformance.js")
 	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
 		t.Fatal(err)

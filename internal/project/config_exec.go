@@ -166,11 +166,11 @@ func cloneExecutableSEOOptions(options gowdk.SEOOptions) gowdk.SEOOptions {
 }
 
 func (addon executableCSSAddon) ProcessCSS(context gowdk.CSSContext) (gowdk.CSSResult, error) {
-	return addon.executableAddon.processCSS(context)
+	return addon.processCSS(context)
 }
 
 func (addon executableCSSGoBlockAddon) ProcessCSS(context gowdk.CSSContext) (gowdk.CSSResult, error) {
-	return addon.executableAddon.processCSS(context)
+	return addon.processCSS(context)
 }
 
 func (addon executableAddon) processCSS(context gowdk.CSSContext) (gowdk.CSSResult, error) {
@@ -193,11 +193,11 @@ func (addon executableAddon) processCSS(context gowdk.CSSContext) (gowdk.CSSResu
 }
 
 func (addon executableGoBlockAddon) GoBlockTargets() []string {
-	return addon.executableAddon.goBlockTargetsCopy()
+	return addon.goBlockTargetsCopy()
 }
 
 func (addon executableCSSGoBlockAddon) GoBlockTargets() []string {
-	return addon.executableAddon.goBlockTargetsCopy()
+	return addon.goBlockTargetsCopy()
 }
 
 func (addon executableAddon) goBlockTargetsCopy() []string {
@@ -205,11 +205,11 @@ func (addon executableAddon) goBlockTargetsCopy() []string {
 }
 
 func (addon executableGoBlockAddon) ValidateGoBlock(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) []gowdk.GoBlockDiagnostic {
-	return addon.executableAddon.validateGoBlock(target, context)
+	return addon.validateGoBlock(target, context)
 }
 
 func (addon executableCSSGoBlockAddon) ValidateGoBlock(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) []gowdk.GoBlockDiagnostic {
-	return addon.executableAddon.validateGoBlock(target, context)
+	return addon.validateGoBlock(target, context)
 }
 
 func (addon executableAddon) validateGoBlock(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) []gowdk.GoBlockDiagnostic {
@@ -232,11 +232,11 @@ func (addon executableAddon) validateGoBlock(target gowdk.GoBlockTarget, context
 }
 
 func (addon executableGoBlockAddon) GeneratedGo(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) ([]gowdk.GoBlockFile, error) {
-	return addon.executableAddon.generatedGo(target, context)
+	return addon.generatedGo(target, context)
 }
 
 func (addon executableCSSGoBlockAddon) GeneratedGo(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) ([]gowdk.GoBlockFile, error) {
-	return addon.executableAddon.generatedGo(target, context)
+	return addon.generatedGo(target, context)
 }
 
 func (addon executableAddon) generatedGo(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) ([]gowdk.GoBlockFile, error) {
@@ -275,7 +275,9 @@ func runConfigHelper(configPath string, command string, input []byte, args ...st
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(helperDir)
+	defer func() {
+		_ = os.RemoveAll(helperDir)
+	}()
 
 	source, err := configHelperSource(packageInfo.ImportPath)
 	if err != nil {

@@ -793,7 +793,14 @@ func (handler Handler) health(response http.ResponseWriter) {
 	if handler.Tracer != nil {
 		payload["trace"] = handler.Tracer.HealthSnapshot()
 	}
-	_ = json.NewEncoder(response).Encode(payload)
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		response.WriteHeader(http.StatusInternalServerError)
+		_, _ = response.Write([]byte(`{"status":"error"}` + "\n"))
+		return
+	}
+	encoded = append(encoded, '\n')
+	_, _ = response.Write(encoded)
 }
 
 func (handler Handler) SPAFile(requestPath string) ([]byte, fs.FileInfo, string, bool) {

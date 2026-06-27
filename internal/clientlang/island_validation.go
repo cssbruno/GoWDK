@@ -754,12 +754,12 @@ func parseIslandLet(source string) (string, string, string, bool) {
 	if !ok {
 		return "", "", "", false
 	}
-	rest = strings.TrimLeftFunc(rest, func(r rune) bool { return isSpaceRune(r) })
+	rest = strings.TrimLeftFunc(rest, isSpaceRune)
 	typ, rest, ok := nextIslandIdent(rest)
 	if !ok {
 		return "", "", "", false
 	}
-	rest = strings.TrimLeftFunc(rest, func(r rune) bool { return isSpaceRune(r) })
+	rest = strings.TrimLeftFunc(rest, isSpaceRune)
 	if !strings.HasPrefix(rest, "=") {
 		return "", "", "", false
 	}

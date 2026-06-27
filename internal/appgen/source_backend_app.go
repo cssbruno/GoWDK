@@ -8,10 +8,6 @@ func backendAppPackageSource(options Options) (source string, err error) {
 	return printGoFile("gowdkapp", imports, append(backendShellDecls(options), backendGeneratedDecls(options)...))
 }
 
-func backendRuntimeImportSource(options Options) string {
-	return importSpecSource(backendRuntimeImportMap(options))
-}
-
 func backendRuntimeImportMap(options Options) map[string]string {
 	imports := map[string]string{
 		"gowdkruntime": "github.com/cssbruno/gowdk/runtime/app",

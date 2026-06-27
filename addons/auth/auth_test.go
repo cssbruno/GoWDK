@@ -691,7 +691,7 @@ func TestSessionRejectsTamperedCookie(t *testing.T) {
 	}
 	cookie := recorder.Result().Cookies()[0]
 	// Flip the role inside the signed payload without re-signing.
-	cookie.Value = cookie.Value + "x"
+	cookie.Value += "x"
 
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
 	request.AddCookie(cookie)
@@ -825,9 +825,9 @@ func TestSessionCookieDefaultsToSecureAttributes(t *testing.T) {
 	if !cookie.Expires.Equal(now.Add(DefaultSessionTTL)) {
 		t.Fatalf("cookie expires at %v, want %v", cookie.Expires, now.Add(DefaultSessionTTL))
 	}
-	clear := sessions.ClearCookie()
-	if clear.Name != DefaultSessionCookie || clear.Path != "/" || !clear.HttpOnly || !clear.Secure || clear.SameSite != http.SameSiteLaxMode {
-		t.Fatalf("unexpected default clear-cookie attributes: %#v", clear)
+	clearCookie := sessions.ClearCookie()
+	if clearCookie.Name != DefaultSessionCookie || clearCookie.Path != "/" || !clearCookie.HttpOnly || !clearCookie.Secure || clearCookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("unexpected default clear-cookie attributes: %#v", clearCookie)
 	}
 }
 
@@ -851,9 +851,9 @@ func TestSessionCookieHelpers(t *testing.T) {
 	if cookie.Name != DefaultSessionCookie || cookie.Value == "" || !cookie.HttpOnly {
 		t.Fatalf("unexpected issued cookie: %#v", cookie)
 	}
-	clear := sessions.ClearCookie()
-	if clear.Name != DefaultSessionCookie || clear.MaxAge >= 0 {
-		t.Fatalf("unexpected clear cookie: %#v", clear)
+	clearCookie := sessions.ClearCookie()
+	if clearCookie.Name != DefaultSessionCookie || clearCookie.MaxAge >= 0 {
+		t.Fatalf("unexpected clear cookie: %#v", clearCookie)
 	}
 }
 
@@ -1085,5 +1085,7 @@ func TestNewReportsEnvNameWithoutLeakingSecret(t *testing.T) {
 
 // Sessions must satisfy the Provider interface so it can be registered with the
 // generated RegisterAuthProvider hook.
-var _ Provider = (*Sessions)(nil)
-var _ PasswordHasher = PBKDF2Hasher{}
+var (
+	_ Provider       = (*Sessions)(nil)
+	_ PasswordHasher = PBKDF2Hasher{}
+)

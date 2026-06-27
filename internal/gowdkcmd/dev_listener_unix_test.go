@@ -57,7 +57,7 @@ func main() {
 	// The reserved port stays bound for the whole session, so an independent
 	// bind on it must fail — there is no window in which it is free.
 	if listener, err := net.Listen("tcp", serve.process.addr); err == nil {
-		listener.Close()
+		_ = listener.Close()
 		t.Fatalf("expected reserved port %q to stay held by the dev session", serve.process.addr)
 	}
 }

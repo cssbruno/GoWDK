@@ -161,10 +161,6 @@ func denyByOmissionJSONStmts() []ast.Stmt {
 	}
 }
 
-func generatedUsesCustomGuards(options Options) bool {
-	return generatedRequiresAppGuardRegistry(options)
-}
-
 func generatedRequiresAppGuardRegistry(options Options) bool {
 	for _, name := range generatedGuardNames(options) {
 		if auth.IsPublicGuard(name) {

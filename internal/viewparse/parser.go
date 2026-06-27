@@ -455,7 +455,7 @@ func (parser *parser) attrWithOptions(allowComponentBind bool) (Attr, error) {
 	if !isAttrName(name) {
 		return Attr{}, parser.errorf("unsupported attribute name %q", name)
 	}
-	if strings.HasPrefix(name, "g:") && !isSupportedDirectiveName(name) && !(allowComponentBind && isComponentBindDirective(name)) {
+	if strings.HasPrefix(name, "g:") && !isSupportedDirectiveName(name) && (!allowComponentBind || !isComponentBindDirective(name)) {
 		return Attr{}, parser.errorf("%s", unsupportedDirectiveMessage(name))
 	}
 
@@ -546,9 +546,7 @@ func normalizeHTMLAttrs(attrs []Attr) ([]Attr, error) {
 				out = append(out, attr)
 				continue
 			}
-			for _, className := range strings.Fields(attr.Value) {
-				classValues = append(classValues, className)
-			}
+			classValues = append(classValues, strings.Fields(attr.Value)...)
 		case "id":
 			if attr.Boolean {
 				out = append(out, attr)

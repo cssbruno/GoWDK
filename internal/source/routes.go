@@ -272,7 +272,7 @@ func RouteParamsFromPath(route string) []RouteParam {
 		}
 		end += index
 		param, ok := ParseRouteParamSegment(route[index : end+1])
-		if ok && IsRouteParamName(param.Name) && IsRouteParamType(param.Type) && !(param.Rest && param.HasType) {
+		if ok && IsRouteParamName(param.Name) && IsRouteParamType(param.Type) && (!param.Rest || !param.HasType) {
 			params = append(params, RouteParam{Name: param.Name, Type: param.Type})
 		}
 		index = end

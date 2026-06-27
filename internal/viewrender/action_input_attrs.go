@@ -53,12 +53,12 @@ func synthesizedInputAttrs(fieldType string, attrs []Attr) []Attr {
 	if !hasLiteralAttr(attrs, "inputmode") {
 		out = append(out, Attr{Name: "inputmode", Value: "numeric"})
 	}
-	if min, max, ok := integerActionInputBounds(fieldType); ok {
-		if min != "" && !hasLiteralAttr(attrs, "min") {
-			out = append(out, Attr{Name: "min", Value: min})
+	if minimum, maximum, ok := integerActionInputBounds(fieldType); ok {
+		if minimum != "" && !hasLiteralAttr(attrs, "min") {
+			out = append(out, Attr{Name: "min", Value: minimum})
 		}
-		if max != "" && !hasLiteralAttr(attrs, "max") {
-			out = append(out, Attr{Name: "max", Value: max})
+		if maximum != "" && !hasLiteralAttr(attrs, "max") {
+			out = append(out, Attr{Name: "max", Value: maximum})
 		}
 	}
 	return out

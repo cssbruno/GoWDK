@@ -53,6 +53,7 @@ func toRuntimeCondSpecs(specs []source.SSRCondSpec) []gowdkssr.CondSpec {
 }
 
 func buildSSRListArtifact(t *testing.T, view string) SSRArtifact {
+	t.Helper()
 	return buildSSRRegionArtifact(t, `=> { columns }`, view)
 }
 

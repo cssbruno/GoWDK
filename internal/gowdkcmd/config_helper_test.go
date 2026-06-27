@@ -15,7 +15,7 @@ func TestNormalizeProjectCommandPathArgsAbsolutizesExistingInputs(t *testing.T) 
 	pagePath := writeHelperArgTestFile(t, root, pageRel)
 	args := []string{"build", "--config", configRel, "--out", "dist", pageRel}
 
-	got := normalizeProjectCommandPathArgs(args, root, 1)
+	got := normalizeProjectCommandPathArgs(args, root)
 	want := []string{"build", "--config", configPath, "--out", "dist", pagePath}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("normalizeProjectCommandPathArgs() = %#v, want %#v", got, want)
@@ -33,7 +33,7 @@ func TestNormalizeProjectCommandPathArgsHandlesEqualsAndBooleanFlags(t *testing.
 	pagePath := writeHelperArgTestFile(t, root, pageRel)
 	args := []string{"build", "--config=" + configRel, "--timings", pageRel}
 
-	got := normalizeProjectCommandPathArgs(args, root, 1)
+	got := normalizeProjectCommandPathArgs(args, root)
 	want := []string{"build", "--config=" + configPath, "--timings", pagePath}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("normalizeProjectCommandPathArgs() = %#v, want %#v", got, want)

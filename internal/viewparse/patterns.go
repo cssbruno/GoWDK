@@ -25,26 +25,11 @@ func (pattern viewPattern) FindStringSubmatch(source string) []string {
 }
 
 var (
-	islandFieldPattern         = viewPattern{match: isIdentifier}
-	islandTextBindingPattern   = viewPattern{submatch: parseIslandTextBinding}
 	forDirectivePattern        = viewPattern{submatch: parseForDirectivePattern}
-	contractReferencePattern   = viewPattern{match: isContractReference}
 	eventNamePattern           = viewPattern{match: isEventName}
 	stylePropertyPattern       = viewPattern{match: isStyleProperty}
 	styleCustomPropertyPattern = viewPattern{match: isStyleCustomProperty}
 )
-
-func parseIslandTextBinding(source string) []string {
-	trimmed := strings.TrimSpace(source)
-	if !strings.HasPrefix(trimmed, "{") || !strings.HasSuffix(trimmed, "}") {
-		return nil
-	}
-	name := strings.TrimSpace(trimmed[1 : len(trimmed)-1])
-	if !isIdentifier(name) {
-		return nil
-	}
-	return []string{source, name}
-}
 
 func parseForDirectivePattern(source string) []string {
 	inStart, inEnd, ok := findForInOperator(source)
@@ -92,21 +77,8 @@ func findForInOperator(source string) (int, int, bool) {
 	return 0, 0, false
 }
 
-func isContractReference(source string) bool {
-	parts := strings.Split(source, ".")
-	if len(parts) < 2 {
-		return false
-	}
-	for _, part := range parts {
-		if !isIdentifier(part) {
-			return false
-		}
-	}
-	return true
-}
-
 func isEventName(source string) bool {
-	if source == "" || !((source[0] >= 'A' && source[0] <= 'Z') || (source[0] >= 'a' && source[0] <= 'z')) {
+	if source == "" || (source[0] < 'A' || source[0] > 'Z') && (source[0] < 'a' || source[0] > 'z') {
 		return false
 	}
 	for index := 1; index < len(source); index++ {

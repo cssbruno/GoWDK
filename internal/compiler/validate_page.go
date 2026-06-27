@@ -130,7 +130,7 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 		diagnostics = append(diagnostics, routeDiagnostics(page, fmt.Sprintf("fragment %s endpoint path", fragment.Name), issues, fragment.RouteSpan, fragment.RouteParams)...)
 	}
 
-	if requiresSSRFeature(mode, page) && !config.HasFeature(gowdk.FeatureSSR) {
+	if requiresSSRFeature(mode) && !config.HasFeature(gowdk.FeatureSSR) {
 		diagnostics = append(diagnostics, ValidationError{
 			Code:   "missing_ssr_addon",
 			PageID: page.ID,
@@ -159,7 +159,7 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 	if len(pageRouteIssues) == 0 {
 		params = pageRoute.Params
 	}
-	if isBuildTimeRoute(mode, page) && len(pageRouteIssues) == 0 && pageRoute.RestParam != "" {
+	if isBuildTimeRoute(mode) && len(pageRouteIssues) == 0 && pageRoute.RestParam != "" {
 		diagnostics = append(diagnostics, ValidationError{
 			Code:   "malformed_route",
 			PageID: page.ID,
@@ -172,7 +172,7 @@ func ValidatePage(config gowdk.Config, page gwdkir.Page) []ValidationError {
 				mode,
 			),
 		})
-	} else if isBuildTimeRoute(mode, page) && len(params) > 0 && !page.Blocks.Paths {
+	} else if isBuildTimeRoute(mode) && len(params) > 0 && !page.Blocks.Paths {
 		diagnostics = append(diagnostics, ValidationError{
 			Code:   "spa_dynamic_route_missing_paths",
 			PageID: page.ID,
@@ -304,7 +304,7 @@ func validatePageGuards(page gwdkir.Page) []ValidationError {
 }
 
 func validateProtectedPageGuardRender(page gwdkir.Page, mode gowdk.RenderMode) []ValidationError {
-	if !isBuildTimeRoute(mode, page) || !hasProtectedPageGuard(page) {
+	if !isBuildTimeRoute(mode) || !hasProtectedPageGuard(page) {
 		return nil
 	}
 	return []ValidationError{{
@@ -338,11 +338,11 @@ func firstGoBlockSpan(page gwdkir.Page, target string) source.SourceSpan {
 	return source.SourceSpan{}
 }
 
-func requiresSSRFeature(mode gowdk.RenderMode, page gwdkir.Page) bool {
+func requiresSSRFeature(mode gowdk.RenderMode) bool {
 	return mode == gowdk.SSR || mode == gowdk.Hybrid
 }
 
-func isBuildTimeRoute(mode gowdk.RenderMode, page gwdkir.Page) bool {
+func isBuildTimeRoute(mode gowdk.RenderMode) bool {
 	switch mode {
 	case gowdk.SPA:
 		return true

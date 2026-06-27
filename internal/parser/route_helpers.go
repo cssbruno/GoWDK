@@ -50,18 +50,6 @@ func sourceLineSpan(lineNumber int, rawLine string) source.SourceSpan {
 	}
 }
 
-func sourceBodyStart(lines []string, firstLineNumber int) source.SourcePosition {
-	for offset, rawLine := range lines {
-		for index, char := range []rune(rawLine) {
-			if strings.TrimSpace(string(char)) == "" {
-				continue
-			}
-			return source.SourcePosition{Line: firstLineNumber + offset, Column: index + 1}
-		}
-	}
-	return source.SourcePosition{}
-}
-
 func namedValueSpans(values []string, lineNumber int, rawLine string) []source.NamedSpan {
 	if len(values) == 0 {
 		return nil

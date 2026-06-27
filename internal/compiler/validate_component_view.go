@@ -346,11 +346,6 @@ func literalAttrValue(attrs []viewmodel.Attr, name string) string {
 	return ""
 }
 
-func collectSimpleInterpolations(value string, fields map[string]bool) {
-	refs := componentViewRefs{Fields: fields}
-	collectSimpleInterpolationRefs(value, 0, &refs)
-}
-
 func collectSimpleInterpolationRefs(value string, base int, refs *componentViewRefs) {
 	for index := 0; index < len(value); index++ {
 		if value[index] != '{' {

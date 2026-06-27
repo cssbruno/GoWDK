@@ -8,14 +8,16 @@ import (
 	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
-type Attr = viewmodel.Attr
-type AwaitBlock = viewmodel.AwaitBlock
-type Component = viewmodel.Component
-type ComponentCall = viewmodel.ComponentCall
-type Element = viewmodel.Element
-type InlineScript = viewmodel.InlineScript
-type Node = viewmodel.Node
-type Text = viewmodel.Text
+type (
+	Attr          = viewmodel.Attr
+	AwaitBlock    = viewmodel.AwaitBlock
+	Component     = viewmodel.Component
+	ComponentCall = viewmodel.ComponentCall
+	Element       = viewmodel.Element
+	InlineScript  = viewmodel.InlineScript
+	Node          = viewmodel.Node
+	Text          = viewmodel.Text
+)
 
 // Parse parses a view markup fragment.
 func Parse(source string) ([]Node, error) {
@@ -84,21 +86,25 @@ type ActionFormField struct {
 	PatternMessage   string
 }
 
-type Dependencies = viewanalysis.Dependencies
-type ComponentIslandUsage = viewanalysis.ComponentIslandUsage
-type ComponentCallUsage = viewanalysis.ComponentCallUsage
-type ComponentReference = viewanalysis.ComponentReference
-type ContractReference = viewanalysis.ContractReference
-type ContractReferenceKind = viewanalysis.ContractReferenceKind
+type (
+	Dependencies          = viewanalysis.Dependencies
+	ComponentIslandUsage  = viewanalysis.ComponentIslandUsage
+	ComponentCallUsage    = viewanalysis.ComponentCallUsage
+	ComponentReference    = viewanalysis.ComponentReference
+	ContractReference     = viewanalysis.ContractReference
+	ContractReferenceKind = viewanalysis.ContractReferenceKind
+)
 
 const (
 	ContractReferenceCommand = viewanalysis.ContractReferenceCommand
 	ContractReferenceQuery   = viewanalysis.ContractReferenceQuery
 )
 
-type CommandReference = viewanalysis.CommandReference
-type QueryReference = viewanalysis.QueryReference
-type SubscriptionReference = viewanalysis.SubscriptionReference
+type (
+	CommandReference      = viewanalysis.CommandReference
+	QueryReference        = viewanalysis.QueryReference
+	SubscriptionReference = viewanalysis.SubscriptionReference
+)
 
 // RenderWithOptions renders a view markup fragment with component support,
 // interpolation data, and page-scoped action endpoints.

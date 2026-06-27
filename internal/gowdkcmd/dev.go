@@ -295,7 +295,7 @@ func (serve *devServeState) useRuntime(runtime devRuntime) error {
 		server, err := startDevRuntimeProxy(serve.addr, targetAddr, serve.reload)
 		if err != nil {
 			if listener != nil {
-				listener.Close()
+				_ = listener.Close()
 			}
 			return err
 		}
@@ -483,7 +483,9 @@ func (process *devRuntimeProcess) restart() error {
 		if err != nil {
 			return fmt.Errorf("share dev runtime listener: %w", err)
 		}
-		defer file.Close()
+		defer func() {
+			_ = file.Close()
+		}()
 		command.ExtraFiles = []*os.File{file}
 		command.Env = append(command.Env, fmt.Sprintf("%s=%d", gowdkListenerFDEnv, devRuntimeListenerFD))
 	}
@@ -604,10 +606,7 @@ func parseDevOptions(args []string) (devOptions, error) {
 			i = next
 			continue
 		}
-		switch {
-		default:
-			options.BuildArgs = append(options.BuildArgs, arg)
-		}
+		options.BuildArgs = append(options.BuildArgs, arg)
 	}
 	if strings.TrimSpace(options.Addr) == "" {
 		return devOptions{}, fmt.Errorf("dev address is required")

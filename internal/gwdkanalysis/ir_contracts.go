@@ -25,16 +25,17 @@ func appendContractReferences(program *gwdkir.Program, template gwdkir.Template)
 		path := ref.Path
 		if path == "" && template.Route != "" {
 			routeIsDynamic := routeHasDynamicParams(template.Route)
-			if routeIsDynamic {
+			switch {
+			case routeIsDynamic:
 				program.Diagnostics = append(program.Diagnostics, gwdkir.Diagnostic{
 					Code:    "contract_route_invalid",
 					Source:  template.Source,
 					Span:    templateOffsetSpan(template, ref.Start, ref.End),
 					Message: fmt.Sprintf("%s %s must declare an explicit route on dynamic page route %q", irContractReferenceKind(ref.Kind), ref.Name, template.Route),
 				})
-			} else if ref.Kind == viewanalysis.ContractReferenceQuery {
+			case ref.Kind == viewanalysis.ContractReferenceQuery:
 				method = "GET"
-			} else if method == "" {
+			case method == "":
 				method = "POST"
 			}
 			if !routeIsDynamic {

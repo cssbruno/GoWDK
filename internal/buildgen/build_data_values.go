@@ -1,7 +1,6 @@
 package buildgen
 
 import (
-	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -75,8 +74,7 @@ func buildObjectValue(order []string, fields map[string]buildValue) buildValue {
 func (v buildValue) jsonText() string {
 	switch v.kind {
 	case buildValueString:
-		encoded, _ := json.Marshal(v.text)
-		return string(encoded)
+		return strconv.Quote(v.text)
 	case buildValueNumber:
 		return canonicalJSONNumber(v.text, v.number)
 	case buildValueBool:
@@ -92,8 +90,7 @@ func (v buildValue) jsonText() string {
 	case buildValueObject:
 		parts := make([]string, 0, len(v.order))
 		for _, name := range v.order {
-			key, _ := json.Marshal(name)
-			parts = append(parts, string(key)+":"+v.fields[name].jsonText())
+			parts = append(parts, strconv.Quote(name)+":"+v.fields[name].jsonText())
 		}
 		return "{" + strings.Join(parts, ",") + "}"
 	default:

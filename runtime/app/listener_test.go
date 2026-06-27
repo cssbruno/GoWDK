@@ -9,7 +9,7 @@ func TestInheritedListenerWithoutEnv(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if listener != nil {
-		listener.Close()
+		_ = listener.Close()
 		t.Fatal("expected no inherited listener when GOWDK_LISTENER_FD is unset")
 	}
 }
@@ -21,7 +21,7 @@ func TestInheritedListenerInvalidFD(t *testing.T) {
 			listener, err := inheritedListener()
 			if err == nil {
 				if listener != nil {
-					listener.Close()
+					_ = listener.Close()
 				}
 				t.Fatalf("expected error for GOWDK_LISTENER_FD=%q", value)
 			}

@@ -2732,7 +2732,7 @@ func TestBuildRejectsWASMIslandPackageMissingABIExports(t *testing.T) {
 			t.Fatalf("expected %q in error: %v", expected, err)
 		}
 	}
-	requireBuildDiagnostic(t, err, "wasm_package_export_error", "Counter")
+	requireBuildDiagnostic(t, err, "wasm_package_export_error")
 }
 
 func TestBuildRejectsWASMIslandPackageBadABIExportSignature(t *testing.T) {
@@ -2769,7 +2769,7 @@ func main() {}
 	if !strings.Contains(err.Error(), `WASM export GOWDKMountCounter must have signature func() uint32`) {
 		t.Fatalf("unexpected bad wasm export signature error: %v", err)
 	}
-	requireBuildDiagnostic(t, err, "wasm_package_export_error", "Counter")
+	requireBuildDiagnostic(t, err, "wasm_package_export_error")
 }
 
 func TestBuildRejectsWASMIslandPackageWithoutMainEntrypoint(t *testing.T) {
@@ -2797,7 +2797,7 @@ func TestBuildRejectsWASMIslandPackageWithoutMainEntrypoint(t *testing.T) {
 		!strings.Contains(err.Error(), "declare a package main with a main function") {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	requireBuildDiagnostic(t, err, "wasm_package_entrypoint_error", "Counter")
+	requireBuildDiagnostic(t, err, "wasm_package_entrypoint_error")
 }
 
 func TestBuildSurfacesWASMIslandPackageImportErrors(t *testing.T) {
@@ -2832,7 +2832,7 @@ func main() {}`)
 			t.Fatalf("expected %q in error: %v", expected, err)
 		}
 	}
-	requireBuildDiagnostic(t, err, "wasm_package_build_error", "Counter")
+	requireBuildDiagnostic(t, err, "wasm_package_build_error")
 }
 
 func TestBuildRejectsUnsupportedWASMIslandPackageImports(t *testing.T) {
@@ -2867,10 +2867,10 @@ func main() {}`)
 			t.Fatalf("expected %q in error: %v", expected, err)
 		}
 	}
-	requireBuildDiagnostic(t, err, "unsupported_wasm_import", "Counter")
+	requireBuildDiagnostic(t, err, "unsupported_wasm_import")
 }
 
-func requireBuildDiagnostic(t *testing.T, err error, code string, componentName string) {
+func requireBuildDiagnostic(t *testing.T, err error, code string) {
 	t.Helper()
 	var buildErr *BuildError
 	if !errors.As(err, &buildErr) {
@@ -2880,7 +2880,7 @@ func requireBuildDiagnostic(t *testing.T, err error, code string, componentName 
 		t.Fatalf("expected one build diagnostic, got %#v", buildErr.Diagnostics)
 	}
 	diagnostic := buildErr.Diagnostics[0]
-	if diagnostic.Code != code || diagnostic.ComponentName != componentName {
+	if diagnostic.Code != code || diagnostic.ComponentName != "Counter" {
 		t.Fatalf("unexpected build diagnostic: %#v", diagnostic)
 	}
 }

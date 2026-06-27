@@ -188,10 +188,14 @@ func evalLiteral(expr LiteralExpr) (any, error) {
 	case TypeBool:
 		return expr.Value == "true", nil
 	case TypeNil:
-		return nil, nil
+		return nilLiteralValue(), nil
 	default:
 		return nil, fmt.Errorf("unknown literal type %q", expr.Type)
 	}
+}
+
+func nilLiteralValue() any {
+	return nil
 }
 
 func evalBinary(op string, left, right any) (any, error) {

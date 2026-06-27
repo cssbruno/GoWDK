@@ -5,29 +5,6 @@ import (
 	"strings"
 )
 
-func blockedViewElement(name string) bool {
-	return strings.EqualFold(strings.TrimSpace(name), "script")
-}
-
-func validateParsedHTMLAttrSafety(attr Attr) error {
-	if inlineEventHandlerAttr(attr.Name) {
-		return fmt.Errorf("inline event handler attribute %q is not supported; use g:on:* inside stateful components", attr.Name)
-	}
-	if strings.EqualFold(strings.TrimSpace(attr.Name), "srcdoc") {
-		return fmt.Errorf("srcdoc attribute is not supported; use g:unsafe-html only with trusted sanitized HTML")
-	}
-	if attr.Boolean {
-		if urlBearingAttr(attr.Name) {
-			return fmt.Errorf("%q attributes require a URL value", attr.Name)
-		}
-		return nil
-	}
-	if strings.Contains(attr.Value, "{") {
-		return nil
-	}
-	return validateURLAttrValue(attr.Name, attr.Value)
-}
-
 func validateRenderedHTMLAttrSafety(name, value string) error {
 	if inlineEventHandlerAttr(name) {
 		return fmt.Errorf("inline event handler attribute %q is not supported; use g:on:* inside stateful components", name)
@@ -107,8 +84,8 @@ func explicitURLScheme(value string) (string, bool) {
 		return "", false
 	}
 	for index, char := range value {
-		switch {
-		case char == ':':
+		switch char {
+		case ':':
 			if index == 0 {
 				return "", false
 			}
@@ -117,7 +94,7 @@ func explicitURLScheme(value string) (string, bool) {
 				return "", false
 			}
 			return strings.ToLower(candidate), true
-		case char == '/', char == '?', char == '#':
+		case '/', '?', '#':
 			return "", false
 		}
 	}

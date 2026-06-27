@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"hash"
 	"strconv"
 	"strings"
 )
@@ -144,5 +143,5 @@ func decodeHash(encoded string) (iterations int, salt, key []byte, err error) {
 }
 
 func pbkdf2SHA256(password string, salt []byte, iterations, keyLength int) ([]byte, error) {
-	return pbkdf2.Key(func() hash.Hash { return sha256.New() }, password, salt, iterations, keyLength)
+	return pbkdf2.Key(sha256.New, password, salt, iterations, keyLength)
 }

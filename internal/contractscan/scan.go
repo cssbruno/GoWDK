@@ -14,8 +14,10 @@ import (
 	runtimecontracts "github.com/cssbruno/gowdk/runtime/contracts"
 )
 
-const RuntimeImportPath = "github.com/cssbruno/gowdk/runtime/contracts"
-const generatedAppModulePath = "gowdk-generated-app"
+const (
+	RuntimeImportPath      = "github.com/cssbruno/gowdk/runtime/contracts"
+	generatedAppModulePath = "gowdk-generated-app"
+)
 
 // Contract describes one discovered registration call.
 type Contract struct {

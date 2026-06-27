@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/parser"
 	"go/token"
@@ -336,7 +337,7 @@ func parseAuditCommandOptions(args []string) (auditCommandOptions, []string, err
 			options.EmitTests = true
 			options.TestPath = strings.TrimSpace(strings.TrimPrefix(arg, "--emit-tests="))
 			if options.TestPath == "" {
-				return options, nil, fmt.Errorf(auditUsage)
+				return options, nil, errors.New(auditUsage)
 			}
 		case arg == "--check-tests":
 			options.CheckTests = true
@@ -344,7 +345,7 @@ func parseAuditCommandOptions(args []string) (auditCommandOptions, []string, err
 			options.CheckTests = true
 			options.TestPath = strings.TrimSpace(strings.TrimPrefix(arg, "--check-tests="))
 			if options.TestPath == "" {
-				return options, nil, fmt.Errorf(auditUsage)
+				return options, nil, errors.New(auditUsage)
 			}
 		case arg == "--force":
 			options.Force = true
@@ -365,7 +366,7 @@ func parseAuditCommandOptions(args []string) (auditCommandOptions, []string, err
 		case strings.HasPrefix(arg, "--schema="):
 			options.Schema = strings.TrimSpace(strings.TrimPrefix(arg, "--schema="))
 			if options.Schema == "" {
-				return options, nil, fmt.Errorf(auditUsage)
+				return options, nil, errors.New(auditUsage)
 			}
 		case arg == "--sarif":
 			options.SARIF = true
@@ -373,21 +374,21 @@ func parseAuditCommandOptions(args []string) (auditCommandOptions, []string, err
 			options.SARIF = true
 			options.SARIFPath = strings.TrimSpace(strings.TrimPrefix(arg, "--sarif="))
 			if options.SARIFPath == "" {
-				return options, nil, fmt.Errorf(auditUsage)
+				return options, nil, errors.New(auditUsage)
 			}
 		case strings.HasPrefix(arg, "--diff="):
 			options.DiffPath = strings.TrimSpace(strings.TrimPrefix(arg, "--diff="))
 			if options.DiffPath == "" {
-				return options, nil, fmt.Errorf(auditUsage)
+				return options, nil, errors.New(auditUsage)
 			}
 		case arg == "--diff":
 			if index+1 >= len(args) {
-				return options, nil, fmt.Errorf(auditUsage)
+				return options, nil, errors.New(auditUsage)
 			}
 			index++
 			options.DiffPath = strings.TrimSpace(args[index])
 			if options.DiffPath == "" {
-				return options, nil, fmt.Errorf(auditUsage)
+				return options, nil, errors.New(auditUsage)
 			}
 		default:
 			projectArgs = append(projectArgs, arg)
@@ -488,15 +489,28 @@ func handleAuditTests(auditOptions auditCommandOptions, options cliOptions, ir g
 }
 
 func standaloneAuditPackageName(dir string) string {
-	packages, err := parser.ParseDir(token.NewFileSet(), dir, func(info os.FileInfo) bool {
-		name := info.Name()
-		return strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
-	}, parser.PackageClauseOnly)
-	if err != nil || len(packages) == 0 {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
 		return "gowdkaudit_test"
 	}
-	names := make([]string, 0, len(packages))
-	for name := range packages {
+	packageNames := map[string]bool{}
+	fileSet := token.NewFileSet()
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fileSet, filepath.Join(dir, name), nil, parser.PackageClauseOnly)
+		if err != nil || file.Name == nil {
+			continue
+		}
+		packageNames[file.Name.Name] = true
+	}
+	if len(packageNames) == 0 {
+		return "gowdkaudit_test"
+	}
+	names := make([]string, 0, len(packageNames))
+	for name := range packageNames {
 		names = append(names, name)
 	}
 	sort.Strings(names)
@@ -524,7 +538,9 @@ func runGeneratedAppAuditTests(options cliOptions, ir gwdkir.Program, runOptions
 	if err != nil {
 		return "", auditRunResult{}, err
 	}
-	defer os.RemoveAll(tempRoot)
+	defer func() {
+		_ = os.RemoveAll(tempRoot)
+	}()
 
 	outputDir := filepath.Join(tempRoot, "output")
 	appDir := filepath.Join(tempRoot, "app")

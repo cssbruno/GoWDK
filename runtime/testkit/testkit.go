@@ -102,34 +102,34 @@ func (request Request) WithQuery(name, value string) Request {
 
 // NewClient creates a cookie-preserving client that executes requests directly
 // against handler without opening a listener.
-func NewClient(t testing.TB, handler http.Handler) *Client {
-	t.Helper()
+func NewClient(tb testing.TB, handler http.Handler) *Client {
+	tb.Helper()
 	if handler == nil {
-		t.Fatal("testkit client requires a handler")
+		tb.Fatal("testkit client requires a handler")
 	}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		t.Fatalf("create cookie jar: %v", err)
+		tb.Fatalf("create cookie jar: %v", err)
 	}
 	return &Client{handler: handler, jar: jar, baseURL: "http://gowdk.test"}
 }
 
 // NewServerClient creates a cookie-preserving client backed by an httptest
 // server. Use this when behavior depends on the HTTP transport.
-func NewServerClient(t testing.TB, handler http.Handler) *Client {
-	t.Helper()
+func NewServerClient(tb testing.TB, handler http.Handler) *Client {
+	tb.Helper()
 	if handler == nil {
-		t.Fatal("testkit server client requires a handler")
+		tb.Fatal("testkit server client requires a handler")
 	}
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		t.Fatalf("create cookie jar: %v", err)
+		tb.Fatalf("create cookie jar: %v", err)
 	}
 	server := httptest.NewServer(handler)
 	httpClient := server.Client()
 	httpClient.Jar = jar
 	client := &Client{server: server, httpClient: httpClient, jar: jar, baseURL: server.URL}
-	t.Cleanup(client.Close)
+	tb.Cleanup(client.Close)
 	return client
 }
 
@@ -150,132 +150,132 @@ func (client *Client) Close() {
 }
 
 // Do executes one request and returns the captured result.
-func (client *Client) Do(t testing.TB, request Request) Result {
-	t.Helper()
+func (client *Client) Do(tb testing.TB, request Request) Result {
+	tb.Helper()
 	if client == nil {
-		t.Fatal("testkit client is nil")
+		tb.Fatal("testkit client is nil")
+		return Result{}
 	}
 	if client.server != nil {
-		return client.doServer(t, request)
+		return client.doServer(tb, request)
 	}
-	return client.doDirect(t, request)
+	return client.doDirect(tb, request)
 }
 
 // Get executes a GET request.
-func (client *Client) Get(t testing.TB, path string) Result {
-	t.Helper()
-	return client.Do(t, Get(path))
+func (client *Client) Get(tb testing.TB, path string) Result {
+	tb.Helper()
+	return client.Do(tb, Get(path))
 }
 
 // PostForm executes a form POST request.
-func (client *Client) PostForm(t testing.TB, path string, form url.Values) Result {
-	t.Helper()
-	return client.Do(t, PostForm(path, form))
+func (client *Client) PostForm(tb testing.TB, path string, form url.Values) Result {
+	tb.Helper()
+	return client.Do(tb, PostForm(path, form))
 }
 
 // PostJSON executes a JSON POST request.
-func (client *Client) PostJSON(t testing.TB, path string, value any) Result {
-	t.Helper()
-	return client.Do(t, PostJSON(path, value))
+func (client *Client) PostJSON(tb testing.TB, path string, value any) Result {
+	tb.Helper()
+	return client.Do(tb, PostJSON(path, value))
 }
 
 // AssertStatus checks the response status code.
-func (result Result) AssertStatus(t testing.TB, want int) {
-	t.Helper()
+func (result Result) AssertStatus(tb testing.TB, want int) {
+	tb.Helper()
 	if result.StatusCode != want {
-		t.Fatalf("status = %d, want %d with body %s", result.StatusCode, want, responseBodySummary(result.Body))
+		tb.Fatalf("status = %d, want %d with body %s", result.StatusCode, want, responseBodySummary(result.Body))
 	}
 }
 
-// AssertStatusRange checks that the response status code is within [min, max].
-func (result Result) AssertStatusRange(t testing.TB, min, max int) {
-	t.Helper()
-	if result.StatusCode < min || result.StatusCode > max {
-		t.Fatalf("status = %d, want range %d..%d with body %s", result.StatusCode, min, max, responseBodySummary(result.Body))
+// AssertStatusRange checks that the response status code is within [minimum, maximum].
+func (result Result) AssertStatusRange(tb testing.TB, minimum, maximum int) {
+	tb.Helper()
+	if result.StatusCode < minimum || result.StatusCode > maximum {
+		tb.Fatalf("status = %d, want range %d..%d with body %s", result.StatusCode, minimum, maximum, responseBodySummary(result.Body))
 	}
 }
 
 // AssertHeader checks one exact response header value.
-func (result Result) AssertHeader(t testing.TB, name, want string) {
-	t.Helper()
+func (result Result) AssertHeader(tb testing.TB, name, want string) {
+	tb.Helper()
 	if got := result.Header.Get(name); got != want {
-		t.Fatalf("header %s = %q, want %q", name, got, want)
+		tb.Fatalf("header %s = %q, want %q", name, got, want)
 	}
 }
 
 // AssertHeaderContains checks that one response header contains text.
-func (result Result) AssertHeaderContains(t testing.TB, name, want string) {
-	t.Helper()
+func (result Result) AssertHeaderContains(tb testing.TB, name, want string) {
+	tb.Helper()
 	if got := result.Header.Get(name); !strings.Contains(got, want) {
-		t.Fatalf("header %s = %q, want it to contain %q", name, got, want)
+		tb.Fatalf("header %s = %q, want it to contain %q", name, got, want)
 	}
 }
 
 // AssertContentType checks the response Content-Type prefix.
-func (result Result) AssertContentType(t testing.TB, want string) {
-	t.Helper()
+func (result Result) AssertContentType(tb testing.TB, want string) {
+	tb.Helper()
 	if got := result.Header.Get("Content-Type"); !strings.HasPrefix(got, want) {
-		t.Fatalf("content type = %q, want prefix %q", got, want)
+		tb.Fatalf("content type = %q, want prefix %q", got, want)
 	}
 }
 
 // AssertCookie checks that a response Set-Cookie with name exists.
-func (result Result) AssertCookie(t testing.TB, name string) *http.Cookie {
-	t.Helper()
+func (result Result) AssertCookie(tb testing.TB, name string) *http.Cookie {
+	tb.Helper()
 	for _, cookie := range result.Cookies {
 		if cookie.Name == name {
 			return cookie
 		}
 	}
-	t.Fatalf("missing Set-Cookie %q in %#v", name, result.Cookies)
+	tb.Fatalf("missing Set-Cookie %q in %#v", name, result.Cookies)
 	return nil
 }
 
 // AssertBodyEquals checks the complete response body.
-func (result Result) AssertBodyEquals(t testing.TB, want string) {
-	t.Helper()
+func (result Result) AssertBodyEquals(tb testing.TB, want string) {
+	tb.Helper()
 	if result.Body != want {
-		t.Fatalf("body = %q, want %q", result.Body, want)
+		tb.Fatalf("body = %q, want %q", result.Body, want)
 	}
 }
 
 // AssertBodyContains checks that the response body contains text.
-func (result Result) AssertBodyContains(t testing.TB, want string) {
-	t.Helper()
+func (result Result) AssertBodyContains(tb testing.TB, want string) {
+	tb.Helper()
 	if !strings.Contains(result.Body, want) {
-		t.Fatalf("body does not contain %q: %s", want, responseBodySummary(result.Body))
+		tb.Fatalf("body does not contain %q: %s", want, responseBodySummary(result.Body))
 	}
 }
 
 // AssertJSONEqual compares the response body with want after JSON
 // normalization.
-func (result Result) AssertJSONEqual(t testing.TB, want any) {
-	t.Helper()
+func (result Result) AssertJSONEqual(tb testing.TB, want any) {
+	tb.Helper()
 	var gotValue any
 	if err := json.Unmarshal([]byte(result.Body), &gotValue); err != nil {
-		t.Fatalf("decode response JSON: %v with body %s", err, responseBodySummary(result.Body))
+		tb.Fatalf("decode response JSON: %v with body %s", err, responseBodySummary(result.Body))
 	}
 	wantPayload, err := json.Marshal(want)
 	if err != nil {
-		t.Fatalf("encode expected JSON: %v", err)
+		tb.Fatalf("encode expected JSON: %v", err)
 	}
 	var wantValue any
 	if err := json.Unmarshal(wantPayload, &wantValue); err != nil {
-		t.Fatalf("decode expected JSON: %v", err)
+		tb.Fatalf("decode expected JSON: %v", err)
 	}
 	if !reflect.DeepEqual(gotValue, wantValue) {
-		t.Fatalf("JSON response = %#v, want %#v", gotValue, wantValue)
+		tb.Fatalf("JSON response = %#v, want %#v", gotValue, wantValue)
 	}
 }
 
 // Run executes scenarios against handler.
-func Run(t testing.TB, handler http.Handler, scenarios []Scenario) {
-	t.Helper()
-	if runner, ok := t.(interface {
+func Run(tb testing.TB, handler http.Handler, scenarios []Scenario) {
+	tb.Helper()
+	if runner, ok := tb.(interface {
 		Run(string, func(*testing.T)) bool
 	}); ok {
 		for _, scenario := range scenarios {
-			scenario := scenario
 			runner.Run(scenarioName(scenario), func(t *testing.T) {
 				t.Helper()
 				runScenario(t, handler, scenario)
@@ -284,30 +284,30 @@ func Run(t testing.TB, handler http.Handler, scenarios []Scenario) {
 		return
 	}
 	for _, scenario := range scenarios {
-		runScenario(t, handler, scenario)
+		runScenario(tb, handler, scenario)
 	}
 }
 
-func runScenario(t testing.TB, handler http.Handler, scenario Scenario) {
-	t.Helper()
+func runScenario(tb testing.TB, handler http.Handler, scenario Scenario) {
+	tb.Helper()
 	response := Response(handler, scenario)
 	if scenario.WantStatus != 0 && response.Code != scenario.WantStatus {
-		t.Errorf("expected status %d, got %d with body %s", scenario.WantStatus, response.Code, responseBodySummary(response.Body.String()))
+		tb.Errorf("expected status %d, got %d with body %s", scenario.WantStatus, response.Code, responseBodySummary(response.Body.String()))
 	}
 	for name, want := range scenario.WantHeader {
 		if got := response.Header().Get(name); got != want {
-			t.Errorf("expected header %s=%q, got %q", name, want, got)
+			tb.Errorf("expected header %s=%q, got %q", name, want, got)
 		}
 	}
 	if want := strings.TrimSpace(scenario.WantBodyContains); want != "" && !strings.Contains(response.Body.String(), want) {
-		t.Errorf("expected body to contain %q, got %s", want, responseBodySummary(response.Body.String()))
+		tb.Errorf("expected body to contain %q, got %s", want, responseBodySummary(response.Body.String()))
 	}
 }
 
 // AssertStatus checks one request's response status.
-func AssertStatus(t testing.TB, handler http.Handler, method, requestPath, body string, want int) {
-	t.Helper()
-	Run(t, handler, []Scenario{{
+func AssertStatus(tb testing.TB, handler http.Handler, method, requestPath, body string, want int) {
+	tb.Helper()
+	Run(tb, handler, []Scenario{{
 		Name:       method + " " + requestPath,
 		Method:     method,
 		Path:       requestPath,
@@ -317,9 +317,9 @@ func AssertStatus(t testing.TB, handler http.Handler, method, requestPath, body 
 }
 
 // AssertHeader checks one response header value.
-func AssertHeader(t testing.TB, handler http.Handler, method, requestPath, name, want string) {
-	t.Helper()
-	Run(t, handler, []Scenario{{
+func AssertHeader(tb testing.TB, handler http.Handler, method, requestPath, name, want string) {
+	tb.Helper()
+	Run(tb, handler, []Scenario{{
 		Name:       method + " " + requestPath,
 		Method:     method,
 		Path:       requestPath,
@@ -346,9 +346,9 @@ func Response(handler http.Handler, scenario Scenario) *httptest.ResponseRecorde
 	return response
 }
 
-func (client *Client) doDirect(t testing.TB, request Request) Result {
-	t.Helper()
-	httpRequest := client.newHTTPRequest(t, request)
+func (client *Client) doDirect(tb testing.TB, request Request) Result {
+	tb.Helper()
+	httpRequest := client.newHTTPRequest(tb, request)
 	for _, cookie := range client.jar.Cookies(httpRequest.URL) {
 		httpRequest.AddCookie(cookie)
 	}
@@ -365,17 +365,19 @@ func (client *Client) doDirect(t testing.TB, request Request) Result {
 	}
 }
 
-func (client *Client) doServer(t testing.TB, request Request) Result {
-	t.Helper()
-	httpRequest := client.newHTTPRequest(t, request)
+func (client *Client) doServer(tb testing.TB, request Request) Result {
+	tb.Helper()
+	httpRequest := client.newHTTPRequest(tb, request)
 	response, err := client.httpClient.Do(httpRequest)
 	if err != nil {
-		t.Fatalf("execute %s %s: %v", httpRequest.Method, httpRequest.URL.String(), err)
+		tb.Fatalf("execute %s %s: %v", httpRequest.Method, httpRequest.URL.String(), err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		t.Fatalf("read response body: %v", err)
+		tb.Fatalf("read response body: %v", err)
 	}
 	return Result{
 		StatusCode: response.StatusCode,
@@ -386,21 +388,21 @@ func (client *Client) doServer(t testing.TB, request Request) Result {
 	}
 }
 
-func (client *Client) newHTTPRequest(t testing.TB, request Request) *http.Request {
-	t.Helper()
+func (client *Client) newHTTPRequest(tb testing.TB, request Request) *http.Request {
+	tb.Helper()
 	method := strings.TrimSpace(request.Method)
 	if method == "" {
 		method = http.MethodGet
 	}
-	target := client.requestURL(t, request)
-	body, contentType := requestBody(t, request)
+	target := client.requestURL(tb, request)
+	body, contentType := requestBody(tb, request)
 	ctx := request.Context
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	httpRequest, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
-		t.Fatalf("build request %s %s: %v", method, target, err)
+		tb.Fatalf("build request %s %s: %v", method, target, err)
 	}
 	if contentType != "" {
 		httpRequest.Header.Set("Content-Type", contentType)
@@ -420,8 +422,8 @@ func (client *Client) newHTTPRequest(t testing.TB, request Request) *http.Reques
 	return httpRequest
 }
 
-func (client *Client) requestURL(t testing.TB, request Request) string {
-	t.Helper()
+func (client *Client) requestURL(tb testing.TB, request Request) string {
+	tb.Helper()
 	baseURL := strings.TrimRight(client.baseURL, "/")
 	if baseURL == "" {
 		baseURL = "http://gowdk.test"
@@ -432,7 +434,7 @@ func (client *Client) requestURL(t testing.TB, request Request) string {
 	}
 	parsed, err := url.Parse(requestPath)
 	if err != nil {
-		t.Fatalf("parse request path %q: %v", requestPath, err)
+		tb.Fatalf("parse request path %q: %v", requestPath, err)
 	}
 	if !parsed.IsAbs() {
 		if !strings.HasPrefix(requestPath, "/") {
@@ -440,7 +442,7 @@ func (client *Client) requestURL(t testing.TB, request Request) string {
 		}
 		parsed, err = url.Parse(baseURL + requestPath)
 		if err != nil {
-			t.Fatalf("parse request URL %q: %v", baseURL+requestPath, err)
+			tb.Fatalf("parse request URL %q: %v", baseURL+requestPath, err)
 		}
 	}
 	query := parsed.Query()
@@ -453,12 +455,12 @@ func (client *Client) requestURL(t testing.TB, request Request) string {
 	return parsed.String()
 }
 
-func requestBody(t testing.TB, request Request) (io.Reader, string) {
-	t.Helper()
+func requestBody(tb testing.TB, request Request) (io.Reader, string) {
+	tb.Helper()
 	if request.JSON != nil {
 		payload, err := json.Marshal(request.JSON)
 		if err != nil {
-			t.Fatalf("encode request JSON: %v", err)
+			tb.Fatalf("encode request JSON: %v", err)
 		}
 		return bytes.NewReader(payload), "application/json"
 	}

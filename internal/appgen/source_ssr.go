@@ -9,27 +9,6 @@ import (
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
-func ssrHandlerSource(routes []SSRRoute) (source string, err error) {
-	defer recoverGeneratedIdentifierError(&err)
-
-	sorted := sortedSSRRoutes(routes)
-	return printActionDecls([]ast.Decl{
-		ssrExactDecl(sorted, false, false, false),
-		ssrDynamicDecl(sorted, false, false, false),
-	})
-}
-
-func sortedSSRRoutes(routes []SSRRoute) []SSRRoute {
-	sorted := append([]SSRRoute(nil), routes...)
-	sort.Slice(sorted, func(i, j int) bool {
-		if sorted[i].Route == sorted[j].Route {
-			return sorted[i].PageID < sorted[j].PageID
-		}
-		return sorted[i].Route < sorted[j].Route
-	})
-	return sorted
-}
-
 func ssrExactDecl(routes []SSRRoute, rateLimit bool, csrf bool, trace bool) *ast.FuncDecl {
 	clauses := []ast.Stmt{}
 	for _, route := range routes {
@@ -41,7 +20,7 @@ func ssrExactDecl(routes []SSRRoute, rateLimit bool, csrf bool, trace bool) *ast
 			Body: ssrRouteBodyStmts(route, false, rateLimit, csrf, trace),
 		})
 	}
-	return funcDecl("ssrExact", actionParams(), namedBoolResults("handled"), []ast.Stmt{
+	return funcDecl("ssrExact", actionParams(), namedBoolResults(), []ast.Stmt{
 		&ast.SwitchStmt{
 			Tag:  selExpr(selExpr(id("request"), "URL"), "Path"),
 			Body: &ast.BlockStmt{List: clauses},
@@ -59,7 +38,7 @@ func ssrDynamicDecl(routes []SSRRoute, rateLimit bool, csrf bool, trace bool) *a
 		body = append(body, ssrDynamicIfStmt(route, rateLimit, csrf, trace))
 	}
 	body = append(body, returnBool(false))
-	return funcDecl("ssrDynamic", actionParams(), namedBoolResults("handled"), body)
+	return funcDecl("ssrDynamic", actionParams(), namedBoolResults(), body)
 }
 
 func ssrDynamicIfStmt(route SSRRoute, rateLimit bool, csrf bool, trace bool) ast.Stmt {

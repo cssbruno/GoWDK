@@ -3,6 +3,7 @@ package sse
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -26,7 +27,9 @@ func TestHubSendsRetryDirective(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 
 	line, err := bufio.NewReader(response.Body).ReadString('\n')
 	if err != nil {
@@ -46,7 +49,9 @@ func TestHubSendsConfiguredRetryDirective(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 
 	line, err := bufio.NewReader(response.Body).ReadString('\n')
 	if err != nil {
@@ -66,7 +71,9 @@ func TestHubStreamsPresentationEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 
 	deadline := time.Now().Add(2 * time.Second)
 	for hub.ClientCount() == 0 && time.Now().Before(deadline) {
@@ -120,12 +127,16 @@ func TestHubFiltersPresentationEventsByAudience(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer broadcast.Body.Close()
+	defer func() {
+		_ = broadcast.Body.Close()
+	}()
 	ada, err := http.Get(server.URL + "?client=ada")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ada.Body.Close()
+	defer func() {
+		_ = ada.Body.Close()
+	}()
 
 	deadline := time.Now().Add(2 * time.Second)
 	for hub.ClientCount() < 2 && time.Now().Before(deadline) {
@@ -204,7 +215,9 @@ func TestHubReplaysEventsAfterLastEventID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 
 	reader := bufio.NewReader(response.Body)
 	deadline := time.Now().Add(2 * time.Second)
@@ -259,7 +272,9 @@ func TestHubReplayKeepsAudienceScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 
 	data := readSSEDataLines(t, response.Body, 1)[0]
 	if !strings.Contains(data, `"id":"private-clinic"`) || strings.Contains(data, "private-other") {
@@ -368,7 +383,7 @@ func TestHubReturnsContextError(t *testing.T) {
 		Type:     "PatientNotice",
 		Value:    patientNotice{ID: "patient-1"},
 	}})
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("SendPresentationEvents error = %v, want context canceled", err)
 	}
 }

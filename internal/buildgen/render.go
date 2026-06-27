@@ -563,7 +563,7 @@ func isInternalNavigationHref(value string) bool {
 	if value == "" || strings.ContainsAny(value, "{}") {
 		return false
 	}
-	return value[0] == '/' && !(len(value) > 1 && (value[1] == '/' || value[1] == '\\'))
+	return value[0] == '/' && (len(value) <= 1 || (value[1] != '/' && value[1] != '\\'))
 }
 
 type pageStoreSeed struct {

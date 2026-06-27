@@ -39,11 +39,17 @@ type PatientCreated struct {
 }
 
 func Register(registry *contracts.Registry) {
-	contracts.RegisterQuery[GetPatientPage, PatientPageData](registry, LoadPatientPage, contracts.RoleWeb)
-	contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient, contracts.RoleWeb)
-	contracts.RegisterPresentationEvent[PatientNotice](registry, PublishPatientNotice, contracts.RoleWeb)
-	contracts.RegisterDomainEvent[PatientCreated](registry, SendWelcomeEmail, contracts.RoleWorker)
-	contracts.RegisterInvalidation[PatientCreated, GetPatientPage](registry)
+	mustRegister(contracts.RegisterQuery[GetPatientPage, PatientPageData](registry, LoadPatientPage, contracts.RoleWeb))
+	mustRegister(contracts.RegisterCommand[CreatePatient, CreatePatientResult](registry, HandleCreatePatient, contracts.RoleWeb))
+	mustRegister(contracts.RegisterPresentationEvent[PatientNotice](registry, PublishPatientNotice, contracts.RoleWeb))
+	mustRegister(contracts.RegisterDomainEvent[PatientCreated](registry, SendWelcomeEmail, contracts.RoleWorker))
+	mustRegister(contracts.RegisterInvalidation[PatientCreated, GetPatientPage](registry))
+}
+
+func mustRegister(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
 
 func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData, error) {

@@ -1511,7 +1511,7 @@ func TestAddCommandListsRegistryJSON(t *testing.T) {
 
 func TestAddonRegistryListDistinguishesDiscoveryCategories(t *testing.T) {
 	var builder strings.Builder
-	writeAddonRegistryList(&builder, []addonregistry.Entry{
+	if err := writeAddonRegistryList(&builder, []addonregistry.Entry{
 		{
 			Name:          "builtin",
 			Kind:          "built-in",
@@ -1534,7 +1534,9 @@ func TestAddonRegistryListDistinguishesDiscoveryCategories(t *testing.T) {
 			Compatibility: "incompatible",
 			Summary:       "old addon",
 		},
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 	output := builder.String()
 	for _, expected := range []string{
 		"built-in",
@@ -2066,18 +2068,24 @@ func TestDevServeStateRebindsStaticOutputDir(t *testing.T) {
 
 	serve := newDevServeState("127.0.0.1:0")
 	t.Cleanup(serve.close)
-	serve.useStatic(firstAbs)
+	if err := serve.useStatic(firstAbs); err != nil {
+		t.Fatal(err)
+	}
 	firstServer := serve.server
 	if firstServer == nil || serve.staticDir != firstAbs {
 		t.Fatalf("expected initial static server for %q, got server=%v dir=%q", firstAbs, firstServer, serve.staticDir)
 	}
 
-	serve.useStatic(firstAbs)
+	if err := serve.useStatic(firstAbs); err != nil {
+		t.Fatal(err)
+	}
 	if serve.server != firstServer {
 		t.Fatal("expected unchanged static output dir to keep the existing server")
 	}
 
-	serve.useStatic(secondAbs)
+	if err := serve.useStatic(secondAbs); err != nil {
+		t.Fatal(err)
+	}
 	if serve.server == nil || serve.staticDir != secondAbs {
 		t.Fatalf("expected rebound static server for %q, got server=%v dir=%q", secondAbs, serve.server, serve.staticDir)
 	}
@@ -2109,7 +2117,9 @@ func main() {
 
 	serve := newDevServeState("127.0.0.1:0")
 	t.Cleanup(serve.close)
-	serve.useStatic(staticDir)
+	if err := serve.useStatic(staticDir); err != nil {
+		t.Fatal(err)
+	}
 	if serve.server == nil {
 		t.Fatal("expected static server before runtime transition")
 	}
@@ -2249,7 +2259,9 @@ func TestPlaygroundExportArchivesSourceProjectOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
+	defer func() {
+		_ = reader.Close()
+	}()
 	var names []string
 	for _, file := range reader.File {
 		names = append(names, file.Name)

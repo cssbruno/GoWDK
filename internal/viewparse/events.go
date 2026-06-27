@@ -20,7 +20,7 @@ type EventDirective struct {
 // ParseEventDirective validates and splits a g:on directive name.
 func ParseEventDirective(name string) (EventDirective, error) {
 	if !strings.HasPrefix(name, "g:on:") {
-		return EventDirective{}, fmt.Errorf("event directive %q must start with g:on:", name)
+		return EventDirective{}, fmt.Errorf("event directive %q must start with g:on", name)
 	}
 	raw := strings.TrimPrefix(name, "g:on:")
 	if raw == "" {
@@ -87,7 +87,7 @@ func parseEventDurationMS(value string) (int, error) {
 		return 0, fmt.Errorf("duration is empty")
 	}
 	multiplier := 1
-	number := value
+	var number string
 	switch {
 	case strings.HasSuffix(value, "ms"):
 		number = strings.TrimSuffix(value, "ms")

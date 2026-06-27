@@ -19,11 +19,6 @@ func renderText(ctx *renderContext, out *renderOutput, value string) error {
 	return nil
 }
 
-func interpolate(ctx *renderContext, value string) (string, error) {
-	resolved, _, err := interpolateValue(ctx, value)
-	return resolved, err
-}
-
 func interpolateValue(ctx *renderContext, value string) (string, bool, error) {
 	if !strings.Contains(value, "{") {
 		return value, false, nil

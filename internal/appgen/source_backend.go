@@ -207,18 +207,6 @@ func sortAPIEndpoints(apis []APIEndpoint) {
 	})
 }
 
-func backendProxySource(options Options) (source string, err error) {
-	defer recoverGeneratedIdentifierError(&err)
-
-	if !options.ProxyBackend || !hasBackendRoutes(options) {
-		return "", nil
-	}
-	return printActionDecls([]ast.Decl{
-		backendProxyDecl(false, generatedObservabilityEnabled(options)),
-		isBackendRouteDecl(backendAdapterIR(options)),
-	})
-}
-
 func backendProxyDecl(rateLimit bool, trace bool) *ast.FuncDecl {
 	stmts := []ast.Stmt{
 		define([]ast.Expr{id("routeMethod")}, selExpr(id("request"), "Method")),

@@ -297,7 +297,7 @@ func (parser *patternParser) parseEscape() (patternNode, error) {
 	case 'd', 'D', 'w', 'W', 's', 'S':
 		return shorthandNode(current), nil
 	case 'p', 'P':
-		return nil, fmt.Errorf("Unicode character class escapes are not supported")
+		return nil, fmt.Errorf("unicode character class escapes are not supported")
 	default:
 		return literalNode(current), nil
 	}
@@ -363,7 +363,7 @@ func (parser *patternParser) parseClassPart() (classPart, bool, error) {
 	case 'd', 'w', 's':
 		return shorthandClassPart(escaped), false, nil
 	case 'p', 'P':
-		return nil, false, fmt.Errorf("Unicode character class escapes are not supported")
+		return nil, false, fmt.Errorf("unicode character class escapes are not supported")
 	default:
 		return literalClassPart(escaped), true, nil
 	}
@@ -392,14 +392,14 @@ func (parser *patternParser) parseQuantifier(atom patternNode) (patternNode, err
 	if parser.index >= len(parser.source) {
 		return atom, nil
 	}
-	min, max, ok, err := parser.readQuantifier()
+	minimum, maximum, ok, err := parser.readQuantifier()
 	if err != nil || !ok {
 		return atom, err
 	}
 	if parser.index < len(parser.source) && parser.source[parser.index] == '?' {
 		return nil, fmt.Errorf("quantifier %q has no target", parser.source[parser.index])
 	}
-	return repeatNode{child: atom, min: min, max: max}, nil
+	return repeatNode{child: atom, min: minimum, max: maximum}, nil
 }
 
 func (parser *patternParser) readQuantifier() (int, int, bool, error) {
@@ -430,11 +430,11 @@ func (parser *patternParser) readBraceQuantifier() (int, int, bool, error) {
 	if index == minStart {
 		return 0, 0, false, nil
 	}
-	min, err := strconv.Atoi(string(parser.source[minStart:index]))
+	minimum, err := strconv.Atoi(string(parser.source[minStart:index]))
 	if err != nil {
 		return 0, 0, false, err
 	}
-	max := min
+	maximum := minimum
 	if index < len(parser.source) && parser.source[index] == ',' {
 		index++
 		maxStart := index
@@ -442,9 +442,9 @@ func (parser *patternParser) readBraceQuantifier() (int, int, bool, error) {
 			index++
 		}
 		if index == maxStart {
-			max = -1
+			maximum = -1
 		} else {
-			max, err = strconv.Atoi(string(parser.source[maxStart:index]))
+			maximum, err = strconv.Atoi(string(parser.source[maxStart:index]))
 			if err != nil {
 				return 0, 0, false, err
 			}
@@ -454,11 +454,11 @@ func (parser *patternParser) readBraceQuantifier() (int, int, bool, error) {
 		parser.index = start
 		return 0, 0, false, nil
 	}
-	if max >= 0 && max < min {
+	if maximum >= 0 && maximum < minimum {
 		return 0, 0, false, fmt.Errorf("invalid repeat count")
 	}
 	parser.index = index + 1
-	return min, max, true, nil
+	return minimum, maximum, true, nil
 }
 
 func matchShorthand(kind rune, r rune) bool {
@@ -466,15 +466,15 @@ func matchShorthand(kind rune, r rune) bool {
 	case 'd':
 		return r >= '0' && r <= '9'
 	case 'D':
-		return !(r >= '0' && r <= '9')
+		return r < '0' || r > '9'
 	case 'w':
 		return r == '_' || (r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')
 	case 'W':
-		return !(r == '_' || (r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z'))
+		return r != '_' && (r < '0' || r > '9') && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z')
 	case 's':
 		return r == '\t' || r == '\n' || r == '\f' || r == '\r' || r == ' '
 	case 'S':
-		return !(r == '\t' || r == '\n' || r == '\f' || r == '\r' || r == ' ')
+		return r != '\t' && r != '\n' && r != '\f' && r != '\r' && r != ' '
 	default:
 		return false
 	}

@@ -28,9 +28,15 @@ type WorkflowStarted struct {
 }
 
 func Register(registry *gowdkcontracts.Registry) {
-	gowdkcontracts.RegisterQuery[GetDashboardSnapshot, DashboardSnapshot](registry, LoadDashboardSnapshot, gowdkcontracts.RoleWeb)
-	gowdkcontracts.RegisterCommand[StartWorkflow, StartWorkflowResult](registry, HandleStartWorkflow, gowdkcontracts.RoleWeb)
-	gowdkcontracts.RegisterDomainEvent[WorkflowStarted](registry, RecordWorkflowStarted, gowdkcontracts.RoleWorker)
+	mustRegister(gowdkcontracts.RegisterQuery[GetDashboardSnapshot, DashboardSnapshot](registry, LoadDashboardSnapshot, gowdkcontracts.RoleWeb))
+	mustRegister(gowdkcontracts.RegisterCommand[StartWorkflow, StartWorkflowResult](registry, HandleStartWorkflow, gowdkcontracts.RoleWeb))
+	mustRegister(gowdkcontracts.RegisterDomainEvent[WorkflowStarted](registry, RecordWorkflowStarted, gowdkcontracts.RoleWorker))
+}
+
+func mustRegister(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
 
 func LoadDashboardSnapshot(context.Context, GetDashboardSnapshot) (DashboardSnapshot, error) {

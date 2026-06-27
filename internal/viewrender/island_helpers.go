@@ -3,8 +3,9 @@ package viewrender
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/cssbruno/gowdk/internal/clientlang"
 	"strconv"
+
+	"github.com/cssbruno/gowdk/internal/clientlang"
 )
 
 func validateIslandField(field string, fields map[string]bool) error {

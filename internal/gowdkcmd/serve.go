@@ -103,7 +103,9 @@ func outputFileHandler(root string) http.Handler {
 			http.NotFound(w, request)
 			return
 		}
-		defer file.Close()
+		defer func() {
+			_ = file.Close()
+		}()
 		http.ServeContent(w, request, info.Name(), info.ModTime(), file)
 	})
 }
@@ -201,7 +203,9 @@ func liveReloadFileHandler(root string, reload *liveReloadBroker) http.Handler {
 			files.ServeHTTP(w, request)
 			return
 		}
-		defer file.Close()
+		defer func() {
+			_ = file.Close()
+		}()
 		payload, err := io.ReadAll(file)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -219,11 +223,12 @@ func devRuntimeProxyHandler(targetAddr string, reload *liveReloadBroker) http.Ha
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		})
 	}
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	originalDirector := proxy.Director
-	proxy.Director = func(request *http.Request) {
-		originalDirector(request)
-		request.Header.Del("Accept-Encoding")
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(proxyRequest *httputil.ProxyRequest) {
+			proxyRequest.SetURL(target)
+			proxyRequest.SetXForwarded()
+			proxyRequest.Out.Header.Del("Accept-Encoding")
+		},
 	}
 	proxy.ModifyResponse = func(response *http.Response) error {
 		return modifyDevRuntimeProxyResponse(response, reload)
@@ -612,7 +617,7 @@ func (files *rootedOutputFiles) openPublicRegularFile(rel string) (*os.File, os.
 	}
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() {
-		file.Close()
+		_ = file.Close()
 		return nil, nil, false
 	}
 	return file, info, true

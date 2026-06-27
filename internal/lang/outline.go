@@ -92,13 +92,13 @@ func classifyLine(line []Token) (OutlineSymbol, bool) {
 
 	switch {
 	case first.Kind == TokenIdentifier && first.Lexeme == "package":
-		return OutlineSymbol{Kind: OutlineKindPackage, Name: "package " + nextLexeme(line, 0), Span: span}, true
+		return OutlineSymbol{Kind: OutlineKindPackage, Name: "package " + nextLexeme(line), Span: span}, true
 	case first.Kind == TokenIdentifier && first.Lexeme == "import":
 		return OutlineSymbol{Kind: OutlineKindImport, Name: "import", Detail: lineValue(line, 1), Span: span}, true
 	case first.Kind == TokenIdentifier && first.Lexeme == "use":
-		return OutlineSymbol{Kind: OutlineKindUse, Name: "use " + nextLexeme(line, 0), Detail: lineValue(line, 2), Span: span}, true
+		return OutlineSymbol{Kind: OutlineKindUse, Name: "use " + nextLexeme(line), Detail: lineValue(line, 2), Span: span}, true
 	case first.Kind == TokenIdentifier && (first.Lexeme == "act" || first.Lexeme == "api"):
-		return OutlineSymbol{Kind: OutlineKindEndpoint, Name: first.Lexeme + " " + nextLexeme(line, 0), Detail: lineValue(line, 2), Span: span}, true
+		return OutlineSymbol{Kind: OutlineKindEndpoint, Name: first.Lexeme + " " + nextLexeme(line), Detail: lineValue(line, 2), Span: span}, true
 	case first.Kind == TokenMetadata:
 		return classifyMetadata(first, line, span), true
 	default:
@@ -107,7 +107,7 @@ func classifyLine(line []Token) (OutlineSymbol, bool) {
 }
 
 func classifyMetadata(first Token, line []Token, span source.SourceSpan) OutlineSymbol {
-	name := nextLexeme(line, 0)
+	name := nextLexeme(line)
 	switch first.Lexeme {
 	case "component":
 		if name != "" {
@@ -121,10 +121,10 @@ func classifyMetadata(first Token, line []Token, span source.SourceSpan) Outline
 	return OutlineSymbol{Kind: OutlineKindMetadata, Name: first.Lexeme, Detail: lineValue(line, 1), Span: span}
 }
 
-// nextLexeme returns the lexeme of the first identifier or string after position
-// at in the line, unquoted.
-func nextLexeme(line []Token, at int) string {
-	for index := at + 1; index < len(line); index++ {
+// nextLexeme returns the lexeme of the first identifier or string after the first
+// token in the line, unquoted.
+func nextLexeme(line []Token) string {
+	for index := 1; index < len(line); index++ {
 		switch line[index].Kind {
 		case TokenIdentifier, TokenText:
 			return line[index].Lexeme

@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -25,7 +26,11 @@ func TestValidateContractReferencesRejectsBoundNonWebRole(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected non-web role diagnostic")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if len(diagnostics) != 1 || diagnostics[0].Code != "contract_reference_role_not_allowed" {
 		t.Fatalf("unexpected diagnostics: %#v", diagnostics)
 	}
@@ -106,7 +111,11 @@ func TestValidateRealtimeSubscriptionBindings(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected subscription diagnostics")
 	}
-	diagnostics := err.(ValidationErrors)
+	diagnostics := func() ValidationErrors {
+		var target ValidationErrors
+		_ = errors.As(err, &target)
+		return target
+	}()
 	if len(diagnostics) != 3 {
 		t.Fatalf("expected three diagnostics, got %#v", diagnostics)
 	}

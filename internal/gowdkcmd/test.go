@@ -2,6 +2,7 @@ package gowdkcmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -137,7 +138,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		arg := args[index]
 		if value, next, ok, missing := consumeValueFlag(args, index, "--config", true); ok {
 			if missing {
-				return testOptions{}, fmt.Errorf(testUsage)
+				return testOptions{}, errors.New(testUsage)
 			}
 			options.ConfigPath = value
 			index = next
@@ -145,7 +146,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--env-file", true); ok {
 			if missing {
-				return testOptions{}, fmt.Errorf(testUsage)
+				return testOptions{}, errors.New(testUsage)
 			}
 			options.EnvFilePath = value
 			index = next
@@ -153,7 +154,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--module", true); ok {
 			if missing {
-				return testOptions{}, fmt.Errorf(testUsage)
+				return testOptions{}, errors.New(testUsage)
 			}
 			options.ModuleNames = appendModuleNames(options.ModuleNames, value)
 			index = next
@@ -161,7 +162,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--target", true); ok {
 			if missing {
-				return testOptions{}, fmt.Errorf(testUsage)
+				return testOptions{}, errors.New(testUsage)
 			}
 			options.TargetNames = appendNames(options.TargetNames, value)
 			index = next
@@ -169,7 +170,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--stage", true); ok {
 			if missing {
-				return testOptions{}, fmt.Errorf(testUsage)
+				return testOptions{}, errors.New(testUsage)
 			}
 			options.Stages = appendTestStages(options.Stages, value)
 			index = next
@@ -177,7 +178,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--run", true); ok {
 			if missing {
-				return testOptions{}, fmt.Errorf(testUsage)
+				return testOptions{}, errors.New(testUsage)
 			}
 			options.RunPattern = value
 			index = next
@@ -185,7 +186,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--timeout", true); ok {
 			if missing {
-				return testOptions{}, fmt.Errorf(testUsage)
+				return testOptions{}, errors.New(testUsage)
 			}
 			timeout, err := normalizeTestTimeout(value)
 			if err != nil {
@@ -197,7 +198,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--count", true); ok {
 			if missing {
-				return testOptions{}, fmt.Errorf(testUsage)
+				return testOptions{}, errors.New(testUsage)
 			}
 			count, err := normalizeTestCount(value)
 			if err != nil {
@@ -209,7 +210,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--browser-command", true); ok {
 			if missing {
-				return testOptions{}, fmt.Errorf(testUsage)
+				return testOptions{}, errors.New(testUsage)
 			}
 			options.BrowserCommand = value
 			index = next
@@ -217,7 +218,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		switch {
 		case arg == "-h" || arg == "--help":
-			return testOptions{}, fmt.Errorf(testUsage)
+			return testOptions{}, errors.New(testUsage)
 		case arg == "--ssr":
 			options.SSR = true
 		case arg == "--cover":

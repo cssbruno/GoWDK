@@ -3,11 +3,12 @@ package viewrender
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/viewparse"
 	gowhtml "github.com/cssbruno/gowdk/runtime/html"
-	"strconv"
-	"strings"
 )
 
 func renderTextNode(node Text, ctx *renderContext, out *renderOutput) error {

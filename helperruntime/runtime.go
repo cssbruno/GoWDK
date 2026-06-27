@@ -25,11 +25,11 @@ type Options struct {
 
 func Main(options Options) {
 	if options.Config == nil {
-		fatal(2, "missing gowdk.Config")
+		fatal("missing gowdk.Config")
 	}
 	handshake()
 	if len(os.Args) < 2 {
-		fatal(2, "missing helper command")
+		fatal("missing helper command")
 	}
 	if err := gowdkcmd.RunWithConfig(os.Args[1:], options.Config, options.ProjectRoot); err != nil {
 		if _, silent := err.(interface{ SilentCLIError() }); !silent {
@@ -44,13 +44,12 @@ func handshake() int {
 	cliMax := envInt("GOWDK_HELPER_PROTOCOL_MAX", -1)
 	cliVersion := os.Getenv("GOWDK_CLI_VERSION")
 	if cliMin < 0 || cliMax < 0 {
-		fatal(2, "missing GOWDK helper protocol environment")
+		fatal("missing GOWDK helper protocol environment")
 	}
 
-	selected := min(cliMax, ProtocolMax)
-	if selected < max(cliMin, ProtocolMin) {
+	selected := minInt(cliMax, ProtocolMax)
+	if selected < maxInt(cliMin, ProtocolMin) {
 		fatal(
-			2,
 			"GOWDK helper protocol mismatch\n\nCLI supports protocol v%d..v%d.\nProject helper supports protocol v%d..v%d.\nCLI GOWDK version: %s\nProject GOWDK version: %s",
 			cliMin,
 			cliMax,
@@ -63,9 +62,9 @@ func handshake() int {
 	return selected
 }
 
-func fatal(code int, format string, args ...any) {
+func fatal(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
-	os.Exit(code)
+	os.Exit(2)
 }
 
 func envInt(name string, fallback int) int {
@@ -80,14 +79,14 @@ func envInt(name string, fallback int) int {
 	return n
 }
 
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}
 	return b
 }
 
-func max(a, b int) int {
+func maxInt(a, b int) int {
 	if a > b {
 		return a
 	}

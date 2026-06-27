@@ -518,8 +518,10 @@ func routeDiagnostics(page gwdkir.Page, label string, issues []routeIssue, route
 
 const restPatternPlaceholder = source.RestRoutePatternPlaceholder
 
-type routeInfo = source.RoutePattern
-type routeIssue = source.RouteIssue
+type (
+	routeInfo  = source.RoutePattern
+	routeIssue = source.RouteIssue
+)
 
 func routeIssueSpan(issue routeIssue, routeSpan source.SourceSpan, paramSpans []source.NamedSpan) source.SourceSpan {
 	if issue.Param != "" {

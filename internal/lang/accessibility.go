@@ -32,13 +32,21 @@ func viewAccessibilityDiagnostics(file string, blocks gwdkir.Blocks) Diagnostics
 	}
 	nodes := blocks.ViewNodes
 	if len(nodes) == 0 {
-		var err error
-		nodes, err = viewparse.Parse(blocks.ViewBody)
-		if err != nil {
+		var ok bool
+		nodes, ok = parsedAccessibilityNodes(blocks.ViewBody)
+		if !ok {
 			return nil
 		}
 	}
 	return accessibilityDiagnosticsForNodes(file, blocks.ViewBody, blocks.Spans.ViewBodyStart, nodes)
+}
+
+func parsedAccessibilityNodes(body string) ([]viewmodel.Node, bool) {
+	nodes, err := viewparse.Parse(body)
+	if err != nil {
+		return nil, false
+	}
+	return nodes, true
 }
 
 func accessibilityDiagnosticsForNodes(file string, body string, bodyStart source.SourcePosition, nodes []viewmodel.Node) Diagnostics {
@@ -281,7 +289,7 @@ func (check *accessibilityCheck) validateAccessibleName(element viewmodel.Elemen
 	if controlNeedsAccessibleName(element, role) && strings.TrimSpace(accessibleText(element)) == "" {
 		check.add(element, "missing_accessible_name", "<"+element.Name+"> has no accessible name", `Add visible text, aria-label, aria-labelledby, title, alt text, or a form label as appropriate.`)
 	}
-	if landmarkNeedsAccessibleName(element, role) && !hasExplicitAccessibleName(element.Attrs) {
+	if landmarkNeedsAccessibleName(role) && !hasExplicitAccessibleName(element.Attrs) {
 		check.add(element, "missing_landmark_name", "<"+element.Name+"> landmark has no accessible name", `Add aria-label or aria-labelledby to distinguish this landmark.`)
 	}
 }
@@ -463,7 +471,7 @@ func controlNeedsAccessibleName(element viewmodel.Element, role string) bool {
 	return interactiveRoles[role] && !strings.EqualFold(role, nativeRole(element))
 }
 
-func landmarkNeedsAccessibleName(element viewmodel.Element, role string) bool {
+func landmarkNeedsAccessibleName(role string) bool {
 	if role == "" {
 		return false
 	}

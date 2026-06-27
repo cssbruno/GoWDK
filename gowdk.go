@@ -916,26 +916,26 @@ func ValidateAddons(addons []Addon) error {
 	features := map[Feature]int{}
 	for index, addon := range addons {
 		if addonIsNil(addon) {
-			return fmt.Errorf("Addons[%d] is nil", index)
+			return fmt.Errorf("addons[%d] is nil", index)
 		}
 		name := strings.TrimSpace(addon.Name())
 		if name == "" {
-			return fmt.Errorf("Addons[%d].Name is required", index)
+			return fmt.Errorf("addons[%d].Name is required", index)
 		}
 		if previous, ok := names[name]; ok {
-			return fmt.Errorf("Addons[%d] %q duplicates Addons[%d]", index, name, previous)
+			return fmt.Errorf("addons[%d] %q duplicates addons[%d]", index, name, previous)
 		}
 		names[name] = index
 		addonFeatures := addon.Features()
 		if len(addonFeatures) == 0 {
-			return fmt.Errorf("Addons[%d] %q must declare at least one feature", index, name)
+			return fmt.Errorf("addons[%d] %q must declare at least one feature", index, name)
 		}
 		for featureIndex, feature := range addonFeatures {
 			if strings.TrimSpace(string(feature)) == "" {
-				return fmt.Errorf("Addons[%d] %q declares empty feature at index %d", index, name, featureIndex)
+				return fmt.Errorf("addons[%d] %q declares empty feature at index %d", index, name, featureIndex)
 			}
 			if previous, ok := features[feature]; ok && !duplicateFeatureAllowed(feature) {
-				return fmt.Errorf("Addons[%d] %q duplicates feature %q already owned by Addons[%d]", index, name, feature, previous)
+				return fmt.Errorf("addons[%d] %q duplicates feature %q already owned by addons[%d]", index, name, feature, previous)
 			}
 			if _, ok := features[feature]; !ok {
 				features[feature] = index
@@ -953,11 +953,11 @@ func validateAddonFeatureContracts(index int, name string, addon Addon, features
 		switch feature {
 		case FeatureSEO:
 			if _, ok := addon.(SEOProvider); !ok {
-				return fmt.Errorf("Addons[%d] %q declares feature %q but does not implement gowdk.SEOProvider", index, name, feature)
+				return fmt.Errorf("addons[%d] %q declares feature %q but does not implement gowdk.SEOProvider", index, name, feature)
 			}
 		case FeatureAuth:
 			if _, ok := addon.(AuthSessionProvider); !ok {
-				return fmt.Errorf("Addons[%d] %q declares feature %q but does not implement gowdk.AuthSessionProvider", index, name, feature)
+				return fmt.Errorf("addons[%d] %q declares feature %q but does not implement gowdk.AuthSessionProvider", index, name, feature)
 			}
 		}
 	}

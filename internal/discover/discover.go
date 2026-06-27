@@ -21,14 +21,8 @@ func Files(root string, includes, excludes []string) ([]string, error) {
 func FilesAndDirs(root string, includes, excludes []string) ([]string, []string, error) {
 	var files []string
 	var dirs []string
-	includeMatchers, err := compileGlobs(includes)
-	if err != nil {
-		return nil, nil, err
-	}
-	excludeMatchers, err := compileGlobs(excludes)
-	if err != nil {
-		return nil, nil, err
-	}
+	includeMatchers := compileGlobs(includes)
+	excludeMatchers := compileGlobs(excludes)
 
 	if err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -77,7 +71,7 @@ func FilesAndDirs(root string, includes, excludes []string) ([]string, []string,
 
 type globPattern string
 
-func compileGlobs(patterns []string) ([]globPattern, error) {
+func compileGlobs(patterns []string) []globPattern {
 	var matchers []globPattern
 	for _, pattern := range patterns {
 		if strings.TrimSpace(pattern) == "" {
@@ -85,7 +79,7 @@ func compileGlobs(patterns []string) ([]globPattern, error) {
 		}
 		matchers = append(matchers, globPattern(filepath.ToSlash(pattern)))
 	}
-	return matchers, nil
+	return matchers
 }
 
 // matchesExcludedDir reports whether a directory (given by its slash-separated

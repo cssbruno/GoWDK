@@ -109,7 +109,7 @@ func configuredServicesDecl(providers []lifecycleServiceProvider) ast.Decl {
 func lifecycleServiceFileSources(options Options) (map[string][]byte, error) {
 	providers := lifecycleServiceProviders(options)
 	if len(providers) == 0 {
-		return nil, nil
+		return map[string][]byte{}, nil
 	}
 	source, err := lifecycleServiceFileSource("!js", providers)
 	if err != nil {

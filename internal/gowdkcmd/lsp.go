@@ -45,8 +45,8 @@ func languageServerConfig(args []string) (gowdk.Config, error) {
 			i = next
 			continue
 		}
-		switch {
-		case arg == "--ssr":
+		switch arg {
+		case "--ssr":
 			options.Config.Addons = append(options.Config.Addons, ssr.Addon())
 		default:
 			return gowdk.Config{}, errors.New(lspUsage)

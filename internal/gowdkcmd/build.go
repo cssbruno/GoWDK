@@ -220,7 +220,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		if request.hasRoleArtifacts() {
 			outputDir = filepath.ToSlash(filepath.Join("gowdk_cache", "roles"))
 		} else {
-			return fmt.Errorf(buildUsage)
+			return errors.New(buildUsage)
 		}
 	}
 	request.OutputDir = outputDir
@@ -236,7 +236,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			discovered, discoverErr = discoverBuildFiles(options.Config, outputDir, request.Modules, options.ProjectRoot)
 			return discoverErr
 		}); err != nil {
-			return operationErrorFromCause("build failed", err)
+			return operationErrorFromCause(err)
 		}
 		if len(discovered) == 0 && !request.hasRoleArtifacts() {
 			return fmt.Errorf("no .gwdk files found")
@@ -247,10 +247,12 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 
 	var app gwdkanalysis.Sources
 	var diagnostics lang.Diagnostics
-	timings.measure("parse_lower", func() error {
+	if err := timings.measure("parse_lower", func() error {
 		app, diagnostics = lang.ParseBuildFiles(paths)
 		return nil
-	})
+	}); err != nil {
+		return operationErrorFromCause(err)
+	}
 	if diagnostics.HasErrors() {
 		return operationErrorFromLang("build failed", diagnostics)
 	}
@@ -258,10 +260,12 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}
 	var ir gwdkir.Program
-	timings.measure("ir_assembly", func() error {
+	if err := timings.measure("ir_assembly", func() error {
 		ir = gwdkanalysis.BuildProgram(options.Config, app)
 		return nil
-	})
+	}); err != nil {
+		return operationErrorFromCause(err)
+	}
 	timings.counter("pages", len(ir.Pages))
 	timings.counter("components", len(ir.Components))
 	timings.counter("layouts", len(ir.Layouts))
@@ -276,13 +280,15 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		}
 		return bindErr
 	}); err != nil {
-		return operationErrorFromCause("build failed", err)
+		return operationErrorFromCause(err)
 	}
 	var report compiler.ValidationErrors
-	timings.measure("ir_validation", func() error {
+	if err := timings.measure("ir_validation", func() error {
 		_, report = compiler.ValidateAnalyzedProgramReport(options.Config, analyzed)
 		return nil
-	})
+	}); err != nil {
+		return operationErrorFromCause(err)
+	}
 	if report.HasErrors() {
 		return operationErrorFromCompiler("build failed", report, report)
 	}
@@ -309,7 +315,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		}
 		return compiler.ValidateQueryInvalidations(options.Config, ir.QueryInvalidations)
 	}); err != nil {
-		return operationErrorFromCause("build failed", err)
+		return operationErrorFromCause(err)
 	}
 
 	var validated compiler.ValidatedProgram
@@ -318,7 +324,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		validated, validateErr = compiler.ValidateIR(options.Config, ir)
 		return validateErr
 	}); err != nil {
-		return operationErrorFromCause("build failed", err)
+		return operationErrorFromCause(err)
 	}
 
 	if err := timings.measure("security_audit", func() error {
@@ -338,12 +344,12 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		return buildErr
 	}); err != nil {
 		printBuildgenBuildErrorReport(err, options.Debug)
-		return operationErrorFromCause("build failed", err)
+		return operationErrorFromCause(err)
 	}
 	if err := timings.measure("final_security_audit", func() error {
 		return enforceFinalBuildArtifactSecurityAudit(options, result)
 	}); err != nil {
-		return operationErrorFromCause("build failed", err)
+		return operationErrorFromCause(err)
 	}
 	timings.counter("artifacts", len(result.Artifacts))
 	timings.counter("css_artifacts", len(result.CSSArtifacts))
@@ -383,7 +389,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		asyncAPIPath, writeErr = contractscan.WriteAsyncAPI(outputDir, contractReport, contractscan.AsyncAPIOptions{})
 		return writeErr
 	}); err != nil {
-		return operationErrorFromCause("build failed", err)
+		return operationErrorFromCause(err)
 	}
 	if asyncAPIPath != "" {
 		fmt.Println(asyncAPIPath)
@@ -415,7 +421,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			app, appErr = appgen.GenerateWithPlan(outputDir, appDir, appPlan)
 			return appErr
 		}); err != nil {
-			return operationErrorFromCause("build failed", err)
+			return operationErrorFromCause(err)
 		}
 		fmt.Println(app.ModulePath)
 		fmt.Println(app.PackagePath)
@@ -427,7 +433,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 				built, buildErr = appgen.BuildBinary(app.AppDir, binaryPath)
 				return buildErr
 			}); err != nil {
-				return operationErrorFromCause("build failed", err)
+				return operationErrorFromCause(err)
 			}
 			fmt.Println(built)
 			buildReportEvents = append(buildReportEvents, buildgen.BuildEvent{
@@ -444,7 +450,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 					artifacts, dockerErr = writeDockerArtifacts(built, request.DockerBase)
 					return dockerErr
 				}); err != nil {
-					return operationErrorFromCause("build failed", err)
+					return operationErrorFromCause(err)
 				}
 				fmt.Println(artifacts.DockerfilePath)
 				fmt.Println(artifacts.DockerignorePath)
@@ -477,7 +483,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 				built, buildErr = appgen.BuildWASM(app.AppDir, wasmPath)
 				return buildErr
 			}); err != nil {
-				return operationErrorFromCause("build failed", err)
+				return operationErrorFromCause(err)
 			}
 			fmt.Println(built)
 		}
@@ -493,7 +499,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			app, appErr = appgen.GenerateBackendWithPlan(backendAppDir, appPlan)
 			return appErr
 		}); err != nil {
-			return operationErrorFromCause("build failed", err)
+			return operationErrorFromCause(err)
 		}
 		fmt.Println(app.ModulePath)
 		fmt.Println(app.PackagePath)
@@ -505,7 +511,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 				built, buildErr = appgen.BuildBinary(app.AppDir, backendBinaryPath)
 				return buildErr
 			}); err != nil {
-				return operationErrorFromCause("build failed", err)
+				return operationErrorFromCause(err)
 			}
 			fmt.Println(built)
 		}
@@ -517,7 +523,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			app, appErr = appgen.GenerateContractWorker(workerAppDir, contractReport, request.Worker)
 			return appErr
 		}); err != nil {
-			return operationErrorFromCause("build failed", err)
+			return operationErrorFromCause(err)
 		}
 		fmt.Println(app.ModulePath)
 		fmt.Println(app.PackagePath)
@@ -530,7 +536,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 				built, buildErr = appgen.BuildWorkerBinary(app.AppDir, workerBinaryPath)
 				return buildErr
 			}); err != nil {
-				return operationErrorFromCause("build failed", err)
+				return operationErrorFromCause(err)
 			}
 			fmt.Println(built)
 			buildReportEvents = append(buildReportEvents, buildgen.BuildEvent{
@@ -552,7 +558,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			app, appErr = appgen.GenerateContractCron(cronAppDir, contractReport, request.Cron)
 			return appErr
 		}); err != nil {
-			return operationErrorFromCause("build failed", err)
+			return operationErrorFromCause(err)
 		}
 		fmt.Println(app.ModulePath)
 		fmt.Println(app.PackagePath)
@@ -565,7 +571,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 				built, buildErr = appgen.BuildCronBinary(app.AppDir, cronBinaryPath)
 				return buildErr
 			}); err != nil {
-				return operationErrorFromCause("build failed", err)
+				return operationErrorFromCause(err)
 			}
 			fmt.Println(built)
 			buildReportEvents = append(buildReportEvents, buildgen.BuildEvent{
@@ -594,7 +600,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			})
 			return recipeErr
 		}); err != nil {
-			return operationErrorFromCause("build failed", err)
+			return operationErrorFromCause(err)
 		}
 		for _, artifact := range recipeArtifacts {
 			fmt.Println(artifact.Path)
@@ -602,10 +608,10 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		buildReportEvents = append(buildReportEvents, deploymentRecipeBuildEvents(recipeArtifacts)...)
 	}
 	if err := appendBuildReportEvents(result.BuildReportPath, buildReportEvents...); err != nil {
-		return operationErrorFromCause("build failed", err)
+		return operationErrorFromCause(err)
 	}
-	if _, err := timings.write(outputDir, request.TimingsPath); err != nil {
-		return operationErrorFromCause("build failed", err)
+	if err := timings.write(outputDir, request.TimingsPath); err != nil {
+		return operationErrorFromCause(err)
 	}
 	return nil
 }
@@ -832,7 +838,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		arg := args[i]
 		if value, next, ok, missing := consumeValueFlag(args, i, "--out", false); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.OutputDir = value
 			i = next
@@ -840,7 +846,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--app", false); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.AppDir = value
 			if strings.TrimSpace(plan.AppDir) == "" {
@@ -851,7 +857,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--bin", false); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.BinaryPath = value
 			if strings.TrimSpace(plan.BinaryPath) == "" {
@@ -862,18 +868,18 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--docker-base", true); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.DockerBase = value
 			if strings.TrimSpace(plan.DockerBase) == "" {
-				return buildOptions{}, fmt.Errorf("Docker base is required")
+				return buildOptions{}, fmt.Errorf("docker base is required")
 			}
 			i = next
 			continue
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--deploy-recipe", true); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.DeployRecipes = appendNames(plan.DeployRecipes, value)
 			i = next
@@ -881,7 +887,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--wasm", false); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.WASMPath = value
 			if strings.TrimSpace(plan.WASMPath) == "" {
@@ -892,7 +898,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--backend-app", false); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.BackendAppDir = value
 			if strings.TrimSpace(plan.BackendAppDir) == "" {
@@ -903,7 +909,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--backend-bin", false); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.BackendBinaryPath = value
 			if strings.TrimSpace(plan.BackendBinaryPath) == "" {
@@ -914,7 +920,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--worker-app", false); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.WorkerAppDir = value
 			if strings.TrimSpace(plan.WorkerAppDir) == "" {
@@ -925,7 +931,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--worker-bin", false); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.WorkerBinaryPath = value
 			if strings.TrimSpace(plan.WorkerBinaryPath) == "" {
@@ -936,7 +942,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--cron-app", false); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.CronAppDir = value
 			if strings.TrimSpace(plan.CronAppDir) == "" {
@@ -947,7 +953,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--cron-bin", false); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.CronBinaryPath = value
 			if strings.TrimSpace(plan.CronBinaryPath) == "" {
@@ -958,7 +964,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--config", false); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.ConfigPath = value
 			i = next
@@ -966,7 +972,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--project-root", false); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.Options.ProjectRoot = value
 			i = next
@@ -974,7 +980,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--env-file", false); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.Options.EnvFilePath = value
 			i = next
@@ -982,7 +988,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--target", false); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.TargetNames = appendNames(plan.TargetNames, value)
 			i = next
@@ -990,7 +996,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--module", false); ok {
 			if missing {
-				return buildOptions{}, fmt.Errorf(buildUsage)
+				return buildOptions{}, errors.New(buildUsage)
 			}
 			plan.ModuleNames = appendNames(plan.ModuleNames, value)
 			i = next

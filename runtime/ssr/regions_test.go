@@ -213,7 +213,7 @@ func TestRenderInvalidatedRegionsSkipsFormmethodPostControls(t *testing.T) {
 func TestRegisterRegionIgnoresIncomplete(t *testing.T) {
 	resetRegions()
 	defer resetRegions()
-	RegisterRegion(RegionRenderer{QueryType: "", Load: func(*http.Request) (map[string]any, error) { return nil, nil }})
+	RegisterRegion(RegionRenderer{QueryType: "", Load: func(*http.Request) (map[string]any, error) { return map[string]any{}, nil }})
 	RegisterRegion(RegionRenderer{QueryType: "example.com/app.Q", Load: nil})
 	if patches := RenderInvalidatedRegions(httptest.NewRequest(http.MethodPost, "/", nil), []string{"example.com/app.Q"}); len(patches) != 0 {
 		t.Fatalf("expected incomplete renderers to be ignored, got %+v", patches)

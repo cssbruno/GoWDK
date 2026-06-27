@@ -1216,7 +1216,7 @@ func TestRecoverSSRRoutePanicAbortsAfterHeaders(t *testing.T) {
 		return nil
 	}()
 
-	if recovered != http.ErrAbortHandler {
+	if !isAbortHandlerPanic(recovered) {
 		t.Fatalf("expected started response to abort the connection, got %v", recovered)
 	}
 	if recorder.Code != http.StatusAccepted {
@@ -2127,7 +2127,8 @@ func TestHandlerRequestTimeoutCancelsSlowHandler(t *testing.T) {
 func TestActionFormRejectsInvalidForm(t *testing.T) {
 	decode := func(values form.Values) (struct {
 		Email string `form:"email"`
-	}, error) {
+	}, error,
+	) {
 		email, _, err := form.String(values, "email")
 		return struct {
 			Email string `form:"email"`
@@ -2135,7 +2136,8 @@ func TestActionFormRejectsInvalidForm(t *testing.T) {
 	}
 	handler := ActionForm(decode, func(context.Context, struct {
 		Email string `form:"email"`
-	}) (response.Response, error) {
+	},
+	) (response.Response, error) {
 		t.Fatal("handler should not run for invalid form")
 		return response.Response{}, nil
 	})
@@ -2262,7 +2264,7 @@ func TestBoundaryRepanicsErrAbortHandler(t *testing.T) {
 		handler(recorder, request)
 		return nil
 	}()
-	if recovered != http.ErrAbortHandler {
+	if !isAbortHandlerPanic(recovered) {
 		t.Fatalf("expected http.ErrAbortHandler to propagate, got %v", recovered)
 	}
 	if logged != "" {
@@ -2290,7 +2292,7 @@ func TestBoundaryAbortsConnectionAfterResponseStarted(t *testing.T) {
 		handler(recorder, request)
 		return nil
 	}()
-	if recovered != http.ErrAbortHandler {
+	if !isAbortHandlerPanic(recovered) {
 		t.Fatalf("expected started response to abort the connection, got %v", recovered)
 	}
 	if logged == "" {
@@ -2348,7 +2350,7 @@ func TestTracedBackendRouteMarksServerStatusError(t *testing.T) {
 	if !handler(recorder, request) {
 		t.Fatal("expected backend handler to handle request")
 	}
-	spans := waitForSpans(t, ring, 1)
+	spans := waitForSpans(t, ring)
 	if len(spans) != 1 {
 		t.Fatalf("spans = %d, want 1", len(spans))
 	}
@@ -2383,7 +2385,7 @@ func TestTracedBackendRouteRecordsEndpointLanes(t *testing.T) {
 				t.Fatal("expected backend handler to handle request")
 			}
 
-			spans := waitForSpans(t, ring, 1)
+			spans := waitForSpans(t, ring)
 			if len(spans) != 1 {
 				t.Fatalf("spans = %d, want 1", len(spans))
 			}
@@ -2445,7 +2447,7 @@ func TestTracedBackendRouteRecordsPanicAsRedactedError(t *testing.T) {
 		_ = handler(recorder, request)
 	}()
 
-	spans := waitForSpans(t, ring, 1)
+	spans := waitForSpans(t, ring)
 	if len(spans) != 1 {
 		t.Fatalf("spans = %d, want 1", len(spans))
 	}
@@ -2466,12 +2468,12 @@ func spanAttr(span gowdktrace.Snapshot, key string) any {
 	return nil
 }
 
-func waitForSpans(t *testing.T, ring *gowdktrace.RingSink, want int) []gowdktrace.Snapshot {
+func waitForSpans(t *testing.T, ring *gowdktrace.RingSink) []gowdktrace.Snapshot {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
 	for {
 		spans := ring.Spans()
-		if len(spans) >= want {
+		if len(spans) >= 1 {
 			return spans
 		}
 		if time.Now().After(deadline) {
@@ -2525,7 +2527,7 @@ func TestFinishHTTPTraceMarksServerStatusError(t *testing.T) {
 
 	FinishHTTPTrace(recorder, span)
 
-	spans := waitForSpans(t, ring, 1)
+	spans := waitForSpans(t, ring)
 	if len(spans) != 1 {
 		t.Fatalf("spans = %d, want 1", len(spans))
 	}

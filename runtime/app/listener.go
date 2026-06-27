@@ -25,9 +25,9 @@ const inheritedListenerEnv = "GOWDK_LISTENER_FD"
 func inheritedListener() (net.Listener, error) {
 	raw := strings.TrimSpace(os.Getenv(inheritedListenerEnv))
 	if raw == "" {
-		return nil, nil
+		return noInheritedListener()
 	}
-	os.Unsetenv(inheritedListenerEnv)
+	_ = os.Unsetenv(inheritedListenerEnv)
 
 	fd, err := strconv.Atoi(raw)
 	if err != nil || fd < 0 {
@@ -53,5 +53,10 @@ func inheritedListener() (net.Listener, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listen on inherited fd %d: %w", fd, err)
 	}
+	return listener, nil
+}
+
+func noInheritedListener() (net.Listener, error) {
+	var listener net.Listener
 	return listener, nil
 }

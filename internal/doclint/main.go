@@ -131,7 +131,7 @@ func Check(cfg Config) ([]Problem, error) {
 			if rel == "" {
 				rel = file
 			}
-			if p, ok := checkLink(root, file, rel, link, anchorsFor); ok {
+			if p, ok := checkLink(file, rel, link, anchorsFor); ok {
 				problems = append(problems, p)
 			}
 		}
@@ -145,7 +145,7 @@ type link struct {
 	Line   int
 }
 
-func checkLink(root, file, rel string, l link, anchorsFor func(string) (map[string]bool, error)) (Problem, bool) {
+func checkLink(file, rel string, l link, anchorsFor func(string) (map[string]bool, error)) (Problem, bool) {
 	target := l.Target
 	if target == "" || isExternal(target) {
 		return Problem{}, false

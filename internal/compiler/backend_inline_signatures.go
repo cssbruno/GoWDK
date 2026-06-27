@@ -52,25 +52,27 @@ func inspectInlineScriptFeaturePackage(page gwdkir.Page, target string) featureP
 			var supportMessage string
 			if signature == source.BackendSignatureActionForm || signature == source.BackendSignatureActionFormPtr {
 				inputStruct, ok := inputStructs[inputType]
-				if !ok {
+				switch {
+				case !ok:
 					supportMessage = fmt.Sprintf("typed action input %s must be an exported struct in the same package", inputType)
 					signature = ""
-				} else if inputStruct.Message != "" {
+				case inputStruct.Message != "":
 					supportMessage = inputStruct.Message
 					signature = ""
-				} else {
+				default:
 					inputFields = append([]source.BackendInputField(nil), inputStruct.Fields...)
 				}
 			}
 			if signature == source.BackendSignatureLoadStruct || signature == source.BackendSignatureLoadStructError {
 				resultStruct, ok := resultStructs[resultType]
-				if !ok {
+				switch {
+				case !ok:
 					supportMessage = fmt.Sprintf("typed load result %s must be an exported struct in the same package", resultType)
 					signature = ""
-				} else if resultStruct.Message != "" {
+				case resultStruct.Message != "":
 					supportMessage = resultStruct.Message
 					signature = ""
-				} else {
+				default:
 					resultFields = append([]source.BackendResultField(nil), resultStruct.Fields...)
 				}
 			}

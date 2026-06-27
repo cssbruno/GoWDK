@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -39,7 +40,7 @@ func Boundary(kind string, handler HandlerFunc) HandlerFunc {
 		wrappedWriter := wrapBoundaryResponseWriter(boundaryWriter)
 		defer func() {
 			if value := recover(); value != nil {
-				if value == http.ErrAbortHandler {
+				if isAbortHandlerPanic(value) {
 					// Deliberate abort signal: let net/http kill the
 					// connection without logging it as a failure.
 					panic(value)
@@ -128,7 +129,7 @@ func RecoverSSRRoutePanic(writer http.ResponseWriter, request *http.Request, val
 	if value == nil {
 		return
 	}
-	if value == http.ErrAbortHandler {
+	if isAbortHandlerPanic(value) {
 		panic(value)
 	}
 	logBoundaryPanic("ssr", value)
@@ -144,7 +145,7 @@ func RecoverEndpointPanic(writer http.ResponseWriter, request *http.Request, val
 	if value == nil {
 		return
 	}
-	if value == http.ErrAbortHandler {
+	if isAbortHandlerPanic(value) {
 		panic(value)
 	}
 	logBoundaryPanic("endpoint", value)
@@ -163,4 +164,9 @@ func boundaryKindLabel(kind string) string {
 	default:
 		return kind
 	}
+}
+
+func isAbortHandlerPanic(value any) bool {
+	err, ok := value.(error)
+	return ok && errors.Is(err, http.ErrAbortHandler)
 }

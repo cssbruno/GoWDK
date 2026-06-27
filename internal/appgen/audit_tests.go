@@ -413,7 +413,7 @@ func auditSecurityHeaders(config gowdk.Config) []auditHeaderExpectation {
 	normalized := normalizedSecurityHeaders(config.Build.SecurityHeaders.Headers)
 	headers := make([]auditHeaderExpectation, 0, len(normalized))
 	for _, header := range normalized {
-		headers = append(headers, auditHeaderExpectation{Name: header.Name, Value: header.Value})
+		headers = append(headers, auditHeaderExpectation(header))
 	}
 	return headers
 }
@@ -511,8 +511,10 @@ func auditEndpointPathMatches(endpointPath string, requestPath string) bool {
 	return false
 }
 
-const generatedAuditEnvSeed = "gowdk-audit-test"
-const generatedAuditCSRFSecretSeed = "gowdk-audit-test-csrf-secret-32-bytes"
+const (
+	generatedAuditEnvSeed        = "gowdk-audit-test"
+	generatedAuditCSRFSecretSeed = "gowdk-audit-test-csrf-secret-32-bytes"
+)
 
 func writeGeneratedAuditEnvSeeds(builder *strings.Builder, config gowdk.Config, manifest securitymanifest.SecurityManifest) {
 	csrfSecretName := ""

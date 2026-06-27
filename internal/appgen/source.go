@@ -9,7 +9,6 @@ import (
 	"go/token"
 	"net/http"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
@@ -31,10 +30,6 @@ func appPackageSource(options Options) (source string, err error) {
 	imports["fs"] = "io/fs"
 	imports["http"] = "net/http"
 	return printGoFile("gowdkapp", imports, append(appShellDecls(options), appGeneratedDecls(direct, options)...))
-}
-
-func runtimeImportSource(options Options) string {
-	return importSpecSource(runtimeImportMap(options))
 }
 
 func runtimeImportMap(options Options) map[string]string {
@@ -279,7 +274,7 @@ func appShellDecls(options Options) []ast.Decl {
 		appDecl(options),
 		handlerDecl(),
 		newServeMuxDecl(options, true),
-		serveMuxDecl(options, true),
+		serveMuxDecl(),
 	)
 	if len(providers) == 0 {
 		decls = append(decls, configuredServicesDecl(nil))
@@ -301,7 +296,7 @@ func backendShellDecls(options Options) []ast.Decl {
 		appDecl(options),
 		handlerDecl(),
 		newServeMuxDecl(options, false),
-		serveMuxDecl(options, false),
+		serveMuxDecl(),
 	)
 	if len(providers) == 0 {
 		decls = append(decls, configuredServicesDecl(nil))
@@ -452,7 +447,7 @@ func handlerDecl() ast.Decl {
 	})
 }
 
-func serveMuxDecl(options Options, embedded bool) ast.Decl {
+func serveMuxDecl() ast.Decl {
 	return funcDecl("ServeMux", nil, []*ast.Field{
 		{Type: &ast.StarExpr{X: sel("http", "ServeMux")}},
 		{Type: id("error")},
@@ -897,30 +892,6 @@ func backendOnlyHandlerFunc() ast.Expr {
 	}
 }
 
-// importSpecSource is retained for narrow tests and package-level helpers. New
-// generated Go files use importDecl through the AST file builder.
-func importSpecSource(imports map[string]string) string {
-	if len(imports) == 0 {
-		return ""
-	}
-	aliases := make([]string, 0, len(imports))
-	for alias := range imports {
-		aliases = append(aliases, alias)
-	}
-	sort.Strings(aliases)
-
-	specs := make([]string, 0, len(aliases))
-	for _, alias := range aliases {
-		spec := "\t"
-		if alias != imports[alias] {
-			spec += alias + " "
-		}
-		spec += strconv.Quote(imports[alias])
-		specs = append(specs, spec)
-	}
-	return "\n" + strings.Join(specs, "\n")
-}
-
 func csrfEnabled(options Options) bool {
 	adapter := backendAdapterIR(options)
 	return options.Config.Build.CSRF.EnabledForGeneratedEndpoints() && (adapter.HasEndpointKind(BackendEndpointAction) || adapter.HasCSRFSensitiveAPI() || contractExposuresParseForm(executableContractExposures(adapter.ContractExposures)))
@@ -933,19 +904,6 @@ func (ir BackendAdapterIR) HasCSRFSensitiveAPI() bool {
 		}
 	}
 	return false
-}
-
-func csrfHelperSource(options Options) (source string, err error) {
-	defer recoverGeneratedIdentifierError(&err)
-
-	if !csrfEnabled(options) {
-		return "", nil
-	}
-	return printActionDecls([]ast.Decl{
-		csrfTokenSourceVarDecl(),
-		csrfValidatorVarDecl(),
-		csrfNewFuncDecl(options),
-	})
 }
 
 func csrfTokenSourceVarDecl() ast.Decl {

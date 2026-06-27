@@ -50,10 +50,7 @@ func TestFilesPrunesExcludedDirectories(t *testing.T) {
 }
 
 func TestMatchesExcludedDir(t *testing.T) {
-	matchers, err := compileGlobs([]string{"node_modules/**", "vendor/**", "**/testdata/**", "src/**/card.cmp.gwdk"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	matchers := compileGlobs([]string{"node_modules/**", "vendor/**", "**/testdata/**", "src/**/card.cmp.gwdk"})
 	tests := []struct {
 		dir  string
 		want bool

@@ -62,7 +62,7 @@ func buildIncrementalSPALoaded(plan buildOptions, change inputChange) (bool, err
 		outputDir = options.Config.Build.Output
 	}
 	if outputDir == "" {
-		return true, fmt.Errorf(buildUsage)
+		return true, errors.New(buildUsage)
 	}
 	options.Config.Build.Output = outputDir
 	if len(paths) == 0 {
@@ -79,10 +79,12 @@ func buildIncrementalSPALoaded(plan buildOptions, change inputChange) (bool, err
 	timings.counter("incremental_input_changes", len(change.Changed))
 	var app gwdkanalysis.Sources
 	var diagnostics lang.Diagnostics
-	timings.measure("parse_lower", func() error {
+	if err := timings.measure("parse_lower", func() error {
 		app, diagnostics = lang.ParseBuildFiles(paths)
 		return nil
-	})
+	}); err != nil {
+		return true, err
+	}
 	for _, diagnostic := range diagnostics {
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}
@@ -164,7 +166,7 @@ func buildIncrementalSPALoaded(plan buildOptions, change inputChange) (bool, err
 		fmt.Println(result.BuildReportPath)
 	}
 	printBuildgenBuildReport(result.Report, options.Debug)
-	if _, err := timings.write(outputDir, plan.TimingsPath); err != nil {
+	if err := timings.write(outputDir, plan.TimingsPath); err != nil {
 		return true, err
 	}
 	return true, nil
@@ -887,7 +889,8 @@ func buildInputPaths(plan buildOptions) (devInputPaths, error) {
 	outputDir := plan.OutputDir
 	paths := append([]string(nil), plan.Paths...)
 	inputs := devInputPaths{}
-	if plan.shouldBuildConfiguredTargets() {
+	switch {
+	case plan.shouldBuildConfiguredTargets():
 		targets, err := selectBuildTargets(options.Config.Build.Targets, plan.TargetNames)
 		if err != nil {
 			return devInputPaths{}, err
@@ -906,7 +909,7 @@ func buildInputPaths(plan buildOptions) (devInputPaths, error) {
 			inputs.addFiles(css...)
 			inputs.addDirs(cssDirs...)
 		}
-	} else if outputDir == "" {
+	case outputDir == "":
 		outputDir = options.Config.Build.Output
 		if len(paths) == 0 {
 			discovered, dirs, err := discoverBuildFilesAndDirs(options.Config, outputDir, plan.ModuleNames, options.ProjectRoot)
@@ -925,7 +928,7 @@ func buildInputPaths(plan buildOptions) (devInputPaths, error) {
 		}
 		inputs.addFiles(css...)
 		inputs.addDirs(cssDirs...)
-	} else if len(paths) == 0 {
+	case len(paths) == 0:
 		discovered, dirs, err := discoverBuildFilesAndDirs(options.Config, outputDir, plan.ModuleNames, options.ProjectRoot)
 		if err != nil {
 			return devInputPaths{}, err
@@ -938,7 +941,7 @@ func buildInputPaths(plan buildOptions) (devInputPaths, error) {
 		}
 		inputs.addFiles(css...)
 		inputs.addDirs(cssDirs...)
-	} else {
+	default:
 		inputs.addFiles(paths...)
 		inputs.addParentDirs(paths...)
 		css, cssDirs, err := discoverBuildCSSFilesAndDirs(options.Config, outputDir, options.ProjectRoot)

@@ -49,7 +49,9 @@ func UploadAvatar(_ context.Context, input UploadInput) (response.Response, erro
 	if err != nil {
 		return response.FragmentFor("#upload-result", alertUploadHTML("Upload could not be opened.")), nil
 	}
-	defer uploaded.Close()
+	defer func() {
+		_ = uploaded.Close()
+	}()
 	bytes, err := io.Copy(io.Discard, uploaded)
 	if err != nil {
 		return response.FragmentFor("#upload-result", alertUploadHTML("Upload could not be read.")), nil

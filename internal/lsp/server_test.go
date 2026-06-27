@@ -457,9 +457,9 @@ func TestServerReturnsDefinitionForComponentCalls(t *testing.T) {
 		t.Fatalf("expected definition provider capability, got %#v", capabilities)
 	}
 	assertResponseID(t, messages[4], float64(2))
-	assertLocation(t, messages[4], localComponentURI, 2, 0)
+	assertLocation(t, messages[4], localComponentURI, 0)
 	assertResponseID(t, messages[5], float64(3))
-	assertLocation(t, messages[5], importedComponentURI, 2, 0)
+	assertLocation(t, messages[5], importedComponentURI, 0)
 	assertResponseID(t, messages[6], float64(4))
 }
 
@@ -504,7 +504,7 @@ func TestServerReturnsDefinitionForWorkspaceComponentFile(t *testing.T) {
 		t.Fatalf("expected 4 output messages, got %d", len(messages))
 	}
 	assertResponseID(t, messages[2], float64(2))
-	assertLocation(t, messages[2], componentURI, 2, 0)
+	assertLocation(t, messages[2], componentURI, 0)
 }
 
 func TestServerWorkspaceComponentCacheRefreshesWhenDiskComponentChanges(t *testing.T) {
@@ -587,7 +587,7 @@ func TestServerReturnsDefinitionForOpenGoHandlerSymbols(t *testing.T) {
 	}
 
 	assertResponseID(t, messages[3], float64(2))
-	assertLocation(t, messages[3], goURI, 2, 5)
+	assertLocation(t, messages[3], goURI, 5)
 	assertResponseID(t, messages[4], float64(3))
 }
 
@@ -862,15 +862,15 @@ func assertNumberPrefix(t *testing.T, values []any, expected []float64) {
 	}
 }
 
-func assertLocation(t *testing.T, message map[string]any, uri string, line int, character int) {
+func assertLocation(t *testing.T, message map[string]any, uri string, character int) {
 	t.Helper()
 	result := message["result"].(map[string]any)
 	if result["uri"] != uri {
 		t.Fatalf("expected location uri %q, got %#v", uri, result)
 	}
 	start := result["range"].(map[string]any)["start"].(map[string]any)
-	if start["line"] != float64(line) || start["character"] != float64(character) {
-		t.Fatalf("expected location start %d:%d, got %#v", line, character, result["range"])
+	if start["line"] != float64(2) || start["character"] != float64(character) {
+		t.Fatalf("expected location start %d:%d, got %#v", 2, character, result["range"])
 	}
 }
 

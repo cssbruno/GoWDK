@@ -12,9 +12,9 @@ const (
 	messageIntro messageKey = "intro"
 )
 
-var homeMessageRefs = []gowdki18n.MessageReference[messageKey]{
-	gowdki18n.Ref(messageTitle, "examples/i18n/home.page.gwdk", 14, 9),
-	gowdki18n.Ref(messageIntro, "examples/i18n/home.page.gwdk", 15, 8),
+var homeRequiredMessages = []gowdki18n.MessageReference[messageKey]{
+	gowdki18n.Key(messageTitle),
+	gowdki18n.Key(messageIntro),
 }
 
 type HomeCopy struct {

@@ -24,10 +24,17 @@ import (
 const sessionCookie = "gowdk_flagship_session"
 
 func Login(_ context.Context, values form.Values) (response.Response, error) {
+	if len(sessionSecret()) == 0 {
+		return response.RedirectTo("/?login=failed"), nil
+	}
+	wantEmail, wantPassword, ok := configuredCredentials()
+	if !ok {
+		return response.RedirectTo("/?login=failed"), nil
+	}
+
 	email := strings.TrimSpace(values.First("email"))
 	password := values.First("password")
-	if !constantEqual(email, env("GOWDK_FLAGSHIP_EMAIL", "demo@example.com")) ||
-		!constantEqual(password, env("GOWDK_FLAGSHIP_PASSWORD", "demo-password")) {
+	if !constantEqual(email, wantEmail) || !constantEqual(password, wantPassword) {
 		return response.RedirectTo("/?login=failed"), nil
 	}
 
@@ -127,6 +134,9 @@ var sessions = struct {
 }{Values: map[string]session{}}
 
 func currentSession(request *http.Request) (session, bool) {
+	if len(sessionSecret()) == 0 {
+		return session{}, false
+	}
 	if request == nil {
 		return session{}, false
 	}
@@ -159,9 +169,19 @@ func sign(value string) string {
 }
 
 func signature(value string) string {
-	mac := hmac.New(sha256.New, []byte(env("GOWDK_FLAGSHIP_SECRET", "development-flagship-secret-change-me")))
+	mac := hmac.New(sha256.New, sessionSecret())
 	_, _ = mac.Write([]byte(value))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func sessionSecret() []byte {
+	return []byte(strings.TrimSpace(os.Getenv("GOWDK_FLAGSHIP_SECRET")))
+}
+
+func configuredCredentials() (email, password string, ok bool) {
+	email = env("GOWDK_FLAGSHIP_EMAIL", "demo@example.com")
+	password = strings.TrimSpace(os.Getenv("GOWDK_FLAGSHIP_PASSWORD"))
+	return email, password, password != ""
 }
 
 func sessionDuration() time.Duration {

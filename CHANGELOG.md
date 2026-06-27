@@ -3,6 +3,17 @@
 GOWDK is experimental 0.x software. Public syntax, generated output, runtime
 packages, and tooling contracts may change before 1.0.
 
+## [0.12.1](https://github.com/cssbruno/GoWDK/compare/v0.12.0...v0.12.1) (2026-06-27)
+
+
+### Bug Fixes
+
+* **config:** harden CORS, addons, CSS, and artifact scans ([#756](https://github.com/cssbruno/GoWDK/issues/756)) ([0ffab59](https://github.com/cssbruno/GoWDK/commit/0ffab590a036706209e58e068f05cd7825bcf7a0))
+* **examples:** harden runnable example flows ([#770](https://github.com/cssbruno/GoWDK/issues/770)) ([d3b8c78](https://github.com/cssbruno/GoWDK/commit/d3b8c78d91a8335391773edc395be192a1cf3328))
+* **gowdkcmd:** preserve delegated helper source paths ([#750](https://github.com/cssbruno/GoWDK/issues/750)) ([935d9ae](https://github.com/cssbruno/GoWDK/commit/935d9ae305d8babad6ec8b01295122bcdd21b495))
+* **release:** require conventional PR titles ([#757](https://github.com/cssbruno/GoWDK/issues/757)) ([58e99ef](https://github.com/cssbruno/GoWDK/commit/58e99efc5bc933409b3fe9e99d3d78d652c11b7f))
+* support config helper source checkout builds ([#746](https://github.com/cssbruno/GoWDK/issues/746)) ([15a52b7](https://github.com/cssbruno/GoWDK/commit/15a52b7ae90903193a8fbbedb754425595af4b67))
+
 ## [0.12.0](https://github.com/cssbruno/GoWDK/compare/v0.11.0...v0.12.0) (2026-06-26)
 
 

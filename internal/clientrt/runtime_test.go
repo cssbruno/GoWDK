@@ -135,6 +135,9 @@ func TestSourceTraceFetchNormalizesRequestInputs(t *testing.T) {
 		`function traceInputURL(url)`,
 		`typeof Request !== 'undefined' && url instanceof Request`,
 		`return url.url || '';`,
+		`function traceURLPath(url)`,
+		`return new URL(value, window.location.href).pathname || '/';`,
+		`{ key: 'url.path', value: traceURLPath(url) }`,
 		`return new URL(traceInputURL(url), window.location.href).origin === window.location.origin;`,
 		`function traceInputHeaders(url, options)`,
 		`url && typeof url === 'object' && url.headers`,
@@ -143,6 +146,20 @@ func TestSourceTraceFetchNormalizesRequestInputs(t *testing.T) {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected runtime source to contain %q:\n%s", expected, source)
 		}
+	}
+}
+
+func TestTraceFetchExportsPathOnlyURL(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	script := filepath.Join(t.TempDir(), "gowdk-trace-url-test.js")
+	if err := os.WriteFile(script, []byte(traceURLHarnessScript(string(Source()))), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command(node, script).CombinedOutput(); err != nil {
+		t.Fatalf("trace URL harness failed: %v\n%s", err, output)
 	}
 }
 
@@ -182,6 +199,63 @@ func TestEmbeddedRuntimeSourceFilesParseWithNode(t *testing.T) {
 			}
 		})
 	}
+}
+
+func traceURLHarnessScript(runtime string) string {
+	return `
+'use strict';
+
+const assert = require('node:assert/strict');
+
+const requests = [];
+global.document = {
+  documentElement: { hasAttribute() { return false; } },
+  addEventListener() {},
+  querySelector() { return null; },
+  querySelectorAll() { return []; }
+};
+global.window = {
+  location: {
+    href: 'http://example.test/account?session=server-secret',
+    origin: 'http://example.test'
+  },
+  addEventListener() {},
+  __gowdkTraceEnabled: true
+};
+	global.fetch = async function(url, options) {
+  requests.push({ url: String(url), options: options || {} });
+  return {
+    ok: true,
+    status: 204,
+    headers: { get() { return ''; } },
+    text: async () => ''
+  };
+};
+
+` + runtime + `
+
+(async function() {
+  await window.__gowdkTrace.fetch('/api/patients?token=client-secret&code=123#frag', {}, {
+    name: 'fetch patients',
+    lane: 'api'
+  });
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(requests[0].url, '/api/patients?token=client-secret&code=123#frag');
+  const traceRequest = requests.find(request => request.url === '/_gowdk/traces/browser');
+  assert.ok(traceRequest, 'trace span was not posted');
+  const payload = String(traceRequest.options.body || '');
+  assert.ok(!payload.includes('client-secret'), payload);
+  assert.ok(!payload.includes('code=123'), payload);
+  assert.ok(!payload.includes('#frag'), payload);
+  const span = JSON.parse(payload);
+  const urlPath = span.attributes.find(attr => attr.key === 'url.path');
+  assert.deepEqual(urlPath, { key: 'url.path', value: '/api/patients' });
+})().catch(error => {
+  console.error(error && error.stack || error);
+  process.exit(1);
+});
+`
 }
 
 func TestRuntimeTemplatesReplacePlaceholders(t *testing.T) {

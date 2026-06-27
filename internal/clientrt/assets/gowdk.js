@@ -948,6 +948,24 @@
     return url;
   }
 
+  function traceURLPath(url) {
+    var value = traceInputURL(url);
+    try {
+      return new URL(value, window.location.href).pathname || '/';
+    } catch (error) {
+      var text = String(value || '');
+      var fragment = text.indexOf('#');
+      if (fragment >= 0) {
+        text = text.slice(0, fragment);
+      }
+      var query = text.indexOf('?');
+      if (query >= 0) {
+        text = text.slice(0, query);
+      }
+      return text;
+    }
+  }
+
   function traceInputHeaders(url, options) {
     if (options && options.headers) {
       return options.headers;
@@ -971,7 +989,7 @@
       return fetch(url, options);
     }
     var span = startTraceSpan(meta && meta.name || 'fetch', meta && meta.lane || 'api', [
-      { key: 'url.path', value: String(url || '') }
+      { key: 'url.path', value: traceURLPath(url) }
     ]);
     var traced = Object.assign({}, options || {});
     if (sameOriginURL(url)) {

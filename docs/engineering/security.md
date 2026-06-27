@@ -66,15 +66,21 @@ diagnostic code, a `file:line`, and remediation; run `gowdk explain <code>` for
 details.
 
 `gowdk build` evaluates the same static baseline before writing output and scans
-the final emitted artifact files for bundled secrets after generation.
+text-like final emitted artifact files for bundled secrets after generation. The
+final scan is bounded to 1 MiB per text file and 16 MiB total text input; known
+binary artifact types such as WASM, images, archives, and generated binaries are
+not scanned as text, and oversized text artifacts produce warnings.
+
 Production builds fail on error-severity findings unless they are explicitly
 waived or scoped-bypassed (see below); non-production builds print a prominent
-warning summary without blocking local iteration. `gowdk audit` remains the
-explicit report and CI surface: it prints the full human/JSON report, reads
-declared `*.audit.gwdk` policies, checks frontend risks such as bundle secrets
-and raw-HTML sinks, can emit readable standalone runtime tests with `gowdk audit
---emit-tests`, can verify committed tests are current with `gowdk audit
---check-tests`, and can run generated-app runtime tests with `gowdk audit --run`.
+warning summary without blocking local iteration.
+
+`gowdk audit` remains the explicit report and CI surface: it prints the full
+human/JSON report, reads declared `*.audit.gwdk` policies, checks frontend risks
+such as bundle secrets and raw-HTML sinks, can emit readable standalone runtime
+tests with `gowdk audit --emit-tests`, can verify committed tests are current
+with `gowdk audit --check-tests`, and can run generated-app runtime tests with
+`gowdk audit --run`.
 
 ## CI-Native Output: JSON Schema, SARIF, Fingerprints, And Diff
 

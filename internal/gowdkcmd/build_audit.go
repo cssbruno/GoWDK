@@ -1,7 +1,9 @@
 package gowdkcmd
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,6 +16,11 @@ import (
 	"github.com/cssbruno/gowdk/internal/diagnostics"
 	"github.com/cssbruno/gowdk/internal/securitymanifest"
 	"github.com/cssbruno/gowdk/internal/securitytext"
+)
+
+const (
+	finalArtifactMaxTextBytes  = 1 << 20
+	finalArtifactMaxTotalBytes = 16 << 20
 )
 
 // buildSecurityAuditError reports that gowdk build was blocked by error-severity
@@ -160,8 +167,9 @@ func recordBuildSecurityWaivers(findings []auditspec.Finding) {
 
 func finalBuildArtifactSecurityFindings(result buildgen.Result) []auditspec.Finding {
 	var findings []auditspec.Finding
+	var scannedBytes int64
 	for _, artifactPath := range finalBuildArtifactPaths(result) {
-		payload, err := os.ReadFile(artifactPath)
+		decision, err := classifyFinalArtifact(artifactPath)
 		if err != nil {
 			findings = append(findings, auditspec.Finding{
 				Code:        "audit_bundle_secret",
@@ -173,7 +181,45 @@ func finalBuildArtifactSecurityFindings(result buildgen.Result) []auditspec.Find
 			})
 			continue
 		}
-		if kind, ok := securitytext.FirstSecretKind(string(payload)); ok {
+		if !decision.scanText {
+			continue
+		}
+		if decision.size > finalArtifactMaxTextBytes {
+			findings = append(findings, auditspec.Finding{
+				Code:        "audit_bundle_secret",
+				Severity:    diagnostics.SeverityWarning,
+				Target:      "artifact:" + filepath.ToSlash(artifactPath),
+				Source:      filepath.ToSlash(artifactPath),
+				Message:     fmt.Sprintf("final emitted text artifact exceeds the bundled-secret scan limit (%d bytes > %d bytes)", decision.size, int64(finalArtifactMaxTextBytes)),
+				Remediation: "Reduce the generated artifact size or inspect it with an application-owned secret scanner before deployment.",
+			})
+			continue
+		}
+		if scannedBytes+decision.size > finalArtifactMaxTotalBytes {
+			findings = append(findings, auditspec.Finding{
+				Code:        "audit_bundle_secret",
+				Severity:    diagnostics.SeverityWarning,
+				Target:      "artifact:" + filepath.ToSlash(artifactPath),
+				Source:      filepath.ToSlash(artifactPath),
+				Message:     fmt.Sprintf("final artifact secret scanning skipped after reaching the total scan budget (%d bytes)", int64(finalArtifactMaxTotalBytes)),
+				Remediation: "Inspect skipped generated text artifacts with an application-owned secret scanner before deployment.",
+			})
+			continue
+		}
+		payload, err := readFinalArtifactText(artifactPath, decision.size)
+		if err != nil {
+			findings = append(findings, auditspec.Finding{
+				Code:        "audit_bundle_secret",
+				Severity:    auditDiagnosticSeverity("audit_bundle_secret"),
+				Target:      "artifact:" + filepath.ToSlash(artifactPath),
+				Source:      filepath.ToSlash(artifactPath),
+				Message:     fmt.Sprintf("final emitted artifact could not be scanned for bundled secrets: %v", err),
+				Remediation: "Regenerate the artifact or remove unreadable output so the final build security scan has complete coverage.",
+			})
+			continue
+		}
+		scannedBytes += decision.size
+		if kind, ok := securitytext.FirstSecretKind(payload); ok {
 			findings = append(findings, auditspec.Finding{
 				Code:        "audit_bundle_secret",
 				Severity:    auditDiagnosticSeverity("audit_bundle_secret"),
@@ -185,6 +231,79 @@ func finalBuildArtifactSecurityFindings(result buildgen.Result) []auditspec.Find
 		}
 	}
 	return auditspec.EnrichFindings(findings)
+}
+
+type finalArtifactScanDecision struct {
+	scanText bool
+	size     int64
+}
+
+func classifyFinalArtifact(path string) (finalArtifactScanDecision, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return finalArtifactScanDecision{}, err
+	}
+	if !info.Mode().IsRegular() {
+		return finalArtifactScanDecision{}, fmt.Errorf("not a regular file")
+	}
+	if finalArtifactExtensionIsBinary(filepath.Ext(path)) {
+		return finalArtifactScanDecision{size: info.Size()}, nil
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return finalArtifactScanDecision{}, err
+	}
+	defer file.Close()
+	header := make([]byte, 512)
+	n, err := file.Read(header)
+	if err != nil && err != io.EOF {
+		return finalArtifactScanDecision{}, err
+	}
+	return finalArtifactScanDecision{
+		scanText: finalArtifactHeaderIsText(header[:n]),
+		size:     info.Size(),
+	}, nil
+}
+
+func finalArtifactExtensionIsBinary(ext string) bool {
+	switch strings.ToLower(ext) {
+	case ".wasm", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".avif", ".zip", ".gz", ".br", ".tar", ".tgz", ".pdf", ".bin", ".exe", ".dylib", ".so", ".dll":
+		return true
+	default:
+		return false
+	}
+}
+
+func finalArtifactHeaderIsText(header []byte) bool {
+	if len(header) == 0 {
+		return true
+	}
+	if bytes.Contains(header, []byte{0}) {
+		return false
+	}
+	for _, b := range header {
+		if b < 0x20 && b != '\n' && b != '\r' && b != '\t' && b != '\f' {
+			return false
+		}
+	}
+	return true
+}
+
+func readFinalArtifactText(path string, size int64) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	limit := size
+	if limit > finalArtifactMaxTextBytes {
+		limit = finalArtifactMaxTextBytes
+	}
+	payload, err := io.ReadAll(io.LimitReader(file, limit))
+	if err != nil {
+		return "", err
+	}
+	return string(payload), nil
 }
 
 func finalBuildArtifactPaths(result buildgen.Result) []string {

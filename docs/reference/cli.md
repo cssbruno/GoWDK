@@ -100,10 +100,12 @@ gowdk lsp [--config <file>] [--project-root <dir>] [--ssr]
   (`GOPROXY=off`, `GOTOOLCHAIN=local`). A failed expectation is reported as
   `audit_test_failed`; exceeding the deadline is reported distinctly as
   `audit_test_timeout`.
-  `gowdk build` runs the same baseline gate before writing output, scans the
-  final emitted artifact files for bundled secrets after generation, blocks
-  production builds on error-severity findings unless `--allow-insecure` is set,
-  and writes the
+  `gowdk build` runs the same baseline gate before writing output, scans
+  text-like final emitted artifact files for bundled secrets after generation
+  with a 1 MiB per-file limit and 16 MiB total text scan budget, skips known
+  binary artifact types such as WASM, images, archives, and binaries, reports
+  oversized text artifacts as warnings, blocks production builds on
+  error-severity findings unless `--allow-insecure` is set, and writes the
   posture alone to a non-served `.gowdk/reports/<output-name>/gowdk-security.json`
   path outside the selected output directory.
   `gowdk audit` exit codes form a stable CI contract; gate on the specific code

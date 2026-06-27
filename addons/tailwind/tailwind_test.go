@@ -38,8 +38,10 @@ func TestProcessCSSRunsStandaloneCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	argsFile := filepath.Join(root, "args.txt")
+	cwdFile := filepath.Join(root, "cwd.txt")
 	inputCopy := filepath.Join(root, "generated-input.css")
 	t.Setenv("TAILWIND_ARGS_FILE", argsFile)
+	t.Setenv("TAILWIND_CWD_FILE", cwdFile)
 	t.Setenv("TAILWIND_INPUT_COPY", inputCopy)
 
 	result, err := Addon(Options{
@@ -66,6 +68,17 @@ func TestProcessCSSRunsStandaloneCommand(t *testing.T) {
 	if len(result.Stylesheets) != 1 || result.Stylesheets[0].Href != "/assets/site.css" {
 		t.Fatalf("unexpected stylesheets: %#v", result.Stylesheets)
 	}
+	wantCWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cwd, err := os.ReadFile(cwdFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(cwd)) != wantCWD {
+		t.Fatalf("expected tailwind command to run in %q, got %q", wantCWD, cwd)
+	}
 
 	args, err := os.ReadFile(argsFile)
 	if err != nil {
@@ -86,6 +99,63 @@ func TestProcessCSSRunsStandaloneCommand(t *testing.T) {
 		if !strings.Contains(generated, expected) {
 			t.Fatalf("expected generated tailwind input to contain %q, got:\n%s", expected, generated)
 		}
+	}
+}
+
+func TestProcessCSSResolvesRelativePathsFromContextWorkingDir(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "styles"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	input := filepath.Join(root, "styles", "app.css")
+	if err := os.WriteFile(input, []byte(`@import "tailwindcss";`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	argsFile := filepath.Join(root, "args.txt")
+	cwdFile := filepath.Join(root, "cwd.txt")
+	inputCopy := filepath.Join(root, "generated-input.css")
+	t.Setenv("TAILWIND_ARGS_FILE", argsFile)
+	t.Setenv("TAILWIND_CWD_FILE", cwdFile)
+	t.Setenv("TAILWIND_INPUT_COPY", inputCopy)
+
+	other := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(other); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	_, err = Addon(Options{
+		Input:   "styles/app.css",
+		Command: fakeTailwindCommand(t),
+	}).ProcessCSS(gowdk.CSSContext{
+		WorkingDir: root,
+		Sources:    []gowdk.CSSSource{{Path: "site.page.gwdk"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cwd, err := os.ReadFile(cwdFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(cwd)) != root {
+		t.Fatalf("expected tailwind command to run in %q, got %q", root, cwd)
+	}
+	generatedInput, err := os.ReadFile(inputCopy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated := string(generatedInput)
+	if !strings.Contains(generated, `styles/app.css`) {
+		t.Fatalf("expected generated input to reference context-relative input, got:\n%s", generated)
 	}
 }
 
@@ -195,6 +265,9 @@ func fakeTailwindCommand(t *testing.T) string {
 
 const fakeTailwindScript = `#!/bin/sh
 set -eu
+if [ "${TAILWIND_CWD_FILE:-}" != "" ]; then
+	pwd > "$TAILWIND_CWD_FILE"
+fi
 printf '%s\n' "$@" > "$TAILWIND_ARGS_FILE"
 out=""
 in=""

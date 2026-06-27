@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/textproto"
-	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/cssbruno/gowdk/runtime/corsorigin"
 )
 
 // CORSPolicy declares generated CORS behavior for API and web contract routes.
@@ -104,24 +105,11 @@ func normalizeCORSOrigin(origin string) (string, error) {
 	if origin == "*" {
 		return origin, nil
 	}
-	if strings.ContainsAny(origin, "\r\n") {
-		return "", fmt.Errorf("CORS origin %q contains a control character", origin)
-	}
-	parsed, err := url.Parse(origin)
+	parsed, err := corsorigin.Parse(origin)
 	if err != nil {
 		return "", fmt.Errorf("CORS origin %q is invalid: %w", origin, err)
 	}
-	scheme := strings.ToLower(parsed.Scheme)
-	if scheme != "http" && scheme != "https" {
-		return "", fmt.Errorf("CORS origin %q must use http or https", origin)
-	}
-	if parsed.User != nil || parsed.Host == "" || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", fmt.Errorf("CORS origin %q must be an origin, not a URL with userinfo, query, or fragment", origin)
-	}
-	if parsed.Path != "" && parsed.Path != "/" {
-		return "", fmt.Errorf("CORS origin %q must not include a path", origin)
-	}
-	return scheme + "://" + strings.ToLower(parsed.Host), nil
+	return parsed.String(), nil
 }
 
 func normalizeCORSMethod(method string) (string, error) {

@@ -2,11 +2,12 @@ package gowdk
 
 import (
 	"fmt"
-	"net/url"
+	"reflect"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/cssbruno/gowdk/runtime/corsorigin"
 	runtimeseo "github.com/cssbruno/gowdk/runtime/seo"
 )
 
@@ -554,22 +555,9 @@ func (config CORSConfig) Validate() error {
 }
 
 func validateCORSOrigin(origin string) error {
-	if strings.ContainsAny(origin, "\r\n") {
-		return fmt.Errorf("Build.CORS.AllowedOrigins contains invalid origin %q", origin)
-	}
-	parsed, err := url.Parse(origin)
+	_, err := corsorigin.Parse(origin)
 	if err != nil {
 		return fmt.Errorf("Build.CORS.AllowedOrigins contains invalid origin %q: %w", origin, err)
-	}
-	scheme := strings.ToLower(parsed.Scheme)
-	if scheme != "http" && scheme != "https" {
-		return fmt.Errorf("Build.CORS.AllowedOrigins origin %q must use http or https", origin)
-	}
-	if parsed.User != nil || parsed.Host == "" || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return fmt.Errorf("Build.CORS.AllowedOrigins origin %q must not include userinfo, query, or fragment", origin)
-	}
-	if parsed.Path != "" && parsed.Path != "/" {
-		return fmt.Errorf("Build.CORS.AllowedOrigins origin %q must not include a path", origin)
 	}
 	return nil
 }
@@ -920,6 +908,79 @@ func (a addon) Features() []Feature {
 	return append([]Feature(nil), a.features...)
 }
 
+// ValidateAddons checks addon identity and feature ownership before compiler
+// planning so invalid declarations fail as config errors instead of panicking
+// during feature lookup or addon execution.
+func ValidateAddons(addons []Addon) error {
+	names := map[string]int{}
+	features := map[Feature]int{}
+	for index, addon := range addons {
+		if addonIsNil(addon) {
+			return fmt.Errorf("Addons[%d] is nil", index)
+		}
+		name := strings.TrimSpace(addon.Name())
+		if name == "" {
+			return fmt.Errorf("Addons[%d].Name is required", index)
+		}
+		if previous, ok := names[name]; ok {
+			return fmt.Errorf("Addons[%d] %q duplicates Addons[%d]", index, name, previous)
+		}
+		names[name] = index
+		addonFeatures := addon.Features()
+		if len(addonFeatures) == 0 {
+			return fmt.Errorf("Addons[%d] %q must declare at least one feature", index, name)
+		}
+		for featureIndex, feature := range addonFeatures {
+			if strings.TrimSpace(string(feature)) == "" {
+				return fmt.Errorf("Addons[%d] %q declares empty feature at index %d", index, name, featureIndex)
+			}
+			if previous, ok := features[feature]; ok && !duplicateFeatureAllowed(feature) {
+				return fmt.Errorf("Addons[%d] %q duplicates feature %q already owned by Addons[%d]", index, name, feature, previous)
+			}
+			if _, ok := features[feature]; !ok {
+				features[feature] = index
+			}
+		}
+		if err := validateAddonFeatureContracts(index, name, addon, addonFeatures); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateAddonFeatureContracts(index int, name string, addon Addon, features []Feature) error {
+	for _, feature := range features {
+		switch feature {
+		case FeatureSEO:
+			if _, ok := addon.(SEOProvider); !ok {
+				return fmt.Errorf("Addons[%d] %q declares feature %q but does not implement gowdk.SEOProvider", index, name, feature)
+			}
+		case FeatureAuth:
+			if _, ok := addon.(AuthSessionProvider); !ok {
+				return fmt.Errorf("Addons[%d] %q declares feature %q but does not implement gowdk.AuthSessionProvider", index, name, feature)
+			}
+		}
+	}
+	return nil
+}
+
+func addonIsNil(addon Addon) bool {
+	if addon == nil {
+		return true
+	}
+	value := reflect.ValueOf(addon)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
+}
+
+func duplicateFeatureAllowed(feature Feature) bool {
+	return feature == FeatureSPA
+}
+
 // FeatureSet is a lookup table of enabled compiler/generator capabilities.
 type FeatureSet map[Feature]bool
 
@@ -927,6 +988,9 @@ type FeatureSet map[Feature]bool
 func EnabledFeatures(config Config) FeatureSet {
 	features := FeatureSet{}
 	for _, addon := range config.Addons {
+		if addonIsNil(addon) {
+			continue
+		}
 		for _, feature := range addon.Features() {
 			features[feature] = true
 		}
@@ -966,10 +1030,14 @@ type CSSSource struct {
 
 // CSSContext is passed to compile-time CSS processors.
 type CSSContext struct {
-	Sources   []CSSSource
-	OutputDir string
-	Build     BuildConfig
-	CSS       CSSConfig
+	ProjectRoot string
+	ConfigDir   string
+	SourceRoot  string
+	WorkingDir  string
+	Sources     []CSSSource
+	OutputDir   string
+	Build       BuildConfig
+	CSS         CSSConfig
 }
 
 // CSSAsset is a CSS file emitted by a compile-time CSS processor.

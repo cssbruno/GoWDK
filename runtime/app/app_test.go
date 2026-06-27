@@ -290,6 +290,39 @@ func TestBackendRouterHandlesCORSPreflightForAPI(t *testing.T) {
 	assertHeader(t, recorder, "Vary", "Origin")
 }
 
+func TestBackendRouterCanonicalizesCORSOrigins(t *testing.T) {
+	router, err := NewBackendRouter(BackendRoute{
+		Kind:    "api",
+		Method:  http.MethodGet,
+		Path:    "/api/health",
+		Handler: func(http.ResponseWriter, *http.Request) bool { return true },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := router.SetCORSPolicy(CORSPolicy{
+		AllowedOrigins: []string{"https://APP.EXAMPLE:443", "https://[2001:db8::1]:8443"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	request.Header.Set("Origin", "https://app.example")
+	if !router.Dispatch(recorder, request) {
+		t.Fatal("expected API request to be handled")
+	}
+	assertHeader(t, recorder, "Access-Control-Allow-Origin", "https://app.example")
+
+	recorder = httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	request.Header.Set("Origin", "https://[2001:db8::1]:8443")
+	if !router.Dispatch(recorder, request) {
+		t.Fatal("expected IPv6 API request to be handled")
+	}
+	assertHeader(t, recorder, "Access-Control-Allow-Origin", "https://[2001:db8::1]:8443")
+}
+
 func TestBackendRouterWritesCORSActualHeadersForAPI(t *testing.T) {
 	router, err := NewBackendRouter(BackendRoute{
 		Kind:   "api",

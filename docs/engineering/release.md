@@ -102,12 +102,8 @@ section because `release.yml` uses it as the release body source:
 gh workflow run release.yml -f version=vX.Y.Z
 ```
 
-After the release workflow completes, smoke the published artifacts for each
-supported OS artifact:
-
-```sh
-gh workflow run release-smoke.yml -f version=vX.Y.Z
-```
+After the release workflow completes, use `scripts/smoke-release-artifact.sh`
+locally when a published artifact needs an extra manual smoke check.
 
 ## Artifacts
 

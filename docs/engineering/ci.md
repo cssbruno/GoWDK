@@ -7,8 +7,7 @@ remains the fastest pre-handoff gate.
 
 Required pull-request lanes:
 
-- `Go tests (ubuntu-latest)`: root dependency check and all Go module tests.
-- `Go tests (macos-14)`: OS signal for Go tests on Darwin/arm64.
+- `Go tests`: root dependency check and all Go module tests on Linux.
 - `Reachable vulnerabilities`: `scripts/vulncheck-go-modules.sh`.
 - `Runtime race detector`: `scripts/test-runtime-race.sh` on Linux for the
   explicit shared-state runtime package list.
@@ -35,19 +34,14 @@ Required pull-request lanes:
 - `Generated output smoke`: representative build output, binary, WASM, SSR,
   CSS, SEO, component asset, and login example checks.
 
-The release lanes live outside the pull-request CI workflow:
+Release automation lives outside pull-request CI:
 
-- `.github/workflows/golangci-lint.yml`: manual strict lint workflow. It runs
-  `scripts/check-golangci-lint.sh` with the pinned GolangCI-Lint version. Do
-  not make this a required pull-request lane until the repository is clean under
-  the configured lint set.
-- `.github/workflows/release-dry-run.yml`: scheduled weekly and manual; packages
-  CLI/VS Code artifacts, writes checksums, and uploads workflow artifacts. This
-  is GitHub-only because it uses Actions artifact upload.
 - `.github/workflows/release.yml`: tag/manual publishing workflow for real
   releases.
-- `.github/workflows/release-smoke.yml`: manual post-publish artifact smoke
-  across Linux, macOS Intel, macOS arm64, and Windows.
+- `.github/workflows/release-please.yml`: maintains the release PR and creates
+  release tags from merged release PRs.
+- `.github/workflows/vscode-extension-publish.yml`: manual Marketplace
+  publishing for the VS Code extension.
 
 ## Local Gates
 
@@ -106,10 +100,7 @@ Run the same local checks before handoff when relevant:
   ```sh
   scripts/check-root-deps.sh
   scripts/vulncheck-go-modules.sh
-  go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/marketing/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/store-persist/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
-  go run ./cmd/gowdk manifest --ssr examples/pages/*.gwdk examples/marketing/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/store-persist/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
-  go run ./cmd/gowdk sitemap --ssr examples/pages/*.gwdk examples/marketing/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/store-persist/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
-  go run ./cmd/gowdk routes --ssr examples/pages/*.gwdk examples/marketing/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/store-persist/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
+  scripts/check-example-reports.sh
   go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk
   go run ./cmd/gowdk build --config examples/seo/gowdk.config.go --out /tmp/gowdk-seo-build examples/seo/*.gwdk
   go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk
@@ -122,14 +113,15 @@ Run the same local checks before handoff when relevant:
   go run ./cmd/gowdk build --out /tmp/gowdk-store-persist examples/store-persist/*.gwdk
   ```
 
-  These commands run from the repository root and rely on the root
-  `gowdk.config.go`. Any smoke command run from another directory must pass
-  `--config <file>`.
+  `scripts/check-example-reports.sh` reads its broad source inventory from
+  `examples/smoke-sources.txt`. These commands run from the repository root and
+  rely on the root `gowdk.config.go`. Any smoke command run from another
+  directory must pass `--config <file>`.
 
 ## Fuzz, Integration, And Determinism
 
-Baseline CI keeps these checks bounded and Linux-only so the OS matrix is not
-multiplied by generated-binary work:
+Baseline CI keeps these checks bounded and Linux-only so generated-binary work
+does not multiply runner cost:
 
 - `scripts/test-parser-fuzz.sh` runs the existing `FuzzParseSyntax` target.
   CI sets `GOWDK_FUZZTIME=1000x` so the smoke uses a deterministic execution
@@ -217,16 +209,14 @@ Pass an explicit asset name to test a non-native artifact:
 scripts/smoke-release-artifact.sh vX.Y.Z gowdk-linux-amd64
 ```
 
-Use `GOWDK_RELEASE_REPO=owner/repo` for forks. The GitHub-only matrix version
-is `.github/workflows/release-smoke.yml`; trigger it with the published tag as
-the `version` input.
+Use `GOWDK_RELEASE_REPO=owner/repo` for forks. There is no hosted release-smoke
+workflow; run this locally only when an artifact needs an extra manual check.
 
 ## Branch Protection
 
 Require these checks before merging to `main`:
 
-- `Go tests (ubuntu-latest)`
-- `Go tests (macos-14)`
+- `Go tests`
 - `Reachable vulnerabilities`
 - `Runtime race detector`
 - `CLI build`
@@ -239,9 +229,8 @@ Require these checks before merging to `main`:
 - `Generated output determinism`
 - `Generated output smoke`
 
-Do not require scheduled `Release Dry Run` or manual `Release Artifact Smoke`
-for normal pull requests. Use them for release readiness and post-publish
-verification.
+Do not require release or manual publishing workflows for normal pull requests.
+Use them only for release readiness and publication.
 
 ## Documentation Links
 
@@ -290,16 +279,9 @@ GitHub Actions caching is enabled for Go through `actions/setup-go` in CI and
 release packaging. Keep those caches because they reduce module and build-cache
 work across repeated runs.
 
-GitHub-managed CodeQL default setup also creates per-commit overlay database
+GitHub-managed CodeQL default setup can create per-commit overlay database
 caches. Those entries are safe to regenerate and can quickly fill the repository
-cache quota. `.github/workflows/cache-maintenance.yml` runs weekly and can be
-triggered manually to keep only the newest CodeQL overlay caches:
-
-```sh
-gh workflow run cache-maintenance.yml
-```
-
-For local one-off cleanup with a GitHub token:
+cache quota. Run local one-off cleanup with a GitHub token only when needed:
 
 ```sh
 GOWDK_CACHE_PRUNE_KEEP=20 scripts/prune-github-caches.sh cssbruno/GoWDK

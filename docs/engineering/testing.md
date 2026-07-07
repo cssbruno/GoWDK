@@ -55,6 +55,7 @@ must pass `--config <file>`.
 | Parser fuzz smoke | `scripts/test-parser-fuzz.sh` | Parser, tokenizer, syntax recovery, and diagnostic recovery changes. |
 | Generated app integration | `scripts/test-generated-app-integration.sh` | Generated binary, SSR, action, fragment, CSRF, and contract adapter changes. |
 | Generated output determinism | `scripts/test-generated-output-determinism.sh` | Generated HTML, manifest, report, inspect, or route/sitemap output changes. |
+| Incremental build equivalence | `go test ./internal/buildgen -run TestIncrementalBuildMatchesCleanBuildEquivalence -count=1` | Incremental SPA output, stale generated asset cleanup, route cleanup, or build report comparison changes. |
 | Runtime race detector | `scripts/test-runtime-race.sh` | Shared-state runtime packages, lifecycle, contracts, SSE, rate limiting, trace, or testkit changes. |
 | VS Code extension syntax | `node --check editors/vscode/extension.js` | Editor extension changes and broad verification. |
 | VS Code extension behavior | `node --test editors/vscode/*.test.js` | Editor extension pure helper changes and broad verification. |
@@ -82,6 +83,12 @@ must pass `--config <file>`.
 - `scripts/test-generated-output-determinism.sh` is the generated output and
   report determinism slice. It compares two clean builds plus manifest, sitemap,
   routes, and asset-graph report output.
+- `TestIncrementalBuildMatchesCleanBuildEquivalence` compares an incremental
+  output tree with a clean build of the same final state. It includes served
+  output, sibling compiler reports, manifests, file bytes, and file modes; the
+  only normalization is the documented `gowdk-build-report.json` projection for
+  progress-path events that intentionally differ between clean and incremental
+  runs.
 - `scripts/test-runtime-race.sh` is the focused race-detector slice. It runs an
   explicit package list under `go test -race -count=1` and fails preflight when
   a selected package has no tests.
@@ -143,7 +150,9 @@ runtime integration, race detection, or nondeterministic output.
   generated file modification times so local dev loops do not retrigger on
   identical output.
 - `internal/buildgen` tests cover incremental changed-page rendering, complete
-  route manifest refreshes, and stale route output cleanup.
+  route manifest refreshes, stale route output cleanup, stale generated asset
+  cleanup, and clean-versus-incremental output equivalence for the current SPA
+  slice.
 - `internal/project` tests cover literal `gowdk.config.go` parsing for source
   discovery, module source groups, build output, and build targets.
 - Nested optional adapter modules cover Chi, Echo, Fiber, Gin, Redis Streams,

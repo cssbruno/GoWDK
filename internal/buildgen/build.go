@@ -782,6 +782,10 @@ func BuildIncrementalFromValidatedProgram(config gowdk.Config, validated compile
 	if err != nil {
 		return Result{}, reporter.fail("manifest", err)
 	}
+	previousAssets, err := readAssetManifestIfExists(outputDir)
+	if err != nil {
+		return Result{}, reporter.fail("manifest", err)
+	}
 	reporter.debug("manifest", "previous_route_manifest_read", "previous route manifest read", BuildEvent{
 		Data: map[string]string{"routes": fmt.Sprint(len(previousRoutes.Routes))},
 	})
@@ -894,6 +898,10 @@ func BuildIncrementalFromValidatedProgram(config gowdk.Config, validated compile
 		result.RobotsPath = robotsPath
 		reporter.info("seo", "robots_written", "robots.txt written", BuildEvent{Path: eventPath(outputDir, robotsPath)})
 	}
+	if err := removeStaleAssetManifestFiles(outputDir, previousAssets, result.CSSArtifacts, result.AssetArtifacts); err != nil {
+		return Result{}, reporter.fail("cleanup", err)
+	}
+	reporter.info("cleanup", "stale_assets_removed", "stale generated assets removed", BuildEvent{})
 	assetManifestPath, err := writeAssetManifest(outputDir, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	if err != nil {
 		return Result{}, reporter.fail("manifest", err)

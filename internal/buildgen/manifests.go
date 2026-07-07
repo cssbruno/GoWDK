@@ -166,6 +166,22 @@ func readRouteManifestIfExists(outputDir string) (routeManifest, error) {
 	return manifest, nil
 }
 
+func readAssetManifestIfExists(outputDir string) (runtimeasset.Manifest, error) {
+	manifestPath := filepath.Join(outputDir, assetManifestFile)
+	payload, err := os.ReadFile(manifestPath)
+	if os.IsNotExist(err) {
+		return runtimeasset.Manifest{}, nil
+	}
+	if err != nil {
+		return runtimeasset.Manifest{}, err
+	}
+	var manifest runtimeasset.Manifest
+	if err := json.Unmarshal(payload, &manifest); err != nil {
+		return runtimeasset.Manifest{}, fmt.Errorf("read existing asset manifest: %w", err)
+	}
+	return manifest, nil
+}
+
 func removeStaleChangedPageArtifacts(outputDir string, previous routeManifest, current []Artifact, changedPageIDs map[string]bool) error {
 	if len(previous.Routes) == 0 || len(changedPageIDs) == 0 {
 		return nil
@@ -186,6 +202,40 @@ func removeStaleChangedPageArtifacts(outputDir string, previous routeManifest, c
 			continue
 		}
 		filePath, err := outputFilePath(outputDir, route.Path)
+		if err != nil {
+			return err
+		}
+		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func removeStaleAssetManifestFiles(outputDir string, previous runtimeasset.Manifest, cssArtifacts []CSSArtifact, assetArtifacts []AssetArtifact) error {
+	if len(previous.Files) == 0 {
+		return nil
+	}
+	keep := map[string]bool{}
+	for _, artifact := range cssArtifacts {
+		rel, err := relativeOutputPath(outputDir, artifact.Path)
+		if err != nil {
+			return err
+		}
+		keep[rel] = true
+	}
+	for _, artifact := range assetArtifacts {
+		rel, err := relativeOutputPath(outputDir, artifact.Path)
+		if err != nil {
+			return err
+		}
+		keep[rel] = true
+	}
+	for _, rel := range previous.Files {
+		if keep[rel] {
+			continue
+		}
+		filePath, err := outputFilePath(outputDir, rel)
 		if err != nil {
 			return err
 		}

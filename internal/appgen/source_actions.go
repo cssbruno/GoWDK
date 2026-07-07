@@ -122,7 +122,7 @@ func sortedActionAdapters(actions []BackendActionAdapter) []BackendActionAdapter
 
 func actionNeedsValues(action BackendActionAdapter) bool {
 	if actionUsesMultipart(action) {
-		return true
+		return multipartActionNeedsValues(action)
 	}
 	if action.Binding.Status != source.BackendBindingBound {
 		return true
@@ -131,6 +131,23 @@ func actionNeedsValues(action BackendActionAdapter) bool {
 		return true
 	}
 	return action.Binding.Signature != source.BackendSignatureAction0
+}
+
+func multipartActionNeedsValues(action BackendActionAdapter) bool {
+	if action.ValidatesInput && len(action.ValidationRules) > 0 {
+		return true
+	}
+	if action.Binding.Status != source.BackendBindingBound {
+		return true
+	}
+	switch action.Binding.Signature {
+	case source.BackendSignatureActionValues:
+		return true
+	case source.BackendSignatureActionForm, source.BackendSignatureActionFormPtr:
+		return !boundActionDecoderUsesData(action)
+	default:
+		return false
+	}
 }
 
 func actionFuncDecl(actions []BackendActionAdapter, csrf bool, rateLimit bool) *ast.FuncDecl {
@@ -187,10 +204,13 @@ func actionCaseStmts(action BackendActionAdapter, csrf bool, rateLimit bool) []a
 	stmts = append(stmts, actionParseFormStmts(action, csrf)...)
 	switch {
 	case actionUsesMultipart(action):
-		stmts = append(stmts,
-			define([]ast.Expr{id("data")}, call(sel("gowdkform", "FromMultipartForm"), selExpr(id("request"), "MultipartForm"))),
-			define([]ast.Expr{id("values")}, selExpr(id("data"), "Values")),
-		)
+		stmts = append(stmts, define([]ast.Expr{id("data")}, call(sel("gowdkform", "FromMultipartForm"), selExpr(id("request"), "MultipartForm"))))
+		if actionNeedsValues(action) {
+			stmts = append(stmts, &ast.DeclStmt{Decl: &ast.GenDecl{Tok: token.VAR, Specs: []ast.Spec{&ast.ValueSpec{
+				Names: []*ast.Ident{id("values")},
+				Type:  sel("gowdkform", "Values"),
+			}}}})
+		}
 	case actionNeedsData(action):
 		stmts = append(stmts,
 			define([]ast.Expr{id("values")}, call(sel("gowdkform", "FromURLValues"), selExpr(id("request"), "PostForm"))),
@@ -354,18 +374,25 @@ func expectedValuesStmts(action BackendActionAdapter) []ast.Stmt {
 }
 
 func expectedDataStmts(action BackendActionAdapter) []ast.Stmt {
-	return []ast.Stmt{&ast.IfStmt{
+	elseStmts := []ast.Stmt{
+		assign([]ast.Expr{id("data")}, id("decodedData")),
+	}
+	if actionNeedsValues(action) {
+		elseStmts = append(elseStmts, assign([]ast.Expr{id("values")}, selExpr(id("data"), "Values")))
+	}
+	stmts := []ast.Stmt{&ast.IfStmt{
 		Init: define([]ast.Expr{id("decodedData"), id("err")}, call(sel("gowdkform", "DecodeExpectedData"), id("data"), actionFormSchemaExpr(action))),
 		Cond: notNil("err"),
 		Body: block(
 			writeNoStoreErrorStmt(sel("http", "StatusBadRequest"), "invalid form"),
 			returnBool(true),
 		),
-		Else: block(
-			assign([]ast.Expr{id("data")}, id("decodedData")),
-			assign([]ast.Expr{id("values")}, selExpr(id("data"), "Values")),
-		),
+		Else: block(elseStmts...),
 	}}
+	if actionNeedsValues(action) {
+		stmts = append(stmts, assign([]ast.Expr{id("_")}, id("values")))
+	}
+	return stmts
 }
 
 func actionRequiredValidationStmts(action BackendActionAdapter) []ast.Stmt {

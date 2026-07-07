@@ -2956,6 +2956,52 @@ func TestGenerateWritesTypedBoundActionHandlers(t *testing.T) {
 	}
 }
 
+func TestGenerateMultipartDataActionDoesNotDeclareUnusedValues(t *testing.T) {
+	outputDir := t.TempDir()
+	appDir := filepath.Join(t.TempDir(), "app")
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Actions: []ActionEndpoint{{
+		PageID:      "Upload",
+		ActionName:  "UploadAvatar",
+		Method:      http.MethodPost,
+		Route:       "/upload",
+		Guards:      []string{"public"},
+		InputFields: []string{"avatar", "caption"},
+		UploadFields: []ActionUploadField{{
+			Field:               "avatar",
+			MaxFiles:            1,
+			MaxBytes:            2048,
+			AllowedContentTypes: []string{"image/png"},
+		}},
+		Binding: source.BackendBinding{
+			Status:       source.BackendBindingBound,
+			ImportPath:   "example.com/app/upload",
+			PackageName:  "upload",
+			FunctionName: "UploadAvatar",
+			Signature:    source.BackendSignatureActionData,
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`data := gowdkform.FromMultipartForm(request.MultipartForm)`,
+		`gowdkform.DecodeExpectedData(data, gowdkform.Schema{Fields: []gowdkform.Field{{Name: "avatar", File: &gowdkform.FilePolicy{MaxFiles: 1, MaxBytes: 2048, AllowedContentTypes: []string{"image/png"}}}, {Name: "caption"}}})`,
+		`result, err := upload.UploadAvatar(ctx, data)`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
+		}
+	}
+	if strings.Contains(source, "values := data.Values") {
+		t.Fatalf("did not expect unused multipart values declaration:\n%s", source)
+	}
+}
+
 func TestBoundActionDecoderRejectsUnsupportedInputFieldType(t *testing.T) {
 	defer func() {
 		recovered := recover()

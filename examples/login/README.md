@@ -97,3 +97,8 @@ GOWDK_ADDR=127.0.0.1:8090 GOWDK_BACKEND_ORIGIN=http://127.0.0.1:8091 bin/login-f
 - `POST /`: bound from `act login` to `auth.Login`.
 - `POST /dashboard`: bound from `act logout` to `auth.Logout`.
 - `GET /api/session`: bound from `api session` to `auth.Session`.
+
+This example demonstrates action/API/session plumbing with signed cookies. The
+dashboard remains public so `gowdk build` works without generated-app guard
+hooks. For protected pages, the built-in auth addon, and native role guards, see
+`examples/auth-guard/`.

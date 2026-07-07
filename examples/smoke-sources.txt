@@ -1,0 +1,21 @@
+# Source of truth for broad example report checks.
+# Keep one shell glob per line, relative to the repository root.
+examples/pages/*.gwdk
+examples/marketing/*.gwdk
+examples/actions/*.gwdk
+examples/partials/*.gwdk
+examples/api/*.gwdk
+examples/ssr/*.gwdk
+examples/go-interop/*.gwdk
+examples/build-iteration/*.gwdk
+examples/components/base/*.gwdk
+examples/components/css/*.gwdk
+examples/components/assets/*.gwdk
+examples/components/wasm/*.gwdk
+examples/store-persist/*.gwdk
+examples/embed/*.gwdk
+examples/css/*.gwdk
+examples/tailwind/*.gwdk
+examples/contracts/*.gwdk
+examples/security/*.gwdk
+examples/seo/*.gwdk

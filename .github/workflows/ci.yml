@@ -7,7 +7,6 @@ on:
   pull_request:
     types:
       - opened
-      - edited
       - reopened
       - synchronize
       - ready_for_review
@@ -15,6 +14,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   pr-title:
@@ -31,19 +34,8 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: scripts/check-pr-title.sh "$PR_TITLE"
 
-  supply-chain-pins:
-    name: Supply-chain pins
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Check pinned workflow and publish tooling inputs
-        run: scripts/check-supply-chain-pins.sh
-
-  go-tests:
-    name: Go tests
+  verify:
+    name: Verify
     runs-on: ubuntu-latest
 
     steps:
@@ -55,6 +47,14 @@ jobs:
         with:
           go-version: '1.26.4'
           cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '24'
+
+      - name: Check supply-chain pins
+        run: scripts/check-supply-chain-pins.sh
 
       - name: Run Go module tests
         run: |
@@ -63,135 +63,22 @@ jobs:
           scripts/check-root-deps.sh
           scripts/test-go-modules.sh
 
-  vulnerabilities:
-    name: Reachable vulnerabilities
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: '1.26.4'
-          cache: true
-
-      - name: Check reachable Go vulnerabilities
-        run: scripts/vulncheck-go-modules.sh
-
-  runtime-race:
-    name: Runtime race detector
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: '1.26.4'
-          cache: true
-
-      - name: Run focused runtime race tests
-        run: scripts/test-runtime-race.sh
-
-  cli-build:
-    name: CLI build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: '1.26.4'
-          cache: true
-
       - name: Build CLI
         run: go build ./cmd/gowdk
 
-  dead-code:
-    name: Dead code
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: '1.26.4'
-          cache: true
-
-      - name: Check focused dead code
-        run: scripts/check-dead-code.sh
-
-  vscode-extension:
-    name: VS Code extension
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
-        with:
-          node-version: '24'
-
-      - name: Check VS Code extension syntax
+      - name: Check VS Code extension
         run: |
           node editors/vscode/scripts/sync-version.js --check
           node --check editors/vscode/extension.js
           node --check editors/vscode/extension-core.js
+          node --test editors/vscode/*.test.js
 
-      - name: Run VS Code extension unit tests
-        run: node --test editors/vscode/*.test.js
-
-  docs:
-    name: Documentation links
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: '1.26.4'
-          cache: true
-
-      - name: Check documentation links
-        run: sh scripts/check-docs-links.sh
-
-      - name: Check documentation style
-        run: sh scripts/check-docs-style.sh
-
-      - name: Check for removed source syntax in docs
-        run: sh scripts/check-removed-syntax.sh
-
-      - name: Check docs do not pin a release version
-        run: sh scripts/check-doc-versions.sh
-
-  docs-site:
-    name: Docs site compile
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: '1.26.4'
-          cache: true
+      - name: Check documentation
+        run: |
+          sh scripts/check-docs-links.sh
+          sh scripts/check-docs-style.sh
+          sh scripts/check-removed-syntax.sh
+          sh scripts/check-doc-versions.sh
 
       - name: Build and smoke docs site against in-tree GOWDK
         working-directory: docs-site
@@ -203,105 +90,10 @@ jobs:
           go test ./...
           go vet ./...
 
-  example-reports:
-    name: Example reports
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: '1.26.4'
-          cache: true
-
       - name: Check example reports
         run: sh scripts/check-example-reports.sh
 
-  parser-fuzz:
-    name: Parser fuzz smoke
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: '1.26.4'
-          cache: true
-
-      - name: Run parser fuzz smoke
-        env:
-          GOWDK_FUZZTIME: 1000x
-        run: scripts/test-parser-fuzz.sh
-
-  generated-app-integration:
-    name: Generated app integration
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: '1.26.4'
-          cache: true
-
-      - name: Run generated app integration tests
-        run: scripts/test-generated-app-integration.sh
-
-  generated-output-determinism:
-    name: Generated output determinism
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: '1.26.4'
-          cache: true
-
-      - name: Check generated output determinism
-        run: scripts/test-generated-output-determinism.sh
-
-  generated-output:
-    name: Generated output smoke
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: '1.26.4'
-          cache: true
-
-      - name: Smoke build SPA example output
-        run: |
-          rm -rf /tmp/gowdk-build
-          go run ./cmd/gowdk build --out /tmp/gowdk-build examples/pages/home.page.gwdk examples/pages/hero.cmp.gwdk
-          test -f /tmp/gowdk-build/gowdk-routes.json
-          test -f /tmp/gowdk-build/gowdk-assets.json
-
-      - name: Smoke build dynamic SPA output
-        run: |
-          rm -rf /tmp/gowdk-dynamic-build
-          go run ./cmd/gowdk build --out /tmp/gowdk-dynamic-build examples/pages/blog-post.page.gwdk
-          test -f /tmp/gowdk-dynamic-build/blog/hello-gowdk/index.html
-          test -f /tmp/gowdk-dynamic-build/blog/compile-first/index.html
-
-      - name: Build login backend example
+      - name: Build login example
         run: |
           set -euxo pipefail
           cd examples/login
@@ -318,65 +110,3 @@ jobs:
           test -n "$login_css"
           test -f "$output/$login_css"
           go test ./src/features/auth
-
-      - name: Smoke build CSS example output
-        run: |
-          rm -rf /tmp/gowdk-css-build
-          go run ./cmd/gowdk build --config examples/css/gowdk.config.go --out /tmp/gowdk-css-build examples/css/styled.page.gwdk
-          grep -F '<link rel="stylesheet" href="/assets/site.css">' /tmp/gowdk-css-build/styled/index.html
-
-      - name: Smoke build SEO addon output
-        run: |
-          rm -rf /tmp/gowdk-seo-build
-          go run ./cmd/gowdk build --config examples/seo/gowdk.config.go --out /tmp/gowdk-seo-build examples/seo/*.gwdk
-          test -f /tmp/gowdk-seo-build/sitemap.xml
-          test -f /tmp/gowdk-seo-build/robots.txt
-          grep -F 'https://example.com/seo/blog/hello-gowdk' /tmp/gowdk-seo-build/sitemap.xml
-          grep -F 'Sitemap: https://example.com/sitemap.xml' /tmp/gowdk-seo-build/robots.txt
-
-      - name: Smoke build embedded binary example
-        run: |
-          rm -rf /tmp/gowdk-embed-build /tmp/gowdk-embed-app /tmp/gowdk-embed-site
-          go run ./cmd/gowdk build --out /tmp/gowdk-embed-build --app /tmp/gowdk-embed-app --bin /tmp/gowdk-embed-site examples/embed/site.page.gwdk
-          test -x /tmp/gowdk-embed-site
-          GOWDK_SMOKE_ADDR=127.0.0.1:18085 scripts/smoke-generated-binary.sh /tmp/gowdk-embed-site /embed "Embedded GOWDK"
-
-      - name: Smoke build generated WASM artifact
-        run: |
-          rm -rf /tmp/gowdk-wasm-build /tmp/gowdk-wasm-app /tmp/gowdk-site.wasm
-          go run ./cmd/gowdk build --out /tmp/gowdk-wasm-build --app /tmp/gowdk-wasm-app --wasm /tmp/gowdk-site.wasm examples/embed/site.page.gwdk
-          scripts/smoke-generated-wasm.sh /tmp/gowdk-site.wasm
-
-      - name: Smoke build hybrid example output
-        run: |
-          rm -rf /tmp/gowdk-hybrid-build /tmp/gowdk-hybrid-app /tmp/gowdk-hybrid-site
-          go run ./cmd/gowdk build --ssr --out /tmp/gowdk-hybrid-build --app /tmp/gowdk-hybrid-app --bin /tmp/gowdk-hybrid-site examples/ssr/hybrid-static.page.gwdk
-          test -x /tmp/gowdk-hybrid-site
-          go run ./cmd/gowdk routes --ssr examples/ssr/hybrid-static.page.gwdk > /tmp/gowdk-hybrid-routes.json
-          grep -F '"kind": "ssr"' /tmp/gowdk-hybrid-routes.json
-          grep -F '"pageId": "hybrid.static"' /tmp/gowdk-hybrid-routes.json
-          grep -F '"code": "spa_disabled"' /tmp/gowdk-hybrid-routes.json
-
-      - name: Smoke build component asset output
-        run: |
-          rm -rf /tmp/gowdk-component-assets
-          go run ./cmd/gowdk build --out /tmp/gowdk-component-assets examples/components/assets/*.gwdk
-          test -f /tmp/gowdk-component-assets/components/assets/index.html
-          grep -F '"assets/gowdk/components/componentassets/AssetBadge/badge.svg"' /tmp/gowdk-component-assets/gowdk-assets.json
-          grep -F 'assets/gowdk/components/componentassets/AssetBadge/badge.' /tmp/gowdk-component-assets/gowdk-assets.json
-
-      - name: Smoke build WASM island example output
-        run: |
-          rm -rf /tmp/gowdk-wasm-island
-          go run ./cmd/gowdk build --out /tmp/gowdk-wasm-island examples/components/wasm/*.gwdk
-          test -f /tmp/gowdk-wasm-island/components/wasm/index.html
-          test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/componentwasm/WasmCounter.wasm
-          test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/componentwasm/WasmCounter.wasm.js
-          test -f /tmp/gowdk-wasm-island/assets/gowdk/islands/wasm_exec.js
-
-      - name: Smoke build persisted store example output
-        run: |
-          rm -rf /tmp/gowdk-store-persist
-          go run ./cmd/gowdk build --out /tmp/gowdk-store-persist examples/store-persist/*.gwdk
-          test -f /tmp/gowdk-store-persist/shop/index.html
-          grep -F 'data-gowdk-persist="local"' /tmp/gowdk-store-persist/shop/index.html

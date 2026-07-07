@@ -2,7 +2,9 @@
 
 This cookbook groups broader native endpoint examples in one generated app. The
 `.gwdk` files declare endpoint metadata and forms; `src/endpoints/handlers.go`
-owns request behavior, validation, redirects, JSON, and fragments in normal Go.
+owns request behavior, validation, redirects, and JSON in normal Go. Fragment
+markup lives in `src/endpoints/fragments/*.html` templates so handlers pass data
+and choose response shapes instead of assembling HTML.
 
 Run from this directory:
 
@@ -19,7 +21,7 @@ GOWDK_CSRF_SECRET=development-endpoints-csrf-secret-32b GOWDK_ADDR=127.0.0.1:809
 | --- | --- |
 | `contact.page.gwdk` | Contact action redirect plus inline validation fragment response. |
 | `settings.page.gwdk` | Settings save/reset actions returning partial fragments. |
-| `upload.page.gwdk` | Multipart action form with generated file policy and typed `form.File` handler input. |
+| `upload.page.gwdk` | Multipart action form with generated file policy and `form.Data` handler input. |
 | `api.page.gwdk` | Typed generated API handlers for session, search, and JSON CRUD plus a raw request webhook escape hatch. |
 | `fragments.page.gwdk` | Inline validation, table row, list refresh, modal body, and dashboard card fragments. |
 
@@ -42,5 +44,5 @@ GOWDK_CSRF_SECRET=development-endpoints-csrf-secret-32b GOWDK_ADDR=127.0.0.1:809
   validation remains in `src/endpoints/handlers.go`.
 - Multipart action uploads enforce generated request/file limits, but storage,
   scanning, and persistence remain user-owned Go behavior.
-- Fragment hooks and static fragment bodies are HTML strings today; richer
-  typed fragment render helpers are still planned.
+- Dynamic fragment handlers use embedded `html/template` files today; richer
+  generated typed fragment render helpers are still planned.

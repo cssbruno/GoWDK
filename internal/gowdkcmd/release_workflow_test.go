@@ -47,11 +47,10 @@ func TestEditorReleaseWorkflowCoverage(t *testing.T) {
 
 func TestReleaseTrustWorkflowCoverage(t *testing.T) {
 	releaseText := readWorkflow(t, "../../.github/workflows/release.yml")
-	smokeText := readWorkflow(t, "../../.github/workflows/release-smoke.yml")
-	cacheText := readWorkflow(t, "../../.github/workflows/cache-maintenance.yml")
 	exampleReportText := readWorkflow(t, "../../scripts/check-example-reports.sh")
 
 	for _, expected := range []string{
+		"workflow_dispatch",
 		"go version",
 		"go env GOVERSION",
 		"version --json",
@@ -82,27 +81,13 @@ func TestReleaseTrustWorkflowCoverage(t *testing.T) {
 	}
 
 	for _, expected := range []string{
-		"workflow_dispatch",
-		"scripts/smoke-release-artifact.sh",
 		"gowdk-linux-amd64",
 		"gowdk-darwin-amd64",
 		"gowdk-darwin-arm64",
 		"gowdk-windows-amd64.exe",
 	} {
-		if !strings.Contains(smokeText, expected) {
-			t.Fatalf("expected %q in release-smoke.yml:\n%s", expected, smokeText)
-		}
-	}
-
-	for _, expected := range []string{
-		"workflow_dispatch",
-		"schedule:",
-		"actions: write",
-		"scripts/prune-github-caches.sh",
-		"GOWDK_CACHE_PRUNE_KEEP",
-	} {
-		if !strings.Contains(cacheText, expected) {
-			t.Fatalf("expected %q in cache-maintenance.yml:\n%s", expected, cacheText)
+		if !strings.Contains(releaseText, expected) {
+			t.Fatalf("expected %q in release.yml:\n%s", expected, releaseText)
 		}
 	}
 }

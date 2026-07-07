@@ -1,38 +1,22 @@
 # CI
 
-Hosted CI is split by concern in `.github/workflows/ci.yml`. Local verification
-remains the fastest pre-handoff gate.
+Hosted CI stays small: `.github/workflows/ci.yml` exposes one title gate and
+one lean verification gate. Heavier audit, fuzz, race, determinism, and broad
+generated-output checks stay local or release-oriented instead of running on
+every pull request.
 
 ## Hosted Jobs
 
 Required pull-request lanes:
 
-- `Go tests`: root dependency check and all Go module tests on Linux.
-- `Reachable vulnerabilities`: `scripts/vulncheck-go-modules.sh`.
-- `Runtime race detector`: `scripts/test-runtime-race.sh` on Linux for the
-  explicit shared-state runtime package list.
-- `CLI build`: `go build ./cmd/gowdk`.
-- `Dead code`: `scripts/check-dead-code.sh` runs pinned Staticcheck `U1000`
-  and x/tools `deadcode` analyzers over the focused compiler, CLI, and
-  runtime-contract package sets documented below.
-- `VS Code extension`: extension version sync, Node syntax checks, and unit
-  tests.
-- `Documentation links`: `scripts/check-docs-links.sh`.
-- `Documentation style`: `scripts/check-docs-style.sh` checks heading order and
-  language-tagged fenced code blocks. Long prose paragraphs are warnings.
-- `Removed source syntax`: `scripts/check-removed-syntax.sh` (runs in the
-  `Documentation links` job) flags pre-v0.6.0 source forms that the script lists
-  but that linger in docs as if still active. They are allowed only in changelog,
-  migration, and diagnostics references, in test fixtures, and on lines carrying
-  a `removed-syntax-ok` marker.
-- `Example reports`: `scripts/check-example-reports.sh`.
-- `Parser fuzz smoke`: `scripts/test-parser-fuzz.sh` with
-  `GOWDK_FUZZTIME=1000x`.
-- `Generated app integration`: `scripts/test-generated-app-integration.sh`.
-- `Generated output determinism`:
-  `scripts/test-generated-output-determinism.sh`.
-- `Generated output smoke`: representative build output, binary, WASM, SSR,
-  CSS, SEO, component asset, and login example checks.
+- `PR title`: conventional commit title check for pull requests.
+- `Verify`: the consolidated command gate. It runs supply-chain pins, Go module
+  tests, CLI build, VS Code extension checks, documentation checks, docs-site
+  compile, example reports, and the login example build smoke.
+
+The consolidated `Verify` job intentionally favors quick signal and fewer PR
+status checks over broad coverage. Keep expensive or niche gates out of routine
+PR CI unless they protect an active release or regression class.
 
 Release automation lives outside pull-request CI:
 
@@ -216,18 +200,8 @@ workflow; run this locally only when an artifact needs an extra manual check.
 
 Require these checks before merging to `main`:
 
-- `Go tests`
-- `Reachable vulnerabilities`
-- `Runtime race detector`
-- `CLI build`
-- `Dead code`
-- `VS Code extension`
-- `Documentation links`
-- `Example reports`
-- `Parser fuzz smoke`
-- `Generated app integration`
-- `Generated output determinism`
-- `Generated output smoke`
+- `PR title`
+- `Verify`
 
 Do not require release or manual publishing workflows for normal pull requests.
 Use them only for release readiness and publication.

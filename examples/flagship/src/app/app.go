@@ -6,9 +6,10 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"embed"
 	"encoding/base64"
 	"fmt"
-	"html"
+	"html/template"
 	"net/http"
 	"os"
 	"strings"
@@ -20,6 +21,11 @@ import (
 	"github.com/cssbruno/gowdk/runtime/response"
 	"github.com/cssbruno/gowdk/runtime/ssr"
 )
+
+//go:embed fragments/*.html
+var fragmentFiles embed.FS
+
+var fragmentTemplates = template.Must(template.ParseFS(fragmentFiles, "fragments/*.html"))
 
 const sessionCookie = "gowdk_flagship_session"
 
@@ -73,7 +79,10 @@ func RefreshSummary(_ context.Context, values form.Values) (response.Response, e
 	if topic == "" {
 		topic = "compiler"
 	}
-	return response.FragmentFor("#summary", summaryHTML(topic, time.Now())), nil
+	return response.FragmentFor("#summary", renderFragment("summary.html", summaryFragment{
+		Topic:     topic,
+		Refreshed: time.Now().Format(time.Kitchen),
+	})), nil
 }
 
 func Status(_ context.Context, request *http.Request) (response.Response, error) {
@@ -159,11 +168,6 @@ func currentSession(request *http.Request) (session, bool) {
 	return current, true
 }
 
-func summaryHTML(topic string, refreshed time.Time) string {
-	escaped := html.EscapeString(topic)
-	return fmt.Sprintf(`<section id="summary" class="summary-fragment"><h2>%s summary</h2><p>Updated by a generated partial action at %s.</p></section>`, escaped, refreshed.Format(time.Kitchen))
-}
-
 func sign(value string) string {
 	return value + "." + signature(value)
 }
@@ -206,4 +210,17 @@ func env(name, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+type summaryFragment struct {
+	Topic     string
+	Refreshed string
+}
+
+func renderFragment(name string, data any) string {
+	var out strings.Builder
+	if err := fragmentTemplates.ExecuteTemplate(&out, name, data); err != nil {
+		panic(err)
+	}
+	return out.String()
 }

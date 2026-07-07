@@ -33,7 +33,7 @@ Expected build outputs:
 | Local component state and WASM island call site | `src/app/counter.cmp.gwdk`, `src/ui/counter.go` |
 | Action login form with generated field validation | `src/app/home.page.gwdk`, `src/app/app.go` |
 | API status endpoint | `src/app/home.page.gwdk`, `src/app/app.go` |
-| Server fragment and partial form update | `src/app/home.page.gwdk`, `src/app/app.go` |
+| Server fragment and partial form update | `src/app/home.page.gwdk`, `src/app/fragments/summary.html`, `src/app/app.go` |
 | Protected SSR dashboard with `server {}` | `src/app/dashboard.page.gwdk`, `apphooks/flagship_hooks.go.txt` |
 | Hybrid request-time page | `src/app/hybrid.page.gwdk` |
 | Component asset and configured CSS | `src/app/asset-badge.cmp.gwdk`, `src/app/badge.svg`, `styles/flagship.css` |
@@ -63,6 +63,8 @@ The main generated routes are:
   CSS, assets, and island metadata.
 - Go packages under `src/` own credentials, session state, endpoint behavior,
   build-time data, SSR load data, contracts, and island state shapes.
+- Fragment templates under `src/app/fragments/` own dynamic partial markup
+  until generated typed fragment render helpers exist.
 - `apphooks/flagship_hooks.go.txt` is copied into the generated app package before
   binary compilation so custom guards and the optional rate limiter can be wired
   through the generated app hook surface.

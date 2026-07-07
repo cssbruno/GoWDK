@@ -2,8 +2,8 @@ package endpoints
 
 import (
 	"context"
-	"fmt"
-	"html"
+	"embed"
+	"html/template"
 	"io"
 	"net/http"
 	"strings"
@@ -14,6 +14,11 @@ import (
 	"github.com/cssbruno/gowdk/runtime/response"
 )
 
+//go:embed fragments/*.html
+var fragmentFiles embed.FS
+
+var fragmentTemplates = template.Must(template.ParseFS(fragmentFiles, "fragments/*.html"))
+
 func Contact(_ context.Context, values form.Values) (response.Response, error) {
 	if contactInvalid(values) {
 		return response.RedirectTo("/endpoints/contact?invalid=1"), nil
@@ -23,89 +28,85 @@ func Contact(_ context.Context, values form.Values) (response.Response, error) {
 
 func ValidateContact(_ context.Context, values form.Values) (response.Response, error) {
 	if contactInvalid(values) {
-		return response.FragmentFor("#contact-result", alertHTML("Email and a 12 character message are required.")), nil
+		return response.FragmentFor("#contact-result", renderFragment("contact-result.html", map[string]string{"Message": "Email and a 12 character message are required."})), nil
 	}
-	return response.FragmentFor("#contact-result", alertHTML("Contact request is ready to submit.")), nil
+	return response.FragmentFor("#contact-result", renderFragment("contact-result.html", map[string]string{"Message": "Contact request is ready to submit."})), nil
 }
 
 func SaveSettings(_ context.Context, values form.Values) (response.Response, error) {
 	theme := valueOr(values.First("theme"), "system")
 	email := valueOr(values.First("email"), "off")
-	body := fmt.Sprintf(`<section id="settings-result"><p>Saved theme %s with email %s.</p></section>`, escape(theme), escape(email))
-	return response.FragmentFor("#settings-result", body), nil
+	return response.FragmentFor("#settings-result", renderFragment("settings-result.html", map[string]string{"Theme": theme, "Email": email})), nil
 }
 
 func ResetSettings(context.Context, form.Values) (response.Response, error) {
-	return response.FragmentFor("#settings-result", `<section id="settings-result"><p>Settings reset to defaults.</p></section>`), nil
+	return response.FragmentFor("#settings-result", renderFragment("settings-reset.html", nil)), nil
 }
 
-type UploadInput struct {
-	Avatar  form.File `form:"avatar"`
-	Caption string    `form:"caption"`
-}
-
-func UploadAvatar(_ context.Context, input UploadInput) (response.Response, error) {
-	uploaded, err := input.Avatar.Open()
+func UploadAvatar(_ context.Context, input form.Data) (response.Response, error) {
+	files := input.Files["avatar"]
+	if len(files) == 0 {
+		return response.FragmentFor("#upload-result", renderFragment("upload-alert.html", map[string]string{"Message": "Upload is required."})), nil
+	}
+	avatar := files[0]
+	uploaded, err := avatar.Open()
 	if err != nil {
-		return response.FragmentFor("#upload-result", alertUploadHTML("Upload could not be opened.")), nil
+		return response.FragmentFor("#upload-result", renderFragment("upload-alert.html", map[string]string{"Message": "Upload could not be opened."})), nil
 	}
 	defer func() {
 		_ = uploaded.Close()
 	}()
 	bytes, err := io.Copy(io.Discard, uploaded)
 	if err != nil {
-		return response.FragmentFor("#upload-result", alertUploadHTML("Upload could not be read.")), nil
+		return response.FragmentFor("#upload-result", renderFragment("upload-alert.html", map[string]string{"Message": "Upload could not be read."})), nil
 	}
-	caption := strings.TrimSpace(input.Caption)
+	caption := strings.TrimSpace(input.Values.First("caption"))
 	if caption == "" {
 		caption = "uncaptioned"
 	}
-	body := fmt.Sprintf(`<section id="upload-result"><p>Received %s (%s, %d bytes streamed) with caption %s.</p></section>`,
-		escape(input.Avatar.Filename),
-		escape(input.Avatar.ContentType),
-		bytes,
-		escape(caption),
-	)
-	return response.FragmentFor("#upload-result", body), nil
+	return response.FragmentFor("#upload-result", renderFragment("upload-result.html", uploadResult{
+		Filename:    avatar.Filename,
+		ContentType: avatar.ContentType,
+		Bytes:       bytes,
+		Caption:     caption,
+	})), nil
 }
 
 func RefreshInventory(context.Context, form.Values) (response.Response, error) {
-	return response.FragmentSwap("#inventory", response.SwapOuterHTML, `<tbody id="inventory"><tr><td>Keyboard</td><td>stocked</td></tr><tr><td>Mouse</td><td>stocked</td></tr></tbody>`)
+	return response.FragmentSwap("#inventory", response.SwapOuterHTML, renderFragment("inventory-list.html", nil))
 }
 
 func UpdateInventoryRow(_ context.Context, values form.Values) (response.Response, error) {
 	item := valueOr(values.First("item"), "Keyboard")
-	body := fmt.Sprintf(`<tr><td>%s</td><td>updated</td></tr>`, escape(item))
-	return response.FragmentFor("#inventory", body), nil
+	return response.FragmentFor("#inventory", renderFragment("inventory-row.html", map[string]string{"Item": item})), nil
 }
 
 func OpenModal(context.Context, form.Values) (response.Response, error) {
-	return response.FragmentFor("#modal-body", `<section id="modal-body"><h2>Modal body</h2><p>Loaded from a partial action.</p></section>`), nil
+	return response.FragmentFor("#modal-body", renderFragment("modal-body.html", nil)), nil
 }
 
 func RefreshDashboardCard(context.Context, form.Values) (response.Response, error) {
-	body := `<article id="dashboard-card"><h2>Dashboard card</h2><p>Refreshed by a fragment response.</p></article>`
-	return response.FragmentSwap("#dashboard-card", response.SwapOuterHTML, body)
+	return response.FragmentSwap("#dashboard-card", response.SwapOuterHTML, renderFragment("dashboard-card.html", nil))
 }
 
 func InlineValidation(context.Context) (response.Response, error) {
-	return response.FragmentFor("#inline-validation", `<section id="inline-validation"><p>Request-time inline validation fragment.</p></section>`), nil
+	return response.FragmentFor("#inline-validation", renderFragment("inline-validation.html", nil)), nil
 }
 
 func InventoryRow(context.Context) (response.Response, error) {
-	return response.FragmentFor("#inventory", `<tr><td>Dynamic item</td><td>ready</td></tr>`), nil
+	return response.FragmentFor("#inventory", renderFragment("runtime-inventory-row.html", nil)), nil
 }
 
 func InventoryList(context.Context) (response.Response, error) {
-	return response.FragmentSwap("#inventory", response.SwapOuterHTML, `<tbody id="inventory"><tr><td>Dynamic list</td><td>ready</td></tr></tbody>`)
+	return response.FragmentSwap("#inventory", response.SwapOuterHTML, renderFragment("runtime-inventory-list.html", nil))
 }
 
 func ModalBody(context.Context) (response.Response, error) {
-	return response.FragmentFor("#modal-body", `<section id="modal-body"><p>Request-time modal body.</p></section>`), nil
+	return response.FragmentFor("#modal-body", renderFragment("runtime-modal-body.html", nil)), nil
 }
 
 func DashboardCard(context.Context) (response.Response, error) {
-	return response.FragmentSwap("#dashboard-card", response.SwapOuterHTML, `<article id="dashboard-card"><h2>Request-time card</h2><p>Ready.</p></article>`)
+	return response.FragmentSwap("#dashboard-card", response.SwapOuterHTML, renderFragment("runtime-dashboard-card.html", nil))
 }
 
 type SessionResult struct {
@@ -225,14 +226,6 @@ func contactInvalid(values form.Values) bool {
 	return strings.TrimSpace(values.First("email")) == "" || len(strings.TrimSpace(values.First("message"))) < 12
 }
 
-func alertHTML(message string) string {
-	return `<section id="contact-result" role="status"><p>` + escape(message) + `</p></section>`
-}
-
-func alertUploadHTML(message string) string {
-	return `<section id="upload-result" role="status"><p>` + escape(message) + `</p></section>`
-}
-
 func valueOr(value, fallback string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -241,6 +234,17 @@ func valueOr(value, fallback string) string {
 	return value
 }
 
-func escape(value string) string {
-	return html.EscapeString(value)
+type uploadResult struct {
+	Filename    string
+	ContentType string
+	Bytes       int64
+	Caption     string
+}
+
+func renderFragment(name string, data any) string {
+	var out strings.Builder
+	if err := fragmentTemplates.ExecuteTemplate(&out, name, data); err != nil {
+		panic(err)
+	}
+	return out.String()
 }

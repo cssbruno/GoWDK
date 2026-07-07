@@ -36,8 +36,12 @@ go run ./cmd/gowdk check --config examples/tailwind/gowdk.config.go examples/tai
 Validate the broad source set with SSR enabled:
 
 ```sh
-go run ./cmd/gowdk check --ssr examples/pages/*.gwdk examples/marketing/*.gwdk examples/actions/*.gwdk examples/partials/*.gwdk examples/api/*.gwdk examples/ssr/*.gwdk examples/go-interop/*.gwdk examples/components/base/*.gwdk examples/components/css/*.gwdk examples/components/assets/*.gwdk examples/components/wasm/*.gwdk examples/store-persist/*.gwdk examples/embed/*.gwdk examples/seo/*.gwdk examples/css/*.gwdk examples/tailwind/*.gwdk examples/contracts/*.gwdk examples/security/*.gwdk
+scripts/check-example-reports.sh
 ```
+
+The checked source inventory lives in `examples/smoke-sources.txt`; the report
+script, this index, and CI docs should point to that file instead of copying the
+glob list.
 
 Focused directories such as `examples/endpoints`, `examples/auth-guard`, and
 `examples/flagship` include `Makefile` targets that run the local checks used by

@@ -2,7 +2,7 @@ module github.com/cssbruno/gowdk/runtime/adapters/fiber
 
 go 1.26.4
 
-require github.com/gofiber/fiber/v2 v2.52.13
+require github.com/gofiber/fiber/v2 v2.52.14
 
 require (
 	github.com/andybalholm/brotli v1.1.0 // indirect

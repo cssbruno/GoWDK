@@ -3,6 +3,14 @@
 GOWDK is experimental 0.x software. Public syntax, generated output, runtime
 packages, and tooling contracts may change before 1.0.
 
+## [0.12.3](https://github.com/cssbruno/GoWDK/compare/v0.12.2...v0.12.3) (2026-07-07)
+
+
+### Bug Fixes
+
+* clean up example fragment markup and smoke inventory ([#795](https://github.com/cssbruno/GoWDK/issues/795)) ([8f7e36a](https://github.com/cssbruno/GoWDK/commit/8f7e36a46dbd502485405d4544e64fd9ef1d566e))
+* **generated-output:** publish artifacts transactionally ([#796](https://github.com/cssbruno/GoWDK/issues/796)) ([5217095](https://github.com/cssbruno/GoWDK/commit/5217095e3cec59b5f42ffe63d011332111d11726))
+
 ## [0.12.2](https://github.com/cssbruno/GoWDK/compare/v0.12.1...v0.12.2) (2026-06-27)
 
 

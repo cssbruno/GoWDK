@@ -121,6 +121,37 @@ func TestBuildFromPlanRejectsZeroValue(t *testing.T) {
 	}
 }
 
+func TestBuildFromPlanDoesNotPublishBeforeManifestPlanningSucceeds(t *testing.T) {
+	outputDir := t.TempDir()
+	plannedCSSPath := filepath.Join(outputDir, "assets", "site.css")
+	plannedPagePath := filepath.Join(outputDir, "index.html")
+	plan := BuildPlan{
+		reporter:  newBuildReporter("build", outputDir),
+		outputDir: outputDir,
+		valid:     true,
+		planned: buildPlan{
+			css: []plannedCSSArtifact{{
+				CSSArtifact: CSSArtifact{Path: plannedCSSPath},
+				contents:    []byte("body{color:red}"),
+			}},
+			pages: []plannedArtifact{{
+				Artifact: Artifact{PageID: "home", Route: "/", Path: filepath.Join(filepath.Dir(outputDir), "outside.html")},
+				contents: []byte("<main>new</main>"),
+			}},
+		},
+	}
+
+	_, err := BuildFromPlan(plan)
+	if err == nil || !strings.Contains(err.Error(), "must stay inside output directory") {
+		t.Fatalf("expected manifest planning error, got %v", err)
+	}
+	for _, path := range []string{plannedCSSPath, plannedPagePath} {
+		if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+			t.Fatalf("expected %s to stay unpublished, stat err=%v", path, statErr)
+		}
+	}
+}
+
 func TestBuildMemoryFromIRCollectsArtifacts(t *testing.T) {
 	config := gowdk.Config{}
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{

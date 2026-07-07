@@ -11,6 +11,11 @@ import (
 	"github.com/cssbruno/gowdk/internal/safeasset"
 )
 
+type plannedFile struct {
+	path     string
+	contents []byte
+}
+
 func validateDirectories(outputDir, appDir string) error {
 	info, err := os.Stat(outputDir)
 	if err != nil {
@@ -38,7 +43,21 @@ func isSameOrWithin(parent, child string) bool {
 }
 
 func copyOutputFiles(sourceRoot, targetRoot string) ([]string, error) {
+	files, planned, err := collectOutputFiles(sourceRoot, targetRoot)
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range planned {
+		if err := writeFileIfChanged(file.path, file.contents); err != nil {
+			return nil, err
+		}
+	}
+	return files, nil
+}
+
+func collectOutputFiles(sourceRoot, targetRoot string) ([]string, []plannedFile, error) {
 	var files []string
+	var planned []plannedFile
 	err := filepath.WalkDir(sourceRoot, func(sourcePath string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -56,7 +75,7 @@ func copyOutputFiles(sourceRoot, targetRoot string) ([]string, error) {
 			if unsafeEmbeddedDirectory(rel) {
 				return filepath.SkipDir
 			}
-			return os.MkdirAll(targetPath, 0o755)
+			return nil
 		}
 		info, err := entry.Info()
 		if err != nil {
@@ -68,14 +87,16 @@ func copyOutputFiles(sourceRoot, targetRoot string) ([]string, error) {
 		if !safeasset.EmbeddableGeneratedOutputFile(rel) {
 			return nil
 		}
-		if err := copyFile(sourcePath, targetPath); err != nil {
+		payload, err := os.ReadFile(sourcePath)
+		if err != nil {
 			return err
 		}
+		planned = append(planned, plannedFile{path: targetPath, contents: payload})
 		files = append(files, rel)
 		return nil
 	})
 	sort.Strings(files)
-	return files, err
+	return files, planned, err
 }
 
 func unsafeEmbeddedDirectory(rel string) bool {
@@ -125,5 +146,31 @@ func writeFileIfChanged(filePath string, contents []byte) error {
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(filePath, contents, 0o644)
+	temp, err := os.CreateTemp(filepath.Dir(filePath), "."+filepath.Base(filePath)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tempName := temp.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tempName)
+		}
+	}()
+	if _, err := temp.Write(contents); err != nil {
+		_ = temp.Close()
+		return err
+	}
+	if err := temp.Chmod(0o644); err != nil {
+		_ = temp.Close()
+		return err
+	}
+	if err := temp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tempName, filePath); err != nil {
+		return err
+	}
+	cleanup = false
+	return nil
 }

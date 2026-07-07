@@ -78,6 +78,12 @@ func PlanBuildFromValidatedProgram(config gowdk.Config, validated compiler.Valid
 	}, nil
 }
 
+type plannedPublishedFile struct {
+	path       string
+	contents   []byte
+	countWrite bool
+}
+
 // BuildFromPlan emits SPA build artifacts from a normalized build plan.
 func BuildFromPlan(plan BuildPlan) (Result, error) {
 	if !plan.valid || plan.reporter == nil {
@@ -94,88 +100,81 @@ func BuildFromPlan(plan BuildPlan) (Result, error) {
 		CSSArtifacts:   make([]CSSArtifact, 0, len(planned.css)),
 		AssetArtifacts: make([]AssetArtifact, 0, len(planned.assets)),
 	}
+	files := make([]plannedPublishedFile, 0, len(planned.css)+len(planned.assets)+len(planned.pages)+6)
 	for _, artifact := range planned.css {
-		wrote, err := writeFileIfChangedStatus(artifact.Path, artifact.contents)
-		if err != nil {
-			return Result{}, reporter.fail("write", err)
-		}
-		recordWriteStat(&result, wrote)
-		reporter.debug("write", "css_written", "CSS artifact written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
 		finalizeCSSArtifact(&artifact)
 		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
+		files = append(files, plannedPublishedFile{path: artifact.Path, contents: artifact.contents, countWrite: true})
+		reporter.debug("write", "css_written", "CSS artifact written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
 	}
 	for _, artifact := range planned.assets {
-		wrote, err := writeFileIfChangedStatus(artifact.Path, artifact.contents)
-		if err != nil {
-			return Result{}, reporter.fail("write", err)
-		}
-		recordWriteStat(&result, wrote)
-		reporter.debug("write", "asset_written", "runtime asset written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
 		finalizeAssetArtifact(&artifact)
 		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
+		files = append(files, plannedPublishedFile{path: artifact.Path, contents: artifact.contents, countWrite: true})
+		reporter.debug("write", "asset_written", "runtime asset written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
 	}
 	for _, artifact := range planned.pages {
-		wrote, err := writeFileIfChangedStatus(artifact.Path, artifact.contents)
-		if err != nil {
-			return Result{}, reporter.fail("write", err)
-		}
-		recordWriteStat(&result, wrote)
+		result.Artifacts = append(result.Artifacts, artifact.Artifact)
+		files = append(files, plannedPublishedFile{path: artifact.Path, contents: artifact.contents, countWrite: true})
 		reporter.debug("write", "page_written", "page artifact written", BuildEvent{
 			PageID: artifact.PageID,
 			Route:  artifact.Route,
 			Path:   eventPath(outputDir, artifact.Path),
 		})
-		result.Artifacts = append(result.Artifacts, artifact.Artifact)
 	}
 	endpoints := compiler.BuildRouteMetadataFromIR(config, ir).Endpoints
-	manifestPath, err := writeRouteManifest(outputDir, result.Artifacts, endpoints)
+	routeManifest, err := routeManifestPayload(outputDir, result.Artifacts, endpoints)
 	if err != nil {
 		return Result{}, reporter.fail("manifest", err)
 	}
-	result.RouteManifestPath = manifestPath
-	reporter.info("manifest", "route_manifest_written", "route manifest written", BuildEvent{Path: eventPath(outputDir, manifestPath)})
+	result.RouteManifestPath = filepath.Join(outputDir, routeManifestFile)
+	files = append(files, plannedPublishedFile{path: result.RouteManifestPath, contents: routeManifest})
+	reporter.info("manifest", "route_manifest_written", "route manifest written", BuildEvent{Path: eventPath(outputDir, result.RouteManifestPath)})
 	seoPlan, err := planSEOArtifacts(config, ir, result.Artifacts)
 	if err != nil {
 		return Result{}, reporter.fail("seo", err)
 	}
 	reportSEOExclusions(reporter, seoPlan.Exclusions)
-	sitemapPath, robotsPath, sitemapWrote, robotsWrote, err := writeSEOArtifacts(outputDir, seoPlan)
-	if err != nil {
-		return Result{}, reporter.fail("seo", err)
-	}
-	if sitemapPath != "" {
-		recordWriteStat(&result, sitemapWrote)
-		result.SitemapPath = sitemapPath
+	if seoPlan.Enabled {
+		result.SitemapPath = filepath.Join(outputDir, sitemapFile)
+		result.RobotsPath = filepath.Join(outputDir, robotsFile)
+		files = append(files,
+			plannedPublishedFile{path: result.SitemapPath, contents: seoPlan.Sitemap, countWrite: true},
+			plannedPublishedFile{path: result.RobotsPath, contents: seoPlan.Robots, countWrite: true},
+		)
 		reporter.info("seo", "sitemap_written", "sitemap written", BuildEvent{
-			Path: eventPath(outputDir, sitemapPath),
+			Path: eventPath(outputDir, result.SitemapPath),
 			Data: map[string]string{"urls": fmt.Sprint(len(seoPlan.URLs))},
 		})
+		reporter.info("seo", "robots_written", "robots.txt written", BuildEvent{Path: eventPath(outputDir, result.RobotsPath)})
 	}
-	if robotsPath != "" {
-		recordWriteStat(&result, robotsWrote)
-		result.RobotsPath = robotsPath
-		reporter.info("seo", "robots_written", "robots.txt written", BuildEvent{Path: eventPath(outputDir, robotsPath)})
-	}
-	assetManifestPath, err := writeAssetManifest(outputDir, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
+	assetManifest, err := assetManifestPayload(outputDir, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	if err != nil {
 		return Result{}, reporter.fail("manifest", err)
 	}
-	result.AssetManifestPath = assetManifestPath
-	reporter.info("manifest", "asset_manifest_written", "asset manifest written", BuildEvent{Path: eventPath(outputDir, assetManifestPath)})
+	result.AssetManifestPath = filepath.Join(outputDir, assetManifestFile)
+	files = append(files, plannedPublishedFile{path: result.AssetManifestPath, contents: assetManifest})
+	reporter.info("manifest", "asset_manifest_written", "asset manifest written", BuildEvent{Path: eventPath(outputDir, result.AssetManifestPath)})
 	reportCachePolicies(reporter, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
 	reportAssetSizes(reporter, outputDir, result.AssetArtifacts)
-	openAPIPath, err := writeOpenAPI(outputDir, config, ir)
+	openAPI, err := openAPIPayload(config, ir)
 	if err != nil {
 		return Result{}, reporter.fail("report", err)
 	}
-	result.OpenAPIPath = openAPIPath
-	reporter.info("report", "openapi_written", "OpenAPI report written", BuildEvent{Path: eventPath(outputDir, openAPIPath)})
-	securityManifestPath, err := writeSecurityManifest(outputDir, config, ir)
+	result.OpenAPIPath = filepath.Join(outputDir, openAPIFile)
+	files = append(files, plannedPublishedFile{path: result.OpenAPIPath, contents: openAPI})
+	reporter.info("report", "openapi_written", "OpenAPI report written", BuildEvent{Path: eventPath(outputDir, result.OpenAPIPath)})
+	securityManifest, err := securityManifestPayload(config, ir)
 	if err != nil {
 		return Result{}, reporter.fail("manifest", err)
 	}
-	result.SecurityManifestPath = securityManifestPath
-	reporter.info("manifest", "security_manifest_written", "security manifest written", BuildEvent{Path: eventPath(outputDir, securityManifestPath)})
+	securityPath, err := securityManifestPath(outputDir)
+	if err != nil {
+		return Result{}, reporter.fail("manifest", err)
+	}
+	result.SecurityManifestPath = securityPath
+	files = append(files, plannedPublishedFile{path: result.SecurityManifestPath, contents: securityManifest})
+	reporter.info("manifest", "security_manifest_written", "security manifest written", BuildEvent{Path: eventPath(outputDir, result.SecurityManifestPath)})
 	reporter.info("complete", "build_complete", "SPA build completed", BuildEvent{
 		Data: map[string]string{
 			"pages":  fmt.Sprint(len(result.Artifacts)),
@@ -184,11 +183,24 @@ func BuildFromPlan(plan BuildPlan) (Result, error) {
 		},
 	})
 	result.Report = reporter.result()
-	buildReportPath, err := writeBuildReport(outputDir, result.Report)
+	buildReport, err := buildReportPayload(result.Report)
 	if err != nil {
 		return Result{}, reporter.fail("report", err)
 	}
-	result.BuildReportPath = buildReportPath
+	result.BuildReportPath = buildReportPath(outputDir)
+	files = append(files, plannedPublishedFile{path: result.BuildReportPath, contents: buildReport})
+	for _, file := range files {
+		wrote, err := writeFileIfChangedStatus(file.path, file.contents)
+		if err != nil {
+			return Result{}, reporter.fail("write", err)
+		}
+		if file.countWrite {
+			recordWriteStat(&result, wrote)
+		}
+	}
+	if err := removeServedSecurityManifest(outputDir); err != nil {
+		return Result{}, reporter.fail("cleanup", err)
+	}
 	return result, nil
 }
 

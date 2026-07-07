@@ -77,6 +77,10 @@ The public `gowdk manifest` command is documented in
 - Keep generated Go deterministic and formatted with `go/format`.
 - Keep generated browser code compiler-owned; user JavaScript remains optional
   assets or explicit page code.
+- Disk static output and generated app source are planned before publication.
+  Final file replacements use same-directory temporary files followed by atomic
+  rename, so validation, formatting, manifest/report generation, and security
+  manifest generation fail before touching committed files.
 - Document new generated files in this page, the build report page, or the
   reference page that owns the public contract.
 - New generated artifact kinds must declare whether they are public,

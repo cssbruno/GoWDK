@@ -23,29 +23,41 @@ type addonGoBlockTarget struct {
 }
 
 func writeInlineGoBlockFiles(appDir string, options Options) ([]string, error) {
+	files, planned, err := collectInlineGoBlockFiles(appDir, options)
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range planned {
+		if err := writeFileIfChanged(file.path, file.contents); err != nil {
+			return nil, err
+		}
+	}
+	return files, nil
+}
+
+func collectInlineGoBlockFiles(appDir string, options Options) ([]string, []plannedFile, error) {
 	if options.IR == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	groups := inlineGoBlockGroups(*options.IR)
 	if len(groups) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	var files []string
+	var planned []plannedFile
 	for packageName, group := range groups {
 		generated, err := goblockgen.Source(packageName, group.imports, group.goBlocks)
 		if err != nil {
-			return nil, fmt.Errorf("generate inline go block package %s: %w", packageName, err)
+			return nil, nil, fmt.Errorf("generate inline go block package %s: %w", packageName, err)
 		}
 		if len(generated) == 0 {
 			continue
 		}
 		relPath := goblockgen.GeneratedRelPath(packageName)
-		if err := writeFileIfChanged(filepath.Join(appDir, relPath), generated); err != nil {
-			return nil, err
-		}
+		planned = append(planned, plannedFile{path: filepath.Join(appDir, relPath), contents: generated})
 		files = append(files, relPath)
 	}
-	return files, nil
+	return files, planned, nil
 }
 
 func inlineGoBlockGroups(ir gwdkir.Program) map[string]inlineGoBlockGroup {
@@ -117,39 +129,51 @@ func mergeGoBlockImports(left []gwdkir.Import, right []gwdkir.Import) []gwdkir.I
 }
 
 func writeAddonGoBlockFiles(appDir string, options Options) ([]string, error) {
+	files, planned, err := collectAddonGoBlockFiles(appDir, options)
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range planned {
+		if err := writeFileIfChanged(file.path, file.contents); err != nil {
+			return nil, err
+		}
+	}
+	return files, nil
+}
+
+func collectAddonGoBlockFiles(appDir string, options Options) ([]string, []plannedFile, error) {
 	if options.IR == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	var files []string
+	var planned []plannedFile
 	for _, target := range addonGoBlockTargets(*options.IR, options.Config) {
 		consumer, ok := addonGoBlockConsumer(options.Config, target.target.Target)
 		if !ok {
-			return nil, fmt.Errorf("go block target %s requires an enabled addon implementing gowdk.GoBlockConsumer", target.target.Target)
+			return nil, nil, fmt.Errorf("go block target %s requires an enabled addon implementing gowdk.GoBlockConsumer", target.target.Target)
 		}
 		generated, err := consumer.GeneratedGo(target.target, gowdk.GoBlockContext{Render: target.render})
 		if err != nil {
-			return nil, fmt.Errorf("generate addon go block target %s: %w", target.target.Target, err)
+			return nil, nil, fmt.Errorf("generate addon go block target %s: %w", target.target.Target, err)
 		}
 		for _, file := range generated {
 			relPath, err := safeAddonGoBlockFilePath(file.Path)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			contents := []byte(file.Source)
 			if strings.HasSuffix(relPath, ".go") {
 				formatted, err := format.Source(contents)
 				if err != nil {
-					return nil, fmt.Errorf("format addon go block file %s: %w", relPath, err)
+					return nil, nil, fmt.Errorf("format addon go block file %s: %w", relPath, err)
 				}
 				contents = formatted
 			}
-			if err := writeFileIfChanged(filepath.Join(appDir, relPath), contents); err != nil {
-				return nil, err
-			}
+			planned = append(planned, plannedFile{path: filepath.Join(appDir, relPath), contents: contents})
 			files = append(files, relPath)
 		}
 	}
-	return files, nil
+	return files, planned, nil
 }
 
 func addonGoBlockConsumer(config gowdk.Config, target string) (gowdk.GoBlockConsumer, bool) {

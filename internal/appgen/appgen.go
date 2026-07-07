@@ -127,24 +127,23 @@ func GenerateWithPlan(outputDir, appDir string, plan ApplicationPlan) (result Re
 	if isSameOrWithin(targetOutput, absOutput) {
 		return Result{}, fmt.Errorf("build output directory %q must not be inside generated app output directory %q", absOutput, targetOutput)
 	}
-	if err := os.MkdirAll(absApp, 0o755); err != nil {
-		return Result{}, err
-	}
 	moduleContext := resolveGeneratedModuleContext(absApp)
-	if err := os.MkdirAll(targetOutput, 0o755); err != nil {
-		return Result{}, err
-	}
-
-	files, err := copyOutputFiles(absOutput, targetOutput)
+	files, outputFiles, err := collectOutputFiles(absOutput, targetOutput)
 	if err != nil {
 		return Result{}, err
 	}
-	if err := removeStaleOutputFiles(targetOutput, files); err != nil {
-		return Result{}, err
-	}
-	modulePath, err := writeGeneratedModuleFile(absApp, moduleContext, options)
-	if err != nil {
-		return Result{}, err
+	plannedFiles := append([]plannedFile(nil), outputFiles...)
+	var removeAfterPublish []string
+	modulePath := filepath.Join(absApp, modFileName)
+	if moduleContext.Nested {
+		modulePayload, err := moduleSource(options)
+		if err != nil {
+			return Result{}, err
+		}
+		plannedFiles = append(plannedFiles, plannedFile{path: modulePath, contents: []byte(modulePayload)})
+	} else {
+		removeAfterPublish = append(removeAfterPublish, modulePath)
+		modulePath = ""
 	}
 	packageSource, err := appPackageSource(options)
 	if err != nil {
@@ -154,11 +153,23 @@ func GenerateWithPlan(outputDir, appDir string, plan ApplicationPlan) (result Re
 	if err != nil {
 		return Result{}, err
 	}
-	if err := writeFileIfChanged(filepath.Join(absApp, appFileName), appSource); err != nil {
+	plannedFiles = append(plannedFiles, plannedFile{path: filepath.Join(absApp, appFileName), contents: appSource})
+	lifecycleSources, err := lifecycleServiceFileSources(options)
+	if err != nil {
 		return Result{}, err
 	}
-	if err := writeLifecycleServiceFiles(absApp, options); err != nil {
-		return Result{}, err
+	for _, name := range []string{lifecycleFileName, lifecycleJSName} {
+		path := filepath.Join(absApp, name)
+		source, ok := lifecycleSources[name]
+		if !ok {
+			removeAfterPublish = append(removeAfterPublish, path)
+			continue
+		}
+		formatted, err := formatGeneratedGo(name, source)
+		if err != nil {
+			return Result{}, err
+		}
+		plannedFiles = append(plannedFiles, plannedFile{path: path, contents: formatted})
 	}
 	auditTestSource, err := GeneratedAuditTestSource(options)
 	if err != nil {
@@ -166,28 +177,45 @@ func GenerateWithPlan(outputDir, appDir string, plan ApplicationPlan) (result Re
 	}
 	auditTestPath := filepath.Join(absApp, auditTestFileName)
 	if len(auditTestSource) > 0 {
-		if err := writeFileIfChanged(auditTestPath, auditTestSource); err != nil {
-			return Result{}, err
-		}
-	} else if err := os.Remove(auditTestPath); err != nil && !os.IsNotExist(err) {
-		return Result{}, err
+		plannedFiles = append(plannedFiles, plannedFile{path: auditTestPath, contents: auditTestSource})
+	} else {
+		removeAfterPublish = append(removeAfterPublish, auditTestPath)
 	}
-	scriptFiles, err := writeInlineGoBlockFiles(absApp, options)
+	scriptFiles, scriptPlannedFiles, err := collectInlineGoBlockFiles(absApp, options)
 	if err != nil {
 		return Result{}, err
 	}
-	addonGoBlockFiles, err := writeAddonGoBlockFiles(absApp, options)
+	plannedFiles = append(plannedFiles, scriptPlannedFiles...)
+	addonGoBlockFiles, addonPlannedFiles, err := collectAddonGoBlockFiles(absApp, options)
 	if err != nil {
 		return Result{}, err
 	}
+	plannedFiles = append(plannedFiles, addonPlannedFiles...)
 	files = append(files, scriptFiles...)
 	files = append(files, addonGoBlockFiles...)
 	mainSource, err := serverMainSource(moduleContext.ImportBase + "/" + appPackageDirName)
 	if err != nil {
 		return Result{}, err
 	}
-	if err := writeFileIfChanged(filepath.Join(absApp, mainFileName), []byte(mainSource)); err != nil {
+	plannedFiles = append(plannedFiles, plannedFile{path: filepath.Join(absApp, mainFileName), contents: []byte(mainSource)})
+	if err := os.MkdirAll(absApp, 0o755); err != nil {
 		return Result{}, err
+	}
+	if err := os.MkdirAll(targetOutput, 0o755); err != nil {
+		return Result{}, err
+	}
+	for _, file := range plannedFiles {
+		if err := writeFileIfChanged(file.path, file.contents); err != nil {
+			return Result{}, err
+		}
+	}
+	if err := removeStaleOutputFiles(targetOutput, files); err != nil {
+		return Result{}, err
+	}
+	for _, path := range removeAfterPublish {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return Result{}, err
+		}
 	}
 
 	return Result{

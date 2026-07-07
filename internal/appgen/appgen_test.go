@@ -6332,6 +6332,12 @@ func TestGenerateRejectsUnsupportedAddonGoBlockTarget(t *testing.T) {
 	if !strings.Contains(err.Error(), "requires an enabled addon implementing gowdk.GoBlockConsumer") {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if _, statErr := os.Stat(filepath.Join(appDir, appOutputDirName, "index.html")); !os.IsNotExist(statErr) {
+		t.Fatalf("expected embedded output to stay unpublished after planning failure, stat err=%v", statErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(appDir, appFileName)); !os.IsNotExist(statErr) {
+		t.Fatalf("expected generated app source to stay unpublished after planning failure, stat err=%v", statErr)
+	}
 }
 
 type appgenGoBlockAddon struct{}

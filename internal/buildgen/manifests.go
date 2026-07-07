@@ -327,7 +327,33 @@ func writeFileIfChangedStatus(filePath string, contents []byte) (bool, error) {
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		return false, err
 	}
-	return true, os.WriteFile(filePath, contents, 0o644)
+	temp, err := os.CreateTemp(filepath.Dir(filePath), "."+filepath.Base(filePath)+".tmp-*")
+	if err != nil {
+		return false, err
+	}
+	tempName := temp.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tempName)
+		}
+	}()
+	if _, err := temp.Write(contents); err != nil {
+		_ = temp.Close()
+		return false, err
+	}
+	if err := temp.Chmod(0o644); err != nil {
+		_ = temp.Close()
+		return false, err
+	}
+	if err := temp.Close(); err != nil {
+		return false, err
+	}
+	if err := os.Rename(tempName, filePath); err != nil {
+		return false, err
+	}
+	cleanup = false
+	return true, nil
 }
 
 func contentHash(contents []byte) string {

@@ -12,7 +12,7 @@ decisions.
 | Repository conventions | [Conventions](conventions.md), [naming conventions](naming-conventions.md), and [documentation style](documentation-style.md) |
 | Code boundaries | [Code quality](code-quality.md), [generated code policy](generated-code-policy.md), and [dependency policy](dependency-policy.md) |
 | Security | [Security](security.md) and [threat model](security-threat-model.md) |
-| Operations | [Operations](operations.md), [testing](testing.md), [CI](ci.md), and [Windows CI](windows-ci.md) |
+| Operations | [Operations](operations.md), [testing](testing.md), and [CI](ci.md) |
 | Releases | [Release process](release.md) and [changelog](../../CHANGELOG.md) |
 | Decisions | [Architecture Decision Records](decisions/README.md) |
 

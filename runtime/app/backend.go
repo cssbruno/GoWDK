@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"mime"
 	"net/http"
 	"path"
 	"strings"
@@ -60,6 +61,7 @@ type backendRouteEntry struct {
 
 type backendPatternRouteEntry struct {
 	key     backendRouteKey
+	shape   string
 	kind    string
 	id      string
 	source  gowdktrace.SourceRef
@@ -112,12 +114,13 @@ func (router *BackendRouter) handle(route BackendRoute) error {
 	}
 	handler := BackendBoundary(kind, traceBackendRoute(kind, key.path, route.EndpointID, route.Source, route.Handler))
 	if backendRouteIsDynamic(key.path) {
+		shape := canonicalBackendRoutePattern(key.path)
 		for _, existing := range router.patterns {
-			if existing.key == key {
+			if existing.key.method == key.method && existing.shape == shape {
 				return fmt.Errorf("duplicate backend route %s %s", key.method, key.path)
 			}
 		}
-		router.patterns = append(router.patterns, backendPatternRouteEntry{key: key, kind: kind, id: route.EndpointID, source: route.Source, cors: routeCORS, handler: handler})
+		router.patterns = append(router.patterns, backendPatternRouteEntry{key: key, shape: shape, kind: kind, id: route.EndpointID, source: route.Source, cors: routeCORS, handler: handler})
 		return nil
 	}
 	if _, exists := router.routes[key]; exists {
@@ -280,8 +283,10 @@ func traceBackendRoute(kind, routePath string, endpointID string, source gowdktr
 			traceRecorder = &traceResponseWriter{ResponseWriter: writer, status: http.StatusOK}
 			writer = wrapTraceResponseWriter(traceRecorder)
 		}
-		routeMetric, routeStart := metrics.startRoute(kind, routePath, endpointID)
-		defer func() { metrics.finishRoute(routeMetric, routeStart, traceRecorder.status) }()
+		if metrics != nil {
+			routeMetric, routeStart := metrics.startRoute(kind, routePath, endpointID)
+			defer func() { metrics.finishRoute(routeMetric, routeStart, traceRecorder.status) }()
+		}
 		if !hasTracer {
 			return handler(writer, request)
 		}
@@ -340,6 +345,25 @@ func backendRouteIsDynamic(routePath string) bool {
 	return strings.Contains(routePath, "{") && strings.Contains(routePath, "}")
 }
 
+func canonicalBackendRoutePattern(routePath string) string {
+	routePath = normalizeBackendPath(routePath)
+	segments := strings.Split(strings.Trim(routePath, "/"), "/")
+	if len(segments) == 1 && segments[0] == "" {
+		return "/"
+	}
+	for index, segment := range segments {
+		if !strings.HasPrefix(segment, "{") || !strings.HasSuffix(segment, "}") {
+			continue
+		}
+		if strings.HasSuffix(segment, "...}") {
+			segments[index] = "{...}"
+			continue
+		}
+		segments[index] = "{}"
+	}
+	return "/" + strings.Join(segments, "/")
+}
+
 func isContractQueryRequest(request *http.Request) bool {
 	if request == nil {
 		return false
@@ -357,13 +381,83 @@ func isContractQueryRequest(request *http.Request) bool {
 }
 
 func acceptsJSON(header string) bool {
-	for _, part := range strings.Split(header, ",") {
-		mediaType := strings.ToLower(strings.TrimSpace(strings.Split(part, ";")[0]))
-		if mediaType == "application/json" || strings.HasSuffix(mediaType, "+json") {
-			return true
+	for _, part := range splitHTTPHeaderList(header) {
+		mediaType, params, err := mime.ParseMediaType(strings.TrimSpace(part))
+		if err != nil || !isJSONMediaType(mediaType) || !hasPositiveAcceptQuality(params) {
+			continue
 		}
+		return true
 	}
 	return false
+}
+
+func splitHTTPHeaderList(value string) []string {
+	start := 0
+	quoted := false
+	escaped := false
+	parts := make([]string, 0, strings.Count(value, ",")+1)
+	for index := 0; index < len(value); index++ {
+		switch current := value[index]; {
+		case escaped:
+			escaped = false
+		case quoted && current == '\\':
+			escaped = true
+		case current == '"':
+			quoted = !quoted
+		case current == ',' && !quoted:
+			parts = append(parts, value[start:index])
+			start = index + 1
+		}
+	}
+	return append(parts, value[start:])
+}
+
+func isJSONMediaType(mediaType string) bool {
+	mediaType = strings.ToLower(strings.TrimSpace(mediaType))
+	if mediaType == "application/json" {
+		return true
+	}
+	return len(mediaType) > len("+json") && strings.HasSuffix(mediaType, "+json")
+}
+
+func hasPositiveAcceptQuality(params map[string]string) bool {
+	quality, ok := params["q"]
+	if !ok {
+		return true
+	}
+	whole, fraction, decimal := strings.Cut(strings.TrimSpace(quality), ".")
+	switch whole {
+	case "0":
+		if !decimal {
+			return false
+		}
+		if len(fraction) > 3 {
+			return false
+		}
+		positive := false
+		for _, digit := range fraction {
+			if digit < '0' || digit > '9' {
+				return false
+			}
+			positive = positive || digit != '0'
+		}
+		return positive
+	case "1":
+		if !decimal {
+			return true
+		}
+		if len(fraction) > 3 {
+			return false
+		}
+		for _, digit := range fraction {
+			if digit != '0' {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
 }
 
 // HandlerFunc returns the router as a generated runtime hook.
@@ -551,7 +645,7 @@ func prepareActionValues(writer http.ResponseWriter, request *http.Request, body
 	}
 	request.Body = http.MaxBytesReader(writer, request.Body, normalizeBodyLimit(bodyLimit, DefaultActionBodyLimit))
 	if err := request.ParseForm(); err != nil {
-		if strings.Contains(err.Error(), "request body too large") {
+		if response.IsRequestBodyTooLarge(err) {
 			response.WriteNoStoreError(writer, http.StatusRequestEntityTooLarge, "request body too large")
 			return nil, nil, false
 		}
@@ -571,7 +665,7 @@ func prepareActionData(writer http.ResponseWriter, request *http.Request, bodyLi
 	request.Body = http.MaxBytesReader(writer, request.Body, normalizeBodyLimit(bodyLimit, DefaultActionBodyLimit))
 	if isMultipartRequest(request) {
 		if err := request.ParseMultipartForm(form.DefaultMultipartMemoryBytes); err != nil {
-			if strings.Contains(err.Error(), "request body too large") {
+			if response.IsRequestBodyTooLarge(err) {
 				response.WriteNoStoreError(writer, http.StatusRequestEntityTooLarge, "request body too large")
 				return nil, form.Data{}, nil, false
 			}
@@ -587,7 +681,7 @@ func prepareActionData(writer http.ResponseWriter, request *http.Request, bodyLi
 		return ctx, form.FromMultipartForm(request.MultipartForm), cleanup, true
 	}
 	if err := request.ParseForm(); err != nil {
-		if strings.Contains(err.Error(), "request body too large") {
+		if response.IsRequestBodyTooLarge(err) {
 			response.WriteNoStoreError(writer, http.StatusRequestEntityTooLarge, "request body too large")
 			return nil, form.Data{}, nil, false
 		}
@@ -602,8 +696,12 @@ func isMultipartRequest(request *http.Request) bool {
 	if request == nil {
 		return false
 	}
-	contentType := strings.ToLower(strings.TrimSpace(request.Header.Get("Content-Type")))
-	return strings.HasPrefix(contentType, "multipart/form-data")
+	contentType := strings.TrimSpace(request.Header.Get("Content-Type"))
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		mediaType, _, _ = strings.Cut(contentType, ";")
+	}
+	return strings.EqualFold(strings.TrimSpace(mediaType), "multipart/form-data")
 }
 
 func normalizeBodyLimit(bodyLimit int64, fallback int64) int64 {

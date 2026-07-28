@@ -54,6 +54,8 @@ Current generated instrumentation:
 - `runtime/app.Metrics` records request count, active request count, latency,
   errors, and generated backend route metrics keyed by route templates and
   endpoint IDs.
+- Metrics and tracing are independent: tracer-only requests still record spans,
+  metrics-only requests still record route counters, and either can be omitted.
 - Generated app health includes tracer export health when a tracer is attached,
   and the local collector JSON includes collector queue/reject health.
 
@@ -133,10 +135,16 @@ if err != nil {
 }
 defer sink.Shutdown(ctx)
 
-tracer := trace.NewTracer(trace.WithSink(sink))
+tracer := trace.NewTracer(
+	trace.WithSink(sink),
+	trace.WithExportQueueSize(256),
+	trace.WithExportTimeout(5*time.Second),
+)
 ```
 
 - For local collectors use `otel.WithInsecure()` instead of TLS.
+- `tracer.Flush(ctx)` drains spans accepted by GOWDK's bounded tracer queue.
+  Call it before `sink.ForceFlush(ctx)` when both queues must reach the exporter.
 - `sink.ForceFlush(ctx)` drains buffered spans at a checkpoint (signal, pre-deploy)
   without shutting the provider down; `sink.Shutdown(ctx)` flushes and stops a
   GOWDK-owned provider.
@@ -144,8 +152,12 @@ tracer := trace.NewTracer(trace.WithSink(sink))
   OTLP path exposes `otel.ExporterFailureCount()` (export batches that failed
   after retries) and `otel.UnsupportedAttributeCount()` (attribute values outside
   the OTel value model).
-- The bounded queue defines overflow behavior: when full, the batch processor
-  drops new spans rather than growing memory without bound.
+- Two bounded queues can be present: the tracer defaults to 256 waiting spans
+  with one active sink call, while the OTel batch processor uses
+  `otel.WithMaxQueueSize`. Both drop new spans when full rather than growing
+  memory without bound. Tracer drops and timeouts appear in
+  `Tracer.HealthSnapshot`; OTel exporter failures remain available through the
+  bridge counters.
 
 ### GOWDK-owned vs app-owned
 

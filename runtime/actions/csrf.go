@@ -33,12 +33,16 @@ type CSRFTokenSource interface {
 
 // CSRFOptions configures signed double-submit CSRF tokens.
 type CSRFOptions struct {
-	Secret     []byte
-	CookieName string
-	FieldName  string
-	HeaderName string
-	Insecure   bool
-	SameSite   http.SameSite
+	// Secret signs new tokens and validates existing tokens.
+	Secret []byte
+	// VerificationSecrets validate tokens during a staged key rotation but
+	// never sign new tokens.
+	VerificationSecrets [][]byte
+	CookieName          string
+	FieldName           string
+	HeaderName          string
+	Insecure            bool
+	SameSite            http.SameSite
 	// Binding, when set, ties each token to a per-request identity (typically
 	// the authenticated principal). The returned value is mixed into the token
 	// signature, so a token minted for one principal is rejected once the
@@ -51,19 +55,27 @@ type CSRFOptions struct {
 
 // CSRF validates signed double-submit CSRF tokens for generated actions.
 type CSRF struct {
-	secret     []byte
-	cookieName string
-	fieldName  string
-	headerName string
-	secure     bool
-	sameSite   http.SameSite
-	binding    func(*http.Request) []byte
+	secret              []byte
+	verificationSecrets [][]byte
+	cookieName          string
+	fieldName           string
+	headerName          string
+	secure              bool
+	sameSite            http.SameSite
+	binding             func(*http.Request) []byte
 }
 
 // NewCSRF creates a validator with secure cookie defaults.
 func NewCSRF(options CSRFOptions) (*CSRF, error) {
 	if len(options.Secret) < 32 {
 		return nil, fmt.Errorf("csrf secret must be at least 32 bytes")
+	}
+	verificationSecrets := make([][]byte, len(options.VerificationSecrets))
+	for index, secret := range options.VerificationSecrets {
+		if len(secret) < 32 {
+			return nil, fmt.Errorf("csrf verification secret %d must be at least 32 bytes", index+1)
+		}
+		verificationSecrets[index] = append([]byte(nil), secret...)
 	}
 	cookieName := options.CookieName
 	if cookieName == "" {
@@ -88,13 +100,14 @@ func NewCSRF(options CSRFOptions) (*CSRF, error) {
 		sameSite = http.SameSiteLaxMode
 	}
 	return &CSRF{
-		secret:     append([]byte(nil), options.Secret...),
-		cookieName: cookieName,
-		fieldName:  fieldName,
-		headerName: headerName,
-		secure:     !options.Insecure,
-		sameSite:   sameSite,
-		binding:    options.Binding,
+		secret:              append([]byte(nil), options.Secret...),
+		verificationSecrets: verificationSecrets,
+		cookieName:          cookieName,
+		fieldName:           fieldName,
+		headerName:          headerName,
+		secure:              !options.Insecure,
+		sameSite:            sameSite,
+		binding:             options.Binding,
 	}, nil
 }
 
@@ -114,12 +127,12 @@ func secureCookiePrefix(name string) bool {
 
 // Token returns the CSRF token for a generated hidden form field. It reuses
 // the request's valid CSRF cookie when present so concurrently open tabs keep
-// working, and only mints and stores a new token when the cookie is absent or
-// invalid.
+// working. A cookie signed by a verification-only key is replaced with a new
+// primary-key token so active clients naturally migrate during key rotation.
 func (csrf *CSRF) Token(response http.ResponseWriter, request *http.Request) (string, error) {
 	binding := csrf.bindingFor(request)
 	if request != nil {
-		if cookie, err := request.Cookie(csrf.cookieName); err == nil && csrf.valid(cookie.Value, binding) {
+		if cookie, err := request.Cookie(csrf.cookieName); err == nil && csrf.validWithPrimary(cookie.Value, binding) {
 			return cookie.Value, nil
 		}
 	}
@@ -191,15 +204,37 @@ func (csrf *CSRF) sign(nonce, binding []byte) string {
 }
 
 func (csrf *CSRF) valid(token string, binding []byte) bool {
-	raw, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil || len(raw) != csrfNonceBytes+csrfMACBytes {
+	nonce, signature, ok := decodeCSRFToken(token)
+	if !ok {
 		return false
 	}
-	nonce := raw[:csrfNonceBytes]
-	signature := raw[csrfNonceBytes:]
-	mac := hmac.New(sha256.New, csrf.secret)
+	matches := csrfSignatureMatches(csrf.secret, nonce, binding, signature)
+	for _, secret := range csrf.verificationSecrets {
+		matches |= csrfSignatureMatches(secret, nonce, binding, signature)
+	}
+	return matches == 1
+}
+
+func (csrf *CSRF) validWithPrimary(token string, binding []byte) bool {
+	nonce, signature, ok := decodeCSRFToken(token)
+	if !ok {
+		return false
+	}
+	return csrfSignatureMatches(csrf.secret, nonce, binding, signature) == 1
+}
+
+func decodeCSRFToken(token string) (nonce []byte, signature []byte, ok bool) {
+	raw, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(raw) != csrfNonceBytes+csrfMACBytes {
+		return nil, nil, false
+	}
+	return raw[:csrfNonceBytes], raw[csrfNonceBytes:], true
+}
+
+func csrfSignatureMatches(secret, nonce, binding, signature []byte) int {
+	mac := hmac.New(sha256.New, secret)
 	mac.Write(nonce)
 	mac.Write(binding)
 	expected := mac.Sum(nil)
-	return subtle.ConstantTimeCompare(signature, expected) == 1
+	return subtle.ConstantTimeCompare(signature, expected)
 }

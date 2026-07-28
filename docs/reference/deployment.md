@@ -269,24 +269,36 @@ dotenv file; host environment values still take precedence over file values.
 
 ## CSRF Secret Rotation
 
-Generated CSRF currently validates tokens with one active signing secret from
-`Build.CSRF.SecretEnv` or `GOWDK_CSRF_SECRET`. CSRF is enabled by default for
-generated action and web-command POSTs; generated apps fail closed at startup if
-those endpoints are present and the secret is absent. There is no multi-key
-grace period yet.
+Generated CSRF signs new tokens with the primary secret from
+`Build.CSRF.SecretEnv` or `GOWDK_CSRF_SECRET`. It can also validate tokens with
+verification-only secrets listed in `Build.CSRF.VerificationSecretEnvs`.
+Generated apps fail closed at startup if any configured value is absent or
+shorter than 32 bytes.
 
-Rotate CSRF secrets as a coordinated deploy:
+Use three deployment phases to rotate from `GOWDK_CSRF_OLD` to
+`GOWDK_CSRF_NEXT`:
 
-1. Build and smoke-test the new binary.
-2. Set the new secret in the deployment platform.
-3. Restart or replace every generated app instance that serves action POSTs.
-4. Confirm `/_gowdk/health` is reachable on every instance.
-5. Expect forms rendered before the rotation to fail with HTTP 403
-   `invalid csrf token`; users should reload the page and resubmit.
+1. Deploy old as primary and next as verification-only. Old and updated
+   instances accept each other's tokens during a mixed rollout.
+2. Deploy next as primary and old as verification-only. New pages and refreshed
+   old-key cookies receive next-key tokens. Rolling back to phase 1 remains safe.
+3. After the chosen overlap window, deploy next as primary with no old
+   verification key.
 
-Do not run mixed old/new CSRF secrets behind the same load balancer for longer
-than the deploy window. If a rollback is needed, restore both the previous
-binary and the previous CSRF secret.
+Example phase-2 config:
+
+```go
+CSRF: gowdk.CSRFConfig{
+	SecretEnv:              "GOWDK_CSRF_NEXT",
+	VerificationSecretEnvs: []string{"GOWDK_CSRF_OLD"},
+}
+```
+
+Keep both environment values available throughout phases 1 and 2, and verify
+`/_gowdk/health` after each rollout. CSRF tokens do not carry an expiry, so the
+deployment operator chooses the overlap window. Once the old key is retired,
+an unrefreshed form holding an old token receives HTTP 403
+`invalid csrf token`; reloading the page obtains a current token.
 
 ## systemd
 

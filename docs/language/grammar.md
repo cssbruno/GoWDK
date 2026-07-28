@@ -6,6 +6,13 @@ Accepted and rejected syntax is pinned by the machine-checked conformance corpus
 in [Conformance Corpus](conformance.md), which is the contract source of truth
 when this grammar drifts.
 
+Each logical line may contain up to 1 MiB (1,048,576 bytes), excluding the
+line ending. This explicit limit applies to metadata and inline `js {}`,
+`style {}`, and `go {}` content, so lines larger than Go's former 64 KiB
+scanner default remain valid. Larger lines report `source_line_too_long` with
+the file and line; split generated/minified content or move it to an external
+asset.
+
 ```text
 file        = line*
 line        = blank | comment | packageDecl | metadataDecl | importDecl | useDecl | blockDecl | goDecl | actionDecl | apiDecl | unsupportedBlock | other
@@ -28,7 +35,7 @@ blockName   = letterOrUnderscore (letter | digit | "_" | "." | "-")*
 ```
 
 Audit policy files use the `*.audit.gwdk` suffix and a separate top-level
-grammar:
+grammar. They use the same 1 MiB logical-line limit:
 
 ```text
 auditFile    = (blank | comment | packageDecl | policyDecl | testDecl)*
@@ -103,10 +110,10 @@ generated app Go files.
 Old `act name { ... }` and `api name { ... }` forms are rejected with migration
 diagnostics.
 
-It validates first-slice action fragment targets, captures their body text, and
-the generated embedded app can serve the first rendered action fragment response
-for partial POSTs. It does not validate broader statement syntax, full markup
-syntax, expressions, or most block body contents.
+It validates first-slice standalone fragment targets and captures their
+source-owned body text for generated render functions and fallback responses.
+It does not validate broader statement syntax, full markup syntax, expressions,
+or most block body contents.
 
 The canonical AST, recovery, and semantic-analysis model lives in the language
 docs in this directory; implementation remains incremental.

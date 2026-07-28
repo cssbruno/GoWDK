@@ -8675,6 +8675,43 @@ var Config = gowdk.Config{
 	}
 }
 
+func TestLanguageServerSettingsPreserveProjectRootAndSelectedModules(t *testing.T) {
+	root := t.TempDir()
+	writeCLIFile(t, filepath.Join(root, "gowdk.config.go"), `package app
+
+import "github.com/cssbruno/gowdk"
+
+var Config = gowdk.Config{
+	Modules: []gowdk.ModuleConfig{
+		{Name: "admin"},
+		{Name: "public"},
+	},
+}
+`)
+
+	settings, err := loadLanguageServerSettings([]string{
+		"--project-root", root,
+		"--module", "admin",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	absoluteRoot, err := filepath.Abs(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.ProjectRoot != absoluteRoot {
+		t.Fatalf("project root = %q, want %q", settings.ProjectRoot, absoluteRoot)
+	}
+	if !reflect.DeepEqual(settings.Modules, []string{"admin"}) {
+		t.Fatalf("selected modules = %#v, want admin", settings.Modules)
+	}
+
+	if _, err := loadLanguageServerSettings([]string{"--project-root", root, "--module", "missing"}); err == nil || !strings.Contains(err.Error(), `module "missing" is not configured`) {
+		t.Fatalf("expected unknown module error, got %v", err)
+	}
+}
+
 func TestLanguageServerConfigRejectsProjectRootWithoutConfig(t *testing.T) {
 	root := t.TempDir()
 	if _, err := languageServerConfig([]string{"--project-root", root}); err == nil || !strings.Contains(err.Error(), "gowdk.config.go is required") {
@@ -8685,6 +8722,18 @@ func TestLanguageServerConfigRejectsProjectRootWithoutConfig(t *testing.T) {
 func TestLanguageServerConfigFallsBackWithoutConfigFile(t *testing.T) {
 	root := t.TempDir()
 	withWorkingDir(t, root, func() {
+		settings, err := loadLanguageServerSettings(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		absoluteRoot, err := filepath.Abs(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if settings.ProjectRoot != absoluteRoot {
+			t.Fatalf("fallback project root = %q, want working directory %q", settings.ProjectRoot, absoluteRoot)
+		}
+
 		config, err := languageServerConfig(nil)
 		if err != nil {
 			t.Fatal(err)

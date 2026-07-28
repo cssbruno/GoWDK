@@ -171,4 +171,5 @@ domain logic, handlers, stores, auth, validation policy, or storage code.
 - Keep `docs/product/roadmap.md` as the active product direction.
 - Keep `docs/engineering/architecture.md` as the implementation boundary
   source of truth.
-- Keep server fragments in runtime responses, not old action body syntax.
+- Keep server-fragment response decisions in runtime responses, keep markup in
+  `.gwdk`, and do not restore old action body syntax.

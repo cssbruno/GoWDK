@@ -49,7 +49,7 @@ The main generated routes are:
 - `POST /login` validates direct form fields, creates a signed demo session,
   and redirects to `/dashboard`.
 - `GET /api/status` returns generated JSON from app-owned Go.
-- `POST /summary` returns a fragment targeting `#summary`.
+- `POST /summary` chooses a partial response targeting `#summary`.
 - `GET /fragments/summary` serves the standalone declared fragment.
 - `GET /dashboard` runs guard `auth.required`, then `LoadDashboard`.
 - `POST /logout` clears the signed demo session.
@@ -59,12 +59,14 @@ The main generated routes are:
 
 ## Ownership Boundaries
 
-- `.gwdk` files declare routes, render lanes, forms, fragments, contracts,
-  CSS, assets, and island metadata.
+- `.gwdk` files declare routes, render lanes, forms, page and fragment markup,
+  contracts, CSS, assets, and island metadata.
 - Go packages under `src/` own credentials, session state, endpoint behavior,
-  build-time data, SSR load data, contracts, and island state shapes.
-- Fragment templates under `src/app/fragments/` own dynamic partial markup
-  until generated typed fragment render helpers exist.
+  build-time data, SSR load data, fragment data and response decisions,
+  contracts, and island state shapes.
+- The fragment template under `src/app/fragments/` exercises the current
+  low-level custom response-body compatibility path. New application markup
+  belongs in `.gwdk`; generated typed fragment data binding remains planned.
 - `apphooks/flagship_hooks.go.txt` is copied into the generated app package before
   binary compilation so custom guards and the optional rate limiter can be wired
   through the generated app hook surface.

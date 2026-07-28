@@ -78,6 +78,29 @@ Current sinks:
 - `NewCollector(limit, options...)`: sink plus local JSON/SSE HTTP handler and
   browser span ingest.
 
+Completed spans pass through a tracer-owned export budget before reaching any
+sink:
+
+```go
+tracer := gowdktrace.NewTracer(
+	gowdktrace.WithSink(sink),
+	gowdktrace.WithExportQueueSize(256),
+	gowdktrace.WithExportTimeout(5*time.Second),
+)
+```
+
+The defaults are a 256-span waiting queue, one active sink export, and a
+5-second deadline per export. `Span.End` never waits for the sink. When the
+queue is full, the newest completed span is dropped; accepted spans remain
+FIFO. `Tracer.HealthSnapshot` reports exported, failed, timed-out, and dropped
+spans plus queue depth, capacity, and in-flight state.
+
+Use `tracer.Flush(ctx)` during graceful shutdown to wait for spans already
+accepted by the tracer queue. It does not shut down or flush buffers owned by
+the sink itself. Sink cancellation is cooperative: a sink that ignores its
+context can pin the single worker, but the bounded queue prevents additional
+export goroutines and memory growth.
+
 ## Collector
 
 ```go

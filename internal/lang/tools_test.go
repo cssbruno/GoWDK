@@ -9,6 +9,7 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/addons/ssr"
+	"github.com/cssbruno/gowdk/internal/parser"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -829,6 +830,55 @@ route "/bad"
 	}
 	if diagnostics[1].Code != "malformed_legacy_metadata" || diagnostics[1].Pos.Line != 5 {
 		t.Fatalf("unexpected second diagnostic: %#v", diagnostics[1])
+	}
+}
+
+func TestParseSourcesReportLineLimitWithFileContext(t *testing.T) {
+	longLine := strings.Repeat("x", parser.MaxSourceLineBytes+3)
+	tests := []struct {
+		name  string
+		path  string
+		parse func(string, []byte) Diagnostics
+		src   []byte
+	}{
+		{
+			name: "page",
+			path: "large.page.gwdk",
+			parse: func(path string, src []byte) Diagnostics {
+				_, diagnostics := ParseSource(path, src)
+				return diagnostics
+			},
+			src: []byte("js {\n" + longLine + "\n}\n"),
+		},
+		{
+			name: "audit",
+			path: "large.audit.gwdk",
+			parse: func(path string, src []byte) Diagnostics {
+				_, diagnostics := ParseAuditSource(path, src)
+				return diagnostics
+			},
+			src: []byte("policy large {\n" + longLine + "\n}\n"),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			diagnostics := test.parse(test.path, test.src)
+			if len(diagnostics) != 1 {
+				t.Fatalf("expected one line-limit diagnostic, got %#v", diagnostics)
+			}
+			diagnostic := diagnostics[0]
+			if diagnostic.File != test.path || diagnostic.Code != parser.DiagnosticSourceLineTooLong {
+				t.Fatalf("unexpected diagnostic identity: %#v", diagnostic)
+			}
+			if diagnostic.Pos.Line != 2 || diagnostic.Pos.Column != 1 {
+				t.Fatalf("unexpected diagnostic position: %#v", diagnostic.Pos)
+			}
+			if diagnostic.Range == nil ||
+				diagnostic.Range.Start.Line != 2 || diagnostic.Range.Start.Column != 1 ||
+				diagnostic.Range.End.Line != 2 || diagnostic.Range.End.Column != 2 {
+				t.Fatalf("unexpected diagnostic range: %#v", diagnostic.Range)
+			}
+		})
 	}
 }
 

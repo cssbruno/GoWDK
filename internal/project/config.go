@@ -96,6 +96,9 @@ func validateLoadedConfig(path string, config gowdk.Config) error {
 	if err := config.Build.CORS.Validate(); err != nil {
 		return fmt.Errorf("%s CORS policy: %w", path, err)
 	}
+	if err := config.Build.CSRF.Validate(); err != nil {
+		return fmt.Errorf("%s CSRF policy: %w", path, err)
+	}
 	if err := gowdk.ValidateAddons(config.Addons); err != nil {
 		return fmt.Errorf("%s addons: %w", path, err)
 	}
@@ -773,6 +776,8 @@ func parseCSRFConfig(expression ast.Expr) gowdk.CSRFConfig {
 			csrf.Disabled = parseBool(field.Value)
 		case "SecretEnv":
 			csrf.SecretEnv = parseString(field.Value)
+		case "VerificationSecretEnvs":
+			csrf.VerificationSecretEnvs = parseStringList(field.Value)
 		case "CookieName":
 			csrf.CookieName = parseString(field.Value)
 		case "FieldName":

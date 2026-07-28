@@ -98,6 +98,18 @@ func actionsParseForm(actions []BackendActionAdapter) bool {
 	return false
 }
 
+func actionsUseStringHelpers(actions []BackendActionAdapter) bool {
+	for _, action := range actions {
+		if endpointDeniedByOmission(action.Guards) {
+			continue
+		}
+		if action.Binding.Status == "" || actionsUseActionValidation(action) {
+			return true
+		}
+	}
+	return false
+}
+
 func sortedActionEndpoints(actions []ActionEndpoint) []ActionEndpoint {
 	sorted := append([]ActionEndpoint(nil), actions...)
 	sort.Slice(sorted, func(i, j int) bool {
@@ -263,7 +275,7 @@ func actionParseFormStmtsWithErrors(csrf bool, jsonErrors bool, multipart bool) 
 			Cond: notNil("err"),
 			Body: block(
 				&ast.IfStmt{
-					Cond: call(sel("strings", "Contains"), call(selExpr(id("err"), "Error")), stringLit("request body too large")),
+					Cond: call(sel("gowdkresponse", "IsRequestBodyTooLarge"), id("err")),
 					Body: block(
 						writeError(sel("http", "StatusRequestEntityTooLarge"), "request body too large"),
 						returnBool(true),

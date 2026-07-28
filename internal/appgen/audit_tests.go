@@ -517,13 +517,15 @@ const (
 )
 
 func writeGeneratedAuditEnvSeeds(builder *strings.Builder, config gowdk.Config, manifest securitymanifest.SecurityManifest) {
-	csrfSecretName := ""
+	csrfSecretNames := map[string]bool{}
 	if auditManifestHasCSRFProtectedEndpoint(manifest) {
-		csrfSecretName = config.Build.CSRF.SecretEnvName()
+		for _, name := range config.Build.CSRF.SecretEnvNames() {
+			csrfSecretNames[name] = true
+		}
 	}
 	for _, name := range auditRequiredEnvNames(config, manifest) {
 		value := generatedAuditEnvSeed
-		if name == csrfSecretName {
+		if csrfSecretNames[name] {
 			value = generatedAuditCSRFSecretSeed
 		}
 		fmt.Fprintf(builder, "\tt.Setenv(%s, %s)\n", strconv.Quote(name), strconv.Quote(value))
@@ -552,7 +554,9 @@ func auditRequiredEnvNames(config gowdk.Config, manifest securitymanifest.Securi
 		}
 	}
 	if auditManifestHasCSRFProtectedEndpoint(manifest) {
-		add(config.Build.CSRF.SecretEnvName())
+		for _, name := range config.Build.CSRF.SecretEnvNames() {
+			add(name)
+		}
 	}
 	sort.Strings(names)
 	return names

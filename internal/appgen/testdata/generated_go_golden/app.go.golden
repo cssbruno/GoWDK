@@ -116,7 +116,7 @@ func action(response http.ResponseWriter, request *http.Request) bool {
 		request = request.WithContext(ctx)
 		request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)
 		if err := request.ParseForm(); err != nil {
-			if strings.Contains(err.Error(), "request body too large") {
+			if gowdkresponse.IsRequestBodyTooLarge(err) {
 				gowdkresponse.WriteNoStoreError(response, http.StatusRequestEntityTooLarge, "request body too large")
 				return true
 			}
@@ -196,7 +196,7 @@ func commandPatientsCreatePatientPOSTPatients(contractRegistry *gowdkcontracts.R
 		request = request.WithContext(ctx)
 		request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)
 		if err := request.ParseForm(); err != nil {
-			if strings.Contains(err.Error(), "request body too large") {
+			if gowdkresponse.IsRequestBodyTooLarge(err) {
 				gowdkresponse.WriteNoStoreJSONError(response, http.StatusRequestEntityTooLarge, "request body too large")
 				return true
 			}

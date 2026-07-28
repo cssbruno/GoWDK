@@ -14,16 +14,22 @@ application runtime services are wired through generated app hooks or
 `Config.Lifecycle.Services`.
 
 Project-aware `build`, `check`, and `dev` run importable `gowdk.config.go`
-packages through the generated native helper. The helper imports the project
-config package, reads `var Config`, and keeps real `gowdk.Addon` values and
-supported extension interfaces in the same process as the compiler operation.
+packages through the generated native-helper binary. That binary imports the
+project config and executes the compiler command in the same process, so its
+real addon values do not cross JSON. Separately, `LoadConfigFile` can evaluate a
+dynamic config through a short-lived executable helper; that fallback sends
+each addon across JSON as an explicit capability descriptor. Its receiving
+proxy remains a plain `gowdk.Addon`. Compiler and generator consumers use
+`gowdk.ResolveAddonCapabilities` for both direct interfaces and bridged
+descriptors.
 
 ## Addon Lifecycle
 
-An addon participates in up to four ordered phases. Each phase corresponds to a
-specific interface, and an addon implements only the interfaces for the phases
-it needs. The base `gowdk.Addon` (`Name()`, `Features()`) only declares a name
-and feature IDs; the rest are opt-in extension points.
+An addon participates in up to four ordered phases. In-process addons implement
+only the interfaces for the phases they need. Executable config loading
+round-trips the same supported phases through `gowdk.AddonCapabilities`. The
+base `gowdk.Addon` (`Name()`, `Features()`) only declares a name and feature IDs;
+the rest are opt-in extension points.
 
 1. **Config loading** — `gowdk.Addon`. Project-aware commands execute
    `gowdk.config.go` as normal Go through the native helper and read
@@ -63,6 +69,30 @@ The registry records this in each entry's `publicInterfaces`:
 
 A single addon can span categories (for example `addons/css` implements both
 `gowdk.Addon` and `gowdk.CSSProcessor`).
+
+### Executable capability descriptors
+
+The executable-config wire uses stable names for the supported optional
+capabilities:
+
+- `gowdk.css-processor`
+- `gowdk.go-block-consumer`
+- `gowdk.seo-provider`
+- `gowdk.auth-session-provider`
+
+Each wire capability declares whether it is required. An unknown optional
+capability is ignored so an older compiler can still use the addon as a feature
+marker. An unknown required capability stops config loading with the addon and
+capability names in the error; silently dropping required behavior is not
+allowed.
+
+`gowdk.ResolveAddonCapabilities(addon)` is the common lookup API. It reads an
+explicit `gowdk.AddonCapabilityProvider` descriptor when present and otherwise
+falls back to the optional interfaces implemented directly by ordinary
+in-process addons. An explicit descriptor is authoritative; direct methods do
+not fill omitted fields. Code consuming addons should use this resolver so
+combined capabilities such as auth plus CSS or auth plus Go-block handling are
+preserved exactly.
 
 ## Boundary Rules
 
@@ -109,6 +139,9 @@ Addons declare what they target two ways:
   the tool is absent; GOWDK does not download it.
 - **Missing feature addon** — using a capability without enabling its addon is a
   compiler diagnostic, not a silent no-op.
+- **Unsupported required executable capability** — config loading fails with
+  the addon and stable capability names. Unknown optional capabilities are
+  ignored.
 - **Version-incompatible addon** — `SupportsVersion` returns `VersionUnsupported`
   for a CLI version outside an entry's `minGOWDK`/`maxGOWDK`. Tooling can surface
   this; build-time auto-enforcement of the version bound remains a deliberate

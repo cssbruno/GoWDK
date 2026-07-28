@@ -78,8 +78,8 @@ func authSetupStmts(options Options) []ast.Stmt {
 
 func authSessionOptions(config gowdk.Config) gowdk.AuthSessionOptions {
 	for _, addon := range config.Addons {
-		provider, ok := addon.(gowdk.AuthSessionProvider)
-		if ok {
+		provider := gowdk.ResolveAddonCapabilities(addon).AuthSessionProvider
+		if provider != nil {
 			return provider.AuthSessionOptions()
 		}
 	}

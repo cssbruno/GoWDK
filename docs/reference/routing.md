@@ -335,6 +335,20 @@ method/path pair, validation fails with a route conflict diagnostic.
 For session, search, JSON CRUD, and webhook API examples, see
 `examples/endpoints/src/endpoints/api.page.gwdk`.
 
+### Runtime Backend Route Patterns
+
+`runtime/app.BackendRouter` accepts concrete paths plus dynamic `{name}`,
+typed `{name:type}`, and final rest `{name...}` segments. Type annotations
+select generated decoding; they do not make the request-path match more
+specific.
+
+For one HTTP method, capture names and type annotations do not distinguish
+otherwise identical patterns. Registering `/blog/{slug}` and `/blog/{id}`, or
+`/patients/{id:int}` and `/patients/{name:string}`, returns a duplicate-route
+error. Rest capture names follow the same rule. Concrete routes take precedence
+over dynamic matches regardless of registration order, so `/blog/archive` wins
+over `/blog/{slug}` for that exact request path.
+
 ## SSR Routes
 
 SSR is optional and must be enabled for validation:

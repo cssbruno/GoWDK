@@ -169,9 +169,9 @@ func seoOptionsFromConfig(config gowdk.Config) (gowdk.SEOOptions, bool, error) {
 			continue
 		}
 		found = true
-		provider, ok := addon.(gowdk.SEOProvider)
-		if !ok {
-			return gowdk.SEOOptions{}, true, fmt.Errorf("seo feature requires an addon that implements gowdk.SEOProvider")
+		provider := gowdk.ResolveAddonCapabilities(addon).SEOProvider
+		if provider == nil {
+			return gowdk.SEOOptions{}, true, fmt.Errorf("seo feature requires an addon that provides gowdk.SEOProvider capability")
 		}
 		options = provider.SEOOptions()
 		break

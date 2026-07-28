@@ -1,8 +1,8 @@
 # Architecture
 
 GOWDK is a compile-first Go web compiler and runtime. `.gwdk` files declare web
-surface contracts; normal Go packages own application behavior; generated Go is
-inspectable adapter glue.
+surface contracts and markup; normal Go packages own application behavior and
+data; generated Go is inspectable adapter glue.
 
 ## System Shape
 
@@ -24,7 +24,7 @@ request-time lane selected with `server {}` or `go server {}`.
 
 | Layer | Owns | Does not own |
 | --- | --- | --- |
-| GOWDK source | Page, component, layout, route, endpoint, asset, guard, cache, and bounded browser declarations | Business logic, storage, authorization policy, production operations |
+| GOWDK source | Page, component, layout, and fragment markup plus route, endpoint, asset, guard, cache, and bounded browser declarations | Business logic, storage, authorization policy, production operations |
 | Compiler internals | Parsing, typed AST, analysis, IR, diagnostics, validation, build reports, manifests, and generated-output planning | Request serving and app-owned runtime state |
 | Generated app | Adapter glue, route registration, decoding, response writing, guard/rate-limit/CSRF ordering, embedded assets, lifecycle hooks | Domain behavior and external infrastructure |
 | Runtime packages | `net/http` helpers, request context, response envelopes, assets, guards, contracts, tracing, and addon helpers | Application schemas, migrations, secrets, auth policy, backups, incidents |

@@ -51,6 +51,16 @@ func WithSink(sink gowdktrace.Sink) gowdktrace.TracerOption {
 	return gowdktrace.WithSink(sink)
 }
 
+// WithExportQueueSize configures the bounded completed-span queue.
+func WithExportQueueSize(size int) gowdktrace.TracerOption {
+	return gowdktrace.WithExportQueueSize(size)
+}
+
+// WithExportTimeout configures the deadline for one sink export.
+func WithExportTimeout(timeout time.Duration) gowdktrace.TracerOption {
+	return gowdktrace.WithExportTimeout(timeout)
+}
+
 // AlwaysOn samples every span.
 func AlwaysOn() gowdktrace.Sampler {
 	return gowdktrace.AlwaysOn()

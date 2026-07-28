@@ -4,8 +4,12 @@ This example shows the supported component-level WASM island package shape.
 
 ```gwdk
 component WasmCounter
-wasm ./examples/components/wasm/browser/counter
+wasm ./browser/counter
 ```
+
+The `wasm` package path is relative to the component source file, so the
+component and its browser package remain portable when the build runs from the
+repository root.
 
 The browser Go package is a normal `package main` compiled with
 `GOOS=js GOARCH=wasm`. It must export the component-scoped ABI functions with

@@ -92,7 +92,7 @@ func islandWASMArtifact(outputDir string, component gwdkir.Component) (plannedAs
 }
 
 func buildWASMIslandPackage(component gwdkir.Component) ([]byte, error) {
-	packagePath := strings.TrimSpace(component.WASM.Package)
+	packagePath := wasmIslandPackagePath(component)
 	temp, err := os.CreateTemp("", "gowdk-"+componentAssetName(component.Name)+"-*.wasm")
 	if err != nil {
 		return nil, wasmIslandDiagnosticError(component, "wasm_package_build_error", packagePath, fmt.Errorf("create temp output: %w", err))
@@ -133,6 +133,30 @@ func buildWASMIslandPackage(component gwdkir.Component) ([]byte, error) {
 		return nil, err
 	}
 	return contents, nil
+}
+
+func wasmIslandPackagePath(component gwdkir.Component) string {
+	packagePath := strings.TrimSpace(component.WASM.Package)
+	if packagePath == "" || filepath.IsAbs(packagePath) {
+		return packagePath
+	}
+	slashPath := filepath.ToSlash(packagePath)
+	if slashPath != "." && slashPath != ".." &&
+		!strings.HasPrefix(slashPath, "./") &&
+		!strings.HasPrefix(slashPath, "../") {
+		return packagePath
+	}
+	baseDir := "."
+	if strings.TrimSpace(component.Source) != "" {
+		baseDir = filepath.Dir(filepath.FromSlash(component.Source))
+	}
+	resolved := filepath.Clean(filepath.Join(baseDir, filepath.FromSlash(packagePath)))
+	if !filepath.IsAbs(resolved) && resolved != "." && resolved != ".." &&
+		!strings.HasPrefix(resolved, "."+string(filepath.Separator)) &&
+		!strings.HasPrefix(resolved, ".."+string(filepath.Separator)) {
+		resolved = "." + string(filepath.Separator) + resolved
+	}
+	return resolved
 }
 
 func clientGoBlockWASMArtifact(outputDir string, page gwdkir.Page, script gwdkir.GoBlock) (plannedAssetArtifact, error) {

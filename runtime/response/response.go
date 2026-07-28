@@ -144,14 +144,20 @@ func expectedErrorStatus(kind ErrorKind) int {
 	}
 }
 
+// IsRequestBodyTooLarge reports whether err contains the typed error returned
+// by http.MaxBytesReader after a request exceeds its configured limit.
+func IsRequestBodyTooLarge(err error) bool {
+	var maxBytesErr *http.MaxBytesError
+	return errors.As(err, &maxBytesErr)
+}
+
 // HandlerStatus returns a handler error status, or fallback for ordinary errors.
 func HandlerStatus(err error, fallback int) int {
 	var handlerErr HandlerError
 	if errors.As(err, &handlerErr) && handlerErr.Status != 0 {
 		return handlerErr.Status
 	}
-	var maxBytesErr *http.MaxBytesError
-	if errors.As(err, &maxBytesErr) {
+	if IsRequestBodyTooLarge(err) {
 		return http.StatusRequestEntityTooLarge
 	}
 	return fallback

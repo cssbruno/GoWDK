@@ -110,7 +110,9 @@ LSP-capable editors can launch:
 gowdk lsp
 ```
 
-Use `gowdk lsp --ssr` when editing projects that should validate SSR pages as if `ssr.Addon()` is enabled.
+Use `gowdk lsp --ssr` when editing projects that should validate SSR pages as if
+`ssr.Addon()` is enabled. Use repeatable or comma-separated `--module` flags to
+limit component discovery to selected configured modules.
 
 ## Commands
 

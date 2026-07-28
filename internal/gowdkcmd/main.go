@@ -12,11 +12,6 @@ import (
 
 const version = "0.12.3" // x-release-please-version
 
-var (
-	defaultSourceIncludes = []string{"**/*.gwdk"}
-	defaultSourceExcludes = []string{".git/**", "vendor/**", "node_modules/**", "**/testdata/**"}
-)
-
 // Main runs the gowdk command-line program and exits with the documented code.
 func Main() {
 	if err := Run(os.Args[1:]); err != nil {
@@ -162,7 +157,7 @@ var topLevelCommands = []topLevelCommandDescriptor{
 	{Name: "preview", Handler: preview, Usage: previewUsage, ListSuffix: " [--addr <addr>] [--hot] [build flags...] build and serve a local deploy preview"},
 	{Name: "playground", Handler: playgroundCommand, Usage: staticCommandUsage(playgroundUsage), ListSuffix: " policy|export|run inspect sandbox policy, export projects, or run an opt-in sandbox build"},
 	{Name: "serve", Handler: serve, Usage: staticCommandUsage("usage: gowdk serve --dir <dir> [--addr <addr>]"), ListSuffix: " --dir <dir> [--addr <addr>] serve generated build output locally"},
-	{Name: "lsp", Handler: languageServer, Usage: staticCommandUsage(lspUsage), ListSuffix: " [--config <file>] [--project-root <dir>] [--ssr] start the language server over stdio"},
+	{Name: "lsp", Handler: languageServer, Usage: staticCommandUsage(lspUsage), ListSuffix: " [--config <file>] [--project-root <dir>] [--module <name>] [--ssr] start the language server over stdio"},
 }
 
 func topLevelCommand(name string) (topLevelCommandDescriptor, bool) {

@@ -1,7 +1,9 @@
 # Actions
 
 Actions are endpoint declarations. A page declares the exported same-package Go
-symbol, HTTP method, and endpoint path in `.gwdk`; normal Go owns the behavior.
+symbol, HTTP method, and endpoint path in `.gwdk`. Page and fragment markup also
+stays in GOWDK source; normal Go owns action data, domain behavior, and response
+decisions.
 
 The supported declaration shape is:
 
@@ -20,8 +22,8 @@ Current behavior:
   errors still follow normal `runtime/response.Response` behavior.
 - Old `act submit { ... }` blocks are rejected with a migration diagnostic.
 - Actions currently require `POST`.
-- Redirects, fragments, validation, and business rules come from the Go handler
-  response, not from generated `.gwdk` action body code.
+- Validation, business rules, state changes, and response outcomes come from
+  the Go handler. Page and fragment markup stays in `.gwdk` source.
 - `<form g:post={Submit}>` lowers to a standard POST form for a supported
   action.
 - `gowdk build --app --bin` generates POST handlers for non-dynamic page routes.
@@ -86,15 +88,19 @@ Current behavior:
 - `runtime/actions.NewCSRF` provides signed double-submit CSRF tokens with an
   HttpOnly, Secure, SameSite=Lax cookie by default. Local HTTP `Insecure` mode
   uses a non-prefixed `gowdk-csrf` cookie because browsers reject `__Host-`
-  cookies without Secure. Normal builds do not expose a no-op CSRF validator;
+  cookies without Secure. `CSRFOptions.Secret` signs new tokens;
+  `CSRFOptions.VerificationSecrets` accepts old or pre-staged keys without
+  using them to sign. Normal builds do not expose a no-op CSRF validator;
   package tests keep their no-op helper in `_test.go`.
 - Generated action adapters wire CSRF token generation and validation by
   default. Generated apps read the signing secret from `Build.CSRF.SecretEnv` or
-  `GOWDK_CSRF_SECRET`, inject a hidden token field into served HTML POST forms,
-  validate action POSTs before generated decoding or user handlers run, and
-  return HTTP 403 with `invalid csrf token` plus `Cache-Control: no-store` for
-  missing or invalid tokens. Set `Build.CSRF.Disabled: true` only for an
-  intentional non-production/test opt-out.
+  `GOWDK_CSRF_SECRET`, read verification-only secrets from
+  `Build.CSRF.VerificationSecretEnvs`, inject a hidden token field into served
+  HTML POST forms, validate action POSTs before generated decoding or user
+  handlers run, and return HTTP 403 with `invalid csrf token` plus
+  `Cache-Control: no-store` for missing or invalid tokens. Set
+  `Build.CSRF.Disabled: true` only for an intentional non-production/test
+  opt-out.
 - Field inference currently reads direct `input`, `textarea`, `select`, and
   named submit controls with literal `name` attributes; fields hidden inside
   component calls are not inferred yet.
@@ -132,25 +138,36 @@ Generated `pattern` checks use GOWDK's anchored form-pattern subset: literals,
 `.`, character classes/ranges, grouping, alternation, common escapes such as
 `\d`, `\w`, and `\s`, and `*`, `+`, `?`, `{n}`, `{n,}`, and `{n,m}`
 quantifiers. GOWDK does not run user-defined domain validation or generate
-general fragment routes. Handlers can return redirects, fragments, HTML, or JSON
-through `runtime/response.Response`.
+general fragment routes. Handlers return `runtime/response.Response` to choose
+status, headers, redirects, JSON, reload behavior, and partial target/swap
+metadata. Page and fragment markup belongs in `.gwdk`. Body-bearing HTML and
+fragment response helpers remain low-level compatibility APIs, not the
+recommended markup authoring model.
 
 ## Examples
 
-- `examples/endpoints/src/endpoints/contact.page.gwdk` declares redirect and validation
-  fragment actions backed by `examples/endpoints/src/endpoints/handlers.go`.
-- `examples/endpoints/src/endpoints/settings.page.gwdk` declares save/reset actions that
-  return partial fragments for a settings result region.
+- `examples/endpoints/src/endpoints/contact.page.gwdk` declares redirect and
+  validation action surfaces backed by
+  `examples/endpoints/src/endpoints/handlers.go`.
+- `examples/endpoints/src/endpoints/settings.page.gwdk` declares save/reset
+  actions and their partial-update target. The example's external HTML
+  templates exercise the current low-level response-body compatibility path;
+  they are not the preferred markup ownership model.
 
 ## Production Notes
 
 - Do not set `Build.CSRF.Disabled` for production generated app deployments
   that accept action POSTs. Provide a stable runtime secret through
-  `Build.CSRF.SecretEnv` or `GOWDK_CSRF_SECRET`.
+  `Build.CSRF.SecretEnv` or `GOWDK_CSRF_SECRET`. Use
+  `Build.CSRF.VerificationSecretEnvs` and the
+  [three-phase rotation procedure](../reference/deployment.md#csrf-secret-rotation)
+  for rollback-safe key changes.
 - Keep authentication, backend authorization, business validation, persistence,
-  service calls, redirects, HTML, JSON, and fragment decisions in normal Go handlers.
-  Generated adapters decode the request and write the returned
-  `runtime/response.Response`; they do not generate application policy.
+  and service calls in normal Go handlers. Handlers also choose redirects,
+  status, headers, JSON, reload behavior, and partial target/swap metadata.
+  Keep page and fragment HTML in `.gwdk` source. Generated adapters decode the
+  request and write the returned `runtime/response.Response`; they do not
+  generate application policy.
 - Generated checks only cover direct literal `required`, `minlength`,
   `maxlength`, and supported `pattern` controls in the current `view {}`
   subset. Treat them as request-shape checks, not a substitute for domain

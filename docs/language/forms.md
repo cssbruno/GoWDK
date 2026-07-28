@@ -1,7 +1,8 @@
 # Forms And Progressive Enhancement
 
 GOWDK forms start as normal HTML forms. JavaScript can enhance a form into a
-fragment request, but Go handlers still own action behavior.
+fragment request. GOWDK source owns page and fragment markup; Go handlers own
+action data, domain behavior, and response decisions.
 
 ## Baseline Form Behavior
 
@@ -20,10 +21,10 @@ request-shape constraints, runs guards and CSRF when configured, calls the
 same-package Go action handler, and writes the returned
 `runtime/response.Response`.
 
-There is no generated page-level form state object today. The submitted form
-data, handler response, redirected page, or returned fragment is the source of
-truth. Component state and `g:bind` can improve client interaction, but they do
-not replace server validation or action results.
+There is no generated page-level form state object today. Submitted form data,
+the handler's response decision, redirected pages, and source-declared
+fragments remain authoritative. Component state and `g:bind` can improve client
+interaction, but they do not replace server validation or action results.
 
 ## Action Results
 
@@ -39,6 +40,12 @@ Full-page POST handlers return `runtime/response.Response`:
   result)` for validation responses.
 - `response.ReloadPage()` for enhanced forms that should reload the current
   page after the action completes.
+
+`response.HTMLBody`, `partial.Fragment`, and other body-bearing response helpers
+remain low-level compatibility APIs. New page and fragment markup belongs in
+`.gwdk`; handlers should prefer status, header, redirect, JSON, reload, target,
+and swap decisions. Generated typed binding from action data into declared
+fragment markup remains planned.
 
 Generated request-shape validation is intentionally narrow. It covers direct
 literal form fields and literal constraints such as `required`, `minlength`,
@@ -75,9 +82,10 @@ focus where possible, and remounts generated islands around replaced DOM.
 Failed enhanced requests dispatch `gowdk:request-error` with `detail.status`,
 `detail.body`, and `detail.response` when an HTTP response exists.
 
-Enhanced redirects are not a stable contract today. For enhanced requests,
-return a fragment response for the target. Use normal full-page POST redirects
-for the no-JavaScript path.
+Enhanced redirects are not a stable contract today. For enhanced requests, the
+handler chooses the target/swap outcome while source owns the fragment markup.
+The current action compatibility path can still return an explicit fragment
+body. Use normal full-page POST redirects for the no-JavaScript path.
 
 There is no nearest error-boundary lookup for enhanced actions today. Failed
 enhanced requests dispatch `gowdk:request-error`; generated validation
@@ -93,7 +101,7 @@ handlers choose the lifecycle outcome explicitly.
 Use one of these explicit outcomes:
 
 - Redirect after full-page POST so the browser loads fresh page output.
-- Return a fragment response for the changed region.
+- Choose a partial target/swap response for the changed source-owned region.
 - Return `response.ReloadPage()` so enhanced forms reload the current page and
   rerun request-time `server {}` data.
 - Return JSON to a user-owned client integration.
@@ -138,6 +146,12 @@ parses multipart requests under `Build.BodyLimits.ActionBytes`, enforces the
 per-file policy, preserves CSRF behavior, and decodes uploads into `form.File`
 or `[]form.File` fields on typed action input structs. Low-level handlers can
 accept `form.Data`.
+
+Multipart classification parses `Content-Type` as a structured media type.
+Valid `multipart/form-data; boundary=...` requests use multipart parsing;
+prefix-only values such as `multipart/form-dataevil` do not. Missing or
+malformed multipart boundaries return HTTP 400. Typed request-limit failures
+return HTTP 413, while other malformed form data returns HTTP 400.
 
 Storage, content scanning, persistence, cleanup beyond parser temporary files,
 authorization, and domain validation remain user-owned Go behavior. Stream file

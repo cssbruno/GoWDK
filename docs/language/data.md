@@ -12,7 +12,7 @@ Generated JavaScript does not own page loading policy.
 | `server {}` | request time | SSR page data | One same-package `Load<PageID>` function returns `map[string]any` data or an exported typed result struct. |
 | `act` | request time | POST/action endpoint behavior | Same-package Go handler returns `runtime/response.Response`. |
 | `api` | request time | API endpoint behavior | Same-package Go handler returns `runtime/response.Response`. |
-| `fragment` | request time | partial endpoint behavior | Same-package Go hook or static generated fragment body. |
+| `fragment` | request time | partial endpoint behavior | `.gwdk` fragment markup plus an optional same-package Go hook for data and response decisions. |
 
 ## Current Rules
 
@@ -50,11 +50,14 @@ func LoadDashboard(ssr.LoadContext) (DashboardData, error)
 ## Invalidation And Refresh
 
 - Full POST actions and enhanced POST actions share the same user Go handler
-  ownership. The handler response decides redirect, HTML, JSON, or fragment
-  behavior.
+  ownership. The handler response decides redirects, status, headers, JSON,
+  reload behavior, and partial target/swap metadata. `.gwdk` source owns page
+  and fragment markup.
 - GOWDK does not automatically rerun `server {}` after an action today.
 - Partial updates use explicit fragment responses or standalone fragment
-  endpoints. Fragments own their request-time data through the fragment Go hook.
+  endpoints. Fragment Go hooks own request-time data and response decisions;
+  fragment declarations own markup. Generated typed binding from hook data into
+  declared fragment markup remains planned.
 - Fragments do not declare compiler-tracked data dependencies today.
 - Generated client navigation does not prefetch or reuse `server {}` data today.
   Any future prefetch or reuse must be an explicit generated-client feature,
@@ -62,8 +65,9 @@ func LoadDashboard(ssr.LoadContext) (DashboardData, error)
 
 ## Boundaries
 
-- User Go owns auth, business validation, storage, service calls, and response
-  semantics.
+- GOWDK source owns page, layout, component, and fragment markup.
+- User Go owns auth, business validation, storage, service calls, data, and
+  response semantics.
 - Generated Go owns adapter glue: decode, dispatch, context metadata, response
   writing, guards, CSRF checks, panic boundaries, and cache defaults.
 - Generated JavaScript may enhance form submissions, fragments, islands, and

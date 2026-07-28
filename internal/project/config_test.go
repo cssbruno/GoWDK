@@ -79,13 +79,14 @@ var Config = gowdk.Config{
 			TwitterCard: "summary_large_image",
 		},
 		CSRF: gowdk.CSRFConfig{
-			Enabled: true,
-			Disabled: true,
-			SecretEnv: "EXAMPLE_CSRF_SECRET",
-			CookieName: "__Host-example-csrf",
-			FieldName: "_example_csrf",
-			HeaderName: "X-Example-CSRF",
-			Insecure: true,
+			Enabled:                true,
+			Disabled:               true,
+			SecretEnv:              "EXAMPLE_CSRF_SECRET",
+			VerificationSecretEnvs: []string{"EXAMPLE_NEXT_CSRF_SECRET", "EXAMPLE_OLD_CSRF_SECRET"},
+			CookieName:             "__Host-example-csrf",
+			FieldName:              "_example_csrf",
+			HeaderName:             "X-Example-CSRF",
+			Insecure:               true,
 		},
 		CORS: gowdk.CORSConfig{
 			Enabled: true,
@@ -241,7 +242,7 @@ var Config = gowdk.Config{
 	if config.Build.Head.SiteName != "Example" || config.Build.Head.Favicon != "/favicon.ico" || config.Build.Head.Image != "https://example.com/social.png" || config.Build.Head.TwitterCard != "summary_large_image" {
 		t.Fatalf("unexpected build head config: %#v", config.Build.Head)
 	}
-	if !config.Build.CSRF.Enabled || !config.Build.CSRF.Disabled || config.Build.CSRF.SecretEnv != "EXAMPLE_CSRF_SECRET" || config.Build.CSRF.CookieName != "__Host-example-csrf" || config.Build.CSRF.FieldName != "_example_csrf" || config.Build.CSRF.HeaderName != "X-Example-CSRF" || !config.Build.CSRF.Insecure {
+	if !config.Build.CSRF.Enabled || !config.Build.CSRF.Disabled || config.Build.CSRF.SecretEnv != "EXAMPLE_CSRF_SECRET" || strings.Join(config.Build.CSRF.VerificationSecretEnvs, ",") != "EXAMPLE_NEXT_CSRF_SECRET,EXAMPLE_OLD_CSRF_SECRET" || config.Build.CSRF.CookieName != "__Host-example-csrf" || config.Build.CSRF.FieldName != "_example_csrf" || config.Build.CSRF.HeaderName != "X-Example-CSRF" || !config.Build.CSRF.Insecure {
 		t.Fatalf("unexpected build csrf config: %#v", config.Build.CSRF)
 	}
 	if !config.Build.CORS.Enabled || strings.Join(config.Build.CORS.AllowedOrigins, ",") != "https://app.example" || strings.Join(config.Build.CORS.AllowedMethods, ",") != "GET,POST" || strings.Join(config.Build.CORS.AllowedHeaders, ",") != "Content-Type,X-CSRF" || strings.Join(config.Build.CORS.ExposedHeaders, ",") != "X-Total-Count" || !config.Build.CORS.AllowCredentials || config.Build.CORS.MaxAgeSeconds != 600 {
@@ -861,9 +862,9 @@ var Config = gowdk.Config{
 	if !config.HasFeature(gowdk.FeatureSEO) {
 		t.Fatalf("expected executable config to keep seo addon, got %#v", config.Addons)
 	}
-	provider, ok := config.Addons[1].(gowdk.SEOProvider)
-	if !ok {
-		t.Fatalf("expected executable seo addon to preserve SEOProvider, got %T", config.Addons[1])
+	provider := gowdk.ResolveAddonCapabilities(config.Addons[1]).SEOProvider
+	if provider == nil {
+		t.Fatalf("expected executable seo addon descriptor to preserve SEOProvider, got %T", config.Addons[1])
 	}
 	options := provider.SEOOptions()
 	if options.BaseURL != "https://example.com" || len(options.ExtraURLs) != 1 || options.ExtraURLs[0].Loc != "/feed.xml" {
@@ -904,8 +905,8 @@ var Config = gowdk.Config{
 	if !config.HasFeature(gowdk.FeatureAuth) {
 		t.Fatal("expected parsed config to enable auth")
 	}
-	provider, ok := config.Addons[0].(gowdk.AuthSessionProvider)
-	if !ok {
+	provider := gowdk.ResolveAddonCapabilities(config.Addons[0]).AuthSessionProvider
+	if provider == nil {
 		t.Fatalf("expected AuthSessionProvider, got %T", config.Addons[0])
 	}
 	options := provider.AuthSessionOptions()
@@ -961,9 +962,9 @@ var Config = gowdk.Config{
 	if !config.HasFeature(gowdk.FeatureAuth) {
 		t.Fatalf("expected executable config to keep auth addon, got %#v", config.Addons)
 	}
-	provider, ok := config.Addons[0].(gowdk.AuthSessionProvider)
-	if !ok {
-		t.Fatalf("expected executable auth addon to preserve AuthSessionProvider, got %T", config.Addons[0])
+	provider := gowdk.ResolveAddonCapabilities(config.Addons[0]).AuthSessionProvider
+	if provider == nil {
+		t.Fatalf("expected executable auth addon descriptor to preserve AuthSessionProvider, got %T", config.Addons[0])
 	}
 	options := provider.AuthSessionOptions()
 	if options.SecretEnv != "GOWDK_SITE_SESSION_SECRET" || options.CookieName != "site_session" || options.TTL.String() != "2h0m0s" || !options.Insecure {
@@ -1009,8 +1010,8 @@ var Config = gowdk.Config{
 	if !config.HasFeature(gowdk.FeatureSEO) {
 		t.Fatal("expected parsed config to enable SEO")
 	}
-	provider, ok := config.Addons[0].(gowdk.SEOProvider)
-	if !ok {
+	provider := gowdk.ResolveAddonCapabilities(config.Addons[0]).SEOProvider
+	if provider == nil {
 		t.Fatalf("expected SEOProvider, got %T", config.Addons[0])
 	}
 	options := provider.SEOOptions()
@@ -1067,9 +1068,9 @@ var Config = gowdk.Config{
 	if !config.HasFeature(gowdk.FeatureSEO) {
 		t.Fatal("expected executable config to enable SEO")
 	}
-	provider, ok := config.Addons[0].(gowdk.SEOProvider)
-	if !ok {
-		t.Fatalf("expected SEOProvider, got %T", config.Addons[0])
+	provider := gowdk.ResolveAddonCapabilities(config.Addons[0]).SEOProvider
+	if provider == nil {
+		t.Fatalf("expected executable SEOProvider descriptor, got %T", config.Addons[0])
 	}
 	options := provider.SEOOptions()
 	if options.BaseURL != "https://dynamic.example.com/docs" || len(options.Disallow) != 1 || options.Disallow[0] != "/admin" {
@@ -1122,14 +1123,163 @@ var Config = gowdk.Config{
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider, ok := config.Addons[0].(gowdk.SEOProvider)
-	if !ok {
-		t.Fatalf("expected SEOProvider, got %T", config.Addons[0])
+	provider := gowdk.ResolveAddonCapabilities(config.Addons[0]).SEOProvider
+	if provider == nil {
+		t.Fatalf("expected executable SEOProvider descriptor, got %T", config.Addons[0])
 	}
 	dynamic := provider.SEOOptions().DynamicSitemap
 	if dynamic.MaxURLs != 25 || dynamic.CacheSeconds != 60 {
 		t.Fatalf("expected executable fallback to preserve dynamic sitemap integers, got %#v", dynamic)
 	}
+}
+
+func TestLoadConfigFilePreservesCombinedExecutableCapabilities(t *testing.T) {
+	root := t.TempDir()
+	repoRoot := repositoryRoot(t)
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/site
+
+go 1.22
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+repoRoot+`
+`)
+	path := filepath.Join(root, DefaultConfigFile)
+	writeTestFile(t, path, `package app
+
+import (
+	"os"
+
+	"github.com/cssbruno/gowdk"
+)
+
+type combinedAddon struct{}
+
+func (combinedAddon) Name() string {
+	return "combined"
+}
+
+func (combinedAddon) Features() []gowdk.Feature {
+	return []gowdk.Feature{gowdk.FeatureAuth, gowdk.FeatureCSS, gowdk.FeatureSEO}
+}
+
+func (combinedAddon) ProcessCSS(context gowdk.CSSContext) (gowdk.CSSResult, error) {
+	return gowdk.CSSResult{
+		Assets: []gowdk.CSSAsset{{
+			Path: "assets/combined.css",
+			Contents: []byte(context.OutputDir),
+		}},
+	}, nil
+}
+
+func (combinedAddon) GoBlockTargets() []string {
+	return []string{"addon.combined"}
+}
+
+func (combinedAddon) ValidateGoBlock(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) []gowdk.GoBlockDiagnostic {
+	return []gowdk.GoBlockDiagnostic{{
+		Code: "combined_seen",
+		Message: target.Body + " " + string(context.Render),
+	}}
+}
+
+func (combinedAddon) GeneratedGo(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) ([]gowdk.GoBlockFile, error) {
+	return []gowdk.GoBlockFile{{
+		Path: "combined/generated.go",
+		Source: "package combined\n",
+	}}, nil
+}
+
+func (combinedAddon) SEOOptions() gowdk.SEOOptions {
+	return gowdk.SEOOptions{BaseURL: "https://combined.example.com"}
+}
+
+func (combinedAddon) AuthSessionOptions() gowdk.AuthSessionOptions {
+	return gowdk.AuthSessionOptions{SecretEnv: "COMBINED_SESSION_SECRET"}
+}
+
+var Config = gowdk.Config{
+	AppName: os.Getenv("GOWDK_TEST_APP_NAME"),
+	Addons: []gowdk.Addon{combinedAddon{}},
+}
+`)
+	tidyTestModule(t, root)
+	t.Setenv("GOWDK_TEST_APP_NAME", "Combined Capabilities")
+
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Addons) != 1 {
+		t.Fatalf("unexpected addons: %#v", config.Addons)
+	}
+	addon := config.Addons[0]
+	for name, implemented := range map[string]bool{
+		"CSSProcessor":        implementsCSSProcessor(addon),
+		"GoBlockConsumer":     implementsGoBlockConsumer(addon),
+		"SEOProvider":         implementsSEOProvider(addon),
+		"AuthSessionProvider": implementsAuthSessionProvider(addon),
+	} {
+		if implemented {
+			t.Fatalf("executable addon must not implement %s directly: %T", name, addon)
+		}
+	}
+
+	capabilities := gowdk.ResolveAddonCapabilities(addon)
+	if capabilities.CSSProcessor == nil || capabilities.GoBlockConsumer == nil ||
+		capabilities.SEOProvider == nil || capabilities.AuthSessionProvider == nil {
+		t.Fatalf("combined capabilities were not preserved: %#v", capabilities)
+	}
+	cssResult, err := capabilities.CSSProcessor.ProcessCSS(gowdk.CSSContext{OutputDir: "dist/site"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cssResult.Assets) != 1 || string(cssResult.Assets[0].Contents) != "dist/site" {
+		t.Fatalf("unexpected CSS result: %#v", cssResult)
+	}
+	diagnostics := capabilities.GoBlockConsumer.ValidateGoBlock(
+		gowdk.GoBlockTarget{Target: "addon.combined", Body: "check"},
+		gowdk.GoBlockContext{Render: gowdk.SSR},
+	)
+	if len(diagnostics) != 1 || diagnostics[0].Code != "combined_seen" || diagnostics[0].Message != "check ssr" {
+		t.Fatalf("unexpected go block diagnostics: %#v", diagnostics)
+	}
+	files, err := capabilities.GoBlockConsumer.GeneratedGo(
+		gowdk.GoBlockTarget{Target: "addon.combined"},
+		gowdk.GoBlockContext{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || files[0].Path != "combined/generated.go" {
+		t.Fatalf("unexpected generated Go files: %#v", files)
+	}
+	if options := capabilities.SEOProvider.SEOOptions(); options.BaseURL != "https://combined.example.com" {
+		t.Fatalf("unexpected SEO options: %#v", options)
+	}
+	if options := capabilities.AuthSessionProvider.AuthSessionOptions(); options.SecretEnv != "COMBINED_SESSION_SECRET" {
+		t.Fatalf("unexpected auth options: %#v", options)
+	}
+}
+
+func implementsCSSProcessor(addon gowdk.Addon) bool {
+	_, ok := addon.(gowdk.CSSProcessor)
+	return ok
+}
+
+func implementsGoBlockConsumer(addon gowdk.Addon) bool {
+	_, ok := addon.(gowdk.GoBlockConsumer)
+	return ok
+}
+
+func implementsSEOProvider(addon gowdk.Addon) bool {
+	_, ok := addon.(gowdk.SEOProvider)
+	return ok
+}
+
+func implementsAuthSessionProvider(addon gowdk.Addon) bool {
+	_, ok := addon.(gowdk.AuthSessionProvider)
+	return ok
 }
 
 func TestLoadConfigFileReadsImportableExternalAddon(t *testing.T) {
@@ -1297,20 +1447,22 @@ var Config = gowdk.Config{
 	if !config.HasFeature(gowdk.FeatureCSS) || !config.HasFeature(gowdk.Feature("brand")) || !config.HasFeature(gowdk.Feature("marker")) {
 		t.Fatalf("expected external addon features, got %#v", config.Addons[0].Features())
 	}
-	processor, ok := config.Addons[0].(gowdk.CSSProcessor)
-	if !ok {
-		t.Fatalf("expected external addon proxy to implement CSSProcessor, got %T", config.Addons[0])
+	brandCapabilities := gowdk.ResolveAddonCapabilities(config.Addons[0])
+	processor := brandCapabilities.CSSProcessor
+	if processor == nil {
+		t.Fatalf("expected external addon descriptor to preserve CSSProcessor, got %T", config.Addons[0])
 	}
-	if _, ok := config.Addons[1].(gowdk.CSSProcessor); ok {
-		t.Fatalf("expected non-css external addon proxy not to implement CSSProcessor, got %T", config.Addons[1])
+	markerCapabilities := gowdk.ResolveAddonCapabilities(config.Addons[1])
+	if markerCapabilities.CSSProcessor != nil {
+		t.Fatalf("expected non-css external addon descriptor not to expose CSSProcessor, got %T", config.Addons[1])
 	}
-	brandConsumer, ok := config.Addons[0].(gowdk.GoBlockConsumer)
-	if !ok {
-		t.Fatalf("expected css external addon proxy to preserve GoBlockConsumer, got %T", config.Addons[0])
+	brandConsumer := brandCapabilities.GoBlockConsumer
+	if brandConsumer == nil {
+		t.Fatalf("expected css external addon descriptor to preserve GoBlockConsumer, got %T", config.Addons[0])
 	}
-	markerConsumer, ok := config.Addons[1].(gowdk.GoBlockConsumer)
-	if !ok {
-		t.Fatalf("expected non-css external addon proxy to preserve GoBlockConsumer, got %T", config.Addons[1])
+	markerConsumer := markerCapabilities.GoBlockConsumer
+	if markerConsumer == nil {
+		t.Fatalf("expected non-css external addon descriptor to preserve GoBlockConsumer, got %T", config.Addons[1])
 	}
 	if targets := brandConsumer.GoBlockTargets(); len(targets) != 1 || targets[0] != "addon.brand" {
 		t.Fatalf("unexpected brand go block targets: %#v", targets)
@@ -1395,8 +1547,8 @@ var Config = gowdk.Config{
 	if len(config.Addons) != 1 || config.Addons[0].Name() != "tailwind" {
 		t.Fatalf("unexpected addons: %#v", config.Addons)
 	}
-	processor, ok := config.Addons[0].(gowdk.CSSProcessor)
-	if !ok {
+	processor := gowdk.ResolveAddonCapabilities(config.Addons[0]).CSSProcessor
+	if processor == nil {
 		t.Fatalf("expected tailwind addon to implement CSSProcessor, got %T", config.Addons[0])
 	}
 	_, err = processor.ProcessCSS(gowdk.CSSContext{})
@@ -1481,6 +1633,137 @@ var Config = secretConfig("SECRET_TOKEN")
 	}
 }
 
+func TestConfigFromExecutableWirePreservesEveryCapabilityCombination(t *testing.T) {
+	for mask := 0; mask < 16; mask++ {
+		var names []string
+		var capabilities []executableAddonCapability
+		if mask&1 != 0 {
+			names = append(names, "css")
+			capabilities = append(capabilities, executableAddonCapability{
+				Name:     executableCapabilityCSSProcessor,
+				Required: true,
+			})
+		}
+		if mask&2 != 0 {
+			names = append(names, "go-block")
+			capabilities = append(capabilities, executableAddonCapability{
+				Name:           executableCapabilityGoBlockConsumer,
+				Required:       true,
+				GoBlockTargets: []string{"addon.combo"},
+			})
+		}
+		if mask&4 != 0 {
+			names = append(names, "seo")
+			capabilities = append(capabilities, executableAddonCapability{
+				Name:       executableCapabilitySEOProvider,
+				Required:   true,
+				SEOOptions: gowdk.SEOOptions{BaseURL: "https://example.com"},
+			})
+		}
+		if mask&8 != 0 {
+			names = append(names, "auth")
+			capabilities = append(capabilities, executableAddonCapability{
+				Name:               executableCapabilityAuthSessionProvider,
+				Required:           true,
+				AuthSessionOptions: gowdk.AuthSessionOptions{SecretEnv: "SESSION_SECRET"},
+			})
+		}
+		name := strings.Join(names, "+")
+		if name == "" {
+			name = "none"
+		}
+		t.Run(name, func(t *testing.T) {
+			config, err := configFromExecutableWire("/project/gowdk.config.go", executableConfig{
+				Addons: []executableAddonDetails{{
+					Name:         "combo",
+					Features:     []gowdk.Feature{gowdk.Feature("combo")},
+					Capabilities: capabilities,
+				}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(config.Addons) != 1 {
+				t.Fatalf("unexpected addons: %#v", config.Addons)
+			}
+			addon := config.Addons[0]
+			if _, ok := addon.(gowdk.CSSProcessor); ok {
+				t.Fatalf("executable addon must not incidentally implement CSSProcessor: %T", addon)
+			}
+			if _, ok := addon.(gowdk.GoBlockConsumer); ok {
+				t.Fatalf("executable addon must not incidentally implement GoBlockConsumer: %T", addon)
+			}
+			if _, ok := addon.(gowdk.SEOProvider); ok {
+				t.Fatalf("executable addon must not incidentally implement SEOProvider: %T", addon)
+			}
+			if _, ok := addon.(gowdk.AuthSessionProvider); ok {
+				t.Fatalf("executable addon must not incidentally implement AuthSessionProvider: %T", addon)
+			}
+
+			resolved := gowdk.ResolveAddonCapabilities(addon)
+			if got := resolved.CSSProcessor != nil; got != (mask&1 != 0) {
+				t.Fatalf("CSSProcessor presence = %t, want %t", got, mask&1 != 0)
+			}
+			if got := resolved.GoBlockConsumer != nil; got != (mask&2 != 0) {
+				t.Fatalf("GoBlockConsumer presence = %t, want %t", got, mask&2 != 0)
+			}
+			if got := resolved.SEOProvider != nil; got != (mask&4 != 0) {
+				t.Fatalf("SEOProvider presence = %t, want %t", got, mask&4 != 0)
+			}
+			if got := resolved.AuthSessionProvider != nil; got != (mask&8 != 0) {
+				t.Fatalf("AuthSessionProvider presence = %t, want %t", got, mask&8 != 0)
+			}
+			if resolved.CSSProcessor != nil && resolved.CSSProcessor.Name() != "combo" {
+				t.Fatalf("unexpected CSS capability owner: %q", resolved.CSSProcessor.Name())
+			}
+			if resolved.GoBlockConsumer != nil {
+				targets := resolved.GoBlockConsumer.GoBlockTargets()
+				if len(targets) != 1 || targets[0] != "addon.combo" {
+					t.Fatalf("unexpected go block targets: %#v", targets)
+				}
+			}
+			if resolved.SEOProvider != nil && resolved.SEOProvider.SEOOptions().BaseURL != "https://example.com" {
+				t.Fatalf("unexpected SEO capability: %#v", resolved.SEOProvider.SEOOptions())
+			}
+			if resolved.AuthSessionProvider != nil && resolved.AuthSessionProvider.AuthSessionOptions().SecretEnv != "SESSION_SECRET" {
+				t.Fatalf("unexpected auth capability: %#v", resolved.AuthSessionProvider.AuthSessionOptions())
+			}
+		})
+	}
+}
+
+func TestConfigFromExecutableWireHandlesUnknownCapabilitiesByRequirement(t *testing.T) {
+	optional, err := configFromExecutableWire("/project/gowdk.config.go", executableConfig{
+		Addons: []executableAddonDetails{{
+			Name:     "optional",
+			Features: []gowdk.Feature{gowdk.Feature("optional")},
+			Capabilities: []executableAddonCapability{{
+				Name: "example.future-capability",
+			}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("unknown optional capability must be ignored: %v", err)
+	}
+	if len(optional.Addons) != 1 {
+		t.Fatalf("unexpected optional addon result: %#v", optional.Addons)
+	}
+
+	_, err = configFromExecutableWire("/project/gowdk.config.go", executableConfig{
+		Addons: []executableAddonDetails{{
+			Name:     "required",
+			Features: []gowdk.Feature{gowdk.Feature("required")},
+			Capabilities: []executableAddonCapability{{
+				Name:     "example.future-capability",
+				Required: true,
+			}},
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), `addon "required" requires unsupported executable capability "example.future-capability"`) {
+		t.Fatalf("expected unsupported required capability error, got %v", err)
+	}
+}
+
 func TestConfigHelperSourceRewritesImportWithAST(t *testing.T) {
 	source, err := configHelperSource("example.com/app/config")
 	if err != nil {
@@ -1494,6 +1777,16 @@ func TestConfigHelperSourceRewritesImportWithAST(t *testing.T) {
 	}
 	if strings.Contains(source, configHelperImportPlaceholder) {
 		t.Fatalf("placeholder import leaked into generated source:\n%s", source)
+	}
+	for _, capability := range []string{
+		executableCapabilityCSSProcessor,
+		executableCapabilityGoBlockConsumer,
+		executableCapabilitySEOProvider,
+		executableCapabilityAuthSessionProvider,
+	} {
+		if !strings.Contains(source, capability) {
+			t.Fatalf("generated helper is missing stable capability name %q", capability)
+		}
 	}
 }
 

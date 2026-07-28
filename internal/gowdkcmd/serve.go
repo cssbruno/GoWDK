@@ -55,7 +55,7 @@ func parseServeOptions(args []string) (string, string, error) {
 		arg := args[i]
 		if value, next, ok, missing := consumeValueFlag(args, i, "--dir", true); ok {
 			if missing {
-				return "", "", fmt.Errorf("usage: gowdk serve --dir <dir> [--addr <addr>]")
+				return "", "", missingValueFlagError("--dir")
 			}
 			dir = value
 			i = next
@@ -63,7 +63,7 @@ func parseServeOptions(args []string) (string, string, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--addr", true); ok {
 			if missing {
-				return "", "", fmt.Errorf("usage: gowdk serve --dir <dir> [--addr <addr>]")
+				return "", "", missingValueFlagError("--addr")
 			}
 			addr = value
 			i = next

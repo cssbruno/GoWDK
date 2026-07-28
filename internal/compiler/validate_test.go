@@ -5777,7 +5777,7 @@ func TestValidateManifestRejectsMarkerAddonGoBlockTarget(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected marker addon go block target error")
 	}
-	if !strings.Contains(err.Error(), `does not implement gowdk.GoBlockConsumer`) {
+	if !strings.Contains(err.Error(), `does not provide gowdk.GoBlockConsumer capability`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

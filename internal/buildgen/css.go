@@ -48,8 +48,8 @@ func planCSS(config gowdk.Config, ir gwdkir.Program, outputDir string, component
 		CSS:         config.CSS,
 	}
 	for _, addon := range config.Addons {
-		processor, ok := addon.(gowdk.CSSProcessor)
-		if !ok {
+		processor := gowdk.ResolveAddonCapabilities(addon).CSSProcessor
+		if processor == nil {
 			continue
 		}
 		result, err := processor.ProcessCSS(context)

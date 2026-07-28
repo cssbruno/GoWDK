@@ -1,7 +1,7 @@
 package componentwasm
 
 component WasmCounter
-wasm ./examples/components/wasm/browser/counter
+wasm ./browser/counter
 
 view {
   <button type="button">

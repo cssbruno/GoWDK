@@ -105,9 +105,11 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `malformed_package_declaration`, `malformed_legacy_metadata`,
   `old_action_block_syntax`, `old_api_block_syntax`, `malformed_go_import`,
   `malformed_gowdk_use`,
+  `source_line_too_long`,
   `unsupported_literal_record_syntax`, `unsupported_top_level_block`,
   `unsupported_layout_metadata`, `invalid_component_prop`,
   `unsupported_component_prop_type`, `unterminated_string`.
+- Environment files: `env_file_line_too_long`.
 - Packages and imports: `missing_package_declaration`, `package_mismatch`,
   `go_package_error`, `invalid_go_import`, `duplicate_go_import_alias`.
 - GOWDK source imports: `duplicate_gowdk_use_alias`,

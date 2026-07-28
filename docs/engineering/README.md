@@ -27,6 +27,10 @@ current product, reference, compiler, and engineering docs. Keep new plans short
 and scoped to active work. Delete or fold them into current contracts when they
 stop being useful.
 
+Current secure-runtime slice:
+[CSRF secret rotation spec](csrf-secret-rotation-spec.md) and
+[implementation plan](csrf-secret-rotation-plan.md).
+
 Use an ADR instead of a plan when the durable decision is more important than the
 execution checklist.
 

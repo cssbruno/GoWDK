@@ -185,8 +185,8 @@ func addonGoBlockConsumer(config gowdk.Config, target string) (gowdk.GoBlockCons
 		if addon.Name() != name {
 			continue
 		}
-		consumer, ok := addon.(gowdk.GoBlockConsumer)
-		if !ok {
+		consumer := gowdk.ResolveAddonCapabilities(addon).GoBlockConsumer
+		if consumer == nil {
 			return nil, false
 		}
 		for _, supported := range consumer.GoBlockTargets() {

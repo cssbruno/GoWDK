@@ -1,7 +1,6 @@
 package gowdkcmd
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -59,7 +58,7 @@ func parsePreviewOptions(args []string) (previewOptions, error) {
 		arg := args[i]
 		if value, next, ok, missing := consumeValueFlag(args, i, "--addr", true); ok {
 			if missing {
-				return previewOptions{}, errors.New(previewUsage())
+				return previewOptions{}, missingValueFlagError("--addr")
 			}
 			options.Addr = value
 			i = next
@@ -67,7 +66,7 @@ func parsePreviewOptions(args []string) (previewOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--out", true); ok {
 			if missing {
-				return previewOptions{}, errors.New(previewUsage())
+				return previewOptions{}, missingValueFlagError("--out")
 			}
 			options.OutputDir = value
 			options.BuildArgs = append(options.BuildArgs, "--out", value)

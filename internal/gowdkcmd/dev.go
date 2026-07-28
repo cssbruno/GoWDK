@@ -588,7 +588,7 @@ func parseDevOptions(args []string) (devOptions, error) {
 		arg := args[i]
 		if value, next, ok, missing := consumeValueFlag(args, i, "--addr", true); ok {
 			if missing {
-				return devOptions{}, errors.New(devUsage())
+				return devOptions{}, missingValueFlagError("--addr")
 			}
 			options.Addr = value
 			i = next
@@ -596,7 +596,7 @@ func parseDevOptions(args []string) (devOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--interval", true); ok {
 			if missing {
-				return devOptions{}, errors.New(devUsage())
+				return devOptions{}, missingValueFlagError("--interval")
 			}
 			interval, err := parseDevInterval(value)
 			if err != nil {

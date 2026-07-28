@@ -2537,7 +2537,8 @@ func TestBuildCompilesDeclaredWASMIslandPackage(t *testing.T) {
 	packageDir := writeWASMIslandPackage(t, "main", requiredWASMExportsSource("Counter"))
 	outputDir := t.TempDir()
 	component := counterComponent()
-	component.WASM = gwdkir.WASMContract{Package: packageDir}
+	component.Source = filepath.Join(filepath.Dir(filepath.Dir(packageDir)), "counter.cmp.gwdk")
+	component.WASM = gwdkir.WASMContract{Package: "./browser/counter"}
 	app := gwdkanalysis.Sources{
 		Pages: []gwdkir.Page{{
 			ID:    "counter",

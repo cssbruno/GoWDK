@@ -42,6 +42,8 @@ var (
 // Server handles one LSP session.
 type Server struct {
 	config                  gowdk.Config
+	projectRoot             string
+	moduleNames             []string
 	documents               map[string]document
 	projectCache            projectIRCache
 	workspaceComponentCache workspaceComponentDefinitionCache
@@ -56,12 +58,25 @@ type document struct {
 	Text    string
 }
 
+// ProjectOptions scopes configured source discovery for one LSP session.
+type ProjectOptions struct {
+	Root    string
+	Modules []string
+}
+
 // NewServer returns a language server using the provided compiler config.
 func NewServer(config gowdk.Config) *Server {
+	return NewProjectServer(config, ProjectOptions{})
+}
+
+// NewProjectServer returns a language server scoped to one configured project.
+func NewProjectServer(config gowdk.Config, options ProjectOptions) *Server {
 	return &Server{
-		config:    config,
-		documents: map[string]document{},
-		log:       os.Stderr,
+		config:      config,
+		projectRoot: options.Root,
+		moduleNames: append([]string(nil), options.Modules...),
+		documents:   map[string]document{},
+		log:         os.Stderr,
 	}
 }
 

@@ -138,7 +138,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		arg := args[index]
 		if value, next, ok, missing := consumeValueFlag(args, index, "--config", true); ok {
 			if missing {
-				return testOptions{}, errors.New(testUsage)
+				return testOptions{}, missingValueFlagError("--config")
 			}
 			options.ConfigPath = value
 			index = next
@@ -146,7 +146,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--env-file", true); ok {
 			if missing {
-				return testOptions{}, errors.New(testUsage)
+				return testOptions{}, missingValueFlagError("--env-file")
 			}
 			options.EnvFilePath = value
 			index = next
@@ -154,7 +154,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--module", true); ok {
 			if missing {
-				return testOptions{}, errors.New(testUsage)
+				return testOptions{}, missingValueFlagError("--module")
 			}
 			options.ModuleNames = appendModuleNames(options.ModuleNames, value)
 			index = next
@@ -162,7 +162,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--target", true); ok {
 			if missing {
-				return testOptions{}, errors.New(testUsage)
+				return testOptions{}, missingValueFlagError("--target")
 			}
 			options.TargetNames = appendNames(options.TargetNames, value)
 			index = next
@@ -170,7 +170,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--stage", true); ok {
 			if missing {
-				return testOptions{}, errors.New(testUsage)
+				return testOptions{}, missingValueFlagError("--stage")
 			}
 			options.Stages = appendTestStages(options.Stages, value)
 			index = next
@@ -178,7 +178,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--run", true); ok {
 			if missing {
-				return testOptions{}, errors.New(testUsage)
+				return testOptions{}, missingValueFlagError("--run")
 			}
 			options.RunPattern = value
 			index = next
@@ -186,7 +186,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--timeout", true); ok {
 			if missing {
-				return testOptions{}, errors.New(testUsage)
+				return testOptions{}, missingValueFlagError("--timeout")
 			}
 			timeout, err := normalizeTestTimeout(value)
 			if err != nil {
@@ -198,7 +198,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--count", true); ok {
 			if missing {
-				return testOptions{}, errors.New(testUsage)
+				return testOptions{}, missingValueFlagError("--count")
 			}
 			count, err := normalizeTestCount(value)
 			if err != nil {
@@ -210,7 +210,7 @@ func parseTestOptions(args []string) (testOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, index, "--browser-command", true); ok {
 			if missing {
-				return testOptions{}, errors.New(testUsage)
+				return testOptions{}, missingValueFlagError("--browser-command")
 			}
 			options.BrowserCommand = value
 			index = next

@@ -4,6 +4,11 @@
 They are discovered with normal `.gwdk` inputs, lowered into IR, and consumed by
 `gowdk audit`; they do not generate pages, routes, or browser assets.
 
+Audit files accept logical lines up to 1 MiB (1,048,576 bytes), excluding the
+line ending. An oversized line reports `source_line_too_long` at its file and
+line. Split long policies across declarations instead of placing generated
+payloads on one line.
+
 ```gwdk
 package security
 

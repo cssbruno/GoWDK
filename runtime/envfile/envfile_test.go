@@ -1,6 +1,7 @@
 package envfile
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -54,6 +55,64 @@ func TestParseFileRejectsInvalidLine(t *testing.T) {
 	_, err := ParseFile(path)
 	if err == nil || !strings.Contains(err.Error(), "expected NAME=value") {
 		t.Fatalf("expected parse error, got %v", err)
+	}
+}
+
+func TestParseFileAcceptsValueLargerThanScannerDefault(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+	value := strings.Repeat("x", 70<<10)
+	if err := os.WriteFile(path, []byte("LONG_VALUE="+value+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := ParseFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name != "LONG_VALUE" || entries[0].Value != value {
+		t.Fatalf("unexpected long env entry: %#v", entries)
+	}
+}
+
+func TestParseFileAcceptsLineAtLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+	prefix := "EXACT="
+	value := strings.Repeat("x", MaxLineBytes-len(prefix))
+	if err := os.WriteFile(path, []byte(prefix+value+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := ParseFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Value != value {
+		t.Fatalf("unexpected exact-limit env entry")
+	}
+}
+
+func TestParseFileRejectsOversizedLineWithPathAndLine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+	source := "OK=value\nTOO_LONG=" + strings.Repeat("x", MaxLineBytes) + "\n"
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := ParseFile(path)
+	if err == nil {
+		t.Fatal("expected oversized env line error")
+	}
+	var diagnostic *DiagnosticError
+	if !errors.As(err, &diagnostic) {
+		t.Fatalf("expected typed env-file diagnostic, got %T: %v", err, err)
+	}
+	if diagnostic.Code != DiagnosticLineTooLong || diagnostic.Path != path || diagnostic.Line != 2 || diagnostic.Limit != MaxLineBytes {
+		t.Fatalf("unexpected env-file diagnostic: %#v", diagnostic)
+	}
+	for _, expected := range []string{path + ":2:", DiagnosticLineTooLong, "1048576-byte limit"} {
+		if !strings.Contains(err.Error(), expected) {
+			t.Fatalf("expected %q in %v", expected, err)
+		}
 	}
 }
 

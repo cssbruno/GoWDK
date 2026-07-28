@@ -434,6 +434,23 @@ func TestHandlerError(t *testing.T) {
 	}
 }
 
+func TestIsRequestBodyTooLargeUsesTypedErrors(t *testing.T) {
+	limitErr := &http.MaxBytesError{Limit: 1024}
+	if !IsRequestBodyTooLarge(limitErr) {
+		t.Fatal("expected direct MaxBytesError to match")
+	}
+	wrapped := errors.Join(errors.New("parse form"), limitErr)
+	if !IsRequestBodyTooLarge(wrapped) {
+		t.Fatal("expected wrapped MaxBytesError to match")
+	}
+	if IsRequestBodyTooLarge(errors.New("unrelated: request body too large")) {
+		t.Fatal("message-only lookalike must not match")
+	}
+	if IsRequestBodyTooLarge(nil) {
+		t.Fatal("nil error must not match")
+	}
+}
+
 func TestHandlerErrorKeepsUnkeyedLiteralShape(t *testing.T) {
 	err := HandlerError{http.StatusServiceUnavailable, "handler unavailable", errors.New("database unavailable")}
 

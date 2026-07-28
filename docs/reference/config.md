@@ -30,7 +30,9 @@ directory passed with `--project-root <dir>`, or load the exact file passed with
 `internal/discover`, and `gowdk build` reads `Source.Include` and
 `Source.Exclude` fields from the loaded config when no explicit files are
 supplied. Explicit file paths still require a loaded config and must stay under
-the selected project root.
+the selected project root. Automatic discovery prunes GOWDK-generated
+directories (`.gowdk`, `gowdk_cache`, configured target apps/outputs) and the
+conventional `bin` and `dist` output roots.
 
 `Modules` declares named source groups. Build discovery treats modules as
 source selectors. Generated app and binary composition is controlled by the
@@ -407,6 +409,10 @@ patterns override that default for the module. Root `Source.Exclude` and module
 `Source.Exclude` patterns are both honored. `gowdk build --module <name>` limits
 discovery to selected configured modules.
 
+`gowdk lsp` uses the same source selection for workspace component completion
+and definition lookup. Pass `--module <name>` to scope an editor session; dirty
+or unsaved documents are indexed only when their paths match that selection.
+
 The selected modules define what gets compiled into the build output and, when
 `--app` or `--bin` is used, what is copied into the generated app and embedded
 in the generated binary. Ad hoc CLI flags can still package modules directly:
@@ -496,6 +502,13 @@ present. Process environment values always win over file values. The file is
 only a value source for the same validation contract; it does not bypass
 `Required` or `MinBytes`.
 
+Environment files accept `NAME=value` assignment lines up to 1 MiB (1,048,576
+bytes), excluding the line ending; multiline continuation is not supported.
+Larger lines fail with `env_file_line_too_long` and include the file and line
+without printing the value. Use process-environment or deployment secret
+injection for larger values, which may also exceed operating-system environment
+limits.
+
 The same name cannot appear in both `Vars` and `Secrets`. Secret-looking var
 names ending in `_SECRET`, `_TOKEN`, `_PASSWORD`, or `_KEY` are rejected and
 must move to `Secrets`. Diagnostics print names only and never print values.
@@ -550,13 +563,14 @@ type HeadConfig struct {
 }
 
 type CSRFConfig struct {
-	Enabled    bool
-	Disabled   bool
-	SecretEnv  string
-	CookieName string
-	FieldName  string
-	HeaderName string
-	Insecure   bool
+	Enabled                bool
+	Disabled               bool
+	SecretEnv              string
+	VerificationSecretEnvs []string
+	CookieName             string
+	FieldName              string
+	HeaderName             string
+	Insecure               bool
 }
 
 type SecurityHeadersConfig struct {
@@ -664,6 +678,23 @@ override the generated token transport names.
 flag, uses the default cookie name `gowdk-csrf` instead of
 `__Host-gowdk-csrf`, and rejects explicit `__Host-`/`__Secure-` cookie names
 because browsers require those prefixes to be Secure.
+
+`VerificationSecretEnvs` provides verification-only keys for rolling rotation.
+New tokens are always signed with `SecretEnv`; tokens signed by any configured
+verification key remain valid, and serving a page replaces an old-key cookie
+with a primary-key token.
+
+```go
+CSRF: gowdk.CSRFConfig{
+	SecretEnv:              "GOWDK_CSRF_PRIMARY",
+	VerificationSecretEnvs: []string{"GOWDK_CSRF_OVERLAP"},
+}
+```
+
+Every configured secret is required at generated-app startup and must contain
+at least 32 bytes. Environment variable names must be non-empty and unique.
+See [CSRF Secret Rotation](deployment.md#csrf-secret-rotation) for the
+three-phase deployment procedure.
 
 `SecurityHeaders` controls additional headers written by generated app
 handlers. When `Enabled` is true, each entry in `Headers` is passed to

@@ -42,13 +42,17 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
   buffers when a workspace root can be found.
 - Return whole-document formatting edits using `gowdk fmt` behavior.
 - Return keyword completions for metadata declarations, render modes, blocks, and `g:` directives.
-- Return project completions for open-document components, layouts, guards,
-  routes, page IDs, stores, local component props, and inferred component state
-  or value fields.
+- Return component completions and definitions from the configured workspace
+  source set, with dirty and unsaved matching documents overlaid on disk
+  sources. Honor root/module includes, excludes, default excludes, and the
+  configured output exclusion.
+- Return project completions for open-document layouts, guards, routes, page
+  IDs, stores, local component props, and inferred component state or value
+  fields.
 - Return hover text for known metadata declarations, directives, blocks, routes, stores,
   props, components, layouts, guards, and handler symbols from open documents.
 - Return go-to-definition locations for same-package and `use`-qualified
-  component calls from open documents.
+  component calls from configured disk sources and matching open documents.
 - Return go-to-definition locations for exported Go handler symbols when the
   matching Go file is open in the editor session.
 - Return references for exact `.gwdk` project symbols across open documents,
@@ -82,10 +86,12 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
       on the directive source range.
 - [x] `textDocument/formatting` returns a replacement edit matching `gowdk fmt`.
 - [x] `textDocument/completion` returns the same language keywords exposed by editor tooling.
-- [x] `textDocument/completion` returns open-project symbols for components,
-      layouts, guards, routes, stores, props, and component state/value fields.
+- [x] `textDocument/completion` returns configured workspace components plus
+      open-project layouts, guards, routes, stores, props, and component
+      state/value fields.
 - [x] `textDocument/hover` returns concise markdown help for language tokens and open-project symbols.
-- [x] `textDocument/definition` returns component declaration locations for open-project component calls.
+- [x] `textDocument/definition` returns component declaration locations from
+      configured workspace sources and matching unsaved overlays.
 - [x] `textDocument/definition` returns open-buffer Go declaration locations for exported handler symbols.
 - [x] `textDocument/references` returns open-document references for page IDs, routes, components, stores, and guards.
 - [x] `textDocument/codeAction` returns quick fixes for old endpoint syntax and missing GOWDK use aliases.
@@ -103,6 +109,9 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 - Closing a document should clear diagnostics for that URI.
 - Unknown LSP requests should return a method-not-found error.
 - Notifications without params should be ignored when safe.
+- Excluded sources, generated output, and unselected modules must not enter the
+  component index even when their files are open. Unsaved files whose paths
+  match the active selection remain available.
 
 ## Dependencies
 

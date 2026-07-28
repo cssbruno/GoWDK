@@ -3,6 +3,7 @@ package trace
 import (
 	"context"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -17,8 +18,20 @@ type Tracer struct {
 	sampledSpans   atomic.Uint64
 	exportedSpans  atomic.Uint64
 	exportFailures atomic.Uint64
+	exportTimeouts atomic.Uint64
+	exportDropped  atomic.Uint64
 	lastExportNS   atomic.Int64
 	maxExportNS    atomic.Int64
+
+	exportMu            sync.Mutex
+	exportQueue         []Snapshot
+	exportQueueCapacity int
+	exportTimeout       time.Duration
+	exportWorkerRunning bool
+	exportInFlight      bool
+	exportAccepted      uint64
+	exportCompleted     uint64
+	exportChanged       chan struct{}
 }
 
 // TracerOption configures a Tracer.
@@ -28,6 +41,26 @@ type TracerOption func(*Tracer)
 func WithSink(sink Sink) TracerOption {
 	return func(tracer *Tracer) {
 		tracer.sink = sink
+	}
+}
+
+// WithExportQueueSize sets the maximum number of completed spans waiting for
+// the single sink-export worker. Non-positive values keep the default.
+func WithExportQueueSize(size int) TracerOption {
+	return func(tracer *Tracer) {
+		if size > 0 {
+			tracer.exportQueueCapacity = size
+		}
+	}
+}
+
+// WithExportTimeout sets the deadline for one sink export. Non-positive values
+// keep the default.
+func WithExportTimeout(timeout time.Duration) TracerOption {
+	return func(tracer *Tracer) {
+		if timeout > 0 {
+			tracer.exportTimeout = timeout
+		}
 	}
 }
 
@@ -51,7 +84,13 @@ func WithIDGenerator(generator IDGenerator) TracerOption {
 
 // NewTracer creates a Tracer.
 func NewTracer(options ...TracerOption) *Tracer {
-	tracer := &Tracer{sampler: AlwaysOn(), idGen: defaultIDGenerator}
+	tracer := &Tracer{
+		sampler:             AlwaysOn(),
+		idGen:               defaultIDGenerator,
+		exportQueueCapacity: DefaultExportQueueSize,
+		exportTimeout:       DefaultExportTimeout,
+		exportChanged:       make(chan struct{}),
+	}
 	for _, option := range options {
 		option(tracer)
 	}
@@ -327,6 +366,11 @@ type TracerHealthSnapshot struct {
 	SampledSpans        uint64 `json:"sampledSpans"`
 	ExportedSpans       uint64 `json:"exportedSpans"`
 	ExportFailures      uint64 `json:"exportFailures"`
+	ExportTimeouts      uint64 `json:"exportTimeouts"`
+	ExportDroppedSpans  uint64 `json:"exportDroppedSpans"`
+	ExportQueueDepth    int    `json:"exportQueueDepth"`
+	ExportQueueCapacity int    `json:"exportQueueCapacity"`
+	ExportInFlight      bool   `json:"exportInFlight"`
 	LastExportLatencyNS int64  `json:"lastExportLatencyNs"`
 	MaxExportLatencyNS  int64  `json:"maxExportLatencyNs"`
 }
@@ -336,12 +380,22 @@ func (tracer *Tracer) HealthSnapshot() TracerHealthSnapshot {
 	if tracer == nil {
 		return TracerHealthSnapshot{}
 	}
+	tracer.exportMu.Lock()
+	queueDepth := len(tracer.exportQueue)
+	queueCapacity := tracer.exportQueueCapacity
+	inFlight := tracer.exportInFlight
+	tracer.exportMu.Unlock()
 	return TracerHealthSnapshot{
 		Sampler:             samplerDescription(tracer.sampler),
 		SamplingRatio:       samplerRatio(tracer.sampler),
 		SampledSpans:        tracer.sampledSpans.Load(),
 		ExportedSpans:       tracer.exportedSpans.Load(),
 		ExportFailures:      tracer.exportFailures.Load(),
+		ExportTimeouts:      tracer.exportTimeouts.Load(),
+		ExportDroppedSpans:  tracer.exportDropped.Load(),
+		ExportQueueDepth:    queueDepth,
+		ExportQueueCapacity: queueCapacity,
+		ExportInFlight:      inFlight,
 		LastExportLatencyNS: tracer.lastExportNS.Load(),
 		MaxExportLatencyNS:  tracer.maxExportNS.Load(),
 	}
@@ -368,7 +422,7 @@ func samplerRatio(sampler Sampler) string {
 	return ""
 }
 
-func (tracer *Tracer) recordExport(duration time.Duration, err error) {
+func (tracer *Tracer) recordExport(duration time.Duration, err error, timedOut bool) {
 	if tracer == nil {
 		return
 	}
@@ -378,6 +432,9 @@ func (tracer *Tracer) recordExport(duration time.Duration, err error) {
 	}
 	tracer.lastExportNS.Store(ns)
 	updateMaxInt64(&tracer.maxExportNS, ns)
+	if timedOut {
+		tracer.exportTimeouts.Add(1)
+	}
 	if err != nil {
 		tracer.exportFailures.Add(1)
 		return

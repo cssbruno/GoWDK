@@ -1,8 +1,10 @@
 # Partials
 
-Partial updates use server fragments, not full-page SSR. The generated slice
-supports action-driven fragment responses for SPA pages and standalone concrete
-or dynamic fragment routes.
+Partial updates use server fragments, not full-page SSR. GOWDK source owns the
+fragment markup; Go handlers and fragment hooks own request-time data,
+application behavior, and response decisions. The generated slice supports
+action-driven fragment responses for SPA pages and standalone concrete or
+dynamic fragment routes.
 
 Current support:
 
@@ -16,13 +18,15 @@ Current support:
   a page uses partial form metadata with a fragment-producing action.
 - `g:target` must reference a SPA `id` in the same direct `view {}`
   markup subset.
-- Action bodies parse `fragment "#id" { ... }` metadata and capture the raw
-  fragment body for generated render functions and first-slice generated action
+- Standalone `fragment Name GET "/path" "#target" { ... }` declarations capture
+  source-owned markup for generated fragment render functions and fallback
   responses.
 - Runtime package boundaries exist for partial responses and swaps.
 - `runtime/partial` exposes server fragment helpers. The underlying
   `runtime/response` envelope carries target and swap metadata through
   `X-GOWDK-Fragment-Target` and `X-GOWDK-Fragment-Swap` when written to HTTP.
+  Helpers that also accept an HTML body are low-level compatibility APIs;
+  application markup should remain in `.gwdk`.
 - Page files can declare standalone fragment endpoints:
 
   ```gwdk
@@ -42,15 +46,17 @@ Current support:
   types are `string`, `int`, `int64`, `uint`, `uint64`, `bool`, and `float64`.
 - If the same package exports a function with the fragment name and signature
   `func(context.Context) (response.Response, error)`, generated apps call that
-  user-owned hook at request time. The hook owns data loading, validation,
-  redirects, HTML, JSON, and fragment response decisions through
-  `runtime/response.Response`. `runtime/app.Request(ctx)` exposes the current
+  user-owned hook at request time. The hook owns data loading, validation, and
+  response decisions through `runtime/response.Response`; the `.gwdk`
+  declaration owns markup. `runtime/app.Request(ctx)` exposes the current
   request, `runtime/app.Params(ctx)` exposes raw dynamic route params, and
   `runtime/app.TypedParams(ctx)` exposes decoded typed route params. Generated
   typed fragment bindings return `400` for invalid scalar params and `404` for
-  missing params before guards or fragment hooks run. If no function with the
-  fragment name exists, the generated handler serves the static rendered
-  fragment body.
+  missing params before guards or fragment hooks run. The current low-level
+  hook contract can replace the declared body with a custom response body for
+  compatibility, but generated typed data binding into fragment markup remains
+  planned. If no function with the fragment name exists, the generated handler
+  serves the static rendered fragment body.
 - Generated embedded app action handlers can respond to `X-GOWDK-Partial`
   requests with rendered fragment HTML, `Cache-Control: no-store`, and fragment
   target metadata. Normal POST requests still use the redirect/no-content
@@ -82,18 +88,19 @@ Current support:
 
 ## Examples
 
-`examples/endpoints/src/endpoints/fragments.page.gwdk` demonstrates inline validation, table
-row update, list refresh, modal body update, dashboard card refresh, standalone
-fragment declarations, and action handlers that return explicit fragment
-responses from normal Go.
+`examples/endpoints/src/endpoints/fragments.page.gwdk` demonstrates inline
+validation, table row update, list refresh, modal body update, dashboard card
+refresh, and source-owned standalone fragment declarations. Its Go hooks and
+external templates also exercise the current low-level custom-body
+compatibility path; new application markup should stay in `.gwdk`.
 
 ## Swap Modes
 
 The current swap modes are:
 
-- `innerHTML`: replace the target element children with the returned fragment
+- `innerHTML`: replace the target element children with the rendered fragment
   HTML. The target element itself remains in place.
-- `outerHTML`: replace the target element itself with the returned fragment
+- `outerHTML`: replace the target element itself with the rendered fragment
   HTML.
 
 Build output records these values as `data-gowdk-swap` metadata and runtime

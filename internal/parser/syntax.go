@@ -1,8 +1,6 @@
 package parser
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -63,9 +61,14 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 		skipScanner = braceScanner{lang: blockScanLang(kind)}
 	}
 
-	scanner := bufio.NewScanner(bytes.NewReader(src))
-	for lineNumber := 1; scanner.Scan(); lineNumber++ {
+	scanner := newSourceLineScanner(src, MaxSourceLineBytes)
+	lineNumber := 1
+	for ; scanner.Scan(); lineNumber++ {
 		rawLine := scanner.Text()
+		if lineTooLong(scanner, MaxSourceLineBytes) {
+			addError(sourceLineTooLongError(lineNumber, MaxSourceLineBytes, "source"))
+			continue
+		}
 		line := strings.TrimSpace(rawLine)
 		if skippingBlock {
 			if line == "}" && !skipScanner.inMultiline() {
@@ -420,13 +423,11 @@ func ParseSyntax(src []byte) (SyntaxFile, error) {
 			continue
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		addError(err)
-	}
-	if captured.Kind != "" {
+	scanFailed := addScannerError(addError, scanner, lineNumber, MaxSourceLineBytes, "source")
+	if captured.Kind != "" && !scanFailed {
 		addError(fmt.Errorf("%s block missing closing }", captured.Kind))
 	}
-	if capturedFragment != nil {
+	if capturedFragment != nil && !scanFailed {
 		addError(fmt.Errorf("fragment %s block missing closing }", capturedFragment.Name))
 	}
 	attachSyntaxAssetScopes(&file)

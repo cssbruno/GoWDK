@@ -30,17 +30,26 @@ type executableConfig struct {
 }
 
 type executableAddonDetails struct {
-	Index              int                      `json:"index"`
+	Index        int                         `json:"index"`
+	Name         string                      `json:"name"`
+	Features     []gowdk.Feature             `json:"features"`
+	Capabilities []executableAddonCapability `json:"capabilities,omitempty"`
+}
+
+type executableAddonCapability struct {
 	Name               string                   `json:"name"`
-	Features           []gowdk.Feature          `json:"features"`
-	CSSProcessor       bool                     `json:"cssProcessor"`
-	GoBlockConsumer    bool                     `json:"goBlockConsumer"`
+	Required           bool                     `json:"required,omitempty"`
 	GoBlockTargets     []string                 `json:"goBlockTargets,omitempty"`
-	SEOProvider        bool                     `json:"seoProvider"`
 	SEOOptions         gowdk.SEOOptions         `json:"seoOptions,omitempty"`
-	AuthSession        bool                     `json:"authSession"`
 	AuthSessionOptions gowdk.AuthSessionOptions `json:"authSessionOptions,omitempty"`
 }
+
+const (
+	executableCapabilityCSSProcessor        = "gowdk.css-processor"
+	executableCapabilityGoBlockConsumer     = "gowdk.go-block-consumer"
+	executableCapabilitySEOProvider         = "gowdk.seo-provider"
+	executableCapabilityAuthSessionProvider = "gowdk.auth-session-provider"
+)
 
 type executableCSSResponse struct {
 	Result gowdk.CSSResult `json:"result"`
@@ -72,26 +81,29 @@ type executableAddon struct {
 	index              int
 	name               string
 	features           []gowdk.Feature
+	cssProcessor       bool
+	goBlockConsumer    bool
 	goBlockTargets     []string
 	seoProvider        bool
 	seoOptions         gowdk.SEOOptions
+	authSession        bool
 	authSessionOptions gowdk.AuthSessionOptions
 }
 
-type executableCSSAddon struct {
-	executableAddon
+type executableCSSCapability struct {
+	addon executableAddon
 }
 
-type executableGoBlockAddon struct {
-	executableAddon
+type executableGoBlockCapability struct {
+	addon executableAddon
 }
 
-type executableCSSGoBlockAddon struct {
-	executableAddon
+type executableSEOCapability struct {
+	options gowdk.SEOOptions
 }
 
-type executableAuthAddon struct {
-	executableAddon
+type executableAuthSessionCapability struct {
+	options gowdk.AuthSessionOptions
 }
 
 func loadExecutableConfig(configPath string) (gowdk.Config, error) {
@@ -103,7 +115,10 @@ func loadExecutableConfig(configPath string) (gowdk.Config, error) {
 	if err := json.Unmarshal(payload, &wire); err != nil {
 		return gowdk.Config{}, fmt.Errorf("decode executable config: %w", err)
 	}
+	return configFromExecutableWire(configPath, wire)
+}
 
+func configFromExecutableWire(configPath string, wire executableConfig) (gowdk.Config, error) {
 	config := gowdk.Config{
 		AppName:   wire.AppName,
 		Source:    wire.Source,
@@ -117,27 +132,31 @@ func loadExecutableConfig(configPath string) (gowdk.Config, error) {
 	}
 	for _, addon := range wire.Addons {
 		proxy := executableAddon{
-			configPath:         configPath,
-			index:              addon.Index,
-			name:               addon.Name,
-			features:           append([]gowdk.Feature(nil), addon.Features...),
-			goBlockTargets:     append([]string(nil), addon.GoBlockTargets...),
-			seoProvider:        addon.SEOProvider,
-			seoOptions:         cloneExecutableSEOOptions(addon.SEOOptions),
-			authSessionOptions: addon.AuthSessionOptions,
+			configPath: configPath,
+			index:      addon.Index,
+			name:       addon.Name,
+			features:   append([]gowdk.Feature(nil), addon.Features...),
 		}
-		switch {
-		case addon.AuthSession:
-			config.Addons = append(config.Addons, executableAuthAddon{executableAddon: proxy})
-		case addon.CSSProcessor && addon.GoBlockConsumer:
-			config.Addons = append(config.Addons, executableCSSGoBlockAddon{executableAddon: proxy})
-		case addon.CSSProcessor:
-			config.Addons = append(config.Addons, executableCSSAddon{executableAddon: proxy})
-		case addon.GoBlockConsumer:
-			config.Addons = append(config.Addons, executableGoBlockAddon{executableAddon: proxy})
-		default:
-			config.Addons = append(config.Addons, proxy)
+		for _, capability := range addon.Capabilities {
+			switch capability.Name {
+			case executableCapabilityCSSProcessor:
+				proxy.cssProcessor = true
+			case executableCapabilityGoBlockConsumer:
+				proxy.goBlockConsumer = true
+				proxy.goBlockTargets = append([]string(nil), capability.GoBlockTargets...)
+			case executableCapabilitySEOProvider:
+				proxy.seoProvider = true
+				proxy.seoOptions = cloneExecutableSEOOptions(capability.SEOOptions)
+			case executableCapabilityAuthSessionProvider:
+				proxy.authSession = true
+				proxy.authSessionOptions = capability.AuthSessionOptions
+			default:
+				if capability.Required {
+					return gowdk.Config{}, fmt.Errorf("addon %q requires unsupported executable capability %q", addon.Name, capability.Name)
+				}
+			}
 		}
+		config.Addons = append(config.Addons, proxy)
 	}
 	return config, nil
 }
@@ -150,12 +169,29 @@ func (addon executableAddon) Features() []gowdk.Feature {
 	return append([]gowdk.Feature(nil), addon.features...)
 }
 
-func (addon executableAddon) SEOOptions() gowdk.SEOOptions {
-	return cloneExecutableSEOOptions(addon.seoOptions)
+func (addon executableAddon) AddonCapabilities() gowdk.AddonCapabilities {
+	var capabilities gowdk.AddonCapabilities
+	if addon.cssProcessor {
+		capabilities.CSSProcessor = executableCSSCapability{addon: addon}
+	}
+	if addon.goBlockConsumer {
+		capabilities.GoBlockConsumer = executableGoBlockCapability{addon: addon}
+	}
+	if addon.seoProvider {
+		capabilities.SEOProvider = executableSEOCapability{options: cloneExecutableSEOOptions(addon.seoOptions)}
+	}
+	if addon.authSession {
+		capabilities.AuthSessionProvider = executableAuthSessionCapability{options: addon.authSessionOptions}
+	}
+	return capabilities
 }
 
-func (addon executableAuthAddon) AuthSessionOptions() gowdk.AuthSessionOptions {
-	return addon.authSessionOptions
+func (capability executableAuthSessionCapability) AuthSessionOptions() gowdk.AuthSessionOptions {
+	return capability.options
+}
+
+func (capability executableSEOCapability) SEOOptions() gowdk.SEOOptions {
+	return cloneExecutableSEOOptions(capability.options)
 }
 
 func cloneExecutableSEOOptions(options gowdk.SEOOptions) gowdk.SEOOptions {
@@ -165,12 +201,16 @@ func cloneExecutableSEOOptions(options gowdk.SEOOptions) gowdk.SEOOptions {
 	return options
 }
 
-func (addon executableCSSAddon) ProcessCSS(context gowdk.CSSContext) (gowdk.CSSResult, error) {
-	return addon.processCSS(context)
+func (capability executableCSSCapability) Name() string {
+	return capability.addon.Name()
 }
 
-func (addon executableCSSGoBlockAddon) ProcessCSS(context gowdk.CSSContext) (gowdk.CSSResult, error) {
-	return addon.processCSS(context)
+func (capability executableCSSCapability) Features() []gowdk.Feature {
+	return capability.addon.Features()
+}
+
+func (capability executableCSSCapability) ProcessCSS(context gowdk.CSSContext) (gowdk.CSSResult, error) {
+	return capability.addon.processCSS(context)
 }
 
 func (addon executableAddon) processCSS(context gowdk.CSSContext) (gowdk.CSSResult, error) {
@@ -192,24 +232,16 @@ func (addon executableAddon) processCSS(context gowdk.CSSContext) (gowdk.CSSResu
 	return response.Result, nil
 }
 
-func (addon executableGoBlockAddon) GoBlockTargets() []string {
-	return addon.goBlockTargetsCopy()
-}
-
-func (addon executableCSSGoBlockAddon) GoBlockTargets() []string {
-	return addon.goBlockTargetsCopy()
+func (capability executableGoBlockCapability) GoBlockTargets() []string {
+	return capability.addon.goBlockTargetsCopy()
 }
 
 func (addon executableAddon) goBlockTargetsCopy() []string {
 	return append([]string(nil), addon.goBlockTargets...)
 }
 
-func (addon executableGoBlockAddon) ValidateGoBlock(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) []gowdk.GoBlockDiagnostic {
-	return addon.validateGoBlock(target, context)
-}
-
-func (addon executableCSSGoBlockAddon) ValidateGoBlock(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) []gowdk.GoBlockDiagnostic {
-	return addon.validateGoBlock(target, context)
+func (capability executableGoBlockCapability) ValidateGoBlock(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) []gowdk.GoBlockDiagnostic {
+	return capability.addon.validateGoBlock(target, context)
 }
 
 func (addon executableAddon) validateGoBlock(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) []gowdk.GoBlockDiagnostic {
@@ -231,12 +263,8 @@ func (addon executableAddon) validateGoBlock(target gowdk.GoBlockTarget, context
 	return response.Diagnostics
 }
 
-func (addon executableGoBlockAddon) GeneratedGo(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) ([]gowdk.GoBlockFile, error) {
-	return addon.generatedGo(target, context)
-}
-
-func (addon executableCSSGoBlockAddon) GeneratedGo(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) ([]gowdk.GoBlockFile, error) {
-	return addon.generatedGo(target, context)
+func (capability executableGoBlockCapability) GeneratedGo(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) ([]gowdk.GoBlockFile, error) {
+	return capability.addon.generatedGo(target, context)
 }
 
 func (addon executableAddon) generatedGo(target gowdk.GoBlockTarget, context gowdk.GoBlockContext) ([]gowdk.GoBlockFile, error) {
@@ -404,17 +432,26 @@ type executableConfig struct {
 }
 
 type executableAddonDetails struct {
-	Index              int                      ` + "`json:\"index\"`" + `
+	Index        int                         ` + "`json:\"index\"`" + `
+	Name         string                      ` + "`json:\"name\"`" + `
+	Features     []gowdk.Feature             ` + "`json:\"features\"`" + `
+	Capabilities []executableAddonCapability ` + "`json:\"capabilities,omitempty\"`" + `
+}
+
+type executableAddonCapability struct {
 	Name               string                   ` + "`json:\"name\"`" + `
-	Features           []gowdk.Feature          ` + "`json:\"features\"`" + `
-	CSSProcessor       bool                     ` + "`json:\"cssProcessor\"`" + `
-	GoBlockConsumer    bool                     ` + "`json:\"goBlockConsumer\"`" + `
+	Required           bool                     ` + "`json:\"required,omitempty\"`" + `
 	GoBlockTargets     []string                 ` + "`json:\"goBlockTargets,omitempty\"`" + `
-	SEOProvider        bool                     ` + "`json:\"seoProvider\"`" + `
 	SEOOptions         gowdk.SEOOptions         ` + "`json:\"seoOptions,omitempty\"`" + `
-	AuthSession        bool                     ` + "`json:\"authSession\"`" + `
 	AuthSessionOptions gowdk.AuthSessionOptions ` + "`json:\"authSessionOptions,omitempty\"`" + `
 }
+
+const (
+	executableCapabilityCSSProcessor        = "gowdk.css-processor"
+	executableCapabilityGoBlockConsumer     = "gowdk.go-block-consumer"
+	executableCapabilitySEOProvider         = "gowdk.seo-provider"
+	executableCapabilityAuthSessionProvider = "gowdk.auth-session-provider"
+)
 
 type executableCSSResponse struct {
 	Result gowdk.CSSResult ` + "`json:\"result\"`" + `
@@ -485,33 +522,40 @@ func writeConfig() {
 		CSS:       config.CSS,
 	}
 	for index, addon := range config.Addons {
-		_, cssProcessor := addon.(gowdk.CSSProcessor)
-		goBlockConsumer, hasGoBlockConsumer := addon.(gowdk.GoBlockConsumer)
-		seoProvider, hasSEOProvider := addon.(gowdk.SEOProvider)
-		authSessionProvider, hasAuthSessionProvider := addon.(gowdk.AuthSessionProvider)
-		var goBlockTargets []string
-		if hasGoBlockConsumer {
-			goBlockTargets = goBlockConsumer.GoBlockTargets()
+		resolved := gowdk.ResolveAddonCapabilities(addon)
+		var capabilities []executableAddonCapability
+		if resolved.CSSProcessor != nil {
+			capabilities = append(capabilities, executableAddonCapability{
+				Name:     executableCapabilityCSSProcessor,
+				Required: true,
+			})
 		}
-		var seoOptions gowdk.SEOOptions
-		if hasSEOProvider {
-			seoOptions = seoProvider.SEOOptions()
+		if resolved.GoBlockConsumer != nil {
+			capabilities = append(capabilities, executableAddonCapability{
+				Name:           executableCapabilityGoBlockConsumer,
+				Required:       true,
+				GoBlockTargets: resolved.GoBlockConsumer.GoBlockTargets(),
+			})
 		}
-		var authSessionOptions gowdk.AuthSessionOptions
-		if hasAuthSessionProvider {
-			authSessionOptions = authSessionProvider.AuthSessionOptions()
+		if resolved.SEOProvider != nil {
+			capabilities = append(capabilities, executableAddonCapability{
+				Name:       executableCapabilitySEOProvider,
+				Required:   true,
+				SEOOptions: resolved.SEOProvider.SEOOptions(),
+			})
+		}
+		if resolved.AuthSessionProvider != nil {
+			capabilities = append(capabilities, executableAddonCapability{
+				Name:               executableCapabilityAuthSessionProvider,
+				Required:           true,
+				AuthSessionOptions: resolved.AuthSessionProvider.AuthSessionOptions(),
+			})
 		}
 		wire.Addons = append(wire.Addons, executableAddonDetails{
-			Index:              index,
-			Name:               addon.Name(),
-			Features:           addon.Features(),
-			CSSProcessor:       cssProcessor,
-			GoBlockConsumer:    hasGoBlockConsumer,
-			GoBlockTargets:     goBlockTargets,
-			SEOProvider:        hasSEOProvider,
-			SEOOptions:         seoOptions,
-			AuthSession:        hasAuthSessionProvider,
-			AuthSessionOptions: authSessionOptions,
+			Index:        index,
+			Name:         addon.Name(),
+			Features:     addon.Features(),
+			Capabilities: capabilities,
 		})
 	}
 	writeJSON(wire)
@@ -523,8 +567,8 @@ func processCSS(index int) {
 		writeJSON(executableCSSResponse{Error: fmt.Sprintf("addon index %%d is out of range", index)})
 		return
 	}
-	processor, ok := config.Addons[index].(gowdk.CSSProcessor)
-	if !ok {
+	processor := gowdk.ResolveAddonCapabilities(config.Addons[index]).CSSProcessor
+	if processor == nil {
 		writeJSON(executableCSSResponse{Error: fmt.Sprintf("addon %%s does not implement CSSProcessor", config.Addons[index].Name())})
 		return
 	}
@@ -582,8 +626,8 @@ func goBlockConsumer(config gowdk.Config, index int) (gowdk.GoBlockConsumer, err
 	if index < 0 || index >= len(config.Addons) {
 		return nil, fmt.Errorf("addon index %d is out of range", index)
 	}
-	consumer, ok := config.Addons[index].(gowdk.GoBlockConsumer)
-	if !ok {
+	consumer := gowdk.ResolveAddonCapabilities(config.Addons[index]).GoBlockConsumer
+	if consumer == nil {
 		return nil, fmt.Errorf("addon %s does not implement GoBlockConsumer", config.Addons[index].Name())
 	}
 	return consumer, nil

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net"
@@ -1674,6 +1675,78 @@ func TestBackendRouterRejectsDuplicateRoutes(t *testing.T) {
 	}
 }
 
+func TestBackendRouterRejectsEquivalentDynamicRoutes(t *testing.T) {
+	handler := NotImplemented("missing")
+	tests := []struct {
+		name   string
+		first  string
+		second string
+	}{
+		{name: "capture name", first: "/blog/{slug}", second: "/blog/{id}"},
+		{name: "type annotation", first: "/patients/{id:int}", second: "/patients/{slug:string}"},
+		{name: "rest capture name", first: "/files/{path...}", second: "/files/{rest...}"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := NewBackendRouter(
+				BackendRoute{Method: http.MethodGet, Path: test.first, Handler: handler},
+				BackendRoute{Method: http.MethodGet, Path: test.second, Handler: handler},
+			)
+			if err == nil || !strings.Contains(err.Error(), "duplicate backend route GET "+test.second) {
+				t.Fatalf("expected equivalent route error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestBackendRouterAllowsEquivalentDynamicRoutesForDifferentMethods(t *testing.T) {
+	handler := NotImplemented("missing")
+	if _, err := NewBackendRouter(
+		BackendRoute{Method: http.MethodGet, Path: "/blog/{slug}", Handler: handler},
+		BackendRoute{Method: http.MethodPost, Path: "/blog/{id}", Handler: handler},
+	); err != nil {
+		t.Fatalf("expected methods to have separate route tables: %v", err)
+	}
+}
+
+func TestBackendRouterPrefersStaticRouteOverDynamicRoute(t *testing.T) {
+	for _, staticFirst := range []bool{false, true} {
+		t.Run(fmt.Sprintf("static_first_%t", staticFirst), func(t *testing.T) {
+			dynamic := BackendRoute{
+				Method: http.MethodGet,
+				Path:   "/blog/{slug}",
+				Handler: func(writer http.ResponseWriter, _ *http.Request) bool {
+					writer.WriteHeader(http.StatusAccepted)
+					return true
+				},
+			}
+			static := BackendRoute{
+				Method: http.MethodGet,
+				Path:   "/blog/archive",
+				Handler: func(writer http.ResponseWriter, _ *http.Request) bool {
+					writer.WriteHeader(http.StatusNoContent)
+					return true
+				},
+			}
+			routes := []BackendRoute{dynamic, static}
+			if staticFirst {
+				routes[0], routes[1] = routes[1], routes[0]
+			}
+			router, err := NewBackendRouter(routes...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			recorder := httptest.NewRecorder()
+			if !router.Dispatch(recorder, httptest.NewRequest(http.MethodGet, "/blog/archive", nil)) {
+				t.Fatal("expected static route to dispatch")
+			}
+			if recorder.Code != http.StatusNoContent {
+				t.Fatalf("expected static route status %d, got %d", http.StatusNoContent, recorder.Code)
+			}
+		})
+	}
+}
+
 func TestBackendRouterOnlyDispatchesQueryRoutesForJSONRequests(t *testing.T) {
 	router, err := NewBackendRouter(BackendRoute{
 		Method: http.MethodGet,
@@ -1709,11 +1782,54 @@ func TestBackendRouterOnlyDispatchesQueryRoutesForJSONRequests(t *testing.T) {
 		t.Fatalf("unexpected JSON query status: %d", jsonRecorder.Code)
 	}
 
+	rejectedJSONRequest := httptest.NewRequest(http.MethodGet, "/patients", nil)
+	rejectedJSONRequest.Header.Set("Accept", "application/json;q=0, text/html")
+	if router.Dispatch(httptest.NewRecorder(), rejectedJSONRequest) {
+		t.Fatal("expected q=0 JSON request not to dispatch query route")
+	}
+
+	multipleHeadersRequest := httptest.NewRequest(http.MethodGet, "/patients", nil)
+	multipleHeadersRequest.Header.Add("Accept", "text/html")
+	multipleHeadersRequest.Header.Add("Accept", "application/problem+json;q=0.5")
+	if !router.Dispatch(httptest.NewRecorder(), multipleHeadersRequest) {
+		t.Fatal("expected positive JSON range in multiple Accept headers to dispatch query route")
+	}
+
 	headerRequest := httptest.NewRequest(http.MethodGet, "/patients", nil)
+	headerRequest.Header.Set("Accept", "application/json;q=0")
 	headerRequest.Header.Set("X-GOWDK-Query", "true")
 	headerRecorder := httptest.NewRecorder()
 	if !router.Dispatch(headerRecorder, headerRequest) {
 		t.Fatal("expected X-GOWDK-Query request to dispatch query route")
+	}
+}
+
+func TestAcceptsJSONRespectsQualityValues(t *testing.T) {
+	tests := []struct {
+		name   string
+		header string
+		want   bool
+	}{
+		{name: "json", header: "application/json", want: true},
+		{name: "uppercase", header: "APPLICATION/JSON", want: true},
+		{name: "structured suffix", header: "application/problem+json", want: true},
+		{name: "structured suffix wildcard", header: "application/*+json", want: true},
+		{name: "positive quality", header: "text/html, application/json; q=0.5", want: true},
+		{name: "zero quality", header: "application/json;q=0, text/html", want: false},
+		{name: "zero structured suffix quality", header: "application/problem+json;q=0.000", want: false},
+		{name: "invalid high quality", header: "application/json;q=1.001", want: false},
+		{name: "invalid quality", header: "application/json;q=invalid", want: false},
+		{name: "quoted comma", header: `application/json; note="a,b"; q=0`, want: false},
+		{name: "wildcard", header: "*/*", want: false},
+		{name: "non application suffix", header: "text/problem+json", want: true},
+		{name: "malformed", header: `application/json; q="`, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := acceptsJSON(tt.header); got != tt.want {
+				t.Fatalf("acceptsJSON(%q) = %v, want %v", tt.header, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -2094,6 +2210,97 @@ func TestActionDataParsesMultipartFiles(t *testing.T) {
 	}
 	if got := recorder.Body.String(); got != "<p>uploaded</p>" {
 		t.Fatalf("unexpected body: %s", got)
+	}
+}
+
+func TestMultipartRequestClassificationUsesStructuredMediaType(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		want        bool
+	}{
+		{name: "valid", contentType: "multipart/form-data; boundary=gowdk", want: true},
+		{name: "case insensitive", contentType: "Multipart/Form-Data; boundary=gowdk", want: true},
+		{name: "invalid prefix only", contentType: "multipart/form-dataevil; boundary=gowdk", want: false},
+		{name: "url encoded", contentType: "application/x-www-form-urlencoded", want: false},
+		{name: "malformed boundary", contentType: "multipart/form-data; boundary=", want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/upload", nil)
+			request.Header.Set("Content-Type", tt.contentType)
+			if got := isMultipartRequest(request); got != tt.want {
+				t.Fatalf("isMultipartRequest(%q) = %v, want %v", tt.contentType, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestActionDataRejectsMalformedMultipartBoundary(t *testing.T) {
+	for _, contentType := range []string{
+		"multipart/form-data",
+		"multipart/form-data; boundary=",
+	} {
+		t.Run(contentType, func(t *testing.T) {
+			handler := ActionData(func(context.Context, form.Data) (response.Response, error) {
+				t.Fatal("handler should not run for malformed multipart content type")
+				return response.Response{}, nil
+			})
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodPost, "/upload", strings.NewReader("not-multipart"))
+			request.Header.Set("Content-Type", contentType)
+
+			handler(recorder, request)
+
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+			}
+		})
+	}
+}
+
+func TestActionDataWithBodyLimitRejectsTooLargeMultipartBody(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("avatar", "avatar.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write([]byte(strings.Repeat("a", 256))); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := ActionDataWithBodyLimit(64, func(context.Context, form.Data) (response.Response, error) {
+		t.Fatal("handler should not run for oversized multipart body")
+		return response.Response{}, nil
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/upload", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+
+	handler(recorder, request)
+
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusRequestEntityTooLarge)
+	}
+}
+
+func TestActionValuesRejectsMalformedNonOversizedForm(t *testing.T) {
+	handler := ActionValuesWithBodyLimit(1024, func(context.Context, form.Values) (response.Response, error) {
+		t.Fatal("handler should not run for malformed form")
+		return response.Response{}, nil
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/submit", strings.NewReader("field=%"))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	handler(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
 	}
 }
 
@@ -2653,6 +2860,85 @@ func TestTracedBackendRouteMarksServerStatusError(t *testing.T) {
 	}
 	if spans[0].Status.Code != gowdktrace.StatusError {
 		t.Fatalf("endpoint span status = %q, want error", spans[0].Status.Code)
+	}
+}
+
+func TestBackendRouteInstrumentationModes(t *testing.T) {
+	kinds := []string{"action", "api", "query"}
+	modes := []struct {
+		name    string
+		metrics bool
+		tracer  bool
+	}{
+		{name: "neither"},
+		{name: "metrics only", metrics: true},
+		{name: "tracer only", tracer: true},
+		{name: "metrics and tracer", metrics: true, tracer: true},
+	}
+	for _, kind := range kinds {
+		for _, mode := range modes {
+			t.Run(kind+"/"+mode.name, func(t *testing.T) {
+				method := http.MethodGet
+				if kind == "action" {
+					method = http.MethodPost
+				}
+				router, err := NewBackendRouter(BackendRoute{
+					Method:     method,
+					Path:       "/patients",
+					Kind:       kind,
+					EndpointID: "patients." + kind,
+					Handler: func(writer http.ResponseWriter, request *http.Request) bool {
+						writer.WriteHeader(http.StatusNoContent)
+						return true
+					},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				request := httptest.NewRequest(method, "/patients", nil)
+				if kind == "query" {
+					request.Header.Set("Accept", "application/json")
+				}
+				var metrics *Metrics
+				if mode.metrics {
+					metrics = &Metrics{}
+					request = request.WithContext(contextWithMetrics(request.Context(), metrics))
+				}
+				var ring *gowdktrace.RingSink
+				if mode.tracer {
+					ring = gowdktrace.NewRingSink(4)
+					tracer := gowdktrace.NewTracer(gowdktrace.WithSink(ring))
+					request = request.WithContext(gowdktrace.ContextWithTracer(request.Context(), tracer))
+				}
+				recorder := httptest.NewRecorder()
+
+				if !router.Dispatch(recorder, request) {
+					t.Fatal("expected backend handler to handle request")
+				}
+				if recorder.Code != http.StatusNoContent {
+					t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNoContent)
+				}
+				if mode.metrics {
+					snapshot := metrics.Snapshot()
+					if len(snapshot.Routes) != 1 {
+						t.Fatalf("route metrics = %#v, want one route", snapshot.Routes)
+					}
+					route := snapshot.Routes[0]
+					if route.Kind != kind || route.Requests != 1 || route.ActiveRequests != 0 {
+						t.Fatalf("unexpected route metrics: %#v", route)
+					}
+				}
+				if mode.tracer {
+					spans := waitForSpans(t, ring)
+					if len(spans) != 1 {
+						t.Fatalf("spans = %d, want 1", len(spans))
+					}
+					if spans[0].Lane != backendTraceLane(kind) {
+						t.Fatalf("span lane = %q, want %q", spans[0].Lane, backendTraceLane(kind))
+					}
+				}
+			})
+		}
 	}
 }
 

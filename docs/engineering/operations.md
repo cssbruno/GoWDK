@@ -124,7 +124,9 @@ readiness claim:
 - Do not set `Build.CSRF.Disabled` for production generated action, command, or
   state-changing API handlers unless another cross-site request strategy is in
   place. Provide a stable `GOWDK_CSRF_SECRET` or configured
-  `Build.CSRF.SecretEnv` value in each runtime environment.
+  `Build.CSRF.SecretEnv` value in each runtime environment. Use
+  `Build.CSRF.VerificationSecretEnvs` for the staged
+  [CSRF rotation procedure](../reference/deployment.md#csrf-secret-rotation).
 - Return explicit method-not-allowed responses for unsupported methods.
 - Serve app assets with deterministic cache headers.
 - Avoid public debug endpoints by default.

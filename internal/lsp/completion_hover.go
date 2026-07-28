@@ -52,10 +52,32 @@ func (server *Server) projectCompletions(currentURI string) []completionItem {
 			items = append(items, completionItem{Label: store.Name, Kind: completionItemKindProperty, Detail: "GOWDK store"})
 		}
 	}
-	for _, component := range ir.Components {
-		if component.Name != "" {
-			items = append(items, completionItem{Label: component.Name, Kind: completionItemKindClass, Detail: "GOWDK component"})
+	if currentDoc, ok := server.documents[currentURI]; ok {
+		ownerPackage, ownerUses := server.ownerPackageAndUses(currentDoc)
+		labels := map[string]bool{}
+		for _, definition := range server.componentDefinitions(currentDoc) {
+			if definition.Name == "" {
+				continue
+			}
+			if definition.Package == "" || definition.Package == ownerPackage {
+				labels[definition.Name] = true
+			}
+			for alias, packageName := range ownerUses {
+				if definition.Package == packageName {
+					labels[alias+"."+definition.Name] = true
+				}
+			}
 		}
+		sortedLabels := make([]string, 0, len(labels))
+		for label := range labels {
+			sortedLabels = append(sortedLabels, label)
+		}
+		sort.Strings(sortedLabels)
+		for _, label := range sortedLabels {
+			items = append(items, completionItem{Label: label, Kind: completionItemKindClass, Detail: "GOWDK component"})
+		}
+	}
+	for _, component := range ir.Components {
 		if doc, ok := docsBySource[component.Source]; ok && doc.URI == currentURI {
 			for _, prop := range component.Props {
 				items = append(items, completionItem{Label: prop.Name, Kind: completionItemKindProperty, Detail: "component prop"})

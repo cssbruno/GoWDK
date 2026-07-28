@@ -2,7 +2,6 @@ package gowdkcmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -38,7 +37,7 @@ func clean(args []string) error {
 		arg := args[i]
 		if value, next, ok, missing := consumeValueFlag(args, i, "--config", true); ok {
 			if missing {
-				return errors.New(cleanUsage)
+				return missingValueFlagError("--config")
 			}
 			configPath = value
 			i = next
@@ -46,7 +45,7 @@ func clean(args []string) error {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--target", true); ok {
 			if missing {
-				return errors.New(cleanUsage)
+				return missingValueFlagError("--target")
 			}
 			targetNames = appendNames(targetNames, value)
 			i = next
@@ -54,7 +53,7 @@ func clean(args []string) error {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--out", true); ok {
 			if missing {
-				return errors.New(cleanUsage)
+				return missingValueFlagError("--out")
 			}
 			outDir = value
 			i = next

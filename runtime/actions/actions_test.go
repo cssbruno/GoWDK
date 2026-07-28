@@ -211,6 +211,96 @@ func TestCSRFBindsTokenToPrincipal(t *testing.T) {
 	}
 }
 
+func TestCSRFRotatesSecretsWithoutInvalidatingOverlap(t *testing.T) {
+	oldSecret := []byte(strings.Repeat("o", 32))
+	newSecret := []byte(strings.Repeat("n", 32))
+	binding := func(request *http.Request) []byte {
+		return []byte(request.Header.Get("X-Principal"))
+	}
+
+	oldCSRF, err := NewCSRF(CSRFOptions{Secret: oldSecret, Insecure: true, Binding: binding})
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldMintRequest := httptest.NewRequest(http.MethodGet, "/", nil)
+	oldMintRequest.Header.Set("X-Principal", "alice")
+	oldResponse := httptest.NewRecorder()
+	oldToken, err := oldCSRF.Token(oldResponse, oldMintRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldCookie := oldResponse.Result().Cookies()[0]
+
+	rotatedCSRF, err := NewCSRF(CSRFOptions{
+		Secret:              newSecret,
+		VerificationSecrets: [][]byte{oldSecret},
+		Insecure:            true,
+		Binding:             binding,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldSubmit := httptest.NewRequest(http.MethodPost, "/submit", nil)
+	oldSubmit.Header.Set("X-Principal", "alice")
+	oldSubmit.Header.Set(defaultCSRFHeader, oldToken)
+	oldSubmit.AddCookie(oldCookie)
+	if err := rotatedCSRF.Validate(oldSubmit); err != nil {
+		t.Fatalf("expected old token to validate during overlap: %v", err)
+	}
+
+	wrongPrincipal := httptest.NewRequest(http.MethodPost, "/submit", nil)
+	wrongPrincipal.Header.Set("X-Principal", "mallory")
+	wrongPrincipal.Header.Set(defaultCSRFHeader, oldToken)
+	wrongPrincipal.AddCookie(oldCookie)
+	if err := rotatedCSRF.Validate(wrongPrincipal); err == nil {
+		t.Fatal("expected rotated token to preserve principal binding")
+	}
+
+	refreshRequest := httptest.NewRequest(http.MethodGet, "/", nil)
+	refreshRequest.Header.Set("X-Principal", "alice")
+	refreshRequest.AddCookie(oldCookie)
+	refreshResponse := httptest.NewRecorder()
+	refreshedToken, err := rotatedCSRF.Token(refreshResponse, refreshRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if refreshedToken == oldToken {
+		t.Fatal("expected verification-key token to refresh with the primary key")
+	}
+	refreshedCookies := refreshResponse.Result().Cookies()
+	if len(refreshedCookies) != 1 || refreshedCookies[0].Value != refreshedToken {
+		t.Fatalf("expected refreshed primary-key cookie, got %#v", refreshedCookies)
+	}
+
+	newOnlyCSRF, err := NewCSRF(CSRFOptions{Secret: newSecret, Insecure: true, Binding: binding})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newSubmit := httptest.NewRequest(http.MethodPost, "/submit", nil)
+	newSubmit.Header.Set("X-Principal", "alice")
+	newSubmit.Header.Set(defaultCSRFHeader, refreshedToken)
+	newSubmit.AddCookie(refreshedCookies[0])
+	if err := newOnlyCSRF.Validate(newSubmit); err != nil {
+		t.Fatalf("expected refreshed token to validate after old-key retirement: %v", err)
+	}
+	if err := newOnlyCSRF.Validate(oldSubmit); err == nil {
+		t.Fatal("expected old token to fail after old-key retirement")
+	}
+
+	preStagedCSRF, err := NewCSRF(CSRFOptions{
+		Secret:              oldSecret,
+		VerificationSecrets: [][]byte{newSecret},
+		Insecure:            true,
+		Binding:             binding,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := preStagedCSRF.Validate(newSubmit); err != nil {
+		t.Fatalf("expected pre-staged instance to accept the next primary key: %v", err)
+	}
+}
+
 func tamperToken(token string) string {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil || len(raw) == 0 {
@@ -224,6 +314,16 @@ func TestNewCSRFRejectsShortSecret(t *testing.T) {
 	_, err := NewCSRF(CSRFOptions{Secret: []byte("short")})
 	if err == nil {
 		t.Fatal("expected short secret error")
+	}
+}
+
+func TestNewCSRFRejectsShortVerificationSecret(t *testing.T) {
+	_, err := NewCSRF(CSRFOptions{
+		Secret:              []byte(strings.Repeat("s", 32)),
+		VerificationSecrets: [][]byte{[]byte("short")},
+	})
+	if err == nil || !strings.Contains(err.Error(), "verification secret 1") {
+		t.Fatalf("expected short verification secret error, got %v", err)
 	}
 }
 

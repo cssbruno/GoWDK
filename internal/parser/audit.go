@@ -1,8 +1,6 @@
 package parser
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"strings"
 
@@ -44,9 +42,14 @@ func ParseAuditSyntax(src []byte) (gwdkast.AuditFile, error) {
 	var captured *capturedAuditBlock
 	seenDeclaration := false
 
-	scanner := bufio.NewScanner(bytes.NewReader(src))
-	for lineNumber := 1; scanner.Scan(); lineNumber++ {
+	scanner := newSourceLineScanner(src, MaxAuditLineBytes)
+	lineNumber := 1
+	for ; scanner.Scan(); lineNumber++ {
 		rawLine := scanner.Text()
+		if lineTooLong(scanner, MaxAuditLineBytes) {
+			addError(sourceLineTooLongError(lineNumber, MaxAuditLineBytes, "audit policy"))
+			continue
+		}
 		line := strings.TrimSpace(rawLine)
 		if captured != nil {
 			if line == "}" && !captured.scanner.inMultiline() && captured.depth == 1 {
@@ -96,10 +99,8 @@ func ParseAuditSyntax(src []byte) (gwdkast.AuditFile, error) {
 		}
 		addError(fmt.Errorf("line %d: unsupported audit declaration %q", lineNumber, line))
 	}
-	if err := scanner.Err(); err != nil {
-		addError(err)
-	}
-	if captured != nil {
+	scanFailed := addScannerError(addError, scanner, lineNumber, MaxAuditLineBytes, "audit policy")
+	if captured != nil && !scanFailed {
 		addError(fmt.Errorf("line %d: unterminated %s block %q", captured.span.Start.Line, captured.kind, captured.name))
 	}
 	if len(parseErrors) > 0 {

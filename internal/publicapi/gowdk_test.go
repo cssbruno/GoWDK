@@ -56,10 +56,10 @@ func TestValidateAddonsRejectsInvalidIdentityAndOwnership(t *testing.T) {
 		}, want: "duplicates feature"},
 		{name: "seo provider mismatch", addons: []gowdk.Addon{
 			gowdk.NewAddon("seo-marker", gowdk.FeatureSEO),
-		}, want: "does not implement gowdk.SEOProvider"},
+		}, want: "does not provide gowdk.SEOProvider capability"},
 		{name: "auth provider mismatch", addons: []gowdk.Addon{
 			gowdk.NewAddon("auth-marker", gowdk.FeatureAuth),
-		}, want: "does not implement gowdk.AuthSessionProvider"},
+		}, want: "does not provide gowdk.AuthSessionProvider capability"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -69,6 +69,86 @@ func TestValidateAddonsRejectsInvalidIdentityAndOwnership(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestResolveAddonCapabilitiesFallsBackToDirectInterfaces(t *testing.T) {
+	addon := publicAPICapabilityAddon{}
+	capabilities := gowdk.ResolveAddonCapabilities(addon)
+	if capabilities.CSSProcessor == nil {
+		t.Fatal("expected direct CSSProcessor capability")
+	}
+	if capabilities.SEOProvider == nil {
+		t.Fatal("expected direct SEOProvider capability")
+	}
+	if capabilities.AuthSessionProvider == nil {
+		t.Fatal("expected direct AuthSessionProvider capability")
+	}
+	if capabilities.GoBlockConsumer == nil {
+		t.Fatal("expected direct GoBlockConsumer capability")
+	}
+	if err := gowdk.ValidateAddons([]gowdk.Addon{addon}); err != nil {
+		t.Fatalf("expected direct capabilities to satisfy feature contracts: %v", err)
+	}
+}
+
+func TestResolveAddonCapabilitiesTreatsExplicitDescriptorAsAuthoritative(t *testing.T) {
+	addon := publicAPIExplicitCapabilityAddon{}
+	capabilities := gowdk.ResolveAddonCapabilities(addon)
+	if capabilities.SEOProvider == nil {
+		t.Fatal("expected explicitly described SEOProvider capability")
+	}
+	if capabilities.CSSProcessor != nil || capabilities.AuthSessionProvider != nil || capabilities.GoBlockConsumer != nil {
+		t.Fatalf("direct interfaces leaked around explicit descriptor: %#v", capabilities)
+	}
+	if err := gowdk.ValidateAddons([]gowdk.Addon{addon}); err != nil {
+		t.Fatalf("expected explicit descriptor to satisfy feature contracts: %v", err)
+	}
+}
+
+type publicAPICapabilityAddon struct{}
+
+func (publicAPICapabilityAddon) Name() string {
+	return "capabilities"
+}
+
+func (publicAPICapabilityAddon) Features() []gowdk.Feature {
+	return []gowdk.Feature{gowdk.FeatureCSS, gowdk.FeatureSEO, gowdk.FeatureAuth}
+}
+
+func (publicAPICapabilityAddon) ProcessCSS(gowdk.CSSContext) (gowdk.CSSResult, error) {
+	return gowdk.CSSResult{}, nil
+}
+
+func (publicAPICapabilityAddon) SEOOptions() gowdk.SEOOptions {
+	return gowdk.SEOOptions{BaseURL: "https://example.com"}
+}
+
+func (publicAPICapabilityAddon) AuthSessionOptions() gowdk.AuthSessionOptions {
+	return gowdk.AuthSessionOptions{SecretEnv: "SESSION_SECRET"}
+}
+
+func (publicAPICapabilityAddon) GoBlockTargets() []string {
+	return []string{"addon.capabilities"}
+}
+
+func (publicAPICapabilityAddon) ValidateGoBlock(gowdk.GoBlockTarget, gowdk.GoBlockContext) []gowdk.GoBlockDiagnostic {
+	return nil
+}
+
+func (publicAPICapabilityAddon) GeneratedGo(gowdk.GoBlockTarget, gowdk.GoBlockContext) ([]gowdk.GoBlockFile, error) {
+	return nil, nil
+}
+
+type publicAPIExplicitCapabilityAddon struct {
+	publicAPICapabilityAddon
+}
+
+func (publicAPIExplicitCapabilityAddon) Features() []gowdk.Feature {
+	return []gowdk.Feature{gowdk.FeatureSEO}
+}
+
+func (publicAPIExplicitCapabilityAddon) AddonCapabilities() gowdk.AddonCapabilities {
+	return gowdk.AddonCapabilities{SEOProvider: publicAPICapabilityAddon{}}
 }
 
 func TestValidateAddonsAllowsExplicitSPAAliasFeatureOverlap(t *testing.T) {

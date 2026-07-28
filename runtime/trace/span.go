@@ -2,7 +2,6 @@ package trace
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -11,8 +10,6 @@ import (
 )
 
 type spanContextKey struct{}
-
-const defaultSinkTimeout = 5 * time.Second
 
 // SinkLogger receives completed-span export failures. Set it to nil to silence
 // sink failure logging. It defaults to the standard log package.
@@ -73,7 +70,6 @@ func (span *Span) EndTime(t time.Time) {
 		return
 	}
 	var snapshot Snapshot
-	var sink Sink
 	var tracer *Tracer
 	span.mu.Lock()
 	if span.ended {
@@ -85,35 +81,11 @@ func (span *Span) EndTime(t time.Time) {
 	snapshot = span.snapshotLocked()
 	if span.tracer != nil {
 		tracer = span.tracer
-		sink = span.tracer.sink
 	}
 	span.mu.Unlock()
-	if sink != nil {
-		recordSpanAsync(tracer, sink, snapshot)
+	if tracer != nil {
+		tracer.enqueueExport(snapshot)
 	}
-}
-
-func recordSpanAsync(tracer *Tracer, sink Sink, snapshot Snapshot) {
-	go func() {
-		start := time.Now()
-		var exportErr error
-		defer func() {
-			if recovered := recover(); recovered != nil {
-				exportErr = fmt.Errorf("panic: %v", recovered)
-				tracer.recordExport(time.Since(start), exportErr)
-				logSinkFailure(exportErr)
-			}
-		}()
-		ctx, cancel := context.WithTimeout(context.Background(), defaultSinkTimeout)
-		defer cancel()
-		if err := sink.RecordSpan(ctx, snapshot); err != nil {
-			exportErr = err
-			tracer.recordExport(time.Since(start), err)
-			logSinkFailure(err)
-			return
-		}
-		tracer.recordExport(time.Since(start), nil)
-	}()
 }
 
 func logSinkFailure(err error) {

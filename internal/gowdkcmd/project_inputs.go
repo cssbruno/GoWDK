@@ -131,6 +131,9 @@ func validateNativeProjectConfigStructure(path string, config gowdk.Config) erro
 	if err := config.Build.CORS.Validate(); err != nil {
 		return fmt.Errorf("%s CORS policy: %w", path, err)
 	}
+	if err := config.Build.CSRF.Validate(); err != nil {
+		return fmt.Errorf("%s CSRF policy: %w", path, err)
+	}
 	if err := gowdk.ValidateAddons(config.Addons); err != nil {
 		return fmt.Errorf("%s addons: %w", path, err)
 	}
@@ -324,19 +327,19 @@ func discoverProjectFiles(config gowdk.Config, moduleNames []string, root string
 }
 
 func discoverConfiguredFiles(config gowdk.Config, outputDir string, moduleNames []string, root string) ([]string, error) {
-	inputs, err := configuredDiscoveryInputs(config, outputDir, moduleNames, root)
+	selection, err := discover.ConfiguredSelection(config, outputDir, moduleNames, root)
 	if err != nil {
 		return nil, err
 	}
-	return discover.Files(inputs.root, inputs.includes, inputs.excludes)
+	return selection.Files()
 }
 
 func discoverConfiguredFilesAndDirs(config gowdk.Config, outputDir string, moduleNames []string, root string) ([]string, []string, error) {
-	inputs, err := configuredDiscoveryInputs(config, outputDir, moduleNames, root)
+	selection, err := discover.ConfiguredSelection(config, outputDir, moduleNames, root)
 	if err != nil {
 		return nil, nil, err
 	}
-	return discover.FilesAndDirs(inputs.root, inputs.includes, inputs.excludes)
+	return selection.FilesAndDirs()
 }
 
 type discoveryInputs struct {
@@ -345,25 +348,21 @@ type discoveryInputs struct {
 	excludes []string
 }
 
+var (
+	defaultSourceIncludes = discover.DefaultSourceIncludes()
+	defaultSourceExcludes = discover.DefaultSourceExcludes()
+)
+
 func configuredDiscoveryInputs(config gowdk.Config, outputDir string, moduleNames []string, root string) (discoveryInputs, error) {
-	if strings.TrimSpace(root) == "" {
-		var err error
-		root, err = os.Getwd()
-		if err != nil {
-			return discoveryInputs{}, err
-		}
-	}
-	modules, err := buildModules(config.Modules, moduleNames)
+	selection, err := discover.ConfiguredSelection(config, outputDir, moduleNames, root)
 	if err != nil {
 		return discoveryInputs{}, err
 	}
-
-	includes := buildSourceIncludes(config, modules, len(moduleNames) > 0)
-	excludes := buildSourceExcludes(config, modules)
-	if pattern := outputExcludePattern(root, outputDir); pattern != "" {
-		excludes = append(excludes, pattern)
-	}
-	return discoveryInputs{root: root, includes: includes, excludes: excludes}, nil
+	return discoveryInputs{
+		root:     selection.Root,
+		includes: append([]string(nil), selection.Includes...),
+		excludes: append([]string(nil), selection.Excludes...),
+	}, nil
 }
 
 func loadCommandInputs(args []string, command string, allowJSON bool) (cliOptions, []string, error) {
@@ -466,63 +465,7 @@ func validateStandaloneCheckOptions(options cliOptions, configPath string, modul
 }
 
 func buildModules(modules []gowdk.ModuleConfig, moduleNames []string) ([]gowdk.ModuleConfig, error) {
-	if len(moduleNames) == 0 {
-		return modules, nil
-	}
-
-	byName := make(map[string]gowdk.ModuleConfig)
-	for _, module := range modules {
-		byName[module.Name] = module
-	}
-
-	var selected []gowdk.ModuleConfig
-	for _, name := range moduleNames {
-		module, ok := byName[name]
-		if !ok {
-			return nil, fmt.Errorf("module %q is not configured", name)
-		}
-		selected = append(selected, module)
-	}
-	return selected, nil
-}
-
-func buildSourceIncludes(config gowdk.Config, modules []gowdk.ModuleConfig, modulesOnly bool) []string {
-	var includes []string
-	if !modulesOnly {
-		includes = appendPatterns(includes, config.Source.Include)
-	}
-	for _, module := range modules {
-		if hasPatterns(module.Source.Include) {
-			includes = appendPatterns(includes, module.Source.Include)
-			continue
-		}
-		if pattern := defaultModuleInclude(module.Name); pattern != "" {
-			includes = append(includes, pattern)
-		}
-	}
-	if len(includes) > 0 {
-		return includes
-	}
-
-	return defaultSourceIncludes
-}
-
-func buildSourceExcludes(config gowdk.Config, modules []gowdk.ModuleConfig) []string {
-	excludes := append([]string{}, defaultSourceExcludes...)
-	excludes = appendPatterns(excludes, config.Source.Exclude)
-	for _, module := range modules {
-		excludes = appendPatterns(excludes, module.Source.Exclude)
-	}
-	return excludes
-}
-
-func hasPatterns(patterns []string) bool {
-	for _, pattern := range patterns {
-		if strings.TrimSpace(pattern) != "" {
-			return true
-		}
-	}
-	return false
+	return discover.SelectModules(modules, moduleNames)
 }
 
 func appendPatterns(values, patterns []string) []string {
@@ -535,34 +478,8 @@ func appendPatterns(values, patterns []string) []string {
 	return values
 }
 
-func defaultModuleInclude(name string) string {
-	name = strings.Trim(strings.TrimSpace(name), "/")
-	if name == "" {
-		return ""
-	}
-	name = filepath.ToSlash(filepath.Clean(name))
-	if name == "." {
-		return ""
-	}
-	return name + "/**/*.gwdk"
-}
-
 func outputExcludePattern(root, outputDir string) string {
-	if strings.TrimSpace(outputDir) == "" {
-		return ""
-	}
-	absOutput := outputDir
-	if !filepath.IsAbs(absOutput) {
-		absOutput = filepath.Join(root, outputDir)
-	}
-	rel, err := filepath.Rel(root, absOutput)
-	if err != nil {
-		return ""
-	}
-	if rel == "." || rel == ".." || strings.HasPrefix(rel, "../") {
-		return ""
-	}
-	return filepath.ToSlash(filepath.Clean(rel)) + "/**"
+	return discover.OutputExcludePattern(root, outputDir)
 }
 
 func parseProjectOptions(args []string, command string, allowJSON bool) (cliOptions, string, []string, []string, error) {
@@ -576,7 +493,7 @@ func parseProjectOptions(args []string, command string, allowJSON bool) (cliOpti
 		arg := args[i]
 		if value, next, ok, missing := consumeValueFlag(args, i, "--config", true); ok {
 			if missing {
-				return options, "", nil, nil, errors.New(usage)
+				return options, "", nil, nil, missingValueFlagError("--config")
 			}
 			configPath = value
 			i = next
@@ -584,7 +501,7 @@ func parseProjectOptions(args []string, command string, allowJSON bool) (cliOpti
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--project-root", true); ok {
 			if missing {
-				return options, "", nil, nil, errors.New(usage)
+				return options, "", nil, nil, missingValueFlagError("--project-root")
 			}
 			options.ProjectRoot = value
 			i = next
@@ -592,7 +509,7 @@ func parseProjectOptions(args []string, command string, allowJSON bool) (cliOpti
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--env-file", true); ok {
 			if missing {
-				return options, "", nil, nil, errors.New(usage)
+				return options, "", nil, nil, missingValueFlagError("--env-file")
 			}
 			envFilePath = value
 			options.EnvFilePath = envFilePath
@@ -601,7 +518,7 @@ func parseProjectOptions(args []string, command string, allowJSON bool) (cliOpti
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--module", true); ok {
 			if missing {
-				return options, "", nil, nil, errors.New(usage)
+				return options, "", nil, nil, missingValueFlagError("--module")
 			}
 			moduleNames = appendModuleNames(moduleNames, value)
 			i = next

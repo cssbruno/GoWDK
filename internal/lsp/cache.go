@@ -9,11 +9,12 @@ type projectIRCache struct {
 }
 
 type workspaceComponentDefinitionCache struct {
-	root        string
-	key         string
-	files       []string
-	dirs        []string
-	definitions map[string]componentDefinition
+	root                 string
+	selectionFingerprint string
+	key                  string
+	files                []string
+	dirs                 []string
+	definitions          map[string]componentDefinition
 }
 
 func (server *Server) invalidateProjectCaches() {

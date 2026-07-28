@@ -58,14 +58,8 @@ func backendRuntimeImportMap(options Options) map[string]string {
 	if contractExposuresUseForm(executableContracts) {
 		imports["gowdkform"] = "github.com/cssbruno/gowdk/runtime/form"
 	}
-	if contractExposuresParseForm(executableContracts) {
-		imports["strings"] = "strings"
-	}
 	if len(adapter.Actions) > 0 {
 		imports["path"] = "path"
-	}
-	if actionsParseForm(adapter.Actions) {
-		imports["strings"] = "strings"
 	}
 	if actionsUseForm(adapter.Actions) {
 		imports["gowdkform"] = "github.com/cssbruno/gowdk/runtime/form"
@@ -84,6 +78,10 @@ func backendRuntimeImportMap(options Options) map[string]string {
 	}
 	if actionsUseValidation(adapter.Actions) {
 		imports["gowdkvalidation"] = "github.com/cssbruno/gowdk/runtime/validation"
+	}
+	if actionsUseStringHelpers(adapter.Actions) ||
+		(generatedRealtimeQueryInvalidationsEnabled(options) && len(executableCommandContractExposures(executableContracts)) > 0) {
+		imports["strings"] = "strings"
 	}
 	if generatedUsesGuards(options) {
 		imports["gowdkauth"] = "github.com/cssbruno/gowdk/runtime/auth"

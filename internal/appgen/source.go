@@ -77,9 +77,6 @@ func runtimeImportMap(options Options) map[string]string {
 	if actionsUseFragments(actions) || fragmentsUseStaticFallback(fragments) {
 		imports["gowdkpartial"] = "github.com/cssbruno/gowdk/runtime/partial"
 	}
-	if actionsParseForm(actions) {
-		imports["strings"] = "strings"
-	}
 	if actionsUseForm(actions) {
 		imports["gowdkform"] = "github.com/cssbruno/gowdk/runtime/form"
 	}
@@ -125,9 +122,6 @@ func runtimeImportMap(options Options) map[string]string {
 	if contractExposuresUseForm(executableContracts) {
 		imports["gowdkform"] = "github.com/cssbruno/gowdk/runtime/form"
 	}
-	if contractExposuresParseForm(executableContracts) {
-		imports["strings"] = "strings"
-	}
 	if options.ProxyBackend {
 		imports["gowdkresponse"] = "github.com/cssbruno/gowdk/runtime/response"
 		if adapter.HasDynamicRoutes() {
@@ -141,6 +135,10 @@ func runtimeImportMap(options Options) map[string]string {
 	}
 	if actionsUseValidation(actions) {
 		imports["gowdkvalidation"] = "github.com/cssbruno/gowdk/runtime/validation"
+	}
+	if actionsUseStringHelpers(actions) ||
+		(generatedRealtimeQueryInvalidationsEnabled(options) && len(executableCommandContractExposures(executableContracts)) > 0) {
+		imports["strings"] = "strings"
 	}
 	if actionsUseLengthValidation(actions) {
 		imports["utf8"] = "unicode/utf8"
@@ -930,6 +928,37 @@ func csrfNewFuncDecl(genOptions Options) *ast.FuncDecl {
 	config := genOptions.Config.Build.CSRF
 	secretEnv := config.SecretEnvName()
 	options := []ast.Expr{keyValue("Secret", call(&ast.ArrayType{Elt: id("byte")}, id("secret")))}
+	statements := []ast.Stmt{
+		define([]ast.Expr{id("secret")}, call(sel("strings", "TrimSpace"), call(sel("os", "Getenv"), stringLit(secretEnv)))),
+		&ast.IfStmt{
+			Cond: &ast.BinaryExpr{X: id("secret"), Op: token.EQL, Y: stringLit("")},
+			Body: block(&ast.ReturnStmt{Results: []ast.Expr{
+				id("nil"),
+				call(sel("errors", "New"), stringLit(secretEnv+" is required when generated CSRF is enabled")),
+			}}),
+		},
+	}
+	if verificationEnvs := config.VerificationSecretEnvNames(); len(verificationEnvs) > 0 {
+		verificationSecrets := make([]ast.Expr, 0, len(verificationEnvs))
+		for index, environmentName := range verificationEnvs {
+			variableName := fmt.Sprintf("verificationSecret%d", index+1)
+			statements = append(statements,
+				define([]ast.Expr{id(variableName)}, call(sel("strings", "TrimSpace"), call(sel("os", "Getenv"), stringLit(environmentName)))),
+				&ast.IfStmt{
+					Cond: &ast.BinaryExpr{X: id(variableName), Op: token.EQL, Y: stringLit("")},
+					Body: block(&ast.ReturnStmt{Results: []ast.Expr{
+						id("nil"),
+						call(sel("errors", "New"), stringLit(environmentName+" is required when configured as a CSRF verification secret")),
+					}}),
+				},
+			)
+			verificationSecrets = append(verificationSecrets, call(&ast.ArrayType{Elt: id("byte")}, id(variableName)))
+		}
+		options = append(options, keyValue("VerificationSecrets", &ast.CompositeLit{
+			Type: &ast.ArrayType{Elt: &ast.ArrayType{Elt: id("byte")}},
+			Elts: verificationSecrets,
+		}))
+	}
 	if config.CookieName != "" {
 		options = append(options, keyValue("CookieName", stringLit(config.CookieName)))
 	}
@@ -949,23 +978,14 @@ func csrfNewFuncDecl(genOptions Options) *ast.FuncDecl {
 	if generatedUsesNativeRBACGuards(genOptions) {
 		options = append(options, keyValue("Binding", csrfPrincipalBindingExpr()))
 	}
+	statements = append(statements, &ast.ReturnStmt{Results: []ast.Expr{call(sel("gowdkactions", "NewCSRF"), &ast.CompositeLit{
+		Type: sel("gowdkactions", "CSRFOptions"),
+		Elts: options,
+	})}})
 	return funcDecl("newCSRF", nil, []*ast.Field{
 		{Type: &ast.StarExpr{X: sel("gowdkactions", "CSRF")}},
 		{Type: id("error")},
-	}, []ast.Stmt{
-		define([]ast.Expr{id("secret")}, call(sel("strings", "TrimSpace"), call(sel("os", "Getenv"), stringLit(secretEnv)))),
-		&ast.IfStmt{
-			Cond: &ast.BinaryExpr{X: id("secret"), Op: token.EQL, Y: stringLit("")},
-			Body: block(&ast.ReturnStmt{Results: []ast.Expr{
-				id("nil"),
-				call(sel("errors", "New"), stringLit(secretEnv+" is required when generated CSRF is enabled")),
-			}}),
-		},
-		&ast.ReturnStmt{Results: []ast.Expr{call(sel("gowdkactions", "NewCSRF"), &ast.CompositeLit{
-			Type: sel("gowdkactions", "CSRFOptions"),
-			Elts: options,
-		})}},
-	})
+	}, statements)
 }
 
 // csrfPrincipalBindingExpr builds the CSRFOptions.Binding func literal that

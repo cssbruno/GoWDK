@@ -154,15 +154,15 @@ func validateAddonGoBlockTarget(enabledAddons map[string]gowdk.Addon, pageID str
 	name := strings.TrimPrefix(strings.TrimSpace(block.Target), "addon.")
 	addon, ok := enabledAddons[name]
 	if name != "" && ok {
-		consumer, ok := addon.(gowdk.GoBlockConsumer)
-		if !ok {
+		consumer := gowdk.ResolveAddonCapabilities(addon).GoBlockConsumer
+		if consumer == nil {
 			return []ValidationError{{
 				Code:          "unsupported_addon_go_block_target",
 				PageID:        pageID,
 				ComponentName: componentName,
 				Source:        sourcePath,
 				Span:          block.Span,
-				Message:       fmt.Sprintf("addon %q is enabled but does not implement gowdk.GoBlockConsumer for go block target %q", name, block.Target),
+				Message:       fmt.Sprintf("addon %q is enabled but does not provide gowdk.GoBlockConsumer capability for go block target %q", name, block.Target),
 			}}
 		}
 		if !goBlockConsumerSupportsTarget(consumer, block.Target) {

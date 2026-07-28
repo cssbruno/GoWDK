@@ -37,7 +37,7 @@ gowdk serve --dir <dir> [--addr <addr>]
 gowdk playground policy [--json]
 gowdk playground export --dir <project> --out <project.zip> [--json]
 gowdk playground run --dir <project> --out <dir> --allow-hosted-execution (--module-cache <dir> | --allow-shared-module-cache)
-gowdk lsp [--config <file>] [--project-root <dir>] [--ssr]
+gowdk lsp [--config <file>] [--project-root <dir>] [--module <name>] [--ssr]
 ```
 
 ## Flags
@@ -191,7 +191,7 @@ gowdk lsp [--config <file>] [--project-root <dir>] [--ssr]
   optimization/hardening option, not a security boundary.
 - `--target`: supported by `build`, `test`, and `clean`; may be repeated or comma-separated. For `build` it runs the selected `Build.Targets` entries; for `test` it selects the target module set while writing artifacts to a temporary workdir; for `clean` it restricts removal to the selected targets' outputs.
 - `--module`: supported by `check`, `doctor`, `test`, `audit`, `manifest`, `sitemap`, `routes`,
-  `endpoints`, `inspect`, `generate stubs`, and `build`; may be repeated or
+  `endpoints`, `inspect`, `generate stubs`, `lsp`, and `build`; may be repeated or
   comma-separated, and limits discovery to selected configured modules when no
   explicit file list is passed.
 - `--out`: supported by `build` and `clean`; for `build` it selects the output directory and overrides `Build.Output`, and for `clean` it adds an extra output directory to remove alongside the configured outputs. `clean --target` refuses to remove a selected target root that contains artifacts owned by an unselected configured target. `playground export` uses `--out` as the archive path. `playground run` uses `--out` as the generated output directory and never writes build output into the source project.
@@ -334,10 +334,11 @@ config requirement. If no files are passed, commands discover configured root
 loaded config does not declare source includes. `--module` limits discovery to
 selected configured modules and skips root `Source.Include`; explicit file
 paths still bypass discovery. A module with a name and no explicit include uses
-`<module-name>/**/*.gwdk`. Discovery excludes `.git`, `vendor`, `node_modules`,
-`testdata`, root/module `Source.Exclude` globs, and the configured build output
-directory when one exists. `build --out` overrides `Build.Output`; one of them
-is required for `build`. Every successful disk build writes
+`<module-name>/**/*.gwdk`. Discovery excludes `.git`, `.gowdk`, `bin`, `dist`,
+`gowdk_cache`, `vendor`, `node_modules`, `testdata`, root/module
+`Source.Exclude` globs, configured target app/output directories, and the active
+build output directory. `build --out` overrides `Build.Output`; one of them is
+required for `build`. Every successful disk build writes
 `gowdk-build-report.json` to the output root. The report includes validation,
 planning, write, manifest, cache-policy, cleanup, and completion events;
 request-time SSR/hybrid pages that are intentionally skipped from static

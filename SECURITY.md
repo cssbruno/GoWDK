@@ -4,11 +4,12 @@ GOWDK is an experimental 0.x compiler/runtime. Do not treat generated apps as
 production-ready security enforcement.
 
 First slices exist for generated action decoding, unexpected-field rejection,
-direct literal request-shape validation, opt-in CSRF, configurable action/API
-request body caps, generated `http.Server` read/header/write/idle timeout
-defaults, `MaxHeaderBytes`, safe local redirects, guard execution, SSR panic
-boundaries, log redaction, and no-store request-time responses. These are not a
-complete production security model.
+direct literal request-shape validation, default CSRF with staged multi-key
+secret rotation, configurable action/API request body caps, generated
+`http.Server` read/header/write/idle timeout defaults, `MaxHeaderBytes`, safe
+local redirects, guard execution, SSR panic boundaries, log redaction, and
+no-store request-time responses. These are not a complete production security
+model.
 
 ## Reporting Vulnerabilities
 
@@ -47,7 +48,6 @@ Known incomplete production areas include:
 
 - Authentication and session policy.
 - Full guard contract coverage.
-- Multi-key CSRF secret rotation.
 - Full redirect policy.
 - Per-route request body/header limit policy beyond the current generated
   body caps and server header cap.

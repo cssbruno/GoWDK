@@ -948,7 +948,9 @@ Current behavior:
 - Page-owned query routes share the page path, so generated apps dispatch them
   only for explicit query requests: `Accept: application/json`, another
   `+json` media type, or `X-GOWDK-Query: true`. Normal document requests keep
-  serving the page HTML at the same route.
+  serving the page HTML at the same route. JSON media ranges with `q=0` or an
+  invalid quality value do not select the query route; malformed media ranges
+  are ignored. `X-GOWDK-Query: true` remains an explicit override.
 - When the scanner can see the exported query input struct fields, generated
   adapters decode supported URL query parameters into the typed query input.
 - Query references on guarded pages inherit the page guards. When rate limiting

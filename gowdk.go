@@ -579,13 +579,14 @@ const DefaultCSRFSecretEnv = "GOWDK_CSRF_SECRET"
 // CSRFConfig controls generated CSRF token wiring for browser-reachable
 // state-changing endpoints.
 type CSRFConfig struct {
-	Enabled    bool
-	Disabled   bool
-	SecretEnv  string
-	CookieName string
-	FieldName  string
-	HeaderName string
-	Insecure   bool
+	Enabled                bool
+	Disabled               bool
+	SecretEnv              string
+	VerificationSecretEnvs []string
+	CookieName             string
+	FieldName              string
+	HeaderName             string
+	Insecure               bool
 }
 
 // EnabledForGeneratedEndpoints reports whether generated state-changing
@@ -599,10 +600,42 @@ func (config CSRFConfig) EnabledForGeneratedEndpoints() bool {
 // SecretEnvName returns the environment variable used by generated apps to
 // read the CSRF signing secret.
 func (config CSRFConfig) SecretEnvName() string {
-	if config.SecretEnv == "" {
+	if strings.TrimSpace(config.SecretEnv) == "" {
 		return DefaultCSRFSecretEnv
 	}
-	return config.SecretEnv
+	return strings.TrimSpace(config.SecretEnv)
+}
+
+// VerificationSecretEnvNames returns the runtime environment variables whose
+// secrets validate existing CSRF tokens without signing new tokens.
+func (config CSRFConfig) VerificationSecretEnvNames() []string {
+	names := make([]string, len(config.VerificationSecretEnvs))
+	for index, name := range config.VerificationSecretEnvs {
+		names[index] = strings.TrimSpace(name)
+	}
+	return names
+}
+
+// SecretEnvNames returns the primary CSRF secret environment variable followed
+// by every verification-only secret environment variable.
+func (config CSRFConfig) SecretEnvNames() []string {
+	return append([]string{config.SecretEnvName()}, config.VerificationSecretEnvNames()...)
+}
+
+// Validate checks the structural CSRF configuration without reading secret
+// values from the runtime environment.
+func (config CSRFConfig) Validate() error {
+	seen := map[string]bool{config.SecretEnvName(): true}
+	for index, name := range config.VerificationSecretEnvNames() {
+		if name == "" {
+			return fmt.Errorf("Build.CSRF.VerificationSecretEnvs[%d] must name an environment variable", index)
+		}
+		if seen[name] {
+			return fmt.Errorf("Build.CSRF secret environment variable %q is declared more than once", name)
+		}
+		seen[name] = true
+	}
+	return nil
 }
 
 // DefaultRequestBodyLimitBytes is the default generated request body cap for
@@ -949,15 +982,16 @@ func ValidateAddons(addons []Addon) error {
 }
 
 func validateAddonFeatureContracts(index int, name string, addon Addon, features []Feature) error {
+	capabilities := ResolveAddonCapabilities(addon)
 	for _, feature := range features {
 		switch feature {
 		case FeatureSEO:
-			if _, ok := addon.(SEOProvider); !ok {
-				return fmt.Errorf("addons[%d] %q declares feature %q but does not implement gowdk.SEOProvider", index, name, feature)
+			if capabilities.SEOProvider == nil {
+				return fmt.Errorf("addons[%d] %q declares feature %q but does not provide gowdk.SEOProvider capability", index, name, feature)
 			}
 		case FeatureAuth:
-			if _, ok := addon.(AuthSessionProvider); !ok {
-				return fmt.Errorf("addons[%d] %q declares feature %q but does not implement gowdk.AuthSessionProvider", index, name, feature)
+			if capabilities.AuthSessionProvider == nil {
+				return fmt.Errorf("addons[%d] %q declares feature %q but does not provide gowdk.AuthSessionProvider capability", index, name, feature)
 			}
 		}
 	}
@@ -1057,4 +1091,48 @@ type CSSResult struct {
 type CSSProcessor interface {
 	Addon
 	ProcessCSS(CSSContext) (CSSResult, error)
+}
+
+// AddonCapabilities describes the optional compiler and generated-output
+// capabilities exposed by an addon. Executable config bridges use this
+// descriptor because Go interface method sets cannot be reconstructed
+// dynamically from data.
+type AddonCapabilities struct {
+	CSSProcessor        CSSProcessor
+	SEOProvider         SEOProvider
+	AuthSessionProvider AuthSessionProvider
+	GoBlockConsumer     GoBlockConsumer
+}
+
+// AddonCapabilityProvider exposes explicit optional addon capabilities.
+// Ordinary in-process addons can keep implementing the optional interfaces
+// directly; bridges and adapters should implement this descriptor instead.
+type AddonCapabilityProvider interface {
+	AddonCapabilities() AddonCapabilities
+}
+
+// ResolveAddonCapabilities returns explicit addon capabilities when available,
+// otherwise it derives them from the optional interfaces implemented directly
+// by the addon.
+func ResolveAddonCapabilities(addon Addon) AddonCapabilities {
+	if addonIsNil(addon) {
+		return AddonCapabilities{}
+	}
+	if provider, ok := addon.(AddonCapabilityProvider); ok {
+		return provider.AddonCapabilities()
+	}
+	var capabilities AddonCapabilities
+	if processor, ok := addon.(CSSProcessor); ok {
+		capabilities.CSSProcessor = processor
+	}
+	if provider, ok := addon.(SEOProvider); ok {
+		capabilities.SEOProvider = provider
+	}
+	if provider, ok := addon.(AuthSessionProvider); ok {
+		capabilities.AuthSessionProvider = provider
+	}
+	if consumer, ok := addon.(GoBlockConsumer); ok {
+		capabilities.GoBlockConsumer = consumer
+	}
+	return capabilities
 }

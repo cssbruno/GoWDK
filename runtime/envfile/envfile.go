@@ -4,12 +4,42 @@ package envfile
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 )
+
+const (
+	// MaxLineBytes is the maximum logical line size accepted in an env file.
+	MaxLineBytes = 1 << 20
+
+	DiagnosticLineTooLong = "env_file_line_too_long"
+)
+
+// DiagnosticError describes an env-file parse diagnostic without exposing the
+// input value.
+type DiagnosticError struct {
+	Code  string
+	Path  string
+	Line  int
+	Limit int
+}
+
+func (err *DiagnosticError) Error() string {
+	if err == nil {
+		return ""
+	}
+	return fmt.Sprintf(
+		"%s:%d: %s: env-file line exceeds the %d-byte limit; use process environment or secret injection for larger values",
+		err.Path,
+		err.Line,
+		err.Code,
+		err.Limit,
+	)
+}
 
 // LoadResult describes one env-file load without exposing values.
 type LoadResult struct {
@@ -113,10 +143,15 @@ func ParseFile(path string) ([]Entry, error) {
 
 	var entries []Entry
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64<<10), MaxLineBytes+2)
 	lineNumber := 0
 	for scanner.Scan() {
 		lineNumber++
-		line := strings.TrimSpace(scanner.Text())
+		rawLine := scanner.Text()
+		if len(rawLine) > MaxLineBytes {
+			return nil, lineTooLongError(path, lineNumber)
+		}
+		line := strings.TrimSpace(rawLine)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -129,9 +164,21 @@ func ParseFile(path string) ([]Entry, error) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
+		if errors.Is(err, bufio.ErrTooLong) {
+			return nil, lineTooLongError(path, lineNumber+1)
+		}
 		return nil, err
 	}
 	return entries, nil
+}
+
+func lineTooLongError(path string, lineNumber int) error {
+	return &DiagnosticError{
+		Code:  DiagnosticLineTooLong,
+		Path:  path,
+		Line:  lineNumber,
+		Limit: MaxLineBytes,
+	}
 }
 
 func parseLine(line string) (Entry, bool, error) {

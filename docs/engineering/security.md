@@ -21,7 +21,9 @@ Do not treat current `act`, `api`, `partial`, `guard`, or SSR scaffolding as com
 - Generated actions, command endpoints, and state-changing API endpoints enable
   CSRF by default. Production configs must not set `Build.CSRF.Disabled` unless
   another cross-site request strategy is enforced, and every runtime environment
-  must provide a stable CSRF secret.
+  must provide a stable primary CSRF secret. Rolling deployments use
+  verification-only secrets so old and new instances accept each other's
+  tokens while only the primary key signs new tokens.
 - Generated form decoders must validate expected fields and avoid mass assignment.
 - Generated action forms must reject direct file inputs unless the enclosing
   `g:post` form is multipart and every file control declares explicit count,
@@ -42,7 +44,8 @@ Do not treat current `act`, `api`, `partial`, `guard`, or SSR scaffolding as com
 Before generated app output is considered production-ready:
 
 - Generated action, command, and state-changing API CSRF must be enabled and
-  configured with a runtime secret.
+  configured with a primary runtime secret. Multi-key verification and
+  old-cookie refresh must support rollback-safe staged rotation.
 - Redirects must reject unsafe external destinations unless explicitly allowed.
 - Generated decoders must define how unknown, missing, repeated, and file fields are handled.
 - Guards must have a documented execution contract, failure behavior, and test coverage.

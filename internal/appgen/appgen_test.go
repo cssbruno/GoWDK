@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +27,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/securitymanifest"
 	"github.com/cssbruno/gowdk/internal/source"
+	gowdkactions "github.com/cssbruno/gowdk/runtime/actions"
 )
 
 var updateGolden = flag.Bool("update", false, "update appgen golden files")
@@ -577,7 +579,10 @@ func TestGenerateWritesAuditIntegrationTest(t *testing.T) {
 					Enabled: true,
 					Headers: map[string]string{"X-Frame-Options": "DENY"},
 				},
-				CSRF: gowdk.CSRFConfig{SecretEnv: "GOWDK_TEST_CSRF_SECRET"},
+				CSRF: gowdk.CSRFConfig{
+					SecretEnv:              "GOWDK_TEST_CSRF_SECRET",
+					VerificationSecretEnvs: []string{"GOWDK_TEST_PREVIOUS_CSRF_SECRET"},
+				},
 			},
 		},
 		Actions: []ActionEndpoint{{
@@ -624,6 +629,7 @@ func TestGenerateWritesAuditIntegrationTest(t *testing.T) {
 		"package gowdkapp",
 		"func TestGOWDKAuditGeneratedSecurityPosture(t *testing.T)",
 		`t.Setenv("GOWDK_TEST_CSRF_SECRET", "gowdk-audit-test-csrf-secret-32-bytes")`,
+		`t.Setenv("GOWDK_TEST_PREVIOUS_CSRF_SECRET", "gowdk-audit-test-csrf-secret-32-bytes")`,
 		`t.Setenv("GOWDK_TEST_DATABASE_URL", "gowdk-audit-test")`,
 		`t.Setenv("GOWDK_TEST_REGION", "gowdk-audit-test")`,
 		"handler, err := Handler()",
@@ -960,6 +966,7 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 		`const maxActionBodyBytes int64 = 1 << 20`,
 		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
 		`if err := request.ParseForm(); err != nil`,
+		`if gowdkresponse.IsRequestBodyTooLarge(err)`,
 		`http.StatusRequestEntityTooLarge`,
 		`gowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, "invalid form")`,
 		`gowdkresponse.WriteNoStoreError(response, http.StatusRequestEntityTooLarge, "request body too large")`,
@@ -984,6 +991,9 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated main.go to contain %q:\n%s", expected, source)
 		}
+	}
+	if strings.Contains(source, `strings.Contains(err.Error(), "request body too large")`) {
+		t.Fatalf("generated action source must use typed body-limit errors:\n%s", source)
 	}
 }
 
@@ -2320,11 +2330,12 @@ func TestGenerateWiresCSRFByDefault(t *testing.T) {
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
 		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
-			SecretEnv:  "GOWDK_TEST_CSRF_SECRET",
-			CookieName: "csrf",
-			FieldName:  "_csrf",
-			HeaderName: "X-CSRF",
-			Insecure:   true,
+			SecretEnv:              "GOWDK_TEST_CSRF_SECRET",
+			VerificationSecretEnvs: []string{"GOWDK_TEST_NEXT_CSRF_SECRET", "GOWDK_TEST_OLD_CSRF_SECRET"},
+			CookieName:             "csrf",
+			FieldName:              "_csrf",
+			HeaderName:             "X-CSRF",
+			Insecure:               true,
 		}}},
 		Actions: []ActionEndpoint{{
 			Guards:      []string{"public"},
@@ -2355,6 +2366,10 @@ func TestGenerateWiresCSRFByDefault(t *testing.T) {
 		`func newCSRF() (*gowdkactions.CSRF, error)`,
 		`secret := strings.TrimSpace(os.Getenv("GOWDK_TEST_CSRF_SECRET"))`,
 		`return nil, errors.New("GOWDK_TEST_CSRF_SECRET is required when generated CSRF is enabled")`,
+		`verificationSecret1 := strings.TrimSpace(os.Getenv("GOWDK_TEST_NEXT_CSRF_SECRET"))`,
+		`return nil, errors.New("GOWDK_TEST_NEXT_CSRF_SECRET is required when configured as a CSRF verification secret")`,
+		`verificationSecret2 := strings.TrimSpace(os.Getenv("GOWDK_TEST_OLD_CSRF_SECRET"))`,
+		`VerificationSecrets: [][]byte{[]byte(verificationSecret1), []byte(verificationSecret2)}`,
 		`CookieName: "csrf"`,
 		`FieldName: "_csrf"`,
 		`HeaderName: "X-CSRF"`,
@@ -2445,6 +2460,7 @@ func TestGenerateSkipsCSRFWhenDisabled(t *testing.T) {
 			PageID:      "newsletter",
 			ActionName:  "Subscribe",
 			Route:       "/newsletter",
+			Guards:      []string{"public"},
 			InputFields: []string{"email"},
 			Redirect:    "/newsletter?ok=1",
 		}},
@@ -2465,6 +2481,41 @@ func TestGenerateSkipsCSRFWhenDisabled(t *testing.T) {
 	} {
 		if strings.Contains(source, unexpected) {
 			t.Fatalf("disabled CSRF should not emit %q:\n%s", unexpected, source)
+		}
+	}
+	if !strings.Contains(source, `if gowdkresponse.IsRequestBodyTooLarge(err)`) {
+		t.Fatalf("generated action source must use typed body-limit errors:\n%s", source)
+	}
+	command := exec.Command("go", "test", "./...")
+	command.Dir = result.AppDir
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("expected CSRF-disabled generated app to compile: %v\n%s", err, output)
+	}
+}
+
+func TestRuntimeImportMapOmitsStringsForSimpleBoundAction(t *testing.T) {
+	options := Options{
+		Config: csrfDisabledConfig(),
+		Actions: []ActionEndpoint{{
+			PageID:     "newsletter",
+			ActionName: "Subscribe",
+			Route:      "/newsletter",
+			Guards:     []string{"public"},
+			Binding: source.BackendBinding{
+				Status:       source.BackendBindingBound,
+				ImportPath:   "example.com/site/actions",
+				PackageName:  "actions",
+				FunctionName: "Subscribe",
+				Signature:    source.BackendSignatureAction0,
+			},
+		}},
+	}
+	for name, imports := range map[string]map[string]string{
+		"embedded": runtimeImportMap(options),
+		"backend":  backendRuntimeImportMap(options),
+	} {
+		if _, ok := imports["strings"]; ok {
+			t.Fatalf("%s simple bound action should not emit an unused strings import: %#v", name, imports)
 		}
 	}
 }
@@ -2521,6 +2572,7 @@ func TestGenerateWiresCSRFForCommandContracts(t *testing.T) {
 		`func commandPatientsCreatePatientPOSTPatients(contractRegistry *gowdkcontracts.Registry) gowdkruntime.BackendHandler`,
 		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
 		`if err := request.ParseForm(); err != nil`,
+		`if gowdkresponse.IsRequestBodyTooLarge(err)`,
 		`gowdkresponse.WriteNoStoreJSONError(response, http.StatusRequestEntityTooLarge, "request body too large")`,
 		`gowdkresponse.WriteNoStoreJSONError(response, http.StatusBadRequest, "invalid form")`,
 		`if csrfValidator != nil {`,
@@ -2533,6 +2585,9 @@ func TestGenerateWiresCSRFForCommandContracts(t *testing.T) {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated command contract CSRF source to contain %q:\n%s", expected, source)
 		}
+	}
+	if strings.Contains(source, `strings.Contains(err.Error(), "request body too large")`) {
+		t.Fatalf("generated command source must use typed body-limit errors:\n%s", source)
 	}
 	if strings.Contains(source, `Kind: "action", Handler: action`) {
 		t.Fatalf("did not expect a classic action route for contract-only CSRF app:\n%s", source)
@@ -8936,8 +8991,9 @@ func TestGeneratedBinaryValidatesCSRFByDefault(t *testing.T) {
 
 	if _, err := GenerateWithOptions(outputDir, appDir, Options{
 		Config: gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{
-			SecretEnv: "GOWDK_TEST_CSRF_SECRET",
-			Insecure:  true,
+			SecretEnv:              "GOWDK_TEST_CSRF_SECRET",
+			VerificationSecretEnvs: []string{"GOWDK_TEST_PREVIOUS_CSRF_SECRET"},
+			Insecure:               true,
 		}}},
 		Actions: []ActionEndpoint{{
 			Guards:      []string{"public"},
@@ -8959,6 +9015,7 @@ func TestGeneratedBinaryValidatesCSRFByDefault(t *testing.T) {
 	command.Env = append(os.Environ(),
 		"GOWDK_ADDR="+addr,
 		"GOWDK_TEST_CSRF_SECRET="+strings.Repeat("s", 32),
+		"GOWDK_TEST_PREVIOUS_CSRF_SECRET="+strings.Repeat("p", 32),
 	)
 	if err := command.Start(); err != nil {
 		t.Fatal(err)
@@ -8967,6 +9024,31 @@ func TestGeneratedBinaryValidatesCSRFByDefault(t *testing.T) {
 		_ = command.Process.Kill()
 		_, _ = command.Process.Wait()
 	}()
+
+	previousCSRF, err := gowdkactions.NewCSRF(gowdkactions.CSRFOptions{
+		Secret:   []byte(strings.Repeat("p", 32)),
+		Insecure: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousResponse := httptest.NewRecorder()
+	previousToken, err := previousCSRF.Token(previousResponse, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousCookie := previousResponse.Result().Cookies()[0]
+	response, err := waitForHTTPStatusWithHeaders("http://"+addr+"/newsletter", http.MethodPost, "email=reader%40example.com", map[string]string{
+		"Cookie":       previousCookie.Name + "=" + previousCookie.Value,
+		"X-GOWDK-CSRF": previousToken,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected verification-key CSRF POST to return 303, got %d", response.StatusCode)
+	}
 
 	body, headers, err := waitForHTTPResponse("http://" + addr + "/newsletter")
 	if err != nil {
@@ -8981,7 +9063,7 @@ func TestGeneratedBinaryValidatesCSRFByDefault(t *testing.T) {
 		t.Fatalf("expected csrf cookie, got %q", headers.Get("Set-Cookie"))
 	}
 
-	response, err := waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "email=reader%40example.com")
+	response, err = waitForHTTPStatus("http://"+addr+"/newsletter", http.MethodPost, "email=reader%40example.com")
 	if err != nil {
 		t.Fatal(err)
 	}

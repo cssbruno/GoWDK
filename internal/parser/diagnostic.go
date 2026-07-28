@@ -16,6 +16,7 @@ const (
 	DiagnosticOldActionBlockSyntax         = "old_action_block_syntax"
 	DiagnosticOldAPIBlockSyntax            = "old_api_block_syntax"
 	DiagnosticPackageMustBeFirst           = "package_must_be_first"
+	DiagnosticSourceLineTooLong            = "source_line_too_long"
 	DiagnosticUnsupportedLiteralRecord     = "unsupported_literal_record_syntax"
 	DiagnosticUnsupportedTopLevelBlock     = "unsupported_top_level_block"
 	DiagnosticUnsupportedLayoutMetadata    = "unsupported_layout_metadata"

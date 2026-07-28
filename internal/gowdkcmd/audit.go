@@ -378,12 +378,12 @@ func parseAuditCommandOptions(args []string) (auditCommandOptions, []string, err
 			}
 		case strings.HasPrefix(arg, "--diff="):
 			options.DiffPath = strings.TrimSpace(strings.TrimPrefix(arg, "--diff="))
-			if options.DiffPath == "" {
-				return options, nil, errors.New(auditUsage)
+			if options.DiffPath == "" || flagLikeValue(options.DiffPath) {
+				return options, nil, missingValueFlagError("--diff")
 			}
 		case arg == "--diff":
-			if index+1 >= len(args) {
-				return options, nil, errors.New(auditUsage)
+			if index+1 >= len(args) || flagLikeValue(args[index+1]) {
+				return options, nil, missingValueFlagError("--diff")
 			}
 			index++
 			options.DiffPath = strings.TrimSpace(args[index])

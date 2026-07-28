@@ -842,7 +842,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		arg := args[i]
 		if value, next, ok, missing := consumeValueFlag(args, i, "--out", false); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--out")
 			}
 			plan.OutputDir = value
 			i = next
@@ -850,7 +850,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--app", false); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--app")
 			}
 			plan.AppDir = value
 			if strings.TrimSpace(plan.AppDir) == "" {
@@ -861,7 +861,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--bin", false); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--bin")
 			}
 			plan.BinaryPath = value
 			if strings.TrimSpace(plan.BinaryPath) == "" {
@@ -872,7 +872,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--docker-base", true); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--docker-base")
 			}
 			plan.DockerBase = value
 			if strings.TrimSpace(plan.DockerBase) == "" {
@@ -883,7 +883,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--deploy-recipe", true); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--deploy-recipe")
 			}
 			plan.DeployRecipes = appendNames(plan.DeployRecipes, value)
 			i = next
@@ -891,7 +891,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--wasm", false); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--wasm")
 			}
 			plan.WASMPath = value
 			if strings.TrimSpace(plan.WASMPath) == "" {
@@ -902,7 +902,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--backend-app", false); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--backend-app")
 			}
 			plan.BackendAppDir = value
 			if strings.TrimSpace(plan.BackendAppDir) == "" {
@@ -913,7 +913,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--backend-bin", false); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--backend-bin")
 			}
 			plan.BackendBinaryPath = value
 			if strings.TrimSpace(plan.BackendBinaryPath) == "" {
@@ -924,7 +924,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--worker-app", false); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--worker-app")
 			}
 			plan.WorkerAppDir = value
 			if strings.TrimSpace(plan.WorkerAppDir) == "" {
@@ -935,7 +935,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--worker-bin", false); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--worker-bin")
 			}
 			plan.WorkerBinaryPath = value
 			if strings.TrimSpace(plan.WorkerBinaryPath) == "" {
@@ -946,7 +946,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--cron-app", false); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--cron-app")
 			}
 			plan.CronAppDir = value
 			if strings.TrimSpace(plan.CronAppDir) == "" {
@@ -957,7 +957,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--cron-bin", false); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--cron-bin")
 			}
 			plan.CronBinaryPath = value
 			if strings.TrimSpace(plan.CronBinaryPath) == "" {
@@ -968,7 +968,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--config", false); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--config")
 			}
 			plan.ConfigPath = value
 			i = next
@@ -976,7 +976,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--project-root", false); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--project-root")
 			}
 			plan.Options.ProjectRoot = value
 			i = next
@@ -984,7 +984,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--env-file", false); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--env-file")
 			}
 			plan.Options.EnvFilePath = value
 			i = next
@@ -992,7 +992,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--target", false); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--target")
 			}
 			plan.TargetNames = appendNames(plan.TargetNames, value)
 			i = next
@@ -1000,7 +1000,7 @@ func parseBuildOptions(args []string) (buildOptions, error) {
 		}
 		if value, next, ok, missing := consumeValueFlag(args, i, "--module", false); ok {
 			if missing {
-				return buildOptions{}, errors.New(buildUsage)
+				return buildOptions{}, missingValueFlagError("--module")
 			}
 			plan.ModuleNames = appendNames(plan.ModuleNames, value)
 			i = next

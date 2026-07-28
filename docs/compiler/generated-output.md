@@ -115,6 +115,11 @@ Action, API, fragment, command, query, SSR, hybrid, realtime, guard, rate-limit,
 CSRF, CORS, and tracing behavior is included only when declared, enabled, and
 validated for the selected build.
 
+Generated CSRF startup reads the primary signing secret named by
+`Build.CSRF.SecretEnv` and every verification-only secret named by
+`Build.CSRF.VerificationSecretEnvs`. Generated source contains environment
+variable names, never secret values.
+
 Worker and cron role outputs follow the same generated-app rule: they are
 normal Go modules downstream of contract metadata, and `--worker-bin` /
 `--cron-bin` compile their generated commands with `go build`.

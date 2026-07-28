@@ -61,6 +61,9 @@ func PlanBackendApplication(options Options) (ApplicationPlan, error) {
 }
 
 func validateAppPlanOptions(options Options, includeSSR bool) error {
+	if err := options.Config.Build.CSRF.Validate(); err != nil {
+		return err
+	}
 	if err := validateActionEndpoints(options.Actions); err != nil {
 		return err
 	}

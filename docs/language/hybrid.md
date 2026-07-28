@@ -42,8 +42,9 @@ Hybrid refresh is explicit:
 
 - Actions decide their own redirect, fragment, JSON, or reload result.
 - Actions do not implicitly rerun page `server {}` data.
-- Fragments own their own request-time data and return no-store fragment
-  responses.
+- Fragment Go hooks own request-time data and response decisions, `.gwdk`
+  declarations own fragment markup, and generated fragment responses are
+  `no-store`.
 - `g:command` with a bound `g:query` region can return single-flight patches to
   the command caller.
 - Realtime query invalidation can use `/_gowdk/realtime/query-refresh` for

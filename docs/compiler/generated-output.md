@@ -55,6 +55,17 @@ realtime surfaces that were enabled and validated at build time.
 Generated binaries speak HTTP. TLS, public host routing, secrets, durable
 storage, process supervision, and backups remain deployment responsibilities.
 
+Binary and `--wasm` packaging is a read-only operation over the selected Go
+module. GOWDK never runs `go mod tidy` while packaging. It invokes `go build`
+with `-trimpath`, `-buildvcs=false`, and `-mod=vendor` when a vendor directory
+exists or `-mod=readonly` otherwise. Ambient `GOFLAGS` are removed; build tags
+must come from an explicit packaging input.
+
+The artifact is compiled to a same-directory temporary path, hashed with
+SHA-256, then renamed into place. A failed compile or metadata read leaves an
+existing artifact untouched. Windows publication temporarily moves an existing
+artifact aside and restores it if the final rename fails.
+
 ## Reports And Manifests
 
 | File | Source |
@@ -81,6 +92,8 @@ The public `gowdk manifest` command is documented in
   Final file replacements use same-directory temporary files followed by atomic
   rename, so validation, formatting, manifest/report generation, and security
   manifest generation fail before touching committed files.
+- Binary and WASM packaging follows the same publish-after-success rule and
+  does not rewrite the source module's `go.mod` or `go.sum`.
 - Document new generated files in this page, the build report page, or the
   reference page that owns the public contract.
 - New generated artifact kinds must declare whether they are public,

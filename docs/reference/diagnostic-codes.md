@@ -108,10 +108,13 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `source_line_too_long`,
   `unsupported_literal_record_syntax`, `unsupported_top_level_block`,
   `unsupported_layout_metadata`, `invalid_component_prop`,
-  `unsupported_component_prop_type`, `unterminated_string`.
+  `unsupported_component_prop_type`, `directive_lane_required`,
+  `directive_lane_invalid`, `unterminated_string`.
 - Environment files: `env_file_line_too_long`.
 - Packages and imports: `missing_package_declaration`, `package_mismatch`,
   `go_package_error`, `invalid_go_import`, `duplicate_go_import_alias`.
+- Explicit Go interop: `missing_load_registration`,
+  `missing_guard_registration`, `missing_auth_registration`.
 - GOWDK source imports: `duplicate_gowdk_use_alias`,
   `unknown_gowdk_use_package`, `unknown_gowdk_use_alias`,
   `unknown_gowdk_component`, `unsupported_gowdk_use_scope`.
@@ -123,6 +126,7 @@ Parser diagnostics emit stable codes for common unsupported syntax and keep
   `missing_page_guard`, `public_guard_exclusive`, and
   `guard_requires_request_render`.
 - Server-lane view directives (`g:for`/`g:if` over `server {}` data):
+  `directive_lane_mismatch`,
   `server_for_invalid`, `server_for_nested_scope`, `server_if_invalid`,
   `server_if_nested_scope`, `server_load_field_conflict`,
   `server_load_field_unknown`,

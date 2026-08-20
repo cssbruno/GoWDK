@@ -438,7 +438,7 @@ block:
   <p>Loading</p>
 {:then items}
   <ul>
-    <li g:for={item in items} g:key={item.ID}>{item.Name}</li>
+    <li g:for={item in items} g:lane="client" g:key={item.ID}>{item.Name}</li>
   </ul>
 {:catch err}
   <p>{err.message}</p>
@@ -497,7 +497,7 @@ client {
 `len(value)` accepts strings and arrays and returns `int`. `lower(value)` and
 `upper(value)` accept strings and return strings. `contains(value, query)`
 accepts strings and returns `bool`; it is intended for small component-local
-filters such as `g:if={contains(lower(item.Name), lower(Query))}` inside
+filters such as `g:if={contains(lower(item.Name), lower(Query))} g:lane="client"` inside
 `g:for`. `string(value)` converts scalar values to `string`. `int(value)` and
 `float(value)` accept strings or numeric values and return the requested numeric
 type.
@@ -660,7 +660,7 @@ Elements inside stateful components can use first-slice conditional rendering:
 
 ```gwdk
 view {
-  <section g:if={Open}>Open content</section>
+  <section g:if={Open} g:lane="client">Open content</section>
   <section g:else-if={Loading}>Loading</section>
   <section g:else>Closed</section>
 }
@@ -676,8 +676,8 @@ list rendering:
 
 ```gwdk
 view {
-  <li g:for={item in Items} g:key={item.ID}>{item.Name}</li>
-  <li g:for={item, i in Items} g:key={item.ID}>{i}: {item.Name}</li>
+  <li g:for={item in Items} g:lane="client" g:key={item.ID}>{item.Name}</li>
+  <li g:for={item, i in Items} g:lane="client" g:key={item.ID}>{i}: {item.Name}</li>
 }
 ```
 

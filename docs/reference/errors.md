@@ -16,6 +16,9 @@ Expected errors are user-owned handler results:
   404, 403, 422, or 500.
 - Return `response.NewHandlerError(status, message, cause)` when a generated
   action or API handler should fail with a specific HTTP status.
+- Prefer `response.NewExpectedCode(kind, code, defaultMessage, vars, cause)` for
+  user-facing failures. JSON responses expose `{ok:false,error:{code,message}}`;
+  non-JSON responses expose `X-GOWDK-Error-Code`.
 - Return ordinary Go errors only for failures where HTTP 500 is acceptable.
   Generated action and API adapters use `response.HandlerStatus`, defaulting to
   HTTP 500.
@@ -36,6 +39,31 @@ Unexpected errors are generated-lane failures:
 - Generated request-shape failures use generic messages such as `invalid form`,
   `invalid csrf token`, or `validation failed`.
 - Generated form decoding and validation do not echo submitted values.
+
+## Stable Codes And Localization
+
+Runtime error codes are separate from compiler diagnostic codes. Configure
+localized messages by specializing the existing typed catalog:
+
+```go
+var runtimeErrors = i18n.NewErrorBundle("en", map[string]i18n.Catalog[i18n.ErrorCode]{
+	"en": i18n.NewCatalog("en", map[i18n.ErrorCode]string{
+		"validation_required": "{field} is required",
+	}),
+	"pt": i18n.NewCatalog("pt", map[i18n.ErrorCode]string{
+		"validation_required": "{field} é obrigatório",
+	}),
+})
+
+var Config = gowdk.Config{
+	I18N: gowdk.I18NConfig{Errors: runtimeErrors},
+}
+```
+
+Generated validation, action/API JSON, guard, auth, and fragment failures carry
+stable codes. Catalog lookup uses the active route locale, formats variables,
+and falls back to the safe default message when a key or locale is absent.
+`validation.Error` exposes `Field`, `Code`, `Message`, and optional `Vars`.
 
 ## Generated Error Pages
 

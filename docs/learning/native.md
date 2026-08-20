@@ -97,8 +97,8 @@ Use installed `gowdk` commands inside an initialized app. Use
 - Read [guards](../language/guards.md) and [hooks](../reference/hooks.md).
 - Inspect the protected flagship route in
   `examples/flagship/src/app/dashboard.page.gwdk`.
-- Custom guards need generated-app hooks; the flagship `Makefile` copies
-  `apphooks/flagship_hooks.go.txt` before building the binary.
+- Custom guards use `gowdk.RegisterGuards` in the flagship `Config.Interop`;
+  ordinary feature packages never import the generated app package.
 
 ## Lesson 13: Use A Database From Go
 

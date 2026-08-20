@@ -67,9 +67,9 @@ The main generated routes are:
 - The fragment template under `src/app/fragments/` exercises the current
   low-level custom response-body compatibility path. New application markup
   belongs in `.gwdk`; generated typed fragment data binding remains planned.
-- `apphooks/flagship_hooks.go.txt` is copied into the generated app package before
-  binary compilation so custom guards and the optional rate limiter can be wired
-  through the generated app hook surface.
+- `gowdk.config.go` registers page loads and custom guards through typed
+  `Config.Interop` function references. `apphooks/flagship_hooks.go.txt` remains
+  only for the optional generated-package rate limiter API.
 - Generated output in `.gowdk/`, `dist/`, and `bin/` is intentionally ignored.
 
 ## Demo Credentials
@@ -81,10 +81,9 @@ and signs the demo session cookie.
 
 ## Current Limitations
 
-- Custom guards and rate limiter registration are generated-app hooks today, so
-  `make build` prepares `apphooks/flagship_hooks.go.txt` before compiling the
-  binary. Running `gowdk build --target flagship` directly from a clean tree will
-  miss those hooks.
+- The rate limiter still uses a generated-package registration API, so `make
+  build` prepares `apphooks/flagship_hooks.go.txt`. Guards and SSR loads do not
+  depend on that copied file.
 - The WASM island uses the current call-site placeholder path. A real browser Go
   WASM package can replace it when the example needs browser-owned Go logic.
 - Contract command/query adapters are local in-process web adapters; realtime

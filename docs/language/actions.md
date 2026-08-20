@@ -117,10 +117,11 @@ Current behavior:
   user-owned Go behavior.
 - Actions declared on guarded pages share generated app guard backing with SSR
   pages and APIs. `auth.Addon` supplies `auth.required` and native RBAC session
-  guard backing when configured. Custom guards require `GOWDKGuardRegistry`;
+  guard backing when configured. Custom guards require
+  `Config.Interop.Guards = gowdk.RegisterGuards(package.Guards)`;
   native RBAC guard IDs such as `role:admin` and `permission:posts.write`
-  require `GOWDKAuthProvider` only without `auth.Addon`. Missing backing hooks
-  fail the generated app Go build.
+  require `Config.Interop.AuthProvider` only without `auth.Addon`. Missing
+  registrations fail compiler validation.
   Generated action handlers run guards before CSRF checks, form decoding, and
   user handler calls. Treat these as defense-in-depth redundancy for generated
   route/page access, never as backend resource authorization. If the page

@@ -44,9 +44,9 @@ the rest are opt-in extension points.
    (`sitemap.xml`/`robots.txt`), and `gowdk.GoBlockConsumer.GeneratedGo` (files
    relative to the generated app directory, formatted before writing).
 4. **Runtime hook registration** — generated apps register runtime hooks from
-   user-owned Go in the generated package, for example
-   `RegisterRateLimiter(*ratelimit.Limiter)`, custom `GOWDKGuardRegistry`
-   entries, `GOWDKAuthProvider() auth.Provider`, or
+   explicit typed `Config.Interop` providers, for example custom guard
+   registries and auth providers, plus generated APIs such as
+   `RegisterRateLimiter(*ratelimit.Limiter)` or
    `RegisterContractEventSink(...)`. The built-in auth addon is the narrow
    exception: `auth.Addon(auth.Options{...})` wires its own session provider and
    `auth.required` guard. GOWDK never calls third-party runtime code implicitly;
@@ -100,7 +100,7 @@ preserved exactly.
   build-time extension options.
 - `runtime/<name>` packages provide request-time helpers used by generated apps
   and application Go.
-- Generated app hooks such as `RegisterRateLimiter` and `GOWDKAuthProvider`
+- Typed config providers and generated APIs such as `RegisterRateLimiter`
   wire application-owned runtime objects. External addons are not implicit
   background services.
 - `gowdk.NewAddon(name, features...)` is only a marker for feature checks unless
@@ -473,9 +473,9 @@ if err != nil {
 cookie, err := sessions.Cookie(auth.Principal{ID: userID, Roles: []string{"user"}})
 ```
 
-Custom guard IDs still require `GOWDKGuardRegistry`. Native `role:` and
-`permission:` guards require `GOWDKAuthProvider` only when the auth addon is not
-configured.
+Custom guard IDs require `Config.Interop.Guards`. Native `role:` and
+`permission:` guards require `Config.Interop.AuthProvider` only when the auth
+addon is not configured.
 
 GOWDK owns generated guard dispatch, CSRF validation, signed session cookie
 helpers, the revocable session interface, and native RBAC checks. Application Go

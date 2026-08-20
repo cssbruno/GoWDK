@@ -17,15 +17,15 @@ SSR is optional and must not become the default framework identity.
   `runtime/app.TypedParams(ctx)` before guards, load functions, or rendering
   run. Invalid typed params return 400; missing params return 404.
 - Generated SSR supports declared identifier and dotted-path fields such as
-  `server { => { user, title, account.plan } }` and calls a same-package exported
-  Go function named `Load<PageID>`. `<PageID>` is the explicit `page` value
-  when present, otherwise the filename-derived page ID.
+  `server { => { user, title, account.plan } }`. `Config.Interop.Loads`
+  explicitly maps the page ID to an exported Go function with
+  `gowdk.RegisterLoad("dashboard", dashboard.Load)`.
 - Supported load function signatures are
   `func LoadDashboard(ssr.LoadContext) map[string]any`,
   `func LoadDashboard(ssr.LoadContext) (map[string]any, error)`,
   `func LoadDashboard(ssr.LoadContext) DashboardData`, and
   `func LoadDashboard(ssr.LoadContext) (DashboardData, error)`.
-  Typed result structs must be exported same-package structs. Exported fields
+  Typed result structs must be exported structs. Exported fields
   are exposed by Go field name or `json` tag name, and `json:"-"` hides a field.
   Returned values replace generated SSR placeholders with request-time HTML
   escaping. Dotted paths resolve through nested maps with string keys, structs,
@@ -77,46 +77,31 @@ SSR is optional and must not become the default framework identity.
   route can be gated before HTML is returned. `runtime/guard` exposes
   `Context`, `Registry`, and ordered guard execution contracts. Generated SSR,
   action, API, and fragment handlers run declared guards before user
-  logic. A guarded generated app will not compile unless required guard backing
-  functions exist. Ordinary guard errors fail closed with HTTP 403. Guards can
+  logic. Missing backing registrations are compiler diagnostics. Ordinary guard
+  errors fail closed with HTTP 403. Guards can
   intentionally return `runtime/guard.RedirectTo`, `runtime/guard.Redirect`, or
   `runtime/guard.Respond` errors to write no-store redirects or custom
   responses. Native RBAC guard IDs use `role:<name>` and
   `permission:<name>` and resolve through an application-owned
   `runtime/auth.Provider`.
 
-Generated app packages that include at least one guarded SSR, action, API, or
-fragment route require backing functions in the generated app package unless
-`auth.Addon` supplies them. With `auth.Addon(auth.Options{...})`, generated
-startup configures the session manager, registers `auth.required`, and uses that
-session manager for native `role:` / `permission:` guards.
+Declare request-time loads and custom backing providers explicitly in config.
+Registrations accept real Go function values and live in ordinary app packages:
 
 ```go
-func GOWDKGuardRegistry() gowdkguard.Registry // required when custom guard IDs are used
-func GOWDKAuthProvider() auth.Provider        // required when role:/permission: IDs are used without auth.Addon
+Interop: gowdk.InteropConfig{
+	Loads: []gowdk.LoadRegistration{
+		gowdk.RegisterLoad("dashboard", dashboard.Load),
+	},
+	Guards:       gowdk.RegisterGuards(security.Guards),
+	AuthProvider: gowdk.RegisterAuthProvider(security.AuthProvider),
+},
 ```
 
-Define custom guards in app startup code that is compiled with the generated app
-package. If this function is missing while custom guard IDs are declared, `go
-build` fails.
-
-```go
-package gowdkapp
-
-import gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
-
-func GOWDKGuardRegistry() gowdkguard.Registry {
-	return gowdkguard.Registry{
-		"auth.required": func(ctx gowdkguard.Context) error {
-			return nil
-		},
-	}
-}
-```
-
-For native RBAC guards, define only the application-owned principal source. If
-this function is missing while `role:` or `permission:` guard IDs are declared,
-`go build` fails.
+`RegisterLoad` replaces the `Load<PageID>` naming convention. Custom guards need
+`RegisterGuards`. Native `role:`/`permission:` guards need
+`RegisterAuthProvider` only when `auth.Addon` is not configured. The addon still
+supplies `auth.required` and its session-backed provider automatically.
 
 ```go
 import (
@@ -125,7 +110,7 @@ import (
 	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
 )
 
-func GOWDKAuthProvider() gowdkauth.Provider {
+func AuthProvider() gowdkauth.Provider {
 	return gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
 		return &gowdkauth.Principal{
 			ID:          "user-1",
@@ -136,18 +121,19 @@ func GOWDKAuthProvider() gowdkauth.Provider {
 }
 ```
 
-Feature packages that declare page, action, or API handlers should not import
-the generated `gowdkapp` package. Keep registration in the generated app
-package to avoid import cycles.
+Feature packages never import the generated `gowdkapp` package. Missing typed
+registrations fail during compiler validation and appear in `inspect
+go-bindings`.
 
 Native RBAC guards are a defense-in-depth redundancy layer for generated
 route/page access. They must never replace backend authorization for protected
 resources in normal Go handlers and services.
 
-## Lane inference: one directive, two lanes
+## Explicit directive lanes
 
-GOWDK has two execution lanes for `g:for` and `g:if`, and the compiler picks the
-lane from the **data source**, not from a separate directive:
+GOWDK has two execution lanes for `g:for` and `g:if`. Source declares the lane
+with `g:lane="server"` or `g:lane="client"`, and the compiler verifies it
+against data ownership:
 
 - When the operand is a **`server {}` request-time field** (or, when nested, the
   enclosing row item), `g:for`/`g:if` render **server-side** at request time, with
@@ -156,10 +142,11 @@ lane from the **data source**, not from a separate directive:
 - When the operand is **client `state`/`store`**, `g:for`/`g:if` bind a **reactive
   client island**.
 
-So `g:for={col in columns}` over a `server {}` field is a server-rendered list,
-while `g:for={todo in todos}` over component `state` is a client island — same
-directive, lane chosen by where the data lives. A name that is neither a declared
-`server {}` field nor client state is rejected. There are no separate `g:each`/`g:when` directives; the lane is inferred. <!-- removed-syntax-ok: documents the g:each/g:when -> g:for/g:if rename -->
+So `g:for={col in columns} g:lane="server"` over a `server {}` field is a
+server-rendered list, while component state uses
+`g:for={todo in todos} g:lane="client"`. A missing lane gets
+`directive_lane_required`; a declaration that disagrees with its data gets
+`directive_lane_mismatch`. There are no separate `g:each`/`g:when` directives. <!-- removed-syntax-ok: documents the g:each/g:when -> g:for/g:if rename -->
 
 ## Server-rendered lists (`g:for` over `server {}`)
 
@@ -174,9 +161,9 @@ guard public
 server { => { columns } }
 view {
   <section class="board">
-    <div class="column" g:for={col in columns}>
+    <div class="column" g:for={col in columns} g:lane="server">
       <h2>{col.title}</h2>
-      <article class="card" g:for={issue in col.issues}>
+      <article class="card" g:for={issue in col.issues} g:lane="server">
         <span>{issue.id}</span> {issue.title}
       </article>
     </div>
@@ -193,16 +180,15 @@ func LoadBoard(ssr.LoadContext) (map[string]any, error) {
 
 Contract:
 
-- A top-level `g:for` over a declared `server {}` field renders server-side. The
-  same `g:for` over component `state`/`store` is a client island instead — the
-  lane follows the source.
+- A top-level `g:for` with `g:lane="server"` must reference a declared
+  `server {}` field. Component `state`/`store` requires `g:lane="client"`.
 - Rows interpolate the item with `{item.Field}` (dotted paths such as
   `{item.author.name}` are supported) and the optional index with
-  `g:for={item, i in field}` then `{i}`. Field values are matched against map
+  `g:for={item, i in field} g:lane="server"` then `{i}`. Field values are matched against map
   keys, exported Go struct fields, or json tags, and are always escaped.
-- Server lists nest. A nested `g:for={child in item.children}` must reference the
+- Server lists nest. A nested `g:for={child in item.children} g:lane="server"` must reference the
   enclosing row item; its slice is resolved per parent row. Nested directives
-  inherit the server lane.
+  declare `g:lane="server"` too.
 - Rows support static markup, item interpolation, nested `g:for`, and nested
   `g:if` only. Components, other client directives (`g:on:*`, `g:bind:*`,
   islands), and `g:unsafe-html` are not part of a server row. Request-time
@@ -224,8 +210,8 @@ guard public
 server { => { count, status } }
 view {
   <section>
-    <p g:if={count > 0 && status == "open"}>You have {count} open items</p>
-    <p g:if={!count}>No issues yet</p>
+    <p g:if={count > 0 && status == "open"} g:lane="server">You have {count} open items</p>
+    <p g:if={!count} g:lane="server">No issues yet</p>
   </section>
 }
 ```
@@ -239,9 +225,8 @@ func LoadBoard(ssr.LoadContext) (map[string]any, error) {
 
 Contract:
 
-- A top-level `g:if` whose condition references a `server {}` field renders
-  server-side; over client `state`/`store` the same `g:if` is a client
-  conditional instead.
+- A top-level `g:if` with `g:lane="server"` must reference a `server {}` field;
+  client `state`/`store` uses `g:lane="client"`.
 - A top-level server `g:if` accepts a full bool expression — comparisons (`==`,
   `!=`, `<`, `<=`, `>`, `>=`), logic (`&&`, `||`, `!`), and literals — over
   `server {}` fields, evaluated at request time. A value with no operator is a
@@ -252,10 +237,10 @@ Contract:
 - A `g:if` branch shares the enclosing scope: a top-level branch interpolates
   `server {}` fields (`{count}`); a `g:if` inside a server `g:for` row references
   the row item (`{issue.id}`), and a **nested** server `g:if` is a single row
-  field (`g:if={issue.urgent}`), not a compound expression.
+  field (`g:if={issue.urgent} g:lane="server"`), not a compound expression.
 - Server `g:for` and `g:if` nest in either direction: a list inside a branch, a
   conditional inside a row.
-- The empty/else branch is a sibling `g:if={!field}`. `g:else`/`g:else-if` are
+- The empty/else branch is a sibling `g:if={!field} g:lane="server"`. `g:else`/`g:else-if` are
   client-only chains and cannot follow a server `g:if`.
 - A server-rendered `g:if` requires the SSR addon and a request-time page; it has
   no SPA/static output form.

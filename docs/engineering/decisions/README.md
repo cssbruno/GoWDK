@@ -28,6 +28,7 @@ a new ADR instead of rewriting its history.
 | [0015](0015-generated-binary-lifecycle-services.md) | Generated binary lifecycle service contracts |
 | [0016](0016-pure-go-helpers-from-bounded-client.md) | Pure Go helpers from bounded client code through WASM |
 | [0017](0017-callback-props-and-scoped-cells.md) | Callback props and scoped cells for parent-child communication |
+| [0018](0018-phase-publication-and-extension-boundaries.md) | Typed compiler phases, committed output generations, and versioned executable extensions |
 
 ## Maintenance
 

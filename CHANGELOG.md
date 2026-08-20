@@ -3,6 +3,22 @@
 GOWDK is experimental 0.x software. Public syntax, generated output, runtime
 packages, and tooling contracts may change before 1.0.
 
+## [0.13.0](https://github.com/cssbruno/GoWDK/compare/v0.12.3...v0.13.0) (2026-08-20)
+
+
+### Features
+
+* **compiler:** harden v1 execution contracts ([9ed07bb](https://github.com/cssbruno/GoWDK/commit/9ed07bb45606e90b040c6023cfbd47e0a43382d3))
+* **compiler:** harden v1 execution contracts ([bad0ec6](https://github.com/cssbruno/GoWDK/commit/bad0ec6436899d9db61d0bc1ed79ccb943a46a8d))
+
+
+### Bug Fixes
+
+* **examples:** align SSR smoke fixture with interop contract ([58bd8e3](https://github.com/cssbruno/GoWDK/commit/58bd8e3bc015b3db097598b7df06d84fb81ffbde))
+* **examples:** align SSR smoke fixture with interop contract ([bd07c03](https://github.com/cssbruno/GoWDK/commit/bd07c032f401cdfb8a78cb4ea72c8e549150bab7))
+* resolve runtime compiler and tooling regressions ([eadad23](https://github.com/cssbruno/GoWDK/commit/eadad23e2a28e39f6324effb5558930b125c944c))
+* resolve runtime compiler and tooling regressions ([d8eafca](https://github.com/cssbruno/GoWDK/commit/d8eafcaf38461f0764bba53e6b22243ea365ebed))
+
 ## [0.12.3](https://github.com/cssbruno/GoWDK/compare/v0.12.2...v0.12.3) (2026-07-07)
 
 

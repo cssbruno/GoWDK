@@ -4,6 +4,7 @@ package gowdkconfig
 
 import (
 	"github.com/cssbruno/gowdk"
+	authaddon "github.com/cssbruno/gowdk/addons/auth"
 	contractsaddon "github.com/cssbruno/gowdk/addons/contracts"
 	"github.com/cssbruno/gowdk/addons/realtime"
 )
@@ -25,6 +26,7 @@ var Config = gowdk.Config{
 		Output: "gowdk_cache",
 	},
 	Addons: []gowdk.Addon{
+		authaddon.Addon(),
 		contractsaddon.Addon(),
 		realtime.Addon(),
 	},

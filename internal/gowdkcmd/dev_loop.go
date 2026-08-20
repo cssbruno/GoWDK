@@ -13,11 +13,12 @@ import (
 
 	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/buildgen"
-	"github.com/cssbruno/gowdk/internal/compiler"
+	"github.com/cssbruno/gowdk/internal/contractscan"
 	"github.com/cssbruno/gowdk/internal/discover"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
+	"github.com/cssbruno/gowdk/internal/projectcompile"
 	"github.com/cssbruno/gowdk/internal/viewanalysis"
 	"github.com/cssbruno/gowdk/internal/viewmodel"
 )
@@ -100,35 +101,47 @@ func buildIncrementalSPALoaded(plan buildOptions, change inputChange) (bool, err
 	timings.counter("incremental_component_changes", incrementalPlan.ComponentChanges)
 	timings.counter("incremental_layout_changes", incrementalPlan.LayoutChanges)
 	timings.counter("incremental_affected_pages", len(incrementalPlan.PageSources))
-	var analyzed compiler.AnalyzedProgram
-	if err := timings.measure("ir_assembly", func() error {
-		var assembleErr error
-		analyzed, assembleErr = compiler.AnalyzeProgram(options.Config, app)
-		return assembleErr
+	var snapshot projectcompile.Snapshot
+	var compileDiagnostics projectcompile.Diagnostics
+	if err := timings.measure("project_compilation", func() error {
+		var compileErr error
+		snapshot, compileDiagnostics, compileErr = projectcompile.Compile(options.Config, app, projectcompile.Options{
+			ProjectRoot: options.ProjectRoot, Mode: projectcompile.ProjectMode, ScanContracts: true,
+		})
+		return compileErr
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return true, fmt.Errorf("build failed")
 	}
-	var validated compiler.ValidatedProgram
-	if err := timings.measure("ir_validation", func() error {
-		var report compiler.ValidationErrors
-		validated, report = compiler.ValidateAnalyzedProgramReport(options.Config, analyzed)
-		if report.HasErrors() {
-			return report
+	if compileDiagnostics.HasErrors() {
+		overlay := make([]devOverlayDiagnostic, 0, len(compileDiagnostics))
+		for _, diagnostic := range compileDiagnostics {
+			item := devOverlayDiagnostic{Code: diagnostic.Code, Severity: diagnostic.Severity, File: diagnostic.Source, Message: diagnostic.Message}
+			if diagnostic.Line > 0 {
+				item.Range = &devOverlayRange{Start: devOverlayPosition{Line: diagnostic.Line, Column: diagnostic.Column}}
+			}
+			overlay = append(overlay, item)
 		}
-		return nil
-	}); err != nil {
-		var report compiler.ValidationErrors
-		if errors.As(err, &report) {
-			return true, newDevDiagnosticError("build failed", devOverlayDiagnosticsFromCompiler(report))
-		}
-		fmt.Fprintln(os.Stderr, err)
-		return true, fmt.Errorf("build failed")
+		return true, newDevDiagnosticError("build failed", overlay)
 	}
+	validated := snapshot.Validated
 	var result buildgen.Result
 	if err := timings.measure("output_plan_writes", func() error {
-		var buildErr error
-		result, buildErr = buildgen.BuildIncrementalFromValidatedProgram(options.Config, validated, outputDir, incrementalPlan.PageSources)
+		outputPlan, buildErr := buildgen.PlanBuildFromValidatedProgram(options.Config, validated, outputDir)
+		if buildErr != nil {
+			return buildErr
+		}
+		asyncAPI, buildErr := contractscan.AsyncAPIPayload(snapshot.Contracts, contractscan.AsyncAPIOptions{})
+		if buildErr != nil {
+			return buildErr
+		}
+		if buildErr = outputPlan.AddOutputFile(contractscan.AsyncAPIFile, asyncAPI); buildErr != nil {
+			return buildErr
+		}
+		outputPlan.SetPrePublishValidation(func(staged buildgen.Result) error {
+			return enforceFinalBuildArtifactSecurityAudit(options, staged)
+		})
+		result, buildErr = buildgen.BuildFromPlan(outputPlan)
 		return buildErr
 	}); err != nil {
 		printBuildgenBuildErrorReport(err, options.Debug)
@@ -284,9 +297,10 @@ type devComponentHMREntry struct {
 }
 
 const (
-	devUpdateProtocolVersion        = 1
+	devUpdateProtocolVersion        = 2
 	devUpdateActionReload           = "reload"
 	devUpdateActionComponentRemount = "component-remount"
+	devUpdateActionDocumentPatch    = "patch"
 )
 
 func devReloadPayload(reason string) string {
@@ -354,17 +368,21 @@ func devIncrementalSPAUpdateLoaded(plan buildOptions, change inputChange) (devIn
 	if diagnostics.HasErrors() {
 		return devIncrementalSPAUpdate{}, false
 	}
+	typedProgram := gwdkanalysis.BuildProgram(options.Config, app)
+	if len(typedProgram.Diagnostics) > 0 {
+		return devIncrementalSPAUpdate{}, false
+	}
 	incrementalPlan, incremental := changedIncrementalSPAPages(app, change.Changed)
 	if !incremental {
 		return devIncrementalSPAUpdate{}, false
 	}
 
 	componentsByKey := map[string]gwdkir.Component{}
-	for _, component := range app.Components {
+	for _, component := range typedProgram.Components {
 		componentsByKey[sourceComponentKey(component.Package, component.Name)] = component
 	}
 	pagesBySource := map[string]gwdkir.Page{}
-	for _, page := range app.Pages {
+	for _, page := range typedProgram.Pages {
 		pagesBySource[page.Source] = page
 	}
 
@@ -386,13 +404,20 @@ func devComponentHMRPayloadLoaded(plan buildOptions, change inputChange) (string
 		Action:   devUpdateActionComponentRemount,
 		Preserve: []string{"page-stores"},
 	}
+	remountDocument := false
+	reloadDocument := false
 	for _, key := range update.plan.ComponentKeys {
 		component, ok := update.componentsByKey[key]
 		if !ok {
 			return "", false
 		}
-		if strings.TrimSpace(component.WASM.Package) != "" {
-			return "", false
+		if len(component.JS) > 0 || len(component.InlineJS) > 0 || len(component.Assets) > 0 {
+			reloadDocument = true
+			continue
+		}
+		if strings.TrimSpace(component.WASM.Package) != "" || len(component.CSS) > 0 {
+			remountDocument = true
+			continue
 		}
 		entry := devComponentHMREntry{
 			Name:       component.Name,
@@ -405,6 +430,16 @@ func devComponentHMRPayloadLoaded(plan buildOptions, change inputChange) (string
 		payload.Components = append(payload.Components, entry)
 	}
 	payload.Routes = devRoutesForPageSources(update.pagesBySource, update.plan.PageSources)
+	if reloadDocument {
+		payload.Action = devUpdateActionReload
+		payload.Reason = "component-assets-changed"
+		payload.Preserve = nil
+		payload.Components = nil
+	} else if remountDocument {
+		payload.Action = devUpdateActionDocumentPatch
+		payload.Reason = "component-wasm-remount"
+		payload.Preserve = []string{"page-stores"}
+	}
 	sort.Slice(payload.Components, func(i, j int) bool {
 		if payload.Components[i].ID == payload.Components[j].ID {
 			return payload.Components[i].Name < payload.Components[j].Name
@@ -412,7 +447,7 @@ func devComponentHMRPayloadLoaded(plan buildOptions, change inputChange) (string
 		return payload.Components[i].ID < payload.Components[j].ID
 	})
 	encoded, ok := marshalDevUpdatePayload(payload)
-	return encoded, ok && len(payload.Components) > 0 && len(payload.Routes) > 0
+	return encoded, ok && (len(payload.Components) > 0 || remountDocument || reloadDocument) && len(payload.Routes) > 0
 }
 
 func devComponentStateShape(component gwdkir.Component) string {
@@ -424,7 +459,9 @@ func devComponentStateShape(component gwdkir.Component) string {
 	state := shape{
 		StateType: component.State.Type.Alias + "." + component.State.Type.Name,
 		StateInit: component.State.Init.Alias + "." + component.State.Init.Name,
-		Client:    strings.TrimSpace(component.Blocks.ClientBody),
+	}
+	if component.Blocks.ClientProgram != nil {
+		state.Client = component.Blocks.ClientProgram.Canonical()
 	}
 	if state.StateType == "." && state.StateInit == "." && state.Client == "" {
 		return ""
@@ -439,7 +476,7 @@ func devComponentStateShape(component gwdkir.Component) string {
 
 func devRouteReloadPayloadLoaded(plan buildOptions, change inputChange) (string, bool) {
 	update, ok := devIncrementalSPAUpdateLoaded(plan, change)
-	if !ok || update.plan.LayoutChanges == 0 || update.plan.PageChanges != 0 || update.plan.ComponentChanges != 0 {
+	if !ok || update.plan.ComponentChanges != 0 || (update.plan.LayoutChanges == 0 && update.plan.PageChanges == 0) {
 		return "", false
 	}
 	routes := devRoutesForPageSources(update.pagesBySource, update.plan.PageSources)
@@ -447,11 +484,19 @@ func devRouteReloadPayloadLoaded(plan buildOptions, change inputChange) (string,
 		return "", false
 	}
 	return marshalDevUpdatePayload(devComponentHMRPayload{
-		Version: devUpdateProtocolVersion,
-		Action:  devUpdateActionReload,
-		Reason:  "route-scoped-layout",
-		Routes:  routes,
+		Version:  devUpdateProtocolVersion,
+		Action:   devUpdateActionDocumentPatch,
+		Reason:   devDocumentPatchReason(update.plan),
+		Routes:   routes,
+		Preserve: []string{"page-stores", "compatible-island-state"},
 	})
+}
+
+func devDocumentPatchReason(plan incrementalSPAChangePlan) string {
+	if plan.PageChanges > 0 {
+		return "route-scoped-page"
+	}
+	return "route-scoped-layout"
 }
 
 func devRoutesForPageSources(pagesBySource map[string]gwdkir.Page, sources []string) []string {
@@ -527,7 +572,7 @@ func newIncrementalDependencyIndex(app gwdkanalysis.Sources) (incrementalDepende
 
 func pageComponentDependencies(page gwdkir.Page, components map[string]gwdkir.Component, layouts map[string]gwdkir.Layout) map[string]bool {
 	seen := map[string]bool{}
-	collectComponentDependenciesFromView(page.Package, page.Uses, page.Blocks.ViewBody, page.Blocks.ViewNodes, components, seen)
+	collectComponentDependenciesFromView(page.Package, page.Uses, page.Blocks.ViewNodes, components, seen)
 	for _, ref := range page.Layouts {
 		if layout, ok := resolvePageLayoutDependency(page.Package, page.Uses, ref, layouts); ok {
 			collectLayoutComponentDependencies(layout, layouts, components, map[string]bool{}, seen)
@@ -536,17 +581,8 @@ func pageComponentDependencies(page gwdkir.Page, components map[string]gwdkir.Co
 	return seen
 }
 
-func collectComponentDependenciesFromView(ownerPackage string, uses []gwdkir.Use, viewBody string, viewNodes []viewmodel.Node, components map[string]gwdkir.Component, seen map[string]bool) {
-	var refs []string
-	if len(viewNodes) > 0 {
-		refs = viewanalysis.ComponentReferencesFromNodes(viewNodes)
-	} else {
-		var err error
-		refs, err = viewanalysis.ComponentReferences(viewBody)
-		if err != nil {
-			return
-		}
-	}
+func collectComponentDependenciesFromView(ownerPackage string, uses []gwdkir.Use, viewNodes []viewmodel.Node, components map[string]gwdkir.Component, seen map[string]bool) {
+	refs := viewanalysis.ComponentReferencesFromNodes(viewNodes)
 	for _, ref := range refs {
 		if component, ok := resolveComponentRef(ownerPackage, uses, ref, components); ok {
 			collectComponentDependencies(component, components, seen)
@@ -560,7 +596,7 @@ func collectLayoutComponentDependencies(layout gwdkir.Layout, layouts map[string
 		return
 	}
 	seenLayouts[key] = true
-	collectComponentDependenciesFromView(layout.Package, layout.Uses, layout.Blocks.ViewBody, layout.Blocks.ViewNodes, components, seenComponents)
+	collectComponentDependenciesFromView(layout.Package, layout.Uses, layout.Blocks.ViewNodes, components, seenComponents)
 	for _, ref := range layout.Layouts {
 		if parent, ok := resolveLayoutDependency(layout.Package, layout.Uses, ref, layouts); ok {
 			collectLayoutComponentDependencies(parent, layouts, components, seenLayouts, seenComponents)
@@ -574,16 +610,7 @@ func collectComponentDependencies(component gwdkir.Component, components map[str
 		return
 	}
 	seen[key] = true
-	var refs []string
-	if len(component.Blocks.ViewNodes) > 0 {
-		refs = viewanalysis.ComponentReferencesFromNodes(component.Blocks.ViewNodes)
-	} else {
-		var err error
-		refs, err = viewanalysis.ComponentReferences(component.Blocks.ViewBody)
-		if err != nil {
-			return
-		}
-	}
+	refs := viewanalysis.ComponentReferencesFromNodes(component.Blocks.ViewNodes)
 	for _, ref := range refs {
 		if child, ok := resolveComponentRef(component.Package, component.Uses, ref, components); ok {
 			collectComponentDependencies(child, components, seen)

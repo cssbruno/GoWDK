@@ -5,6 +5,7 @@ func backendAppPackageSource(options Options) (source string, err error) {
 
 	imports := backendRuntimeImportMap(options)
 	imports["http"] = "net/http"
+	imports["gowdki18n"] = "github.com/cssbruno/gowdk/runtime/i18n"
 	return printGoFile("gowdkapp", imports, append(backendShellDecls(options), backendGeneratedDecls(options)...))
 }
 
@@ -86,6 +87,12 @@ func backendRuntimeImportMap(options Options) map[string]string {
 	if generatedUsesGuards(options) {
 		imports["gowdkauth"] = "github.com/cssbruno/gowdk/runtime/auth"
 		imports["gowdkguard"] = "github.com/cssbruno/gowdk/runtime/guard"
+	}
+	if generatedRequiresAppGuardRegistry(options) && options.guardHookAlias != "" {
+		imports[options.guardHookAlias] = options.Config.Interop.Guards.Hook.ImportPath
+	}
+	if generatedUsesNativeRBACGuards(options) && !generatedUsesAuthAddon(options) && options.authHookAlias != "" && options.Config.Interop.AuthProvider.Hook.ImportPath != options.Config.Interop.Guards.Hook.ImportPath {
+		imports[options.authHookAlias] = options.Config.Interop.AuthProvider.Hook.ImportPath
 	}
 	if csrfEnabled(options) {
 		imports["errors"] = "errors"

@@ -73,7 +73,7 @@ func apiCaseStmts(api BackendAPIAdapter, csrf bool, rateLimit bool) []ast.Stmt {
 	stmts = append(stmts, rateLimitStmts(rateLimit)...)
 	stmts = append(stmts, guardStmts(api.Guards)...)
 	if api.Binding.Status != source.BackendBindingBound {
-		stmts = append(stmts, backendNotImplementedStmts(api.Binding, "API")...)
+		stmts = append(stmts, backendNotImplementedJSONStmts(api.Binding, "API")...)
 		stmts = append(stmts, returnBool(true))
 		return stmts
 	}

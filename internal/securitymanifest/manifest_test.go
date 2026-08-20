@@ -12,6 +12,8 @@ import (
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
+	"github.com/cssbruno/gowdk/internal/viewmodel"
+	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
 func TestRelativizeMakesPosturePortableAcrossCheckouts(t *testing.T) {
@@ -165,7 +167,11 @@ func TestBuildPopulatesFrontendAuditSurface(t *testing.T) {
 			Blocks: gwdkir.Blocks{
 				Build:     true,
 				BuildBody: `=> { api_key: "live_sk_abc123" }`,
-				Spans:     gwdkir.BlockSpans{Build: source.SourceSpan{Start: source.SourcePosition{Line: 9, Column: 1}}},
+				BuildRecords: []gwdkir.LiteralRecord{{
+					FieldOrder:  []string{"api_key"},
+					Expressions: map[string]string{"api_key": `"live_sk_abc123"`},
+				}},
+				Spans: gwdkir.BlockSpans{Build: source.SourceSpan{Start: source.SourcePosition{Line: 9, Column: 1}}},
 			},
 		}},
 		Assets: []gwdkir.Asset{
@@ -178,6 +184,7 @@ func TestBuildPopulatesFrontendAuditSurface(t *testing.T) {
 			OwnerID:   "home",
 			Source:    "home.page.gwdk",
 			Body:      `<main><div g:unsafe-html={TrustedHTML}></div></main>`,
+			Nodes:     mustTemplateNodes(t, `<main><div g:unsafe-html={TrustedHTML}></div></main>`),
 			BodyStart: source.SourcePosition{Line: 12, Column: 1},
 			Span:      source.SourceSpan{Start: source.SourcePosition{Line: 11, Column: 1}},
 		}},
@@ -240,6 +247,7 @@ func TestBuildRecordsRawHTMLSinkFingerprint(t *testing.T) {
 			OwnerID:   "home",
 			Source:    "home.page.gwdk",
 			Body:      `<main><div g:unsafe-html={Body}></div></main>`,
+			Nodes:     mustTemplateNodes(t, `<main><div g:unsafe-html={Body}></div></main>`),
 			BodyStart: source.SourcePosition{Line: 12, Column: 1},
 			Span:      source.SourceSpan{Start: source.SourcePosition{Line: 11, Column: 1}},
 		}},
@@ -253,6 +261,15 @@ func TestBuildRecordsRawHTMLSinkFingerprint(t *testing.T) {
 	if sink.Fingerprint != want || sink.Fingerprint == "" {
 		t.Fatalf("sink fingerprint should match the exported derivation, got %#v", sink)
 	}
+}
+
+func mustTemplateNodes(t *testing.T, body string) []viewmodel.Node {
+	t.Helper()
+	nodes, err := viewparse.Parse(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return nodes
 }
 
 func hasBundleLeak(leaks []BundleLeak, source string, kind string) bool {

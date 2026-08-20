@@ -13,12 +13,10 @@ import (
 	"github.com/cssbruno/gowdk/addons/ssr"
 	"github.com/cssbruno/gowdk/internal/appgen"
 	"github.com/cssbruno/gowdk/internal/buildgen"
-	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/contractscan"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
-	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/lang"
-	"github.com/cssbruno/gowdk/internal/source"
+	"github.com/cssbruno/gowdk/internal/projectcompile"
 )
 
 const buildUsage = "usage: gowdk build [--config <file>] [--project-root <dir>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [--worker-app <dir>] [--worker-bin <file>] [--cron-app <dir>] [--cron-bin <file>] [files...]"
@@ -259,73 +257,36 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	for _, diagnostic := range diagnostics {
 		fmt.Fprintln(os.Stderr, diagnostic.String())
 	}
-	var ir gwdkir.Program
-	if err := timings.measure("ir_assembly", func() error {
-		ir = gwdkanalysis.BuildProgram(options.Config, app)
-		return nil
+	var snapshot projectcompile.Snapshot
+	var compileDiagnostics projectcompile.Diagnostics
+	if err := timings.measure("project_compilation", func() error {
+		var compileErr error
+		snapshot, compileDiagnostics, compileErr = projectcompile.Compile(options.Config, app, projectcompile.Options{
+			ProjectRoot: options.ProjectRoot, Mode: projectcompile.ProjectMode, ScanContracts: true,
+		})
+		return compileErr
 	}); err != nil {
 		return operationErrorFromCause(err)
 	}
+	// Preserve the stable timing schema while the shared orchestrator owns the
+	// formerly command-local binding and validation subphases.
+	timings.addDuration("go_binding", 0)
+	timings.addDuration("ir_validation", 0)
+	if compileDiagnostics.HasErrors() {
+		return operationErrorFromCause(compileDiagnostics)
+	}
+	for _, diagnostic := range compileDiagnostics {
+		if diagnostic.Severity == "warning" {
+			fmt.Fprintln(os.Stderr, "warning: "+diagnostic.Message)
+		}
+	}
+	ir := snapshot.Analyzed.Program()
+	validated := snapshot.Validated
+	contractReport := snapshot.Contracts
 	timings.counter("pages", len(ir.Pages))
 	timings.counter("components", len(ir.Components))
 	timings.counter("layouts", len(ir.Layouts))
 	timings.counter("endpoints", len(ir.Endpoints))
-	var analyzed compiler.AnalyzedProgram
-	if err := timings.measure("go_binding", func() error {
-		var bindErr error
-		var bindings []source.BackendBinding
-		bindings, bindErr = compiler.EnrichProgram(options.Config, &ir)
-		if bindErr == nil {
-			analyzed = compiler.AnalyzedProgramWithBindings(ir, bindings)
-		}
-		return bindErr
-	}); err != nil {
-		return operationErrorFromCause(err)
-	}
-	var report compiler.ValidationErrors
-	if err := timings.measure("ir_validation", func() error {
-		_, report = compiler.ValidateAnalyzedProgramReport(options.Config, analyzed)
-		return nil
-	}); err != nil {
-		return operationErrorFromCause(err)
-	}
-	if report.HasErrors() {
-		return operationErrorFromCompiler("build failed", report, report)
-	}
-	for _, diagnostic := range report {
-		prefix := ""
-		if diagnostic.Severity == compiler.SeverityWarning {
-			prefix = "warning: "
-		}
-		fmt.Fprintln(os.Stderr, prefix+diagnostic.Error())
-	}
-	var contractReport contractscan.Report
-	if err := timings.measure("contract_validation", func() error {
-		scanned, err := scanContractReport(options.ProjectRoot)
-		if err != nil {
-			return err
-		}
-		contractReport = scanned
-		linkIRContractReferencesFromReport(&ir, contractReport)
-		if err := compiler.ValidateContractReferences(ir.ContractRefs); err != nil {
-			return err
-		}
-		if err := compiler.ValidateRealtimeSubscriptionBindings(ir.RealtimeSubscriptions); err != nil {
-			return err
-		}
-		return compiler.ValidateQueryInvalidations(options.Config, ir.QueryInvalidations)
-	}); err != nil {
-		return operationErrorFromCause(err)
-	}
-
-	var validated compiler.ValidatedProgram
-	if err := timings.measure("validated_snapshot", func() error {
-		var validateErr error
-		validated, validateErr = compiler.ValidateIR(options.Config, ir)
-		return validateErr
-	}); err != nil {
-		return operationErrorFromCause(err)
-	}
 
 	if err := timings.measure("security_audit", func() error {
 		return enforceBuildSecurityAudit(options, validated)
@@ -334,21 +295,27 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	}
 
 	var result buildgen.Result
+	asyncAPIPath := filepath.Join(outputDir, contractscan.AsyncAPIFile)
 	if err := timings.measure("output_plan_writes", func() error {
 		var buildErr error
 		outputPlan, buildErr := buildgen.PlanBuildFromValidatedProgram(options.Config, validated, outputDir)
 		if buildErr != nil {
 			return buildErr
 		}
+		asyncAPI, buildErr := contractscan.AsyncAPIPayload(contractReport, contractscan.AsyncAPIOptions{})
+		if buildErr != nil {
+			return buildErr
+		}
+		if buildErr = outputPlan.AddOutputFile(contractscan.AsyncAPIFile, asyncAPI); buildErr != nil {
+			return buildErr
+		}
+		outputPlan.SetPrePublishValidation(func(staged buildgen.Result) error {
+			return enforceFinalBuildArtifactSecurityAudit(options, staged)
+		})
 		result, buildErr = buildgen.BuildFromPlan(outputPlan)
 		return buildErr
 	}); err != nil {
 		printBuildgenBuildErrorReport(err, options.Debug)
-		return operationErrorFromCause(err)
-	}
-	if err := timings.measure("final_security_audit", func() error {
-		return enforceFinalBuildArtifactSecurityAudit(options, result)
-	}); err != nil {
 		return operationErrorFromCause(err)
 	}
 	timings.counter("artifacts", len(result.Artifacts))
@@ -383,14 +350,6 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	if result.SecurityManifestPath != "" {
 		fmt.Println(result.SecurityManifestPath)
 	}
-	var asyncAPIPath string
-	if err := timings.measure("asyncapi_report", func() error {
-		var writeErr error
-		asyncAPIPath, writeErr = contractscan.WriteAsyncAPI(outputDir, contractReport, contractscan.AsyncAPIOptions{})
-		return writeErr
-	}); err != nil {
-		return operationErrorFromCause(err)
-	}
 	if asyncAPIPath != "" {
 		fmt.Println(asyncAPIPath)
 	}
@@ -408,6 +367,9 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 	cronAppDir := request.CronAppDir
 	cronBinaryPath := request.CronBinaryPath
 	var buildReportEvents []buildgen.BuildEvent
+	packagingOptions := appgen.PackagingOptions{
+		Environment: options.ProjectEnvironment.ForSubprocess(os.Environ()),
+	}
 	if strings.TrimSpace(appDir) != "" {
 		var app appgen.Result
 		if err := timings.measure("app_generation", func() error {
@@ -429,14 +391,15 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		fmt.Println(app.PackagePath)
 		fmt.Println(app.MainPath)
 		if strings.TrimSpace(binaryPath) != "" {
-			var built string
+			var packaged appgen.PackagingResult
 			if err := timings.measure("binary_build", func() error {
 				var buildErr error
-				built, buildErr = appgen.BuildBinary(app.AppDir, binaryPath)
+				packaged, buildErr = appgen.BuildBinaryWithOptions(app.AppDir, binaryPath, packagingOptions)
 				return buildErr
 			}); err != nil {
 				return operationErrorFromCause(err)
 			}
+			built := packaged.Path
 			fmt.Println(built)
 			buildReportEvents = append(buildReportEvents, buildgen.BuildEvent{
 				Level:   buildgen.BuildEventInfo,
@@ -444,6 +407,7 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 				Kind:    "binary_built",
 				Message: "compiled generated app binary",
 				Path:    filepath.ToSlash(built),
+				Data:    packaged.Metadata.Data(),
 			})
 			if request.Docker {
 				var artifacts dockerArtifacts
@@ -479,15 +443,23 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 			}
 		}
 		if strings.TrimSpace(wasmPath) != "" {
-			var built string
+			var packaged appgen.PackagingResult
 			if err := timings.measure("wasm_build", func() error {
 				var buildErr error
-				built, buildErr = appgen.BuildWASM(app.AppDir, wasmPath)
+				packaged, buildErr = appgen.BuildWASMWithOptions(app.AppDir, wasmPath, packagingOptions)
 				return buildErr
 			}); err != nil {
 				return operationErrorFromCause(err)
 			}
-			fmt.Println(built)
+			fmt.Println(packaged.Path)
+			buildReportEvents = append(buildReportEvents, buildgen.BuildEvent{
+				Level:   buildgen.BuildEventInfo,
+				Stage:   "package",
+				Kind:    "wasm_built",
+				Message: "compiled generated app WASM",
+				Path:    filepath.ToSlash(packaged.Path),
+				Data:    packaged.Metadata.Data(),
+			})
 		}
 	}
 	if strings.TrimSpace(backendAppDir) != "" {
@@ -509,15 +481,23 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		fmt.Println(app.PackagePath)
 		fmt.Println(app.MainPath)
 		if strings.TrimSpace(backendBinaryPath) != "" {
-			var built string
+			var packaged appgen.PackagingResult
 			if err := timings.measure("backend_binary_build", func() error {
 				var buildErr error
-				built, buildErr = appgen.BuildBinary(app.AppDir, backendBinaryPath)
+				packaged, buildErr = appgen.BuildBinaryWithOptions(app.AppDir, backendBinaryPath, packagingOptions)
 				return buildErr
 			}); err != nil {
 				return operationErrorFromCause(err)
 			}
-			fmt.Println(built)
+			fmt.Println(packaged.Path)
+			buildReportEvents = append(buildReportEvents, buildgen.BuildEvent{
+				Level:   buildgen.BuildEventInfo,
+				Stage:   "package",
+				Kind:    "backend_binary_built",
+				Message: "compiled generated backend binary",
+				Path:    filepath.ToSlash(packaged.Path),
+				Data:    packaged.Metadata.Data(),
+			})
 		}
 	}
 	if strings.TrimSpace(workerAppDir) != "" {
@@ -534,14 +514,15 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		fmt.Println(app.MainPath)
 		buildReportEvents = append(buildReportEvents, contractRoleBuildEvents("worker", app.Contracts, nil, app.MainPath)...)
 		if strings.TrimSpace(workerBinaryPath) != "" {
-			var built string
+			var packaged appgen.PackagingResult
 			if err := timings.measure("worker_binary_build", func() error {
 				var buildErr error
-				built, buildErr = appgen.BuildWorkerBinary(app.AppDir, workerBinaryPath)
+				packaged, buildErr = appgen.BuildWorkerBinaryWithOptions(app.AppDir, workerBinaryPath, packagingOptions)
 				return buildErr
 			}); err != nil {
 				return operationErrorFromCause(err)
 			}
+			built := packaged.Path
 			fmt.Println(built)
 			buildReportEvents = append(buildReportEvents, buildgen.BuildEvent{
 				Level:   buildgen.BuildEventInfo,
@@ -549,9 +530,11 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 				Kind:    "contract_role_binary_built",
 				Message: "compiled generated contract worker binary",
 				Path:    filepath.ToSlash(built),
-				Data: map[string]string{
-					"role": "worker",
-				},
+				Data: func() map[string]string {
+					data := packaged.Metadata.Data()
+					data["role"] = "worker"
+					return data
+				}(),
 			})
 		}
 	}
@@ -569,14 +552,15 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 		fmt.Println(app.MainPath)
 		buildReportEvents = append(buildReportEvents, contractRoleBuildEvents("cron", nil, app.Jobs, app.MainPath)...)
 		if strings.TrimSpace(cronBinaryPath) != "" {
-			var built string
+			var packaged appgen.PackagingResult
 			if err := timings.measure("cron_binary_build", func() error {
 				var buildErr error
-				built, buildErr = appgen.BuildCronBinary(app.AppDir, cronBinaryPath)
+				packaged, buildErr = appgen.BuildCronBinaryWithOptions(app.AppDir, cronBinaryPath, packagingOptions)
 				return buildErr
 			}); err != nil {
 				return operationErrorFromCause(err)
 			}
+			built := packaged.Path
 			fmt.Println(built)
 			buildReportEvents = append(buildReportEvents, buildgen.BuildEvent{
 				Level:   buildgen.BuildEventInfo,
@@ -584,9 +568,11 @@ func buildOnce(options cliOptions, request buildRequest, timings *buildTimingRec
 				Kind:    "contract_role_binary_built",
 				Message: "compiled generated contract cron binary",
 				Path:    filepath.ToSlash(built),
-				Data: map[string]string{
-					"role": "cron",
-				},
+				Data: func() map[string]string {
+					data := packaged.Metadata.Data()
+					data["role"] = "cron"
+					return data
+				}(),
 			})
 		}
 	}

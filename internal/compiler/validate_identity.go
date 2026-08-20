@@ -6,6 +6,7 @@ import (
 
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
+	"github.com/cssbruno/gowdk/internal/viewmodel"
 )
 
 func validateUniquePages(pages []gwdkir.Page) []ValidationError {
@@ -272,7 +273,7 @@ func detectLayoutCycles(layouts []gwdkir.Layout, edges map[string][]string) []Va
 func validateLayoutSlots(layouts []gwdkir.Layout) []ValidationError {
 	var diagnostics []ValidationError
 	for _, layout := range layouts {
-		count := countLayoutSlots(layout.Blocks.ViewBody)
+		count := countLayoutSlots(layout.Blocks.ViewNodes)
 		if count == 1 {
 			continue
 		}
@@ -296,26 +297,21 @@ func validateLayoutSlots(layouts []gwdkir.Layout) []ValidationError {
 
 // countLayoutSlots counts self-closing `<slot />` placeholders, mirroring the
 // app-shell composition slot scan (whitespace tolerated, named slots ignored).
-func countLayoutSlots(body string) int {
-	isSpace := func(b byte) bool { return b == ' ' || b == '\t' || b == '\n' || b == '\r' }
+func countLayoutSlots(nodes []viewmodel.Node) int {
 	count := 0
-	for index := 0; index < len(body); index++ {
-		if body[index] != '<' || !strings.HasPrefix(body[index:], "<slot") {
-			continue
-		}
-		cursor := index + len("<slot")
-		for cursor < len(body) && isSpace(body[cursor]) {
-			cursor++
-		}
-		if cursor >= len(body) || body[cursor] != '/' {
-			continue
-		}
-		cursor++
-		for cursor < len(body) && isSpace(body[cursor]) {
-			cursor++
-		}
-		if cursor < len(body) && body[cursor] == '>' {
-			count++
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case viewmodel.Element:
+			if typed.Name == "slot" && len(typed.Attrs) == 0 && len(typed.Children) == 0 {
+				count++
+			}
+			count += countLayoutSlots(typed.Children)
+		case viewmodel.ComponentCall:
+			count += countLayoutSlots(typed.Children)
+		case viewmodel.AwaitBlock:
+			count += countLayoutSlots(typed.Pending)
+			count += countLayoutSlots(typed.Then)
+			count += countLayoutSlots(typed.Catch)
 		}
 	}
 	return count

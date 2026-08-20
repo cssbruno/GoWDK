@@ -208,7 +208,7 @@ func TestBuildRejectsInvalidBuildDataBeforeWriting(t *testing.T) {
 		{
 			name:      "malformed",
 			body:      `title: "Home"`,
-			wantError: `build line 1 must use`,
+			wantError: `unsupported literal record syntax`,
 		},
 		{
 			name: "duplicate field across declarations",
@@ -219,7 +219,7 @@ func TestBuildRejectsInvalidBuildDataBeforeWriting(t *testing.T) {
 		{
 			name:      "duplicate field",
 			body:      `=> { title: "Home", title: "Again" }`,
-			wantError: `duplicate build field "title"`,
+			wantError: `duplicate literal record field "title"`,
 		},
 		{
 			name:      "invalid expression",
@@ -1098,7 +1098,7 @@ func TestBuildRejectsInvalidDynamicPathsBeforeWriting(t *testing.T) {
 		{
 			name:      "malformed",
 			body:      `slug: "hello-gowdk"`,
-			wantError: `paths line 1 must use`,
+			wantError: `unsupported literal record syntax`,
 		},
 		{
 			name:      "missing param",

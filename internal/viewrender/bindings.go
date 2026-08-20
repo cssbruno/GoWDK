@@ -16,6 +16,9 @@ type styleBinding struct {
 func elementStyleBindings(node Element, ctx *renderContext) ([]styleBinding, error) {
 	var bindings []styleBinding
 	for _, attr := range node.Attrs {
+		if attr.Name == "g:lane" {
+			continue
+		}
 		if !isStyleBindingAttr(attr.Name) {
 			continue
 		}
@@ -323,6 +326,9 @@ func elementDirectiveValues(node Element) (postDirectives, error) {
 	var directives postDirectives
 	for _, attr := range node.Attrs {
 		if !strings.HasPrefix(attr.Name, "g:") {
+			continue
+		}
+		if attr.Name == "g:lane" {
 			continue
 		}
 		if strings.HasPrefix(attr.Name, "g:on:") {

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
@@ -69,7 +68,7 @@ func envCommand(args []string) error {
 	if err := loadProjectConfig(&options, configPath); err != nil {
 		return err
 	}
-	validationErr := project.ValidateRuntimeEnvironment(options.Config, os.LookupEnv)
+	validationErr := project.ValidateRuntimeEnvironment(options.Config, options.ProjectEnvironment.Lookup)
 	report := newEnvCheckReport(options, validationErr)
 	if jsonOutput {
 		payload, err := json.MarshalIndent(report, "", "  ")

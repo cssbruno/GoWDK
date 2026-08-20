@@ -9,5 +9,5 @@ const ImportPath = "github.com/cssbruno/gowdk/addons/contracts"
 // Addon enables contract-driven runtime metadata and generated adapters once
 // the compiler integration lands.
 func Addon() gowdk.Addon {
-	return gowdk.NewAddon("contracts", gowdk.FeatureContracts)
+	return gowdk.NewBuiltinAddon("contracts", gowdk.FeatureContracts)
 }

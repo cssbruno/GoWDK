@@ -129,7 +129,6 @@ func (server *Server) openComponentDefinitions(selection discover.Selection) map
 }
 
 func (server *Server) workspaceComponentDefinitions(selection discover.Selection) map[string]componentDefinition {
-	definitions := map[string]componentDefinition{}
 	fingerprint := selection.Fingerprint()
 	if server.workspaceComponentCache.root == selection.Root &&
 		server.workspaceComponentCache.selectionFingerprint == fingerprint &&
@@ -142,7 +141,7 @@ func (server *Server) workspaceComponentDefinitions(selection discover.Selection
 	definitions, key, files, dirs, err := server.loadWorkspaceComponentDefinitions(selection)
 	if err != nil {
 		server.logf("component discovery: %v", err)
-		return definitions
+		return map[string]componentDefinition{}
 	}
 	server.workspaceComponentCache = workspaceComponentDefinitionCache{
 		root:                 selection.Root,

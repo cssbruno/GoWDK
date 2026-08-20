@@ -167,6 +167,19 @@ view {
 	}
 }
 
+func TestParseSyntaxReadsSamePackageBuildCall(t *testing.T) {
+	file, err := ParseSyntax([]byte("build {\n  => HomeForBuild()\n}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(file.Blocks) != 1 || file.Blocks[0].Call == nil {
+		t.Fatalf("expected typed same-package build call, got %#v", file.Blocks)
+	}
+	if file.Blocks[0].Call.Alias != "" || file.Blocks[0].Call.Function != "HomeForBuild" {
+		t.Fatalf("unexpected build call: %#v", file.Blocks[0].Call)
+	}
+}
+
 func TestParseSyntaxRejectsDuplicateLiteralRecordField(t *testing.T) {
 	_, err := ParseSyntax([]byte(`page duplicate
 route "/duplicate"

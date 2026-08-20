@@ -20,14 +20,13 @@ var supportedDirectiveNames = map[string]bool{
 	// g:event parses so the renderer can explain that domain events are
 	// backend-owned facts instead of emitting a generic unknown-directive error.
 	"g:event": true,
-	// g:for and g:if span both lanes: over server {} request-time data they
-	// render server-side (the former g:each/g:when), and over client state/store
-	// they bind reactive islands. The compiler infers the lane from the operand.
+	// g:for and g:if require an adjacent g:lane declaration in .gwdk source.
 	"g:for":           true,
 	"g:unsafe-html":   true,
 	"g:if":            true,
 	"g:island":        true,
 	"g:key":           true,
+	"g:lane":          true,
 	"g:max-file-size": true,
 	"g:max-files":     true,
 	"g:transition":    true,
@@ -86,9 +85,9 @@ func unsupportedDirectiveMessage(name string) string {
 	case name == "g:html":
 		return "g:html was renamed to g:unsafe-html to make the raw-HTML XSS surface explicit; use g:unsafe-html={Expr} to opt into trusted raw HTML"
 	case name == "g:each":
-		return "g:each was unified into g:for; use g:for={item in collection} — the compiler renders it server-side when the collection is a server {} field and as a client island over state/store"
+		return "g:each was unified into g:for; use g:for={item in collection} with g:lane=\"server\" or g:lane=\"client\""
 	case name == "g:when":
-		return "g:when was unified into g:if; use g:if={field} (or g:if={!field}) — the compiler renders it server-side when the condition is a server {} field and as a client conditional over state/store"
+		return "g:when was unified into g:if; use g:if={field} (or g:if={!field}) with g:lane=\"server\" or g:lane=\"client\""
 	case strings.HasPrefix(name, "g:transition") || strings.HasPrefix(name, "g:animate"):
 		return fmt.Sprintf("unsupported g: directive %q; supported motion directives are g:transition and g:animate", name)
 	case name == "g:window" || name == "g:document" || name == "g:body" || name == "g:head":

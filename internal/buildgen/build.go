@@ -1,9 +1,11 @@
 package buildgen
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/publish"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -20,12 +23,42 @@ import (
 // defaults, localized page outputs, CSS/assets, fragments, schemas, and report
 // metadata are finalized before files are written.
 type BuildPlan struct {
-	reporter  *buildReporter
-	planned   buildPlan
-	config    gowdk.Config
-	ir        gwdkir.Program
-	outputDir string
-	valid     bool
+	reporter   *buildReporter
+	planned    buildPlan
+	config     gowdk.Config
+	ir         gwdkir.Program
+	outputDir  string
+	extraFiles []plannedPublishedFile
+	prePublish func(Result) error
+	valid      bool
+}
+
+// AddOutputFile adds a compiler-owned report or artifact to the same output
+// generation transaction. relativePath must stay within the build directory.
+func (plan *BuildPlan) AddOutputFile(relativePath string, contents []byte) error {
+	if plan == nil || !plan.valid {
+		return fmt.Errorf("build plan was not constructed by buildgen planning")
+	}
+	relativePath = filepath.Clean(strings.TrimSpace(relativePath))
+	if relativePath == "." || filepath.IsAbs(relativePath) || relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("additional output path %q must stay within the build directory", relativePath)
+	}
+	absolute := filepath.Join(plan.outputDir, relativePath)
+	for _, file := range plan.extraFiles {
+		if filepath.Clean(file.path) == filepath.Clean(absolute) {
+			return fmt.Errorf("additional output path %q is already planned", relativePath)
+		}
+	}
+	plan.extraFiles = append(plan.extraFiles, plannedPublishedFile{path: absolute, contents: append([]byte(nil), contents...)})
+	return nil
+}
+
+// SetPrePublishValidation installs a read-only audit over staged artifact
+// paths. A failure aborts publication and leaves the previous generation live.
+func (plan *BuildPlan) SetPrePublishValidation(validate func(Result) error) {
+	if plan != nil {
+		plan.prePublish = validate
+	}
 }
 
 func Build(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (Result, error) {
@@ -100,7 +133,11 @@ func BuildFromPlan(plan BuildPlan) (Result, error) {
 		CSSArtifacts:   make([]CSSArtifact, 0, len(planned.css)),
 		AssetArtifacts: make([]AssetArtifact, 0, len(planned.assets)),
 	}
+	for _, file := range plan.extraFiles {
+		result.AdditionalOutputPaths = append(result.AdditionalOutputPaths, file.path)
+	}
 	files := make([]plannedPublishedFile, 0, len(planned.css)+len(planned.assets)+len(planned.pages)+6)
+	files = append(files, plan.extraFiles...)
 	for _, artifact := range planned.css {
 		finalizeCSSArtifact(&artifact)
 		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
@@ -189,8 +226,27 @@ func BuildFromPlan(plan BuildPlan) (Result, error) {
 	}
 	result.BuildReportPath = buildReportPath(outputDir)
 	files = append(files, plannedPublishedFile{path: result.BuildReportPath, contents: buildReport})
+	var publication publish.Transaction
+	stageOutput, err := publication.StageDirectory(outputDir)
+	if err != nil {
+		return Result{}, reporter.fail("write", err)
+	}
+	defer publication.Abort()
+	stageSecurity, err := publication.StageFile(result.SecurityManifestPath)
+	if err != nil {
+		return Result{}, reporter.fail("write", err)
+	}
 	for _, file := range files {
-		wrote, err := writeFileIfChangedStatus(file.path, file.contents)
+		stagedPath := stageSecurity
+		if filepath.Clean(file.path) != filepath.Clean(result.SecurityManifestPath) {
+			rel, relErr := relativeOutputPath(outputDir, file.path)
+			if relErr != nil {
+				return Result{}, reporter.fail("write", relErr)
+			}
+			stagedPath = filepath.Join(stageOutput, filepath.FromSlash(rel))
+		}
+		wrote := !samePublishedContents(file.path, file.contents)
+		err := stagePublishedFile(stagedPath, file.path, file.contents, !wrote)
 		if err != nil {
 			return Result{}, reporter.fail("write", err)
 		}
@@ -198,10 +254,88 @@ func BuildFromPlan(plan BuildPlan) (Result, error) {
 			recordWriteStat(&result, wrote)
 		}
 	}
-	if err := removeServedSecurityManifest(outputDir); err != nil {
-		return Result{}, reporter.fail("cleanup", err)
+	if plan.prePublish != nil {
+		stagedResult := stagedBuildResult(result, outputDir, stageOutput, result.SecurityManifestPath, stageSecurity)
+		if err := plan.prePublish(stagedResult); err != nil {
+			return Result{}, reporter.fail("pre_publish_validation", err)
+		}
+	}
+	if err := publication.Commit(); err != nil {
+		return Result{}, reporter.fail("publish", err)
 	}
 	return result, nil
+}
+
+func stagePublishedFile(stagedPath, currentPath string, contents []byte, unchanged bool) error {
+	if !unchanged {
+		_, err := writeFileIfChangedStatus(stagedPath, contents)
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(stagedPath), 0o755); err != nil {
+		return err
+	}
+	if err := os.Remove(stagedPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Link(currentPath, stagedPath); err == nil {
+		return nil
+	}
+	if err := os.WriteFile(stagedPath, contents, 0o644); err != nil {
+		return err
+	}
+	if info, err := os.Stat(currentPath); err == nil {
+		_ = os.Chmod(stagedPath, info.Mode().Perm())
+		_ = os.Chtimes(stagedPath, info.ModTime(), info.ModTime())
+	}
+	return nil
+}
+
+func stagedBuildResult(result Result, outputDir, stageOutput, securityPath, stageSecurity string) Result {
+	// Result is returned to callers after validation. Clone every slice before
+	// rewriting staged paths so the validator cannot mutate the published result
+	// through a shared backing array.
+	result.Artifacts = append([]Artifact(nil), result.Artifacts...)
+	result.CSSArtifacts = append([]CSSArtifact(nil), result.CSSArtifacts...)
+	result.AssetArtifacts = append([]AssetArtifact(nil), result.AssetArtifacts...)
+	result.AdditionalOutputPaths = append([]string(nil), result.AdditionalOutputPaths...)
+	mapPath := func(path string) string {
+		if strings.TrimSpace(path) == "" {
+			return ""
+		}
+		if filepath.Clean(path) == filepath.Clean(securityPath) {
+			return stageSecurity
+		}
+		rel, err := relativeOutputPath(outputDir, path)
+		if err != nil {
+			return path
+		}
+		return filepath.Join(stageOutput, filepath.FromSlash(rel))
+	}
+	for index := range result.Artifacts {
+		result.Artifacts[index].Path = mapPath(result.Artifacts[index].Path)
+	}
+	for index := range result.CSSArtifacts {
+		result.CSSArtifacts[index].Path = mapPath(result.CSSArtifacts[index].Path)
+	}
+	for index := range result.AssetArtifacts {
+		result.AssetArtifacts[index].Path = mapPath(result.AssetArtifacts[index].Path)
+	}
+	result.RouteManifestPath = mapPath(result.RouteManifestPath)
+	result.AssetManifestPath = mapPath(result.AssetManifestPath)
+	result.SitemapPath = mapPath(result.SitemapPath)
+	result.RobotsPath = mapPath(result.RobotsPath)
+	result.OpenAPIPath = mapPath(result.OpenAPIPath)
+	result.SecurityManifestPath = mapPath(result.SecurityManifestPath)
+	result.BuildReportPath = mapPath(result.BuildReportPath)
+	for index := range result.AdditionalOutputPaths {
+		result.AdditionalOutputPaths[index] = mapPath(result.AdditionalOutputPaths[index])
+	}
+	return result
+}
+
+func samePublishedContents(path string, contents []byte) bool {
+	current, err := os.ReadFile(path)
+	return err == nil && bytes.Equal(current, contents)
 }
 
 func recordWriteStat(result *Result, wrote bool) {
@@ -709,234 +843,10 @@ func BuildIncrementalFromAnalyzedProgram(config gowdk.Config, analyzed compiler.
 // BuildIncrementalFromValidatedProgram incrementally renders changed SPA pages
 // from compiler-validated IR.
 func BuildIncrementalFromValidatedProgram(config gowdk.Config, validated compiler.ValidatedProgram, outputDir string, changedPageSources []string) (Result, error) {
-	ir := validated.Program()
-	backendBindings := validated.BackendBindings()
-	reporter := newBuildReporter("incremental", outputDir)
-	reporter.info("start", "build_started", "incremental SPA build started", BuildEvent{
-		Data: map[string]string{
-			"pages":          fmt.Sprint(len(ir.Pages)),
-			"changedSources": fmt.Sprint(len(changedPageSources)),
-		},
-	})
-	if strings.TrimSpace(outputDir) == "" {
-		return Result{}, reporter.fail("validate", fmt.Errorf("build output directory is required"))
-	}
-	if !validated.Valid() {
-		return Result{}, reporter.fail("validate", fmt.Errorf("validated program was not constructed by compiler validation"))
-	}
-	reporter.info("validate", "ir_valid", "compiler IR validation completed", BuildEvent{})
-	reportBackendBindings(reporter, backendBindings)
-	reportContractReferences(reporter, ir.ContractRefs)
-	reportRealtimeSubscriptions(reporter, ir.RealtimeSubscriptions)
-	reportStructuredData(reporter, ir)
-	if err := compiler.ValidateBackendBindingPolicyIR(config, ir); err != nil {
-		return Result{}, reporter.fail("bind", err)
-	}
-
-	changedPages := sourcePathSet(changedPageSources)
-	components, componentFailures := buildComponents(ir.Components)
-	layouts, layoutFailures := buildLayouts(ir.Layouts)
-	css, cssFailures := planCSS(config, ir, outputDir, components, layouts)
-	componentAssets, componentAssetFailures := planComponentFileAssets(ir.Assets, outputDir)
-	scopedJS, scopedJSFailures := planScopedJSAssets(ir.Assets, outputDir)
-	baseStylesheets := append([]gowdk.Stylesheet{}, config.Build.Stylesheets...)
-	baseStylesheets = append(baseStylesheets, css.stylesheets...)
-	actionFields := pageActionInputFields(ir)
-	realtimeEventTypeNames := realtimeSubscriptionEventTypeNames(ir.RealtimeSubscriptions)
-	queryTypeNames := queryInvalidationTypeNames(ir.QueryInvalidations)
-
-	var failures []string
-	failures = append(failures, componentFailures...)
-	failures = append(failures, layoutFailures...)
-	failures = append(failures, cssFailures...)
-	failures = append(failures, componentAssetFailures...)
-	failures = append(failures, scopedJSFailures...)
-	if len(failures) > 0 {
-		return Result{}, reporter.fail("plan", errors.New(strings.Join(failures, "\n")))
-	}
-	runtime, err := runtimeArtifacts(config, ir, outputDir, layouts, components)
-	if err != nil {
-		return Result{}, reporter.fail("plan", err)
-	}
-	runtime = append(scopedJS, runtime...)
-	runtime = append(componentAssets, runtime...)
-	var obfuscations []assetObfuscationRecord
-	runtime, obfuscations, err = applyAssetObfuscation(config, outputDir, runtime)
-	if err != nil {
-		return Result{}, reporter.fail("plan", err)
-	}
-	reporter.info("plan", "artifacts_planned", "incremental artifacts planned", BuildEvent{
-		Data: map[string]string{
-			"css":    fmt.Sprint(len(css.assets)),
-			"assets": fmt.Sprint(len(runtime)),
-		},
-	})
-	reportAssetObfuscation(reporter, config.Build.ObfuscateAssets, obfuscations)
-
-	result := Result{
-		Artifacts:      make([]Artifact, 0, len(ir.Pages)),
-		CSSArtifacts:   make([]CSSArtifact, 0, len(css.assets)),
-		AssetArtifacts: make([]AssetArtifact, 0, 1),
-	}
-	previousRoutes, err := readRouteManifestIfExists(outputDir)
-	if err != nil {
-		return Result{}, reporter.fail("manifest", err)
-	}
-	previousAssets, err := readAssetManifestIfExists(outputDir)
-	if err != nil {
-		return Result{}, reporter.fail("manifest", err)
-	}
-	reporter.debug("manifest", "previous_route_manifest_read", "previous route manifest read", BuildEvent{
-		Data: map[string]string{"routes": fmt.Sprint(len(previousRoutes.Routes))},
-	})
-	changedPageIDs := map[string]bool{}
-	for _, artifact := range css.assets {
-		wrote, err := writeFileIfChangedStatus(artifact.Path, artifact.contents)
-		if err != nil {
-			return Result{}, reporter.fail("write", err)
-		}
-		recordWriteStat(&result, wrote)
-		reporter.debug("write", "css_written", "CSS artifact written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
-		finalizeCSSArtifact(&artifact)
-		result.CSSArtifacts = append(result.CSSArtifacts, artifact.CSSArtifact)
-	}
-	for _, artifact := range runtime {
-		wrote, err := writeFileIfChangedStatus(artifact.Path, artifact.contents)
-		if err != nil {
-			return Result{}, reporter.fail("write", err)
-		}
-		recordWriteStat(&result, wrote)
-		reporter.debug("write", "asset_written", "runtime asset written", BuildEvent{Path: eventPath(outputDir, artifact.Path)})
-		finalizeAssetArtifact(&artifact)
-		result.AssetArtifacts = append(result.AssetArtifacts, artifact.AssetArtifact)
-	}
-
-	seenOutputPaths := map[string]string{}
-	for _, page := range ir.Pages {
-		if isRequestTimePage(config, page) {
-			continue
-		}
-		routeArtifacts, err := pageRouteArtifacts(config, outputDir, page)
-		if err != nil {
-			failures = append(failures, err.Error())
-			continue
-		}
-		for _, artifact := range routeArtifacts {
-			if _, err := relativeOutputPath(outputDir, artifact.Path); err != nil {
-				failures = append(failures, fmt.Sprintf("%s: %v", page.ID, err))
-				continue
-			}
-			if previousPage, ok := seenOutputPaths[artifact.Path]; ok {
-				failures = append(failures, pageOutputCollisionError(page, artifact.Route, previousPage))
-				continue
-			}
-			seenOutputPaths[artifact.Path] = page.ID
-			result.Artifacts = append(result.Artifacts, artifact)
-		}
-
-		if !sourcePathChanged(changedPages, page.Source) {
-			continue
-		}
-		changedPageIDs[page.ID] = true
-		stylesheets := append([]gowdk.Stylesheet{}, baseStylesheets...)
-		stylesheets = append(stylesheets, css.pageStylesheets[page.ID]...)
-		pageArtifacts, err := pageOutputArtifacts(config, outputDir, page, components, layouts, stylesheets, actionFields[page.ID], realtimeEventTypeNames, queryTypeNames)
-		if err != nil {
-			failures = append(failures, err.Error())
-			continue
-		}
-		for _, artifact := range pageArtifacts {
-			wrote, err := writeFileIfChangedStatus(artifact.Path, artifact.contents)
-			if err != nil {
-				return Result{}, reporter.fail("write", err)
-			}
-			recordWriteStat(&result, wrote)
-			reporter.debug("write", "page_written", "page artifact written", BuildEvent{
-				PageID: artifact.PageID,
-				Route:  artifact.Route,
-				Path:   eventPath(outputDir, artifact.Path),
-			})
-		}
-	}
-	if len(failures) > 0 {
-		return Result{}, reporter.fail("plan", errors.New(strings.Join(failures, "\n")))
-	}
-	reportSkippedPrerenderPages(reporter, config, ir)
-	if err := removeStaleChangedPageArtifacts(outputDir, previousRoutes, result.Artifacts, changedPageIDs); err != nil {
-		return Result{}, reporter.fail("cleanup", err)
-	}
-	reporter.info("cleanup", "stale_artifacts_removed", "stale changed-page artifacts removed", BuildEvent{
-		Data: map[string]string{"changedPages": fmt.Sprint(len(changedPageIDs))},
-	})
-
-	endpoints := compiler.BuildRouteMetadataFromIR(config, ir).Endpoints
-	manifestPath, err := writeRouteManifest(outputDir, result.Artifacts, endpoints)
-	if err != nil {
-		return Result{}, reporter.fail("manifest", err)
-	}
-	result.RouteManifestPath = manifestPath
-	reporter.info("manifest", "route_manifest_written", "route manifest written", BuildEvent{Path: eventPath(outputDir, manifestPath)})
-	seoPlan, err := planSEOArtifacts(config, ir, result.Artifacts)
-	if err != nil {
-		return Result{}, reporter.fail("seo", err)
-	}
-	reportSEOExclusions(reporter, seoPlan.Exclusions)
-	sitemapPath, robotsPath, sitemapWrote, robotsWrote, err := writeSEOArtifacts(outputDir, seoPlan)
-	if err != nil {
-		return Result{}, reporter.fail("seo", err)
-	}
-	if sitemapPath != "" {
-		recordWriteStat(&result, sitemapWrote)
-		result.SitemapPath = sitemapPath
-		reporter.info("seo", "sitemap_written", "sitemap written", BuildEvent{
-			Path: eventPath(outputDir, sitemapPath),
-			Data: map[string]string{"urls": fmt.Sprint(len(seoPlan.URLs))},
-		})
-	}
-	if robotsPath != "" {
-		recordWriteStat(&result, robotsWrote)
-		result.RobotsPath = robotsPath
-		reporter.info("seo", "robots_written", "robots.txt written", BuildEvent{Path: eventPath(outputDir, robotsPath)})
-	}
-	if err := removeStaleAssetManifestFiles(outputDir, previousAssets, result.CSSArtifacts, result.AssetArtifacts); err != nil {
-		return Result{}, reporter.fail("cleanup", err)
-	}
-	reporter.info("cleanup", "stale_assets_removed", "stale generated assets removed", BuildEvent{})
-	assetManifestPath, err := writeAssetManifest(outputDir, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
-	if err != nil {
-		return Result{}, reporter.fail("manifest", err)
-	}
-	result.AssetManifestPath = assetManifestPath
-	reporter.info("manifest", "asset_manifest_written", "asset manifest written", BuildEvent{Path: eventPath(outputDir, assetManifestPath)})
-	reportCachePolicies(reporter, result.Artifacts, result.CSSArtifacts, result.AssetArtifacts)
-	reportAssetSizes(reporter, outputDir, result.AssetArtifacts)
-	openAPIPath, err := writeOpenAPI(outputDir, config, ir)
-	if err != nil {
-		return Result{}, reporter.fail("report", err)
-	}
-	result.OpenAPIPath = openAPIPath
-	reporter.info("report", "openapi_written", "OpenAPI report written", BuildEvent{Path: eventPath(outputDir, openAPIPath)})
-	securityManifestPath, err := writeSecurityManifest(outputDir, config, ir)
-	if err != nil {
-		return Result{}, reporter.fail("manifest", err)
-	}
-	result.SecurityManifestPath = securityManifestPath
-	reporter.info("manifest", "security_manifest_written", "security manifest written", BuildEvent{Path: eventPath(outputDir, securityManifestPath)})
-	reporter.info("complete", "build_complete", "incremental SPA build completed", BuildEvent{
-		Data: map[string]string{
-			"pages":        fmt.Sprint(len(result.Artifacts)),
-			"changedPages": fmt.Sprint(len(changedPageIDs)),
-			"css":          fmt.Sprint(len(result.CSSArtifacts)),
-			"assets":       fmt.Sprint(len(result.AssetArtifacts)),
-		},
-	})
-	result.Report = reporter.result()
-	buildReportPath, err := writeBuildReport(outputDir, result.Report)
-	if err != nil {
-		return Result{}, reporter.fail("report", err)
-	}
-	result.BuildReportPath = buildReportPath
-	return result, nil
+	// Publication is generation-transactional. Planning the complete generation
+	// also guarantees that stale routes and assets disappear in the same commit.
+	// changedPageSources remains in the API for dev dependency accounting.
+	return BuildFromValidatedProgram(config, validated, outputDir)
 }
 
 func plan(config gowdk.Config, sources gwdkanalysis.Sources, outputDir string) (buildPlan, error) {

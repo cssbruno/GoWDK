@@ -564,7 +564,7 @@ func TestWriteNoStoreHandlerJSONError(t *testing.T) {
 	if contentType := recorder.Header().Get("Content-Type"); contentType != "application/json; charset=utf-8" {
 		t.Fatalf("expected JSON content type, got %q", contentType)
 	}
-	if body := strings.TrimSpace(recorder.Body.String()); body != `{"error":"Internal Server Error"}` {
+	if body := strings.TrimSpace(recorder.Body.String()); body != `{"ok":false,"error":{"code":"request_failed","message":"Internal Server Error"}}` {
 		t.Fatalf("unexpected JSON handler error body: %q", body)
 	}
 }
@@ -578,7 +578,7 @@ func TestWriteNoStoreHandlerJSONErrorUsesExplicitHandlerErrorMessage(t *testing.
 	if recorder.Code != http.StatusConflict {
 		t.Fatalf("unexpected status: %d", recorder.Code)
 	}
-	if body := strings.TrimSpace(recorder.Body.String()); body != `{"error":"duplicate patient"}` {
+	if body := strings.TrimSpace(recorder.Body.String()); body != `{"ok":false,"error":{"code":"handler_error","message":"duplicate patient"}}` {
 		t.Fatalf("unexpected JSON handler error body: %q", body)
 	}
 }

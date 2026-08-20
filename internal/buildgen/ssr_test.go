@@ -138,7 +138,7 @@ func TestSSRArtifactsIncludeScopedJSScripts(t *testing.T) {
 		}},
 	}
 
-	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	artifacts, err := SSRArtifacts(ssrTestConfig(), app, outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -372,7 +372,7 @@ func TestSSRArtifactsRenderDynamicSSRPageWithPlaceholders(t *testing.T) {
 		}},
 	}
 
-	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	artifacts, err := SSRArtifacts(ssrTestConfig(), app, outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,6 +440,7 @@ func TestSSRArtifactsRenderLoadPlaceholders(t *testing.T) {
 		ID:     "dashboard",
 		Route:  "/dashboard",
 		Render: gowdk.SSR,
+		Guards: []string{"public"},
 		Blocks: gwdkir.Blocks{
 			Server:     true,
 			ServerBody: `=> { user.name, account.plan }`,
@@ -448,7 +449,7 @@ func TestSSRArtifactsRenderLoadPlaceholders(t *testing.T) {
 		},
 	}}}
 
-	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	artifacts, err := SSRArtifacts(ssrTestConfig("dashboard"), app, outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -534,6 +535,7 @@ func TestSSRArtifactsMarkLoadURLPlaceholders(t *testing.T) {
 		ID:     "profile",
 		Route:  "/profile",
 		Render: gowdk.SSR,
+		Guards: []string{"public"},
 		Blocks: gwdkir.Blocks{
 			Server:     true,
 			ServerBody: `=> { user.slug, user.avatar }`,
@@ -542,7 +544,7 @@ func TestSSRArtifactsMarkLoadURLPlaceholders(t *testing.T) {
 		},
 	}}}
 
-	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	artifacts, err := SSRArtifacts(ssrTestConfig("profile"), app, outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -585,6 +587,7 @@ func TestSSRArtifactsComposePageLoadThroughLayouts(t *testing.T) {
 			ID:      "dashboard",
 			Route:   "/dashboard",
 			Render:  gowdk.SSR,
+			Guards:  []string{"public"},
 			Layouts: []string{"shell"},
 			Blocks: gwdkir.Blocks{
 				Server:     true,
@@ -602,7 +605,7 @@ func TestSSRArtifactsComposePageLoadThroughLayouts(t *testing.T) {
 		}},
 	}
 
-	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	artifacts, err := SSRArtifacts(ssrTestConfig("dashboard"), app, outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -632,6 +635,7 @@ func TestSSRArtifactsIncludeLayoutErrorPageBoundaries(t *testing.T) {
 			ID:      "dashboard",
 			Route:   "/dashboard",
 			Render:  gowdk.SSR,
+			Guards:  []string{"public"},
 			Layouts: []string{"section"},
 			Blocks: gwdkir.Blocks{
 				Server:     true,
@@ -661,7 +665,7 @@ func TestSSRArtifactsIncludeLayoutErrorPageBoundaries(t *testing.T) {
 		},
 	}
 
-	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, outputDir)
+	artifacts, err := SSRArtifacts(ssrTestConfig("dashboard"), app, outputDir)
 	if err != nil {
 		t.Fatal(err)
 	}

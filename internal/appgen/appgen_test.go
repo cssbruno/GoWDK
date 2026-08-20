@@ -28,12 +28,55 @@ import (
 	"github.com/cssbruno/gowdk/internal/securitymanifest"
 	"github.com/cssbruno/gowdk/internal/source"
 	gowdkactions "github.com/cssbruno/gowdk/runtime/actions"
+	gowdki18n "github.com/cssbruno/gowdk/runtime/i18n"
+	interopfixture "github.com/cssbruno/gowdk/testfixture/interop"
 )
 
 var updateGolden = flag.Bool("update", false, "update appgen golden files")
 
 func csrfDisabledConfig() gowdk.Config {
 	return gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{Disabled: true}}}
+}
+
+func typedGuardConfig() gowdk.Config {
+	config := csrfDisabledConfig()
+	config.Interop.Guards = gowdk.RegisterGuards(interopfixture.Guards)
+	return config
+}
+
+func TestGenerateEmbedsRuntimeErrorCatalogAndStableCodes(t *testing.T) {
+	root := t.TempDir()
+	outputDir := filepath.Join(root, "dist")
+	appDir := filepath.Join(root, "generated-app")
+	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
+	config := csrfDisabledConfig()
+	config.I18N = gowdk.I18NConfig{
+		DefaultLocale: "en",
+		Locales:       []gowdk.LocaleConfig{{Code: "en"}, {Code: "pt"}},
+		Errors: gowdki18n.NewErrorBundleStrings("en", map[string]map[string]string{
+			"pt": {"invalid_form": "Formulário inválido"},
+		}),
+	}
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Config: config, APIs: []APIEndpoint{{
+		PageID: "form", APIName: "Submit", Method: "POST", Route: "/api/form", Guards: []string{"public"},
+		Binding: source.BackendBinding{Status: source.BackendBindingBound, ImportPath: "example.com/app/forms", PackageName: "forms", FunctionName: "Submit", Signature: source.BackendSignatureAPIInput, InputType: "Input"},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(result.PackagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(payload)
+	for _, expected := range []string{
+		`gowdki18n.NewErrorBundleStrings("en", map[string]map[string]string{"pt": map[string]string{"invalid_form": "Formulário inválido"}})`,
+		`gowdkresponse.WriteNoStoreLocalizedHandlerJSONError(response, err, http.StatusInternalServerError, userErrorCatalog, gowdkruntime.Locale(request.Context()))`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Fatalf("expected generated localized error contract %q:\n%s", expected, source)
+		}
+	}
 }
 
 func withCSRFDisabled(config gowdk.Config) gowdk.Config {
@@ -968,11 +1011,11 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 		`if err := request.ParseForm(); err != nil`,
 		`if gowdkresponse.IsRequestBodyTooLarge(err)`,
 		`http.StatusRequestEntityTooLarge`,
-		`gowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, "invalid form")`,
-		`gowdkresponse.WriteNoStoreError(response, http.StatusRequestEntityTooLarge, "request body too large")`,
-		`gowdkresponse.WriteNoStoreError(response, http.StatusUnprocessableEntity, "validation failed")`,
+		`gowdkresponse.WriteNoStoreLocalizedUserError(response, http.StatusBadRequest, "invalid_form"`,
+		`gowdkresponse.WriteNoStoreLocalizedUserError(response, http.StatusRequestEntityTooLarge, "request_body_too_large"`,
+		`gowdkresponse.WriteNoStoreLocalizedUserError(response, http.StatusUnprocessableEntity, "validation_failed"`,
 		`validationTarget := strings.TrimSpace(request.Header.Get("X-GOWDK-Target"))`,
-		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.ValidationFragment(validationTarget, validation))`,
+		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.LocalizedValidationFragment(validationTarget, validation`,
 		`requestPath := actionRequestPath(request.URL.Path)`,
 		`func actionRequestPath(value string) string`,
 		`type SubscribeInput struct`,
@@ -980,11 +1023,11 @@ func TestGenerateWritesActionRedirectHandler(t *testing.T) {
 		`gowdkform.DecodeExpected(values, gowdkform.Schema{Fields: []gowdkform.Field{{Name: "email"}}})`,
 		`validation := gowdkvalidation.Result{}`,
 		`values.HasSubmitted("email")`,
-		`validation.Add("email", "Email is required")`,
+		`validation.AddCode("email", "validation_required", "Email is required", nil)`,
 		`utf8.RuneCountInString(value) < 5`,
 		`utf8.RuneCountInString(value) > 80`,
 		`gowdkvalidation.MatchPattern("[a-z]+@[a-z]+[.][a-z]{2,4}", value)`,
-		`validation.Add("email", "Use a real email address")`,
+		`validation.AddCode("email", "validation_pattern", "Use a real email address", nil)`,
 		`http.StatusUnprocessableEntity`,
 		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.RedirectTo("/newsletter?ok=1"))`,
 	} {
@@ -1097,7 +1140,7 @@ func TestGenerateWritesBoundContractBackendRoutes(t *testing.T) {
 		`func decodeContractPatientsGetPatientPageInput(values gowdkform.Values) (patients.GetPatientPage, error)`,
 		`input.Filter = field0`,
 		`gowdkresponse.JSONValue(http.StatusOK, result)`,
-		`gowdkresponse.WriteNoStoreHandlerJSONError(response, err, http.StatusInternalServerError)`,
+		`gowdkresponse.WriteNoStoreLocalizedHandlerJSONError(response, err, http.StatusInternalServerError`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated contract app source to contain %q:\n%s", expected, source)
@@ -1613,7 +1656,7 @@ func TestGenerateGuardsRealtimeStreamForSubscribedPages(t *testing.T) {
 		}},
 	}
 
-	result, err := GenerateWithOptions(outputDir, appDir, Options{Config: csrfDisabledConfig(), IR: program})
+	result, err := GenerateWithOptions(outputDir, appDir, Options{Config: typedGuardConfig(), IR: program})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1637,7 +1680,7 @@ func TestGenerateGuardsRealtimeStreamForSubscribedPages(t *testing.T) {
 		`return []string{"gowdk.route.0"}`,
 		`return []string{"auth.required"}`,
 		`if !runGuards(response, request, realtimeStreamGuards(request))`,
-		`RegisterGuards(GOWDKGuardRegistry())`,
+		`RegisterGuards(interop.Guards())`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated guarded realtime source to contain %q:\n%s", expected, source)
@@ -2376,7 +2419,7 @@ func TestGenerateWiresCSRFByDefault(t *testing.T) {
 		`Insecure: true`,
 		`if csrfValidator != nil {`,
 		`err := csrfValidator.Validate(request)`,
-		`gowdkresponse.WriteNoStoreError(response, http.StatusForbidden, "invalid csrf token")`,
+		`gowdkresponse.WriteNoStoreLocalizedUserError(response, http.StatusForbidden, "invalid_csrf_token"`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("expected generated app source to contain %q:\n%s", expected, source)
@@ -2429,7 +2472,7 @@ func TestGenerateWiresCSRFForStateChangingAPIs(t *testing.T) {
 		`case request.Method == "POST" && requestPath == "/api/status":`,
 		`if csrfValidator != nil {`,
 		`err := csrfValidator.Validate(request)`,
-		`gowdkresponse.WriteNoStoreJSONError(response, http.StatusForbidden, "invalid csrf token")`,
+		`gowdkresponse.WriteNoStoreLocalizedJSONUserError(response, http.StatusForbidden, "invalid_csrf_token"`,
 		`request.Body = http.MaxBytesReader(response, request.Body, maxAPIBodyBytes)`,
 		`result, err := status.Update(ctx, request)`,
 	} {
@@ -2573,11 +2616,11 @@ func TestGenerateWiresCSRFForCommandContracts(t *testing.T) {
 		`request.Body = http.MaxBytesReader(response, request.Body, maxActionBodyBytes)`,
 		`if err := request.ParseForm(); err != nil`,
 		`if gowdkresponse.IsRequestBodyTooLarge(err)`,
-		`gowdkresponse.WriteNoStoreJSONError(response, http.StatusRequestEntityTooLarge, "request body too large")`,
-		`gowdkresponse.WriteNoStoreJSONError(response, http.StatusBadRequest, "invalid form")`,
+		`gowdkresponse.WriteNoStoreLocalizedJSONUserError(response, http.StatusRequestEntityTooLarge, "request_body_too_large"`,
+		`gowdkresponse.WriteNoStoreLocalizedJSONUserError(response, http.StatusBadRequest, "invalid_form"`,
 		`if csrfValidator != nil {`,
 		`err := csrfValidator.Validate(request)`,
-		`gowdkresponse.WriteNoStoreJSONError(response, http.StatusForbidden, "invalid csrf token")`,
+		`gowdkresponse.WriteNoStoreLocalizedJSONUserError(response, http.StatusForbidden, "invalid_csrf_token"`,
 		`input := patients.CreatePatient{}`,
 		`gowdkcontracts.CaptureCommandEventsForRole[patients.CreatePatient, patients.CreatePatientResult]`,
 		`gowdkcontracts.DispatchCommandEvents(ctx, currentContractEventSink(), contractRegistry, gowdkcontracts.RoleWeb, events)`,
@@ -3464,7 +3507,7 @@ func TestGenerateWritesBoundAPIHandler(t *testing.T) {
 		`ctx := gowdkruntime.WithEndpoint(gowdkruntime.WithRequest(request.Context(), request), gowdkruntime.EndpointMetadata{Kind: "api", PageID: "status", Name: "Health", Method: "GET", Path: "/api/health"})`,
 		`request.Body = http.MaxBytesReader(response, request.Body, maxAPIBodyBytes)`,
 		`result, err := status.Health(ctx, request)`,
-		`gowdkresponse.WriteNoStoreHandlerError(response, err, http.StatusInternalServerError)`,
+		`gowdkresponse.WriteNoStoreLocalizedHandlerError(response, err, http.StatusInternalServerError`,
 		`gowdkresponse.WriteNoStoreHTTP(response, result)`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -3477,7 +3520,7 @@ func TestGenerateWritesBoundAPIHandler(t *testing.T) {
 	for _, unexpected := range []string{
 		`func newCSRF() (*gowdkactions.CSRF, error)`,
 		`err := csrfValidator.Validate(request)`,
-		`gowdkresponse.WriteNoStoreJSONError(response, http.StatusForbidden, "invalid csrf token")`,
+		`gowdkresponse.WriteNoStoreLocalizedJSONUserError(response, http.StatusForbidden, "invalid_csrf_token"`,
 	} {
 		if strings.Contains(source, unexpected) {
 			t.Fatalf("safe API output should not emit CSRF validation %q:\n%s", unexpected, source)
@@ -3550,7 +3593,7 @@ func TestGenerateWritesTypedBoundAPIHandlers(t *testing.T) {
 		`decoder, err := gowdkapi.NewJSONFieldDecoder(request)`,
 		`var maxBytesErr *http.MaxBytesError`,
 		`if errors.As(err, &maxBytesErr)`,
-		`gowdkresponse.WriteNoStoreJSONError(response, http.StatusRequestEntityTooLarge, "request body too large")`,
+		`gowdkresponse.WriteNoStoreLocalizedJSONUserError(response, http.StatusRequestEntityTooLarge, "request_body_too_large"`,
 		`case "name":`,
 		`field0, err := decoder.String("name")`,
 		`input.Name = field0`,
@@ -3571,7 +3614,7 @@ func TestGenerateWritesTypedBoundAPIHandlers(t *testing.T) {
 		`result, err := status.List(ctx, &input)`,
 		`status := gowdkapi.ResultStatus(result, http.StatusOK)`,
 		`httpResult, err := gowdkresponse.JSONValue(status, result)`,
-		`gowdkresponse.WriteNoStoreHandlerJSONError(response, err, http.StatusInternalServerError)`,
+		`gowdkresponse.WriteNoStoreLocalizedHandlerJSONError(response, err, http.StatusInternalServerError`,
 		`gowdkresponse.WriteNoStoreHTTP(response, httpResult)`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -3789,7 +3832,7 @@ func TestGenerateWritesActionFragmentHandler(t *testing.T) {
 		`fragment := gowdkpartial.Fragment("#patients", "<section><p>Updated patients</p></section>")`,
 		`gowdkpartial.Swap(fragment.Target, gowdkpartial.SwapMode(swap), fragment.Body)`,
 		`gowdkresponse.WriteNoStoreHTTP(response, fragment)`,
-		`gowdkresponse.WriteNoStoreError(response, http.StatusNotFound, "partial fragment not found")`,
+		`gowdkresponse.WriteNoStoreLocalizedUserError(response, http.StatusNotFound, "fragment_not_found"`,
 		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.RedirectTo("/patients"))`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -3978,7 +4021,7 @@ func TestGenerateWritesSSRLoadHandler(t *testing.T) {
 		`redirectURL, redirectStatus, ok := gowdkssr.RedirectTarget(err)`,
 		`gowdkresponse.WriteNoStoreHTTP(response, gowdkresponse.Response{Kind: gowdkresponse.Redirect, Status: redirectStatus, URL: redirectURL})`,
 		`errorStatus := gowdkresponse.HandlerStatus(err, http.StatusInternalServerError)`,
-		`gowdkruntime.WriteErrorPage(response, request, errorStatus, gowdkresponse.HandlerErrorMessage(err, errorStatus))`,
+		`gowdkruntime.WriteErrorPage(response, request, errorStatus, gowdkresponse.LocalizedHandlerErrorMessage(err, errorStatus`,
 		`loadValue0, loadOK0 := gowdkssr.LoadPath(loadData, "user.name")`,
 		`gowdkruntime.WriteErrorPage(response, request, http.StatusInternalServerError, "missing load field user.name")`,
 		`strings.ReplaceAll(html, "__USER__", gowdkhtml.Escape(fmt.Sprint(loadValue0)))`,
@@ -4319,8 +4362,8 @@ func TestGenerateWritesTypedSSRRouteParamBindings(t *testing.T) {
 		`RouteParams: []gowdkruntime.RouteParamMetadata{gowdkruntime.RouteParamMetadata{Name: "id", Type: "int"}}`,
 		`typedParams := map[string]any{}`,
 		`paramValue0, paramOK0, paramErr0 := gowdkroute.Int(params, "id")`,
-		`gowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, "invalid route parameter id")`,
-		`gowdkresponse.WriteNoStoreError(response, http.StatusNotFound, "missing route parameter id")`,
+		`gowdkresponse.WriteNoStoreLocalizedUserError(response, http.StatusBadRequest, "invalid_route_parameter"`,
+		`gowdkresponse.WriteNoStoreLocalizedUserError(response, http.StatusNotFound, "invalid_route_parameter"`,
 		`typedParams["id"] = paramValue0`,
 		`ctx = gowdkruntime.WithTypedParams(ctx, typedParams)`,
 	} {
@@ -4359,7 +4402,7 @@ func TestGenerateWritesDynamicFragmentRouteParamBindings(t *testing.T) {
 		`if params, ok := gowdkroute.Match("/patients/{id:int}/vitals", request.URL.Path); request.Method == "GET" && ok {`,
 		`ctx = gowdkruntime.WithParams(ctx, params)`,
 		`paramValue0, paramOK0, paramErr0 := gowdkroute.Int(params, "id")`,
-		`gowdkresponse.WriteNoStoreError(response, http.StatusBadRequest, "invalid route parameter id")`,
+		`gowdkresponse.WriteNoStoreLocalizedUserError(response, http.StatusBadRequest, "invalid_route_parameter"`,
 		`typedParams["id"] = paramValue0`,
 		`ctx = gowdkruntime.WithTypedParams(ctx, typedParams)`,
 		`gowdkpartial.Fragment("#vitals", "<section>Vitals</section>")`,
@@ -4407,7 +4450,7 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 			ID:     "dashboard",
 			Route:  "/dashboard",
 			Render: gowdk.SSR,
-			Guards: []string{"auth.required"},
+			Guards: []string{"public"},
 			Blocks: gwdkir.Blocks{
 				View:     true,
 				ViewBody: `<main><h1>Dashboard</h1></main>`,
@@ -4439,7 +4482,7 @@ func TestGenerateAutoDetectsActionAndSSRRoutes(t *testing.T) {
 		`case request.Method == "GET" && requestPath == "/newsletter/list":`,
 		`gowdkpartial.Fragment("#newsletter", "<section>Newsletter list</section>")`,
 		`case "/dashboard":`,
-		`gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "ssr", Guards: []string{"auth.required"}}`,
+		`gowdkruntime.RouteMetadata{Kind: "ssr", PageID: "dashboard", Method: "GET", Path: "/dashboard", Render: "ssr", Guards: []string{"public"}}`,
 		`<main><h1>Dashboard</h1></main>`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -4553,6 +4596,7 @@ func TestGenerateWritesGuardRegistryAndGuardChecks(t *testing.T) {
 	writeTestFile(t, filepath.Join(outputDir, "index.html"), "<main>Home</main>")
 
 	result, err := GenerateWithOptions(outputDir, appDir, Options{
+		Config: typedGuardConfig(),
 		Actions: []ActionEndpoint{{
 			PageID:     "newsletter",
 			ActionName: "Subscribe",
@@ -4591,9 +4635,9 @@ func TestGenerateWritesGuardRegistryAndGuardChecks(t *testing.T) {
 		`var authProvider gowdkauth.Provider`,
 		`func RegisterAuthProvider(provider gowdkauth.Provider)`,
 		`func init()`,
-		`RegisterGuards(GOWDKGuardRegistry())`,
+		`RegisterGuards(interop.Guards())`,
 		`gowdkguard.RunGuardsWithAuth(guardContext, guards, guardRegistry, authProvider)`,
-		`gowdkguard.WriteNoStoreFailure(response, err)`,
+		`gowdkguard.WriteNoStoreLocalizedFailure(response, err, userErrorCatalog, gowdkruntime.Locale(request.Context()))`,
 		`if !runGuards(response, request, []string{"auth.required"})`,
 	} {
 		if !strings.Contains(source, expected) {
@@ -7027,7 +7071,7 @@ func Session(ctx context.Context, request *http.Request) (gowdkresponse.Response
 	}
 }
 
-func TestGeneratedBinarySSRGuardRequiresBackingCode(t *testing.T) {
+func TestGeneratedBinarySSRGuardHasNoMagicCompileDependency(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
@@ -7042,8 +7086,8 @@ func TestGeneratedBinarySSRGuardRequiresBackingCode(t *testing.T) {
 	}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := BuildBinary(appDir, binaryPath); err == nil || !strings.Contains(err.Error(), "GOWDKGuardRegistry") {
-		t.Fatalf("expected missing GOWDKGuardRegistry compile error, got %v", err)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatalf("generated app should not depend on a magic GOWDKGuardRegistry symbol: %v", err)
 	}
 }
 
@@ -7072,7 +7116,7 @@ func TestGeneratedBinaryAuthAddonSuppliesGuardBackingCode(t *testing.T) {
 	}
 }
 
-func TestGeneratedBinaryBackendGuardsRequireBackingCode(t *testing.T) {
+func TestGeneratedBinaryBackendGuardsHaveNoMagicCompileDependency(t *testing.T) {
 	root := t.TempDir()
 	outputDir := filepath.Join(root, "dist")
 	appDir := filepath.Join(root, "generated-app")
@@ -7098,8 +7142,8 @@ func TestGeneratedBinaryBackendGuardsRequireBackingCode(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := BuildBinary(appDir, binaryPath); err == nil || !strings.Contains(err.Error(), "GOWDKGuardRegistry") {
-		t.Fatalf("expected missing GOWDKGuardRegistry compile error, got %v", err)
+	if _, err := BuildBinary(appDir, binaryPath); err != nil {
+		t.Fatalf("generated app should not depend on a magic GOWDKGuardRegistry symbol: %v", err)
 	}
 }
 
@@ -7155,7 +7199,7 @@ func TestGeneratedBinaryContractFallbacksAreExplicitNoStore(t *testing.T) {
 	if contentType := response.Header.Get("Content-Type"); contentType != "application/json; charset=utf-8" {
 		t.Fatalf("expected JSON missing contract response, got content type %q: %s", contentType, payload)
 	}
-	if strings.TrimSpace(string(payload)) != `{"error":"command patients.CreatePatient is not registered"}` {
+	if strings.TrimSpace(string(payload)) != `{"ok":false,"error":{"code":"handler_not_implemented","message":"command patients.CreatePatient is not registered"}}` {
 		t.Fatalf("expected explicit JSON missing contract response, got %s", payload)
 	}
 	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-store" {
@@ -7960,12 +8004,12 @@ import (
 	gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
 )
 
-func GOWDKGuardRegistry() gowdkguard.Registry {
-	return gowdkguard.Registry{
+func init() {
+	RegisterGuards(gowdkguard.Registry{
 		"auth.required": func(ctx gowdkguard.Context) error {
 			return errors.New("denied")
 		},
-	}
+	})
 }
 `)
 	if _, err := BuildBinary(appDir, binaryPath); err != nil {
@@ -8131,7 +8175,7 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 	if commandResponse.Header.Get("Content-Type") != "application/json; charset=utf-8" {
 		t.Fatalf("expected command JSON error content type, got %q", commandResponse.Header.Get("Content-Type"))
 	}
-	if strings.TrimSpace(string(commandPayload)) != `{"error":"Internal Server Error"}` {
+	if strings.TrimSpace(string(commandPayload)) != `{"ok":false,"error":{"code":"request_failed","message":"Internal Server Error"}}` {
 		t.Fatalf("unexpected command JSON error payload: %s", commandPayload)
 	}
 	if strings.Contains(string(commandPayload), "secret") {
@@ -8153,7 +8197,7 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 	if commandParseResponse.Header.Get("Content-Type") != "application/json; charset=utf-8" {
 		t.Fatalf("expected command parse JSON error content type, got %q", commandParseResponse.Header.Get("Content-Type"))
 	}
-	if strings.TrimSpace(string(commandParsePayload)) != `{"error":"invalid form"}` {
+	if strings.TrimSpace(string(commandParsePayload)) != `{"ok":false,"error":{"code":"invalid_form","message":"invalid form"}}` {
 		t.Fatalf("unexpected command parse JSON error payload: %s", commandParsePayload)
 	}
 
@@ -8172,7 +8216,7 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 	if commandDecodeResponse.Header.Get("Content-Type") != "application/json; charset=utf-8" {
 		t.Fatalf("expected command decode JSON error content type, got %q", commandDecodeResponse.Header.Get("Content-Type"))
 	}
-	if strings.TrimSpace(string(commandDecodePayload)) != `{"error":"invalid form"}` {
+	if strings.TrimSpace(string(commandDecodePayload)) != `{"ok":false,"error":{"code":"invalid_form","message":"invalid form"}}` {
 		t.Fatalf("unexpected command decode JSON error payload: %s", commandDecodePayload)
 	}
 
@@ -8193,7 +8237,7 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 	if queryResponse.Header.Get("Content-Type") != "application/json; charset=utf-8" {
 		t.Fatalf("expected query JSON error content type, got %q", queryResponse.Header.Get("Content-Type"))
 	}
-	if strings.TrimSpace(string(queryPayload)) != `{"error":"invalid filter"}` {
+	if strings.TrimSpace(string(queryPayload)) != `{"ok":false,"error":{"code":"handler_error","message":"invalid filter"}}` {
 		t.Fatalf("unexpected query JSON error payload: %s", queryPayload)
 	}
 
@@ -8214,7 +8258,7 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 	if queryDecodeResponse.Header.Get("Content-Type") != "application/json; charset=utf-8" {
 		t.Fatalf("expected query decode JSON error content type, got %q", queryDecodeResponse.Header.Get("Content-Type"))
 	}
-	if strings.TrimSpace(string(queryDecodePayload)) != `{"error":"invalid form"}` {
+	if strings.TrimSpace(string(queryDecodePayload)) != `{"ok":false,"error":{"code":"invalid_form","message":"invalid form"}}` {
 		t.Fatalf("unexpected query decode JSON error payload: %s", queryDecodePayload)
 	}
 }
@@ -8306,7 +8350,7 @@ func HandleCreatePatient(ctx context.Context, command CreatePatient) (CreatePati
 	if response.Header.Get("Content-Type") != "application/json; charset=utf-8" {
 		t.Fatalf("expected csrf JSON error content type, got %q", response.Header.Get("Content-Type"))
 	}
-	if strings.TrimSpace(string(payload)) != `{"error":"invalid csrf token"}` {
+	if strings.TrimSpace(string(payload)) != `{"ok":false,"error":{"code":"invalid_csrf_token","message":"invalid csrf token"}}` {
 		t.Fatalf("unexpected csrf JSON error payload: %s", payload)
 	}
 	if cache := response.Header.Get("Cache-Control"); cache != "no-store" {
@@ -8364,12 +8408,12 @@ func TestGeneratedBinaryRegisteredGuardsAllowRequestTimeRoutes(t *testing.T) {
 
 import gowdkssr "github.com/cssbruno/gowdk/runtime/ssr"
 
-func GOWDKGuardRegistry() gowdkssr.GuardRegistry {
-	return gowdkssr.GuardRegistry{
+func init() {
+	RegisterGuards(gowdkssr.GuardRegistry{
 		"auth.required": func(ctx gowdkssr.LoadContext) error {
 			return nil
 		},
-	}
+	})
 }
 `)
 	writeTestFile(t, filepath.Join(appDir, "backend", "backend.go"), `package backend
@@ -8456,12 +8500,12 @@ func TestGeneratedBinaryGuardCanRedirectRequestTimeRoute(t *testing.T) {
 
 import gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
 
-func GOWDKGuardRegistry() gowdkguard.Registry {
-	return gowdkguard.Registry{
+func init() {
+	RegisterGuards(gowdkguard.Registry{
 		"auth.required": func(ctx gowdkguard.Context) error {
 			return gowdkguard.RedirectTo("/login")
 		},
-	}
+	})
 }
 `)
 	if _, err := BuildBinary(appDir, binaryPath); err != nil {
@@ -8514,14 +8558,14 @@ import (
 	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
 )
 
-func GOWDKAuthProvider() gowdkauth.Provider {
-	return gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
+func init() {
+	RegisterAuthProvider(gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
 		return &gowdkauth.Principal{
 			ID: "user-1",
 			Roles: []string{"admin"},
 			Permissions: []string{"admin.read"},
 		}, nil
-	})
+	}))
 }
 `)
 	if _, err := BuildBinary(appDir, binaryPath); err != nil {
@@ -9860,8 +9904,8 @@ func TestDeniedPageRoutePatternsSelectsGuardlessDynamicPages(t *testing.T) {
 }
 
 func TestGuardlessActionAndAPIAreDeniedByOmission(t *testing.T) {
-	const deny = `gowdkresponse.WriteNoStoreError(response, http.StatusForbidden, "403 forbidden")`
-	const denyJSON = `gowdkresponse.WriteNoStoreJSONError(response, http.StatusForbidden, "403 forbidden")`
+	const deny = `gowdkresponse.WriteNoStoreLocalizedUserError(response, http.StatusForbidden, "forbidden"`
+	const denyJSON = `gowdkresponse.WriteNoStoreLocalizedJSONUserError(response, http.StatusForbidden, "forbidden"`
 
 	actionSrc, err := actionHandlerSource([]ActionEndpoint{{PageID: "p", ActionName: "Sub", Route: "/sub"}})
 	if err != nil {

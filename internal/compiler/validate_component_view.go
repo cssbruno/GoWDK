@@ -72,14 +72,6 @@ type componentViewRefs struct {
 	RefBinds      []fieldRef
 }
 
-func componentViewReferences(source string) (componentViewRefs, error) {
-	nodes, err := viewparse.Parse(source)
-	if err != nil {
-		return componentViewRefs{}, err
-	}
-	return componentViewReferencesFromNodes(source, nodes), nil
-}
-
 func componentViewReferencesFromNodes(source string, nodes []viewmodel.Node) componentViewRefs {
 	refs := componentViewRefs{Fields: map[string]bool{}}
 	collectComponentViewReferences(source, nodes, &refs)

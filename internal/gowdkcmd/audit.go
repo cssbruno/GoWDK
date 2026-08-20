@@ -579,8 +579,8 @@ func writeGeneratedAppAuditRunHooks(appDir string, ir gwdkir.Program) error {
 	builder.WriteString(")\n")
 
 	builder.WriteString(`
-func GOWDKAuthProvider() gowdkauth.Provider {
-	return gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
+func init() {
+	RegisterAuthProvider(gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
 		actor := strings.TrimSpace(request.Header.Get("X-GOWDK-Audit-Actor"))
 		switch {
 		case actor == "" || actor == "anonymous":
@@ -592,7 +592,7 @@ func GOWDKAuthProvider() gowdkauth.Provider {
 		default:
 			return &gowdkauth.Principal{ID: "audit", Roles: []string{actor}}, nil
 		}
-	})
+	}))
 }
 `)
 	return os.WriteFile(hookPath, []byte(builder.String()), 0o644)

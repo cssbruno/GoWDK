@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cssbruno/gowdk/runtime/i18n"
 	"github.com/cssbruno/gowdk/runtime/response"
 )
 
@@ -59,6 +60,21 @@ func TestErrorDefaultsCodeAndMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{`"code":"api_error"`, `"message":"Not Found"`} {
+		if !strings.Contains(result.Body, expected) {
+			t.Fatalf("expected %q in error body: %s", expected, result.Body)
+		}
+	}
+}
+
+func TestLocalizedErrorDefaultsCodeBeforeCatalogLookup(t *testing.T) {
+	bundle := i18n.NewErrorBundleStrings("en", map[string]map[string]string{
+		"en": {"api_error": "Localized API error"},
+	})
+	result, err := LocalizedError(http.StatusBadRequest, "", "fallback", nil, bundle, "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{`"code":"api_error"`, `"message":"Localized API error"`} {
 		if !strings.Contains(result.Body, expected) {
 			t.Fatalf("expected %q in error body: %s", expected, result.Body)
 		}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cssbruno/gowdk/runtime/i18n"
 	"github.com/cssbruno/gowdk/runtime/response"
 )
 
@@ -98,7 +99,17 @@ func WriteNoStoreFailure(writer http.ResponseWriter, err error) {
 		_ = response.WriteNoStoreHTTP(writer, result)
 		return
 	}
-	response.WriteNoStoreError(writer, http.StatusForbidden, "403 forbidden")
+	response.WriteNoStoreUserError(writer, http.StatusForbidden, "guard_forbidden", "403 forbidden")
+}
+
+// WriteNoStoreLocalizedFailure localizes ordinary guard denials. Explicit
+// redirect/response errors retain their application-owned response.
+func WriteNoStoreLocalizedFailure(writer http.ResponseWriter, err error, bundle i18n.ErrorBundle, locale string) {
+	if result, ok := ResponseResult(err); ok {
+		_ = response.WriteNoStoreHTTP(writer, result)
+		return
+	}
+	response.WriteNoStoreLocalizedUserError(writer, http.StatusForbidden, "guard_forbidden", "403 forbidden", nil, bundle, locale)
 }
 
 func validateRedirectURL(url string) error {

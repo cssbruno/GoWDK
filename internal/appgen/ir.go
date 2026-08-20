@@ -97,10 +97,10 @@ func actionEndpointRoutes(config gowdk.I18NConfig, pageRoute string, route strin
 
 func actionFormSchemaFromBlocks(blocks gwdkir.Blocks) (map[string][]view.ActionFormField, error) {
 	if len(blocks.ViewNodes) == 0 {
-		if strings.TrimSpace(blocks.ViewBody) == "" {
+		if !blocks.View {
 			return map[string][]view.ActionFormField{}, nil
 		}
-		return nil, fmt.Errorf("view {} has source body but no parsed nodes")
+		return nil, fmt.Errorf("view {} has no parsed nodes")
 	}
 	return view.ActionFormSchemaFromNodes(blocks.ViewNodes)
 }
@@ -172,7 +172,7 @@ func fragmentEndpointsFromIR(ir gwdkir.Program) ([]FragmentEndpoint, error) {
 	for _, page := range ir.Pages {
 		for _, fragment := range page.Blocks.Fragments {
 			uses := irUsesMap(page.Uses)
-			html, err := renderFragmentHTML(fragment.Body, page.Package, uses, components)
+			html, err := renderFragmentHTML(fragment.Nodes, page.Package, uses, components)
 			if err != nil {
 				return nil, fmt.Errorf("%s.%s: fragment %s: %w", page.ID, fragment.Name, fragment.Target, err)
 			}
@@ -206,8 +206,8 @@ func fragmentEndpointsFromIR(ir gwdkir.Program) ([]FragmentEndpoint, error) {
 	return endpoints, nil
 }
 
-func renderFragmentHTML(body string, packageName string, uses map[string]string, components map[string]view.Component) (string, error) {
-	return view.RenderWithOptions(body, componentRegistryForFragment(packageName, uses, components), nil, view.Options{
+func renderFragmentHTML(nodes []view.Node, packageName string, uses map[string]string, components map[string]view.Component) (string, error) {
+	return view.RenderNodesWithOptions(nodes, componentRegistryForFragment(packageName, uses, components), nil, view.Options{
 		Package: packageName,
 		Uses:    uses,
 	})
@@ -224,7 +224,6 @@ func fragmentComponentsFromIR(components []gwdkir.Component) map[string]view.Com
 			PropTypes:    irPropTypes(component.Props),
 			PropDefaults: irPropDefaults(component.Props),
 			Exports:      irExportTypes(component.Exports),
-			Body:         component.Blocks.ViewBody,
 			Nodes:        append([]view.Node(nil), component.Blocks.ViewNodes...),
 		}
 		addFragmentComponent(out, compiled)
@@ -233,7 +232,7 @@ func fragmentComponentsFromIR(components []gwdkir.Component) map[string]view.Com
 }
 
 func addFragmentComponent(registry map[string]view.Component, component view.Component) {
-	if component.Name == "" || component.Body == "" {
+	if component.Name == "" || len(component.Nodes) == 0 {
 		return
 	}
 	registry[fragmentComponentKey(component.Package, component.Name)] = component
@@ -383,7 +382,7 @@ func actionFragmentsFromIR(action gwdkir.Action) ([]ActionFragment, error) {
 	}
 	fragments := make([]ActionFragment, 0, len(action.Fragments))
 	for _, fragment := range action.Fragments {
-		html, err := view.RenderSPA(fragment.Body)
+		html, err := view.RenderNodesWithOptions(fragment.Nodes, nil, nil, view.Options{})
 		if err != nil {
 			return nil, fmt.Errorf("fragment %s: %w", fragment.Target, err)
 		}

@@ -143,15 +143,10 @@ func resolveComponentContracts(component gwdkir.Component) (componentContracts, 
 // has a different shape is the author's responsibility, exactly as a mismatched
 // local state declaration was.
 func resolveComponentStoreFields(component gwdkir.Component, contracts *componentContracts) []ValidationError {
-	if strings.TrimSpace(component.Blocks.ClientBody) == "" {
+	if !component.Blocks.Client || component.Blocks.ClientProgram == nil {
 		return nil
 	}
-	program, err := clientlang.Parse(component.Blocks.ClientBody)
-	if err != nil {
-		// A malformed client block is reported with a precise span by
-		// validateComponentClient; skip store-field binding here.
-		return nil
-	}
+	program := *component.Blocks.ClientProgram
 	var diagnostics []ValidationError
 	for _, use := range program.Uses {
 		if use.Type == "" {

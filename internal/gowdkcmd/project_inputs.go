@@ -96,7 +96,7 @@ func loadProjectConfigWithPaths(options *cliOptions, configPath string, paths []
 	if err := loadProjectEnvFile(options, projectRoot); err != nil {
 		return err
 	}
-	config, err := project.LoadConfigStructural(resolvedConfigPath)
+	config, err := project.LoadConfigFileStructuralWithEnvironment(resolvedConfigPath, options.ProjectEnvironment.ForSubprocess(os.Environ()))
 	if err != nil {
 		return err
 	}
@@ -119,23 +119,8 @@ func validateNativeProjectConfigStructure(path string, config gowdk.Config) erro
 	if strings.TrimSpace(path) == "" {
 		path = project.DefaultConfigFile
 	}
-	if err := config.Env.Validate(nil); err != nil {
-		return fmt.Errorf("%s env contract: %w", path, err)
-	}
-	if err := config.Lifecycle.Validate(); err != nil {
-		return fmt.Errorf("%s lifecycle contract: %w", path, err)
-	}
-	if err := config.I18N.Validate(); err != nil {
-		return fmt.Errorf("%s i18n policy: %w", path, err)
-	}
-	if err := config.Build.CORS.Validate(); err != nil {
-		return fmt.Errorf("%s CORS policy: %w", path, err)
-	}
-	if err := config.Build.CSRF.Validate(); err != nil {
-		return fmt.Errorf("%s CSRF policy: %w", path, err)
-	}
-	if err := gowdk.ValidateAddons(config.Addons); err != nil {
-		return fmt.Errorf("%s addons: %w", path, err)
+	if err := config.ValidateStructural(); err != nil {
+		return fmt.Errorf("%s config: %w", path, err)
 	}
 	return nil
 }
@@ -145,7 +130,7 @@ func loadProjectEnvFile(options *cliOptions, projectRoot string) error {
 	if err != nil {
 		return err
 	}
-	result, err := envfile.LoadIntoEnv(path, explicit)
+	environment, result, err := envfile.Load(path, explicit, os.Environ())
 	if err != nil {
 		if explicit {
 			return fmt.Errorf("load env file %q: %w", path, err)
@@ -157,6 +142,7 @@ func loadProjectEnvFile(options *cliOptions, projectRoot string) error {
 	options.EnvFileExplicit = result.Explicit
 	options.EnvFileApplied = append([]string(nil), result.Applied...)
 	options.EnvFileSkipped = append([]string(nil), result.Skipped...)
+	options.ProjectEnvironment = environment
 	return nil
 }
 

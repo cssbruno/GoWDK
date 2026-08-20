@@ -110,10 +110,8 @@ func TestBuildIncrementalRendersOnlyChangedPageSources(t *testing.T) {
 			ID:      "about",
 			Route:   "/about",
 			Blocks: gwdkir.Blocks{
-				Build:     true,
-				BuildBody: `=> missing.BuildData()`,
-				View:      true,
-				ViewBody:  `<main>About stable</main>`,
+				View:     true,
+				ViewBody: `<main>About stable</main>`,
 			},
 		},
 	}}

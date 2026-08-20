@@ -36,6 +36,51 @@ func TestConfigHasFeature(t *testing.T) {
 	}
 }
 
+func TestTypedFeaturesAreIndependentFromExtensions(t *testing.T) {
+	config := gowdk.Config{
+		Features: gowdk.FeatureConfig{SPA: true, SSR: true},
+		Extensions: []gowdk.Extension{publicAPIExtension{descriptor: gowdk.ExtensionDescriptor{
+			Name: "metadata", ProtocolVersion: gowdk.ExtensionProtocolVersion,
+			Phases: []gowdk.ExtensionPhase{gowdk.ExtensionPhaseBuildMetadata},
+		}}},
+	}
+	if !config.HasFeature(gowdk.FeatureSPA) || !config.HasFeature(gowdk.FeatureSSR) {
+		t.Fatalf("typed feature selection was not preserved: %#v", gowdk.EnabledFeatures(config))
+	}
+	if err := gowdk.ValidateExtensions(config.Extensions); err != nil {
+		t.Fatalf("valid extension descriptor rejected: %v", err)
+	}
+}
+
+func TestValidateExtensionsNegotiatesRequiredAndOptionalCapabilities(t *testing.T) {
+	required := publicAPIExtension{descriptor: gowdk.ExtensionDescriptor{
+		Name: "required", ProtocolVersion: gowdk.ExtensionProtocolVersion,
+		Capabilities: []gowdk.ExtensionCapabilityDescriptor{{Name: gowdk.ExtensionCapabilityCSSProcessor, Version: 1, Required: true}},
+	}}
+	if err := gowdk.ValidateExtensions([]gowdk.Extension{required}); err == nil || !strings.Contains(err.Error(), "requires unavailable capability") {
+		t.Fatalf("missing required capability error = %v", err)
+	}
+	optional := publicAPIExtension{descriptor: gowdk.ExtensionDescriptor{
+		Name: "optional", ProtocolVersion: gowdk.ExtensionProtocolVersion,
+		Capabilities: []gowdk.ExtensionCapabilityDescriptor{{Name: "vendor.future", Version: 9}},
+	}}
+	if err := gowdk.ValidateExtensions([]gowdk.Extension{optional}); err != nil {
+		t.Fatalf("unknown optional capability should be ignored: %v", err)
+	}
+	wrongVersion := publicAPIExtension{descriptor: gowdk.ExtensionDescriptor{Name: "future", ProtocolVersion: gowdk.ExtensionProtocolVersion + 1}}
+	if err := gowdk.ValidateExtensions([]gowdk.Extension{wrongVersion}); err == nil || !strings.Contains(err.Error(), "supports") {
+		t.Fatalf("protocol mismatch error = %v", err)
+	}
+}
+
+type publicAPIExtension struct{ descriptor gowdk.ExtensionDescriptor }
+
+func (extension publicAPIExtension) Name() string { return extension.descriptor.Name }
+
+func (extension publicAPIExtension) Descriptor() gowdk.ExtensionDescriptor {
+	return extension.descriptor
+}
+
 func TestValidateAddonsRejectsInvalidIdentityAndOwnership(t *testing.T) {
 	tests := []struct {
 		name   string

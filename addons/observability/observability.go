@@ -20,7 +20,7 @@ type Collector = gowdktrace.Collector
 
 // Addon enables generated app trace wiring.
 func Addon() gowdk.Addon {
-	return gowdk.NewAddon("observability", gowdk.FeatureObservability)
+	return gowdk.NewBuiltinAddon("observability", gowdk.FeatureObservability)
 }
 
 // CollectorOption configures a Collector.

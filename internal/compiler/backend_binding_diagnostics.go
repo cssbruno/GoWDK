@@ -28,6 +28,12 @@ func BackendBindingDiagnostics(bindings []source.BackendBinding) []ValidationErr
 	var diagnostics []ValidationError
 	for _, binding := range bindings {
 		switch {
+		case binding.ExplicitRegistrationRequired:
+			diagnostics = append(diagnostics, ValidationError{
+				Code: "missing_load_registration", PageID: binding.PageID,
+				Source: binding.Source, Span: binding.Span, Message: binding.Message,
+				Severity: SeverityError,
+			})
 		case binding.Ambiguous:
 			diagnostics = append(diagnostics, backendBindingDiagnostic("ambiguous_backend_handler", binding))
 		case binding.Status == source.BackendBindingUnsupportedSignature:

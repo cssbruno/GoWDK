@@ -2,8 +2,10 @@ package buildgen
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -26,6 +28,66 @@ func irComponent(component gwdkir.Component) gwdkir.Component {
 
 func analyzedIRFixture(t *testing.T, program gwdkir.Program) gwdkir.Program {
 	t.Helper()
+	// Lower every source fixture through the production analyzer. Tests in this
+	// package historically constructed raw Blocks bodies directly; generators
+	// now require the typed records produced before validation.
+	lowered := gwdkanalysis.BuildProgram(gowdk.Config{}, gwdkanalysis.Sources{
+		Pages:      program.Pages,
+		Components: program.Components,
+		Layouts:    program.Layouts,
+		AuditSpecs: program.AuditSpecs,
+	})
+	program.Pages = lowered.Pages
+	program.Components = lowered.Components
+	program.Layouts = lowered.Layouts
+	program.Diagnostics = append(program.Diagnostics, lowered.Diagnostics...)
+	for index := range program.Pages {
+		blocks := &program.Pages[index].Blocks
+		if blocks.Paths && len(blocks.PathsRecords) == 0 && strings.TrimSpace(blocks.PathsBody) != "" {
+			declarations, err := parsePathDeclarations(blocks.PathsBody)
+			if err != nil {
+				program.Diagnostics = append(program.Diagnostics, gwdkir.Diagnostic{Code: "test_fixture_paths_error", Source: program.Pages[index].Source, Message: err.Error()})
+			} else {
+				for _, declaration := range declarations {
+					record := gwdkir.LiteralRecord{Fields: map[string]string{}, Expressions: map[string]string{}}
+					for name, value := range declaration {
+						record.FieldOrder = append(record.FieldOrder, name)
+						record.Fields[name] = value
+						record.Expressions[name] = strconv.Quote(value)
+					}
+					blocks.PathsRecords = append(blocks.PathsRecords, record)
+				}
+			}
+		}
+		if blocks.Build && blocks.BuildCall == nil && len(blocks.BuildRecords) == 0 && strings.TrimSpace(blocks.BuildBody) != "" {
+			lines := significantBuildLines(blocks.BuildBody)
+			if len(lines) == 1 {
+				if call, ok, err := parseBuildDataCallLine(lines[0]); err != nil {
+					program.Diagnostics = append(program.Diagnostics, gwdkir.Diagnostic{Code: "test_fixture_build_error", Source: program.Pages[index].Source, Message: err.Error()})
+				} else if ok {
+					blocks.BuildCall = &gwdkir.BuildCall{Alias: call.Alias, Function: call.Function}
+				}
+			}
+			if blocks.BuildCall == nil {
+				for lineIndex, line := range lines {
+					fields, ok, err := buildLiteralRecordFields(line)
+					if err != nil || !ok {
+						if err == nil {
+							err = fmt.Errorf("build line %d must use `=> { name: value }` or `=> BuildData()`", lineIndex+1)
+						}
+						program.Diagnostics = append(program.Diagnostics, gwdkir.Diagnostic{Code: "test_fixture_build_error", Source: program.Pages[index].Source, Message: err.Error()})
+						break
+					}
+					record := gwdkir.LiteralRecord{Expressions: map[string]string{}}
+					for _, field := range fields {
+						record.FieldOrder = append(record.FieldOrder, field.name)
+						record.Expressions[field.name] = field.expr
+					}
+					blocks.BuildRecords = append(blocks.BuildRecords, record)
+				}
+			}
+		}
+	}
 	parseBlocks := func(blocks *gwdkir.Blocks) {
 		t.Helper()
 		if strings.TrimSpace(blocks.ViewBody) == "" {

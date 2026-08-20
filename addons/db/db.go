@@ -25,7 +25,7 @@ const ImportPath = "github.com/cssbruno/gowdk/addons/db"
 
 // Addon enables the database plumbing feature.
 func Addon() gowdk.Addon {
-	return gowdk.NewAddon("db", gowdk.FeatureDB)
+	return gowdk.NewBuiltinAddon("db", gowdk.FeatureDB)
 }
 
 // Options tunes the connection pool. The zero value applies sensible defaults.

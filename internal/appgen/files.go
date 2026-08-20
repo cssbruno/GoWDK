@@ -42,19 +42,6 @@ func isSameOrWithin(parent, child string) bool {
 	return rel == "." || (!strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != "..")
 }
 
-func copyOutputFiles(sourceRoot, targetRoot string) ([]string, error) {
-	files, planned, err := collectOutputFiles(sourceRoot, targetRoot)
-	if err != nil {
-		return nil, err
-	}
-	for _, file := range planned {
-		if err := writeFileIfChanged(file.path, file.contents); err != nil {
-			return nil, err
-		}
-	}
-	return files, nil
-}
-
 func collectOutputFiles(sourceRoot, targetRoot string) ([]string, []plannedFile, error) {
 	var files []string
 	var planned []plannedFile
@@ -103,38 +90,6 @@ func unsafeEmbeddedDirectory(rel string) bool {
 	return safeasset.UnsafeEmbeddedDirectory(rel)
 }
 
-func copyFile(sourcePath, targetPath string) error {
-	payload, err := os.ReadFile(sourcePath)
-	if err != nil {
-		return err
-	}
-	return writeFileIfChanged(targetPath, payload)
-}
-
-func removeStaleOutputFiles(targetRoot string, files []string) error {
-	keep := map[string]bool{}
-	for _, file := range files {
-		keep[file] = true
-	}
-	return filepath.WalkDir(targetRoot, func(filePath string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		rel, err := filepath.Rel(targetRoot, filePath)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
-		if keep[rel] {
-			return nil
-		}
-		return os.Remove(filePath)
-	})
-}
-
 func writeFileIfChanged(filePath string, contents []byte) error {
 	current, err := os.ReadFile(filePath)
 	if err == nil && bytes.Equal(current, contents) {
@@ -172,5 +127,29 @@ func writeFileIfChanged(filePath string, contents []byte) error {
 		return err
 	}
 	cleanup = false
+	return nil
+}
+
+func stageGeneratedFile(stagedPath, currentPath string, contents []byte) error {
+	current, err := os.ReadFile(currentPath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err != nil || !bytes.Equal(current, contents) {
+		return writeFileIfChanged(stagedPath, contents)
+	}
+	if err := os.MkdirAll(filepath.Dir(stagedPath), 0o755); err != nil {
+		return err
+	}
+	if err := os.Link(currentPath, stagedPath); err == nil {
+		return nil
+	}
+	if err := os.WriteFile(stagedPath, contents, 0o644); err != nil {
+		return err
+	}
+	if info, err := os.Stat(currentPath); err == nil {
+		_ = os.Chmod(stagedPath, info.Mode().Perm())
+		_ = os.Chtimes(stagedPath, info.ModTime(), info.ModTime())
+	}
 	return nil
 }

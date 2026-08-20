@@ -19,7 +19,7 @@ func ValidateBackendBindingPolicyIR(config gowdk.Config, ir gwdkir.Program) erro
 	}
 	bindings := BackendBindingsFromIR(ir)
 	if len(bindings) == 0 && programDeclaresBackendEndpoints(ir) {
-		bindings = computeBackendBindings(ir)
+		bindings = computeBackendBindingsWithConfig(ir, &config)
 	}
 
 	var diagnostics []ValidationError

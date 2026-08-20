@@ -6,12 +6,17 @@ import (
 	"github.com/cssbruno/gowdk/addons/partial"
 	"github.com/cssbruno/gowdk/addons/ratelimit"
 	"github.com/cssbruno/gowdk/addons/ssr"
+	flagship "github.com/cssbruno/gowdk/examples/flagship/src/app"
 )
 
 var Config = gowdk.Config{
 	AppName: "GOWDK Flagship",
 	Source: gowdk.SourceConfig{
 		Include: []string{"src/**/*.gwdk"},
+	},
+	Interop: gowdk.InteropConfig{
+		Loads:  []gowdk.LoadRegistration{gowdk.RegisterLoad("dashboard", flagship.LoadDashboard)},
+		Guards: gowdk.RegisterGuards(flagship.Guards),
 	},
 	Build: gowdk.BuildConfig{
 		Output: "dist",

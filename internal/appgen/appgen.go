@@ -4,9 +4,10 @@ package appgen
 import (
 	"fmt"
 	"go/format"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/cssbruno/gowdk/internal/publish"
 )
 
 const (
@@ -136,7 +137,6 @@ func GenerateWithPlan(outputDir, appDir string, plan ApplicationPlan) (result Re
 		return Result{}, err
 	}
 	plannedFiles := append([]plannedFile(nil), outputFiles...)
-	var removeAfterPublish []string
 	modulePath := filepath.Join(absApp, modFileName)
 	if moduleContext.Nested {
 		modulePayload, err := moduleSource(options)
@@ -145,7 +145,6 @@ func GenerateWithPlan(outputDir, appDir string, plan ApplicationPlan) (result Re
 		}
 		plannedFiles = append(plannedFiles, plannedFile{path: modulePath, contents: []byte(modulePayload)})
 	} else {
-		removeAfterPublish = append(removeAfterPublish, modulePath)
 		modulePath = ""
 	}
 	packageSource, err := appPackageSource(options)
@@ -165,7 +164,6 @@ func GenerateWithPlan(outputDir, appDir string, plan ApplicationPlan) (result Re
 		path := filepath.Join(absApp, name)
 		source, ok := lifecycleSources[name]
 		if !ok {
-			removeAfterPublish = append(removeAfterPublish, path)
 			continue
 		}
 		formatted, err := formatGeneratedGo(name, source)
@@ -181,8 +179,6 @@ func GenerateWithPlan(outputDir, appDir string, plan ApplicationPlan) (result Re
 	auditTestPath := filepath.Join(absApp, auditTestFileName)
 	if len(auditTestSource) > 0 {
 		plannedFiles = append(plannedFiles, plannedFile{path: auditTestPath, contents: auditTestSource})
-	} else {
-		removeAfterPublish = append(removeAfterPublish, auditTestPath)
 	}
 	scriptFiles, scriptPlannedFiles, err := collectInlineGoBlockFiles(absApp, options)
 	if err != nil {
@@ -201,24 +197,23 @@ func GenerateWithPlan(outputDir, appDir string, plan ApplicationPlan) (result Re
 		return Result{}, err
 	}
 	plannedFiles = append(plannedFiles, plannedFile{path: filepath.Join(absApp, mainFileName), contents: []byte(mainSource)})
-	if err := os.MkdirAll(absApp, 0o755); err != nil {
+	var publication publish.Transaction
+	stageApp, err := publication.StageDirectory(absApp)
+	if err != nil {
 		return Result{}, err
 	}
-	if err := os.MkdirAll(targetOutput, 0o755); err != nil {
-		return Result{}, err
-	}
+	defer publication.Abort()
 	for _, file := range plannedFiles {
-		if err := writeFileIfChanged(file.path, file.contents); err != nil {
+		rel, err := filepath.Rel(absApp, file.path)
+		if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return Result{}, fmt.Errorf("planned generated app file %q escapes app directory %q", file.path, absApp)
+		}
+		if err := stageGeneratedFile(filepath.Join(stageApp, rel), file.path, file.contents); err != nil {
 			return Result{}, err
 		}
 	}
-	if err := removeStaleOutputFiles(targetOutput, files); err != nil {
+	if err := publication.Commit(); err != nil {
 		return Result{}, err
-	}
-	for _, path := range removeAfterPublish {
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			return Result{}, err
-		}
 	}
 
 	return Result{
@@ -260,13 +255,16 @@ func GenerateBackendWithPlan(appDir string, plan ApplicationPlan) (result Result
 	if !plan.backendOnly {
 		return Result{}, fmt.Errorf("embedded application plan cannot be used for backend app generation")
 	}
-	if err := os.MkdirAll(absApp, 0o755); err != nil {
-		return Result{}, err
-	}
 	moduleContext := resolveGeneratedModuleContext(absApp)
-	modulePath, err := writeGeneratedModuleFile(absApp, moduleContext, options)
-	if err != nil {
-		return Result{}, err
+	var plannedFiles []plannedFile
+	modulePath := ""
+	if moduleContext.Nested {
+		modulePayload, err := moduleSource(options)
+		if err != nil {
+			return Result{}, err
+		}
+		modulePath = filepath.Join(absApp, modFileName)
+		plannedFiles = append(plannedFiles, plannedFile{path: modulePath, contents: []byte(modulePayload)})
 	}
 	packageSource, err := backendAppPackageSource(options)
 	if err != nil {
@@ -276,23 +274,53 @@ func GenerateBackendWithPlan(appDir string, plan ApplicationPlan) (result Result
 	if err != nil {
 		return Result{}, err
 	}
-	if err := writeFileIfChanged(filepath.Join(absApp, appFileName), appSource); err != nil {
+	plannedFiles = append(plannedFiles, plannedFile{path: filepath.Join(absApp, appFileName), contents: appSource})
+	lifecycleSources, err := lifecycleServiceFileSources(options)
+	if err != nil {
 		return Result{}, err
 	}
-	if err := writeLifecycleServiceFiles(absApp, options); err != nil {
+	for _, name := range []string{lifecycleFileName, lifecycleJSName} {
+		source, ok := lifecycleSources[name]
+		if !ok {
+			continue
+		}
+		formatted, err := formatGeneratedGo(name, source)
+		if err != nil {
+			return Result{}, err
+		}
+		plannedFiles = append(plannedFiles, plannedFile{path: filepath.Join(absApp, name), contents: formatted})
+	}
+	inlineFiles, inlinePlanned, err := collectInlineGoBlockFiles(absApp, options)
+	if err != nil {
 		return Result{}, err
 	}
-	if _, err := writeInlineGoBlockFiles(absApp, options); err != nil {
+	addonFiles, addonPlanned, err := collectAddonGoBlockFiles(absApp, options)
+	if err != nil {
 		return Result{}, err
 	}
-	if _, err := writeAddonGoBlockFiles(absApp, options); err != nil {
-		return Result{}, err
-	}
+	plannedFiles = append(plannedFiles, inlinePlanned...)
+	plannedFiles = append(plannedFiles, addonPlanned...)
 	mainSource, err := serverMainSource(moduleContext.ImportBase + "/" + appPackageDirName)
 	if err != nil {
 		return Result{}, err
 	}
-	if err := writeFileIfChanged(filepath.Join(absApp, mainFileName), []byte(mainSource)); err != nil {
+	plannedFiles = append(plannedFiles, plannedFile{path: filepath.Join(absApp, mainFileName), contents: []byte(mainSource)})
+	var publication publish.Transaction
+	stageApp, err := publication.StageDirectory(absApp)
+	if err != nil {
+		return Result{}, err
+	}
+	defer publication.Abort()
+	for _, file := range plannedFiles {
+		rel, err := filepath.Rel(absApp, file.path)
+		if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return Result{}, fmt.Errorf("planned generated backend file %q escapes app directory %q", file.path, absApp)
+		}
+		if err := stageGeneratedFile(filepath.Join(stageApp, rel), file.path, file.contents); err != nil {
+			return Result{}, err
+		}
+	}
+	if err := publication.Commit(); err != nil {
 		return Result{}, err
 	}
 	return Result{
@@ -300,50 +328,8 @@ func GenerateBackendWithPlan(appDir string, plan ApplicationPlan) (result Result
 		MainPath:    filepath.Join(absApp, mainFileName),
 		PackagePath: filepath.Join(absApp, appFileName),
 		ModulePath:  modulePath,
+		Files:       append(inlineFiles, addonFiles...),
 	}, nil
-}
-
-func writeGeneratedModuleFile(absApp string, context generatedModuleContext, options Options) (string, error) {
-	nestedPath := filepath.Join(absApp, modFileName)
-	if !context.Nested {
-		if err := os.Remove(nestedPath); err != nil && !os.IsNotExist(err) {
-			return "", err
-		}
-		return "", nil
-	}
-	modulePayload, err := moduleSource(options)
-	if err != nil {
-		return "", err
-	}
-	if err := writeFileIfChanged(nestedPath, []byte(modulePayload)); err != nil {
-		return "", err
-	}
-	return nestedPath, nil
-}
-
-func writeLifecycleServiceFiles(absApp string, options Options) error {
-	sources, err := lifecycleServiceFileSources(options)
-	if err != nil {
-		return err
-	}
-	for _, name := range []string{lifecycleFileName, lifecycleJSName} {
-		path := filepath.Join(absApp, name)
-		source, ok := sources[name]
-		if !ok {
-			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-				return err
-			}
-			continue
-		}
-		formatted, err := formatGeneratedGo(name, source)
-		if err != nil {
-			return err
-		}
-		if err := writeFileIfChanged(path, formatted); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func formatGeneratedGo(name string, source []byte) ([]byte, error) {

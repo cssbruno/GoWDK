@@ -8,8 +8,8 @@ const (
 	// TierStable: accepted today and not expected to change shape within 0.x
 	// without a deprecation step.
 	TierStable StabilityTier = "stable"
-	// TierPartial: accepted for a narrower slice than the final contract.
-	TierPartial StabilityTier = "partial"
+	// TierExperimental: accepted behind a documented, changeable 0.x contract.
+	TierExperimental StabilityTier = "experimental"
 	// TierPlanned: not accepted yet; using it is rejected with DiagnosticCode.
 	TierPlanned StabilityTier = "planned"
 	// TierDeprecated: previously accepted spelling, now rejected with
@@ -48,17 +48,17 @@ func ConstructStabilities() []ConstructStability {
 		{Name: "package", Kind: ConstructBlock, Tier: TierStable},
 		{Name: "import", Kind: ConstructBlock, Tier: TierStable},
 		{Name: "use", Kind: ConstructBlock, Tier: TierStable},
-		{Name: "paths {}", Kind: ConstructBlock, Tier: TierPartial},
-		{Name: "build {}", Kind: ConstructBlock, Tier: TierPartial},
-		{Name: "server {}", Kind: ConstructBlock, Tier: TierPartial},
+		{Name: "paths {}", Kind: ConstructBlock, Tier: TierExperimental},
+		{Name: "build {}", Kind: ConstructBlock, Tier: TierExperimental},
+		{Name: "server {}", Kind: ConstructBlock, Tier: TierExperimental},
 		{Name: "view {}", Kind: ConstructBlock, Tier: TierStable},
 		{Name: "style {}", Kind: ConstructBlock, Tier: TierStable},
-		{Name: "client {}", Kind: ConstructBlock, Tier: TierPartial},
-		{Name: "go {}", Kind: ConstructBlock, Tier: TierPartial},
-		{Name: "store", Kind: ConstructBlock, Tier: TierPartial},
-		{Name: "props", Kind: ConstructBlock, Tier: TierPartial},
-		{Name: "state", Kind: ConstructBlock, Tier: TierPartial},
-		{Name: "emits", Kind: ConstructBlock, Tier: TierPartial},
+		{Name: "client {}", Kind: ConstructBlock, Tier: TierExperimental},
+		{Name: "go {}", Kind: ConstructBlock, Tier: TierExperimental},
+		{Name: "store", Kind: ConstructBlock, Tier: TierExperimental},
+		{Name: "props", Kind: ConstructBlock, Tier: TierExperimental},
+		{Name: "state", Kind: ConstructBlock, Tier: TierExperimental},
+		{Name: "emits", Kind: ConstructBlock, Tier: TierExperimental},
 		{Name: "unsupported top-level block", Kind: ConstructBlock, Tier: TierPlanned, DiagnosticCode: "unsupported_top_level_block"},
 
 		// Supported g: directives. Flow control is stable; the rest are partial.
@@ -67,31 +67,32 @@ func ConstructStabilities() []ConstructStability {
 		{Name: "g:else", Kind: ConstructDirective, Tier: TierStable},
 		{Name: "g:for", Kind: ConstructDirective, Tier: TierStable},
 		{Name: "g:key", Kind: ConstructDirective, Tier: TierStable},
+		{Name: "g:lane", Kind: ConstructDirective, Tier: TierStable},
 		{Name: "g:unsafe-html", Kind: ConstructDirective, Tier: TierStable},
-		{Name: "g:bind:value", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:bind:checked", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:post", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:target", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:swap", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:max-file-size", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:max-files", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:island", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:command", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:query", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:subscribe", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:event", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:ref", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:slot", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:transition", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:animate", Kind: ConstructDirective, Tier: TierPartial},
+		{Name: "g:bind:value", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:bind:checked", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:post", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:target", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:swap", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:max-file-size", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:max-files", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:island", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:command", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:query", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:subscribe", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:event", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:ref", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:slot", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:transition", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:animate", Kind: ConstructDirective, Tier: TierExperimental},
 
 		// Supported g: directive families (validated separately from the
 		// exact-name set, so viewparse.SupportedDirectiveNames() excludes them).
-		{Name: "g:on:*", Kind: ConstructDirective, Tier: TierPartial},
-		{Name: "g:message:*", Kind: ConstructDirective, Tier: TierPartial},
+		{Name: "g:on:*", Kind: ConstructDirective, Tier: TierExperimental},
+		{Name: "g:message:*", Kind: ConstructDirective, Tier: TierExperimental},
 
 		// Supported markup block syntax.
-		{Name: "{#await}", Kind: ConstructMarkup, Tier: TierPartial},
+		{Name: "{#await}", Kind: ConstructMarkup, Tier: TierExperimental},
 
 		// Planned g: directives, rejected on use. They currently surface as the
 		// generic parse_error rather than a typed code (see
@@ -110,7 +111,7 @@ func ConstructStabilities() []ConstructStability {
 		// Endpoint declaration forms.
 		{Name: "act", Kind: ConstructEndpoint, Tier: TierStable},
 		{Name: "api", Kind: ConstructEndpoint, Tier: TierStable},
-		{Name: "fragment", Kind: ConstructEndpoint, Tier: TierPartial},
+		{Name: "fragment", Kind: ConstructEndpoint, Tier: TierExperimental},
 		{Name: "act block form", Kind: ConstructEndpoint, Tier: TierDeprecated, DiagnosticCode: "old_action_block_syntax"},
 		{Name: "api block form", Kind: ConstructEndpoint, Tier: TierDeprecated, DiagnosticCode: "old_api_block_syntax"},
 	}

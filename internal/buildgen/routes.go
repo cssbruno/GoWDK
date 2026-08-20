@@ -17,22 +17,6 @@ type pageOutput struct {
 	locale string
 }
 
-func pageRouteArtifacts(config gowdk.Config, outputDir string, page gwdkir.Page) ([]Artifact, error) {
-	outputs, err := pageOutputs(config, page)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", page.ID, err)
-	}
-	artifacts := make([]Artifact, 0, len(outputs))
-	for _, output := range outputs {
-		outputPath, err := outputPath(outputDir, output.route)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", page.ID, err)
-		}
-		artifacts = append(artifacts, Artifact{PageID: page.ID, Route: output.route, Path: outputPath, CachePolicy: page.CachePolicy(), Locale: output.locale})
-	}
-	return artifacts, nil
-}
-
 func pageOutputArtifacts(config gowdk.Config, outputDir string, page gwdkir.Page, components map[string]view.Component, layouts map[string]gwdkir.Layout, stylesheets []gowdk.Stylesheet, actionFields map[string][]view.ActionInputField, realtimeEventTypeNames map[string]string, queryTypeNames map[string]string) ([]plannedArtifact, error) {
 	outputs, err := pageOutputs(config, page)
 	if err != nil {

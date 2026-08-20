@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/runtime/envfile"
 )
 
 const version = "0.12.3" // x-release-please-version
@@ -79,35 +80,14 @@ func commandHelpRequested(args []string) bool {
 }
 
 func nestedCommandUsage(args []string) (string, bool) {
-	if len(args) != 3 || (args[2] != "-h" && args[2] != "--help") {
+	if len(args) < 3 || (args[len(args)-1] != "-h" && args[len(args)-1] != "--help") {
 		return "", false
 	}
-	switch args[0] {
-	case "inspect":
-		switch args[1] {
-		case "ir", "tree", "endpoint-graph", "asset-graph", "go-bindings":
-			return fmt.Sprintf("usage: gowdk inspect %s [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...]", args[1]), true
-		}
-	case "generate":
-		if args[1] == "stubs" {
-			return generateUsage, true
-		}
-	case "env":
-		if args[1] == "check" {
-			return envUsage, true
-		}
-	case "list":
-		switch args[1] {
-		case "commands", "queries", "events", "jobs":
-			return "usage: gowdk list commands|queries|events|jobs [--json] [dir]", true
-		}
-	case "playground":
-		switch args[1] {
-		case "policy", "export", "run":
-			return playgroundUsage, true
-		}
+	descriptor, ok := commandSpec(args[:len(args)-1])
+	if !ok || len(args) == 2 {
+		return "", false
 	}
-	return "", false
+	return descriptor.Usage(), true
 }
 
 func commandUsage(command string) (string, bool) {
@@ -117,56 +97,87 @@ func commandUsage(command string) (string, bool) {
 	return "", false
 }
 
-type topLevelCommandDescriptor struct {
+type CommandSpec struct {
 	Name       string
 	Handler    func([]string) error
 	Usage      func() string
 	ListSuffix string
+	Summary    string
+	Children   []CommandSpec
 }
 
 func staticCommandUsage(value string) func() string {
 	return func() string { return value }
 }
 
-var topLevelCommands = []topLevelCommandDescriptor{
-	{Name: "version", Handler: printVersion, Usage: staticCommandUsage("usage: gowdk version [--json]"), ListSuffix: " [--json]         print CLI version"},
-	{Name: "init", Handler: initProject, Usage: staticCommandUsage(initUsage), ListSuffix: " [--force] [--tests] [--template <site|minimal>] [dir] scaffold a starter GOWDK project"},
-	{Name: "add", Handler: addAddon, Usage: staticCommandUsage(addUsage), ListSuffix: " <addon> [--config <file>] [--base-url <url>] | add --list [--registry] [--json]  wire or list addons"},
-	{Name: "tokens", Handler: tokens, Usage: staticCommandUsage("usage: gowdk tokens <file.gwdk>"), ListSuffix: " <file.gwdk>       print language tokens"},
-	{Name: "fmt", Handler: format, Usage: staticCommandUsage("usage: gowdk fmt [--write] [--check] <files>"), ListSuffix: " [--write] [--check] <files>  format .gwdk files (--check reports files that need formatting)"},
-	{Name: "check", Handler: check, Usage: func() string { return projectCommandUsage("check", true) }, ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--json] [--warnings-as-errors] [--standalone] [--ssr] [files...] parse and validate .gwdk files"},
-	{Name: "env", Handler: envCommand, Usage: staticCommandUsage(envUsage), ListSuffix: " check [--config <file>] [--env-file <file>] [--json] validate deployment environment values"},
-	{Name: "fix", Handler: fixCommand, Usage: staticCommandUsage(fixUsage), ListSuffix: " [--dry-run] [--code <diagnostic-code>] [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...] apply registered safe diagnostic fixes"},
-	{Name: "manifest", Handler: manifestJSON, Usage: func() string { return projectCommandUsage("manifest", false) }, ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON"},
-	{Name: "sitemap", Handler: siteMapJSON, Usage: func() string { return projectCommandUsage("sitemap", false) }, ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON"},
-	{Name: "routes", Handler: routesJSON, Usage: func() string { return projectCommandUsage("routes", false) }, ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON"},
-	{Name: "endpoints", Handler: endpointsJSONCommand, Usage: func() string { return projectCommandUsage("endpoints", false) }, ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...] print endpoint metadata JSON"},
-	{Name: "inspect", Handler: inspect, Usage: staticCommandUsage(inspectUsage), ListSuffix: " ir|tree|endpoint-graph|asset-graph|go-bindings [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...] print validated compiler inspection JSON"},
-	{Name: "generate", Handler: generate, Usage: staticCommandUsage(generateUsage), ListSuffix: " stubs [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...] write missing action/API Go handler stubs"},
-	{Name: "explain", Handler: explainDiagnostic, Usage: staticCommandUsage("usage: gowdk explain [--json] <diagnostic-code>"), ListSuffix: " [--json] <diagnostic-code> explain a diagnostic code and next steps"},
-	{Name: "doctor", Handler: doctor, Usage: staticCommandUsage(doctorUsage), ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...] check local GOWDK environment and project health"},
-	{Name: "test", Handler: gowdkTest, Usage: staticCommandUsage(testUsage), ListSuffix: " [--config <file>] [--env-file <file>] [--module <name>] [--target <name>] [--stage <unit|app|binary|browser>] [--run <pattern>] [--timeout <duration>] [--count <n>] [--cover] [--json] [--keep-workdir] [--browser-command <command>] [--ssr] [files...] run Go tests against generated app artifacts"},
-	{Name: "audit", Handler: audit, Usage: staticCommandUsage(auditUsage), ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--sarif[=<file>]] [--diff <previous-report>] [--schema[=report|security]] [--emit-tests[=<file>]] [--force] [--run] [files...] check security posture, emit SARIF/JSON-Schema, diff against a previous report, and run optional runtime tests"},
-	{Name: "contracts", Handler: contractsReport, Usage: staticCommandUsage("usage: gowdk contracts [--json] [dir]"), ListSuffix: " [--json] [dir]  print Go contract registration metadata"},
-	{Name: "graph", Handler: contractGraph, Usage: staticCommandUsage("usage: gowdk graph [--json] [dir]"), ListSuffix: " [--json] [dir]      print command/event contract graph"},
-	{Name: "trace", Handler: contractTrace, Usage: staticCommandUsage("usage: gowdk trace <contract> [--json] [dir]"), ListSuffix: " <contract> [--json] [dir] print one command/query/event/job contract trace"},
-	{Name: "list", Handler: listContracts, Usage: staticCommandUsage("usage: gowdk list commands|queries|events|jobs [--json] [dir]"), ListSuffix: " commands|queries|events|jobs [--json] [dir] print filtered contract metadata"},
-	{Name: "build", Handler: build, Usage: staticCommandUsage(buildUsage), ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...] compile .gwdk files into build output"},
-	{Name: "clean", Handler: clean, Usage: staticCommandUsage(cleanUsage), ListSuffix: " [--config <file>] [--target <name>] [--out <dir>] [--dry-run] [--json] remove configured build outputs"},
-	{Name: "dev", Handler: dev, Usage: devUsage, ListSuffix: " [--addr <addr>] [--interval <duration>] [build flags...] build, serve, rebuild, and live reload"},
-	{Name: "preview", Handler: preview, Usage: previewUsage, ListSuffix: " [--addr <addr>] [--hot] [build flags...] build and serve a local deploy preview"},
-	{Name: "playground", Handler: playgroundCommand, Usage: staticCommandUsage(playgroundUsage), ListSuffix: " policy|export|run inspect sandbox policy, export projects, or run an opt-in sandbox build"},
-	{Name: "serve", Handler: serve, Usage: staticCommandUsage("usage: gowdk serve --dir <dir> [--addr <addr>]"), ListSuffix: " --dir <dir> [--addr <addr>] serve generated build output locally"},
-	{Name: "lsp", Handler: languageServer, Usage: staticCommandUsage(lspUsage), ListSuffix: " [--config <file>] [--project-root <dir>] [--module <name>] [--ssr] start the language server over stdio"},
+var topLevelCommands []CommandSpec
+
+func init() {
+	topLevelCommands = []CommandSpec{
+		{Name: "version", Handler: printVersion, Usage: staticCommandUsage("usage: gowdk version [--json]"), ListSuffix: " [--json]         print CLI version"},
+		{Name: "init", Handler: initProject, Usage: staticCommandUsage(initUsage), ListSuffix: " [--force] [--tests] [--template <site|minimal>] [dir] scaffold a starter GOWDK project"},
+		{Name: "add", Handler: addAddon, Usage: staticCommandUsage(addUsage), ListSuffix: " <addon> [--config <file>] [--base-url <url>] | add --list [--registry] [--json]  wire or list addons"},
+		{Name: "tokens", Handler: tokens, Usage: staticCommandUsage("usage: gowdk tokens <file.gwdk>"), ListSuffix: " <file.gwdk>       print language tokens"},
+		{Name: "fmt", Handler: format, Usage: staticCommandUsage("usage: gowdk fmt [--write] [--check] <files>"), ListSuffix: " [--write] [--check] <files>  format .gwdk files (--check reports files that need formatting)"},
+		{Name: "check", Handler: check, Usage: func() string { return projectCommandUsage("check", true) }, ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--json] [--warnings-as-errors] [--standalone] [--ssr] [files...] parse and validate .gwdk files"},
+		{Name: "env", Handler: envCommand, Usage: staticCommandUsage(envUsage), ListSuffix: " check [--config <file>] [--env-file <file>] [--json] validate deployment environment values", Children: []CommandSpec{{Name: "check", Usage: staticCommandUsage(envUsage), Summary: "validate deployment environment values"}}},
+		{Name: "fix", Handler: fixCommand, Usage: staticCommandUsage(fixUsage), ListSuffix: " [--dry-run] [--code <diagnostic-code>] [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...] apply registered safe diagnostic fixes"},
+		{Name: "manifest", Handler: manifestJSON, Usage: func() string { return projectCommandUsage("manifest", false) }, ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...] print validated manifest JSON"},
+		{Name: "sitemap", Handler: siteMapJSON, Usage: func() string { return projectCommandUsage("sitemap", false) }, ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...] print editor site-map JSON"},
+		{Name: "routes", Handler: routesJSON, Usage: func() string { return projectCommandUsage("routes", false) }, ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...] print route and endpoint metadata JSON"},
+		{Name: "endpoints", Handler: endpointsJSONCommand, Usage: func() string { return projectCommandUsage("endpoints", false) }, ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...] print endpoint metadata JSON"},
+		{Name: "inspect", Handler: inspect, Usage: staticCommandUsage(inspectUsage), ListSuffix: " ir|tree|endpoint-graph|asset-graph|go-bindings [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--json] [--ssr] [files...] print validated compiler inspection JSON", Children: inspectCommandSpecs()},
+		{Name: "generate", Handler: generate, Usage: staticCommandUsage(generateUsage), ListSuffix: " stubs [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [files...] write missing action/API Go handler stubs", Children: []CommandSpec{{Name: "stubs", Usage: staticCommandUsage(generateUsage), Summary: "write missing Go handler stubs"}}},
+		{Name: "explain", Handler: explainDiagnostic, Usage: staticCommandUsage("usage: gowdk explain [--json] <diagnostic-code>"), ListSuffix: " [--json] <diagnostic-code> explain a diagnostic code and next steps"},
+		{Name: "doctor", Handler: doctor, Usage: staticCommandUsage(doctorUsage), ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [--json] [files...] check local GOWDK environment and project health"},
+		{Name: "test", Handler: gowdkTest, Usage: staticCommandUsage(testUsage), ListSuffix: " [--config <file>] [--env-file <file>] [--module <name>] [--target <name>] [--stage <unit|app|binary|browser>] [--run <pattern>] [--timeout <duration>] [--count <n>] [--cover] [--json] [--keep-workdir] [--browser-command <command>] [--ssr] [files...] run Go tests against generated app artifacts"},
+		{Name: "audit", Handler: audit, Usage: staticCommandUsage(auditUsage), ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--module <name>] [--ssr] [--json] [--sarif[=<file>]] [--diff <previous-report>] [--schema[=report|security]] [--emit-tests[=<file>]] [--force] [--run] [files...] check security posture, emit SARIF/JSON-Schema, diff against a previous report, and run optional runtime tests"},
+		{Name: "contracts", Handler: contractsReport, Usage: staticCommandUsage("usage: gowdk contracts [--json] [dir]"), ListSuffix: " [--json] [dir]  print Go contract registration metadata"},
+		{Name: "graph", Handler: contractGraph, Usage: staticCommandUsage("usage: gowdk graph [--json] [dir]"), ListSuffix: " [--json] [dir]      print command/event contract graph"},
+		{Name: "trace", Handler: contractTrace, Usage: staticCommandUsage("usage: gowdk trace <contract> [--json] [dir]"), ListSuffix: " <contract> [--json] [dir] print one command/query/event/job contract trace"},
+		{Name: "list", Handler: listContracts, Usage: staticCommandUsage("usage: gowdk list commands|queries|events|jobs [--json] [dir]"), ListSuffix: " commands|queries|events|jobs [--json] [dir] print filtered contract metadata", Children: contractListCommandSpecs()},
+		{Name: "build", Handler: build, Usage: staticCommandUsage(buildUsage), ListSuffix: " [--config <file>] [--project-root <dir>] [--env-file <file>] [--debug] [--timings[=<file>]] [--ssr] [--allow-missing-backend] [--allow-insecure] [--obfuscate-assets] [--target <name>] [--module <name>] [--out <dir>] [--app <dir>] [--bin <file>] [--docker] [--docker-base <distroless|scratch>] [--deploy-recipe <caddy|nginx|split|static|systemd>] [--wasm <file>] [--backend-app <dir>] [--backend-bin <file>] [files...] compile .gwdk files into build output"},
+		{Name: "clean", Handler: clean, Usage: staticCommandUsage(cleanUsage), ListSuffix: " [--config <file>] [--target <name>] [--out <dir>] [--dry-run] [--json] remove configured build outputs"},
+		{Name: "dev", Handler: dev, Usage: devUsage, ListSuffix: " [--addr <addr>] [--interval <duration>] [build flags...] build, serve, rebuild, and live reload"},
+		{Name: "preview", Handler: preview, Usage: previewUsage, ListSuffix: " [--addr <addr>] [--hot] [build flags...] build and serve a local deploy preview"},
+		{Name: "playground", Handler: playgroundCommand, Usage: staticCommandUsage(playgroundUsage), ListSuffix: " policy|export|run inspect sandbox policy, export projects, or run an opt-in sandbox build", Children: playgroundCommandSpecs()},
+		{Name: "serve", Handler: serve, Usage: staticCommandUsage("usage: gowdk serve --dir <dir> [--addr <addr>]"), ListSuffix: " --dir <dir> [--addr <addr>] serve generated build output locally"},
+		{Name: "lsp", Handler: languageServer, Usage: staticCommandUsage(lspUsage), ListSuffix: " [--config <file>] [--project-root <dir>] [--module <name>] [--ssr] start the language server over stdio"},
+		{Name: "completion", Handler: completionCommand, Usage: staticCommandUsage(completionUsage), ListSuffix: " <bash|zsh|fish> generate shell completion from the command schema", Children: completionCommandSpecs()},
+	}
 }
 
-func topLevelCommand(name string) (topLevelCommandDescriptor, bool) {
+func topLevelCommand(name string) (CommandSpec, bool) {
 	for _, descriptor := range topLevelCommands {
 		if descriptor.Name == name {
 			return descriptor, true
 		}
 	}
-	return topLevelCommandDescriptor{}, false
+	return CommandSpec{}, false
+}
+
+func commandSpec(path []string) (CommandSpec, bool) {
+	if len(path) == 0 {
+		return CommandSpec{}, false
+	}
+	current, ok := topLevelCommand(path[0])
+	if !ok {
+		return CommandSpec{}, false
+	}
+	for _, name := range path[1:] {
+		found := false
+		for _, child := range current.Children {
+			if child.Name == name {
+				current = child
+				found = true
+				break
+			}
+		}
+		if !found {
+			return CommandSpec{}, false
+		}
+	}
+	return current, true
 }
 
 func printVersion(args []string) error {
@@ -217,6 +228,7 @@ type cliOptions struct {
 	EnvFileExplicit    bool
 	EnvFileApplied     []string
 	EnvFileSkipped     []string
+	ProjectEnvironment envfile.Environment
 }
 
 func appendModuleNames(moduleNames []string, value string) []string {

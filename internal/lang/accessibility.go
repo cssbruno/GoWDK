@@ -9,7 +9,6 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/viewmodel"
-	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
 func accessibilityDiagnostics(ir gwdkir.Program) Diagnostics {
@@ -30,23 +29,10 @@ func viewAccessibilityDiagnostics(file string, blocks gwdkir.Blocks) Diagnostics
 	if !blocks.View || blocks.ViewBody == "" || blocks.Spans.ViewBodyStart.Line <= 0 {
 		return nil
 	}
-	nodes := blocks.ViewNodes
-	if len(nodes) == 0 {
-		var ok bool
-		nodes, ok = parsedAccessibilityNodes(blocks.ViewBody)
-		if !ok {
-			return nil
-		}
+	if len(blocks.ViewNodes) == 0 {
+		return nil
 	}
-	return accessibilityDiagnosticsForNodes(file, blocks.ViewBody, blocks.Spans.ViewBodyStart, nodes)
-}
-
-func parsedAccessibilityNodes(body string) ([]viewmodel.Node, bool) {
-	nodes, err := viewparse.Parse(body)
-	if err != nil {
-		return nil, false
-	}
-	return nodes, true
+	return accessibilityDiagnosticsForNodes(file, blocks.ViewBody, blocks.Spans.ViewBodyStart, blocks.ViewNodes)
 }
 
 func accessibilityDiagnosticsForNodes(file string, body string, bodyStart source.SourcePosition, nodes []viewmodel.Node) Diagnostics {

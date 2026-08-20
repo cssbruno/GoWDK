@@ -103,6 +103,11 @@ func RequireSession(ctx guard.Context) error {
 	return guard.RedirectTo("/?login=required")
 }
 
+// Guards is the explicit typed runtime registration used by gowdk.config.go.
+func Guards() guard.Registry {
+	return guard.Registry{"auth.required": RequireSession}
+}
+
 func LoadDashboard(ctx ssr.LoadContext) (map[string]any, error) {
 	current, ok := currentSession(ctx.Request)
 	if !ok {

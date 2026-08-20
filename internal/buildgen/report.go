@@ -129,18 +129,6 @@ func (reporter *buildReporter) result() BuildReport {
 	return report
 }
 
-func writeBuildReport(outputDir string, report BuildReport) (string, error) {
-	reportPath := filepath.Join(outputDir, buildReportFile)
-	payload, err := buildReportPayload(report)
-	if err != nil {
-		return "", err
-	}
-	if err := writeFileIfChanged(reportPath, payload); err != nil {
-		return "", err
-	}
-	return reportPath, nil
-}
-
 func buildReportPayload(report BuildReport) ([]byte, error) {
 	payload, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {

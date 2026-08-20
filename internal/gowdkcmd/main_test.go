@@ -2,6 +2,7 @@ package gowdkcmd
 
 import (
 	"archive/zip"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -221,6 +223,9 @@ view {
 	}
 	if strings.TrimSpace(stdout) != "ok" || stderr != "" {
 		t.Fatalf("unexpected check output stdout=%q stderr=%q", stdout, stderr)
+	}
+	if _, exists := os.LookupEnv(secretName); exists {
+		t.Fatalf("project env loading must not mutate the CLI process")
 	}
 }
 
@@ -2884,7 +2889,8 @@ view {
 component Brand
 
 client {
-  func Toggle() {}
+  fn Toggle() {
+  }
 }
 
 view {
@@ -2935,6 +2941,49 @@ func TestDevReloadPayloadUsesVersionedReloadAction(t *testing.T) {
 	}
 	if decoded.Generated == "" {
 		t.Fatalf("expected generated timestamp in payload: %#v", decoded)
+	}
+}
+
+func TestDevWASMComponentUpdateUsesStatelessDocumentPatch(t *testing.T) {
+	root := t.TempDir()
+	page := filepath.Join(root, "home.page.gwdk")
+	component := filepath.Join(root, "counter.cmp.gwdk")
+	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, page, `package app
+
+page home
+route "/"
+
+view {
+  <main><Counter /></main>
+}
+`)
+	writeCLIFile(t, component, `package app
+
+component Counter
+wasm ./browser/counter
+
+view {
+  <button>Count</button>
+}
+`)
+	plan, err := loadBuildOptions([]string{"--config", config, "--out", filepath.Join(root, "dist"), page, component})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, ok := devComponentHMRPayloadLoaded(plan, inputChange{Changed: []string{component}})
+	if !ok {
+		t.Fatal("expected WASM component update payload")
+	}
+	var decoded devComponentHMRPayload
+	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Action != devUpdateActionDocumentPatch || decoded.Reason != "component-wasm-remount" {
+		t.Fatalf("unexpected WASM update: %#v", decoded)
+	}
+	if strings.Join(decoded.Preserve, ",") != "page-stores" || len(decoded.Components) != 0 {
+		t.Fatalf("WASM state must not be transferred: %#v", decoded)
 	}
 }
 
@@ -3013,7 +3062,7 @@ view {
 	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
 		t.Fatalf("invalid route reload payload JSON: %v\n%s", err, payload)
 	}
-	if decoded.Version != devUpdateProtocolVersion || decoded.Action != devUpdateActionReload || decoded.Reason != "route-scoped-layout" {
+	if decoded.Version != devUpdateProtocolVersion || decoded.Action != devUpdateActionDocumentPatch || decoded.Reason != "route-scoped-layout" {
 		t.Fatalf("unexpected route reload protocol fields: %#v", decoded)
 	}
 	if strings.Join(decoded.Routes, ",") != "/" {
@@ -5125,7 +5174,7 @@ func TestRoutesCommandPrintsSSRRouteKind(t *testing.T) {
 page dashboard
 route "/dashboard"
 
-server {
+go server {
 }
 
 view {
@@ -5756,6 +5805,25 @@ func TestInspectGoBindingsCommandPrintsBindingReport(t *testing.T) {
 	writeCLITestModule(t, root, "example.com/gowdk-go-bindings")
 	page := filepath.Join(root, "pages", "dashboard.page.gwdk")
 	config := writeMinimalCLIConfig(t, root)
+	writeCLIFile(t, config, `package app
+
+import (
+	"github.com/cssbruno/gowdk"
+	pages "example.com/gowdk-go-bindings/pages"
+)
+
+var Config = gowdk.Config{Interop: gowdk.InteropConfig{Loads: []gowdk.LoadRegistration{
+	gowdk.RegisterLoad("dashboard", pages.LoadDashboard),
+}}}
+`)
+	writeCLIFile(t, filepath.Join(root, "pages", "load.go"), `package pages
+
+import "github.com/cssbruno/gowdk/runtime/ssr"
+
+func LoadDashboard(ssr.LoadContext) (map[string]any, error) {
+	return map[string]any{"user": map[string]string{"name": "Ada"}}, nil
+}
+`)
 	writeCLIFile(t, page, `package pages
 
 page dashboard
@@ -5844,7 +5912,7 @@ func LoadPatientPage(ctx context.Context, query GetPatientPage) (PatientPageData
 		t.Fatalf("unexpected go-bindings version: %d", report.Version)
 	}
 	assertGoBinding(t, report.Bindings, "build", "FeaturedCopyWithErrorForBuild", "unverified")
-	assertGoBinding(t, report.Bindings, "load", "LoadDashboard", "missing")
+	assertGoBinding(t, report.Bindings, "load", "LoadDashboard", "bound")
 	assertGoBinding(t, report.Bindings, "action", "Save", "missing")
 	assertGoBinding(t, report.Bindings, "api", "Session", "missing")
 	assertGoBinding(t, report.Bindings, "fragment", "Summary", "unknown")
@@ -6093,8 +6161,8 @@ server {
 
 view {
   <main>
-    <a g:for={issue in issues} href={issue.id}>{issue.title}</a>
-    <form g:for={issue in issues} g:post={Open}></form>
+    <a g:for={issue in issues} g:lane="server" href={issue.id}>{issue.title}</a>
+    <form g:for={issue in issues} g:lane="server" g:post={Open}></form>
   </main>
 }
 `)
@@ -7853,9 +7921,13 @@ func TestLiveReloadFileHandlerInjectsScript(t *testing.T) {
 		`events.addEventListener("dev-update"`,
 		`events.addEventListener("component-hmr"`,
 		`gowdk:dev-update`,
-		`DEV_UPDATE_VERSION = 1`,
+		`DEV_UPDATE_VERSION = 2`,
 		`carryCompatibleIslandState`,
+		`carryDocumentIslandState`,
 		`component-remount`,
+		`payload.action === "patch"`,
+		`gowdk:page-hmr`,
+		`focusTarget.focus`,
 		`payload.action === "reload"`,
 		`routes.some((route) => pathMatchesRoute(route, window.location.pathname))`,
 		`fetchFreshDocument`,
@@ -7867,6 +7939,120 @@ func TestLiveReloadFileHandlerInjectsScript(t *testing.T) {
 	}
 	if strings.Index(body, "<script>") > strings.Index(body, "</body>") {
 		t.Fatalf("expected script before body close:\n%s", body)
+	}
+}
+
+func TestDevHMRDocumentPatchPreservesCompatibleStateAndCleansStaleDOMInBrowser(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	chromium := ""
+	for _, name := range []string{"chromium", "chromium-browser", "google-chrome"} {
+		if candidate, lookupErr := exec.LookPath(name); lookupErr == nil {
+			chromium = candidate
+			break
+		}
+	}
+	if chromium == "" {
+		t.Skip("chromium is not installed")
+	}
+	probe := exec.Command(node, "-e", `require("node:module").createRequire(process.cwd()+"/gowdk-test.js").resolve("playwright")`)
+	probe.Dir, _ = os.Getwd()
+	if output, probeErr := probe.CombinedOutput(); probeErr != nil {
+		t.Skipf("playwright is not installed: %v\n%s", probeErr, output)
+	}
+
+	reload := newLiveReloadBroker()
+	var fresh atomic.Bool
+	handler := http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/__gowdk/reload":
+			reload.serve(w, request)
+			return
+		case "/ready":
+			reload.mu.Lock()
+			ready := len(reload.clients) > 0
+			reload.mu.Unlock()
+			if ready {
+				_, _ = io.WriteString(w, "ready")
+				return
+			}
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		case "/trigger":
+			fresh.Store(true)
+			reload.notifyData("dev-update", `{"version":2,"action":"patch","routes":["/"],"preserve":["page-stores","compatible-island-state"]}`)
+			_, _ = io.WriteString(w, "ok")
+			return
+		case "/overlay":
+			reload.notifyData("build-error", `{"title":"GOWDK build failed","message":"synthetic failure"}`)
+			_, _ = io.WriteString(w, "ok")
+			return
+		case "/unrelated":
+			reload.notifyData("dev-update", `{"version":2,"action":"patch","routes":["/other"]}`)
+			_, _ = io.WriteString(w, "ok")
+			return
+		}
+		body := `<!doctype html><html><head><title>Old</title><meta name="description" content="old"><script>
+window.__gowdkDestroyIslands = () => {};
+window.__gowdkMountIslands = () => { window.__mountedIslands = (window.__mountedIslands || 0) + 1; };
+window.__gowdkMountClientGoBlocks = () => {};
+window.__gowdkStores = { cleared: [], clear(name) { this.cleared.push(name); }, hydrate() {} };
+</script><script type="application/json" data-gowdk-store="cart" data-gowdk-store-shape="shape-a">{"Count":1}</script><script type="application/json" data-gowdk-store="removed" data-gowdk-store-shape="shape-old">{}</script></head><body><input id="focus-me" name="focus"><div id="stale">old</div><gowdk-island data-gowdk-runtime="js" data-gowdk-component-id="app.Counter" data-gowdk-state-shape="island-a" data-gowdk-state='{"count":7}'></gowdk-island><gowdk-island data-gowdk-runtime="js" data-gowdk-component-id="app.Changed" data-gowdk-state-shape="island-old" data-gowdk-state='{"count":9}'></gowdk-island><gowdk-island data-gowdk-runtime="wasm" data-gowdk-component-id="app.Clock" data-gowdk-state-shape="wasm-a" data-gowdk-state='{"opaque":7}'></gowdk-island></body></html>`
+		if fresh.Load() {
+			body = `<!doctype html><html><head><title>New</title><meta name="description" content="new"><script type="application/json" data-gowdk-store="cart" data-gowdk-store-shape="shape-a">{"Count":0}</script></head><body><input id="focus-me" name="focus"><div id="current">new</div><gowdk-island data-gowdk-runtime="js" data-gowdk-component-id="app.Counter" data-gowdk-state-shape="island-a" data-gowdk-state='{"count":0}'></gowdk-island><gowdk-island data-gowdk-runtime="js" data-gowdk-component-id="app.Changed" data-gowdk-state-shape="island-new" data-gowdk-state='{"count":0}'></gowdk-island><gowdk-island data-gowdk-runtime="wasm" data-gowdk-component-id="app.Clock" data-gowdk-state-shape="wasm-a" data-gowdk-state='{"opaque":0}'></gowdk-island></body></html>`
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(injectLiveReloadScript([]byte(body)))
+	})
+	server := httptest.NewServer(handler)
+	defer func() {
+		server.CloseClientConnections()
+		server.Close()
+	}()
+
+	script := filepath.Join(t.TempDir(), "hmr-v2-browser.cjs")
+	writeCLIFile(t, script, `"use strict";
+const assert = require("node:assert/strict");
+const nodeModule = require("node:module");
+const { chromium } = nodeModule.createRequire(process.cwd()+"/gowdk-test.js")("playwright");
+(async () => {
+  const browser = await chromium.launch({ executablePath: process.argv[3], headless: true, args: ["--no-sandbox"] });
+  try {
+    const page = await browser.newPage();
+	page.setDefaultTimeout(5000);
+    await page.goto(process.argv[2]);
+    await page.focus("#focus-me");
+    await page.waitForFunction(async () => { try { return (await fetch("/ready")).ok; } catch (_) { return false; } });
+	await page.evaluate(() => fetch("/overlay"));
+	await page.locator("#__gowdk-error-overlay").waitFor();
+    await page.evaluate(() => { window.__pageHMR = false; document.addEventListener("gowdk:page-hmr", () => { window.__pageHMR = true; }, { once: true }); });
+    await page.evaluate(() => fetch("/trigger"));
+    await page.waitForFunction(() => window.__pageHMR === true);
+    assert.equal(await page.title(), "New");
+    assert.equal(await page.locator('meta[name="description"]').getAttribute("content"), "new");
+    assert.equal(await page.locator("#stale").count(), 0);
+    assert.equal(await page.locator("#current").count(), 1);
+	assert.equal(await page.locator("#__gowdk-error-overlay").count(), 0);
+	assert.equal(await page.locator('gowdk-island[data-gowdk-component-id="app.Counter"]').getAttribute("data-gowdk-state"), '{"count":7}');
+	assert.equal(await page.locator('gowdk-island[data-gowdk-component-id="app.Changed"]').getAttribute("data-gowdk-state"), '{"count":0}');
+	assert.equal(await page.locator('gowdk-island[data-gowdk-runtime="wasm"]').getAttribute("data-gowdk-state"), '{"opaque":0}');
+	assert.ok(await page.evaluate(() => window.__mountedIslands > 0));
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), "focus-me");
+    assert.deepEqual(await page.evaluate(() => window.__gowdkStores.cleared), ["removed"]);
+	await page.evaluate(() => fetch("/unrelated"));
+	await page.waitForTimeout(200);
+	assert.equal(await page.title(), "New");
+  } finally { await browser.close(); }
+})().catch((error) => { console.error(error); process.exit(1); });
+`)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, node, script, server.URL, chromium)
+	command.Dir, _ = os.Getwd()
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("HMR v2 browser test failed: %v\n%s", err, output)
 	}
 }
 

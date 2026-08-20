@@ -1,6 +1,7 @@
 package appgen
 
 import (
+	"context"
 	"fmt"
 	"go/format"
 	"path/filepath"
@@ -20,19 +21,6 @@ type inlineGoBlockGroup struct {
 type addonGoBlockTarget struct {
 	target gowdk.GoBlockTarget
 	render gowdk.RenderMode
-}
-
-func writeInlineGoBlockFiles(appDir string, options Options) ([]string, error) {
-	files, planned, err := collectInlineGoBlockFiles(appDir, options)
-	if err != nil {
-		return nil, err
-	}
-	for _, file := range planned {
-		if err := writeFileIfChanged(file.path, file.contents); err != nil {
-			return nil, err
-		}
-	}
-	return files, nil
 }
 
 func collectInlineGoBlockFiles(appDir string, options Options) ([]string, []plannedFile, error) {
@@ -128,19 +116,6 @@ func mergeGoBlockImports(left []gwdkir.Import, right []gwdkir.Import) []gwdkir.I
 	return out
 }
 
-func writeAddonGoBlockFiles(appDir string, options Options) ([]string, error) {
-	files, planned, err := collectAddonGoBlockFiles(appDir, options)
-	if err != nil {
-		return nil, err
-	}
-	for _, file := range planned {
-		if err := writeFileIfChanged(file.path, file.contents); err != nil {
-			return nil, err
-		}
-	}
-	return files, nil
-}
-
 func collectAddonGoBlockFiles(appDir string, options Options) ([]string, []plannedFile, error) {
 	if options.IR == nil {
 		return nil, nil, nil
@@ -152,7 +127,11 @@ func collectAddonGoBlockFiles(appDir string, options Options) ([]string, []plann
 		if !ok {
 			return nil, nil, fmt.Errorf("go block target %s requires an enabled addon implementing gowdk.GoBlockConsumer", target.target.Target)
 		}
-		generated, err := consumer.GeneratedGo(target.target, gowdk.GoBlockContext{Render: target.render})
+		blockContext := gowdk.GoBlockContext{Render: target.render}
+		generated, err := consumer.GeneratedGo(target.target, blockContext)
+		if cancellable, ok := consumer.(gowdk.GoBlockConsumerContext); ok {
+			generated, err = cancellable.GeneratedGoContext(context.Background(), target.target, blockContext)
+		}
 		if err != nil {
 			return nil, nil, fmt.Errorf("generate addon go block target %s: %w", target.target.Target, err)
 		}
@@ -186,6 +165,20 @@ func addonGoBlockConsumer(config gowdk.Config, target string) (gowdk.GoBlockCons
 			continue
 		}
 		consumer := gowdk.ResolveAddonCapabilities(addon).GoBlockConsumer
+		if consumer == nil {
+			return nil, false
+		}
+		for _, supported := range consumer.GoBlockTargets() {
+			if supported == target {
+				return consumer, true
+			}
+		}
+	}
+	for _, extension := range config.Extensions {
+		if extension.Name() != name {
+			continue
+		}
+		consumer := gowdk.ResolveExtensionCapabilities(extension).GoBlockConsumer
 		if consumer == nil {
 			return nil, false
 		}

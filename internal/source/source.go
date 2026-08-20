@@ -442,6 +442,9 @@ type BackendBinding struct {
 	// Go source (sibling same-package code and an inline go {} block), so tooling
 	// reports the conflict instead of silently preferring one.
 	Ambiguous bool
+	// ExplicitRegistrationRequired marks a request-time page load that still
+	// relies on the removed Load<PageID> naming convention.
+	ExplicitRegistrationRequired bool
 }
 
 // ErrorPagePath returns a clean generated-output-relative error page path.

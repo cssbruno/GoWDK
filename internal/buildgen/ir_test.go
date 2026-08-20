@@ -152,6 +152,43 @@ func TestBuildFromPlanDoesNotPublishBeforeManifestPlanningSucceeds(t *testing.T)
 	}
 }
 
+func TestBuildFromPlanKeepsPriorGenerationWhenPrePublishValidationFails(t *testing.T) {
+	outputDir := filepath.Join(t.TempDir(), "dist")
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	oldPath := filepath.Join(outputDir, "old.txt")
+	if err := os.WriteFile(oldPath, []byte("committed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	analyzed, err := compiler.AnalyzeProgram(gowdk.Config{}, gwdkanalysis.Sources{Pages: []gwdkir.Page{{
+		Source: "home.page.gwdk", Package: "app", ID: "home", Route: "/",
+		Blocks: gwdkir.Blocks{View: true, ViewBody: `<main>new</main>`},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	validated, err := compiler.ValidateAnalyzedProgram(gowdk.Config{}, analyzed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := PlanBuildFromValidatedProgram(gowdk.Config{}, validated, outputDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.SetPrePublishValidation(func(Result) error { return errors.New("audit rejected stage") })
+	if _, err := BuildFromPlan(plan); err == nil || !strings.Contains(err.Error(), "audit rejected stage") {
+		t.Fatalf("pre-publish failure = %v", err)
+	}
+	payload, err := os.ReadFile(oldPath)
+	if err != nil || string(payload) != "committed" {
+		t.Fatalf("prior generation changed: %q, %v", payload, err)
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "index.html")); !os.IsNotExist(err) {
+		t.Fatalf("staged page was published: %v", err)
+	}
+}
+
 func TestBuildMemoryFromIRCollectsArtifacts(t *testing.T) {
 	config := gowdk.Config{}
 	app := gwdkanalysis.Sources{Pages: []gwdkir.Page{{

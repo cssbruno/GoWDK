@@ -653,6 +653,9 @@ func parseQualifiedCall(tokens []syntax.Token) (string, string, bool) {
 	if len(tokens) != 2 || tokens[1].Kind != syntax.TokenText || tokens[1].Lexeme != "()" {
 		return "", "", false
 	}
+	if isIdentifierToken(tokens[0]) && isStrictIdent(tokens[0].Lexeme) {
+		return "", tokens[0].Lexeme, true
+	}
 	return splitQualifiedIdentifier(tokens[0])
 }
 

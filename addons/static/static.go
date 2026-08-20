@@ -7,5 +7,5 @@ const ImportPath = "github.com/cssbruno/gowdk/addons/static"
 
 // Addon enables build-time static page output.
 func Addon() gowdk.Addon {
-	return gowdk.NewAddon("static", gowdk.FeatureSPA)
+	return gowdk.NewBuiltinAddon("static", gowdk.FeatureSPA)
 }

@@ -17,6 +17,7 @@ var Config = gowdk.Config{
 	},
 	I18N: gowdk.I18NConfig{
 		DefaultLocale: localeEnglish,
+		Errors:        runtimeErrorMessages,
 		Locales: []gowdk.LocaleConfig{
 			{Code: localeEnglish, Name: "English"},
 			{Code: localePortuguese, Name: "Portuguese"},

@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk/internal/project"
+	"github.com/cssbruno/gowdk/runtime/envfile"
 )
 
 const (
@@ -59,7 +60,11 @@ func runProjectHelperIfNeeded(args []string) (bool, error) {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = append(os.Environ(),
+	helperEnvironment, err := projectHelperEnvironment(projectRoot, args)
+	if err != nil {
+		return true, err
+	}
+	cmd.Env = append(helperEnvironment,
 		helperActiveEnv+"=1",
 		fmt.Sprintf("GOWDK_HELPER_PROTOCOL_MIN=%d", helperProtocolMin),
 		fmt.Sprintf("GOWDK_HELPER_PROTOCOL_MAX=%d", helperProtocolMax),
@@ -73,6 +78,31 @@ func runProjectHelperIfNeeded(args []string) (bool, error) {
 		return true, err
 	}
 	return true, nil
+}
+
+func projectHelperEnvironment(projectRoot string, args []string) ([]string, error) {
+	var explicit string
+	for index := 0; index < len(args); index++ {
+		if value, next, ok, missing := consumeValueFlag(args, index, "--env-file", true); ok {
+			if missing {
+				return nil, errors.New("--env-file requires a value")
+			}
+			explicit = value
+			index = next
+		}
+	}
+	path, isExplicit, err := envfile.LookupPath(projectRoot, explicit)
+	if err != nil {
+		return nil, err
+	}
+	environment, _, err := envfile.Load(path, isExplicit, os.Environ())
+	if err != nil {
+		if isExplicit {
+			return nil, fmt.Errorf("load env file %q: %w", path, err)
+		}
+		return nil, fmt.Errorf("load discovered env file %q: %w", path, err)
+	}
+	return environment.ForSubprocess(os.Environ()), nil
 }
 
 func normalizeProjectHelperArgs(args []string) ([]string, error) {
@@ -318,7 +348,7 @@ func ensureProjectHelper(configPath string) (helperPath string, projectRoot stri
 	if err != nil {
 		return "", "", err
 	}
-	cmd := exec.Command("go", "build", "-mod=mod", "-o", binPath, "./"+filepath.ToSlash(rel))
+	cmd := exec.Command("go", "build", "-buildvcs=false", "-mod=mod", "-o", binPath, "./"+filepath.ToSlash(rel))
 	cmd.Dir = packageInfo.Module.Dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

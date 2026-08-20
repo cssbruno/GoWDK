@@ -7,5 +7,5 @@ const ImportPath = "github.com/cssbruno/gowdk/addons/spa"
 
 // Addon enables build-time prerendering.
 func Addon() gowdk.Addon {
-	return gowdk.NewAddon("spa", gowdk.FeatureSPA)
+	return gowdk.NewBuiltinAddon("spa", gowdk.FeatureSPA)
 }

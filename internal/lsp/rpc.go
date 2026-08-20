@@ -12,6 +12,38 @@ import (
 	"strings"
 )
 
+const (
+	framingHeaderTooLarge           = "lsp_header_too_large"
+	framingTooManyHeaders           = "lsp_too_many_headers"
+	framingMissingContentLength     = "lsp_missing_content_length"
+	framingConflictingContentLength = "lsp_conflicting_content_length"
+	framingInvalidContentLength     = "lsp_invalid_content_length"
+	framingMessageTooLarge          = "lsp_message_too_large"
+	framingTruncatedMessage         = "lsp_truncated_message"
+)
+
+// FramingError classifies an LSP transport failure without retaining or
+// exposing the raw header or message body. Framing failures are fatal because
+// the next byte boundary cannot be trusted without consuming attacker-sized
+// input.
+type FramingError struct {
+	Code    string
+	Fatal   bool
+	Message string
+	Limit   int64
+	Actual  int64
+}
+
+func (err *FramingError) Error() string {
+	if err == nil {
+		return ""
+	}
+	if err.Message != "" {
+		return err.Code + ": " + err.Message
+	}
+	return err.Code
+}
+
 func publishDiagnostics(uri string, diagnostics []diagnostic) []byte {
 	if diagnostics == nil {
 		diagnostics = []diagnostic{}
@@ -94,37 +126,101 @@ func (server *Server) logf(format string, args ...any) {
 }
 
 func readMessage(reader *bufio.Reader) ([]byte, error) {
-	contentLength := -1
+	return readMessageWithLimits(reader, DefaultLimits())
+}
+
+func readMessageWithLimits(reader *bufio.Reader, limits Limits) ([]byte, error) {
+	limits = limits.normalized()
+	var contentLength int64 = -1
+	var headerBytes int64
+	headerCount := 0
 	for {
-		line, err := reader.ReadString('\n')
+		line, bytesRead, err := readBoundedHeaderLine(reader, limits.MaxHeaderLineBytes)
 		if err != nil {
 			if errors.Is(err, io.EOF) && line == "" {
 				return nil, io.EOF
 			}
 			return nil, err
 		}
+		headerBytes += bytesRead
+		if headerBytes > limits.MaxHeaderBytes {
+			return nil, &FramingError{Code: framingHeaderTooLarge, Fatal: true, Message: "aggregate headers exceed configured limit", Limit: limits.MaxHeaderBytes, Actual: headerBytes}
+		}
 		line = strings.TrimRight(line, "\r\n")
 		if line == "" {
 			break
 		}
+		headerCount++
+		if headerCount > limits.MaxHeaderCount {
+			return nil, &FramingError{Code: framingTooManyHeaders, Fatal: true, Message: "header count exceeds configured limit", Limit: int64(limits.MaxHeaderCount), Actual: int64(headerCount)}
+		}
 		name, value, ok := strings.Cut(line, ":")
 		if !ok {
-			continue
+			return nil, &FramingError{Code: framingHeaderTooLarge, Fatal: true, Message: "malformed header line"}
 		}
 		if strings.EqualFold(strings.TrimSpace(name), "Content-Length") {
-			parsed, err := strconv.Atoi(strings.TrimSpace(value))
+			parsed, err := parseContentLength(value)
 			if err != nil {
-				return nil, fmt.Errorf("invalid Content-Length %q", value)
+				return nil, err
+			}
+			if contentLength >= 0 && contentLength != parsed {
+				return nil, &FramingError{Code: framingConflictingContentLength, Fatal: true, Message: "conflicting Content-Length headers"}
 			}
 			contentLength = parsed
 		}
 	}
 	if contentLength < 0 {
-		return nil, fmt.Errorf("missing Content-Length header")
+		return nil, &FramingError{Code: framingMissingContentLength, Fatal: true, Message: "missing Content-Length header"}
 	}
-	body := make([]byte, contentLength)
-	_, err := io.ReadFull(reader, body)
-	return body, err
+	if contentLength > limits.MaxMessageBytes {
+		return nil, &FramingError{Code: framingMessageTooLarge, Fatal: true, Message: "declared message body exceeds configured limit", Limit: limits.MaxMessageBytes, Actual: contentLength}
+	}
+	body := make([]byte, int(contentLength))
+	read, err := io.ReadFull(reader, body)
+	if err != nil {
+		return nil, &FramingError{Code: framingTruncatedMessage, Fatal: true, Message: "message body ended before Content-Length bytes were read", Actual: int64(read)}
+	}
+	return body, nil
+}
+
+func readBoundedHeaderLine(reader *bufio.Reader, limit int) (string, int64, error) {
+	var line []byte
+	var total int64
+	for {
+		chunk, err := reader.ReadSlice('\n')
+		total += int64(len(chunk))
+		if total > int64(limit) {
+			return "", total, &FramingError{Code: framingHeaderTooLarge, Fatal: true, Message: "header line exceeds configured limit", Limit: int64(limit), Actual: total}
+		}
+		line = append(line, chunk...)
+		switch {
+		case err == nil:
+			return string(line), total, nil
+		case errors.Is(err, bufio.ErrBufferFull):
+			continue
+		case errors.Is(err, io.EOF) && len(line) > 0:
+			return string(line), total, io.ErrUnexpectedEOF
+		default:
+			return string(line), total, err
+		}
+	}
+}
+
+func parseContentLength(value string) (int64, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, &FramingError{Code: framingInvalidContentLength, Fatal: true, Message: "Content-Length is empty"}
+	}
+	for _, char := range value {
+		if char < '0' || char > '9' {
+			return 0, &FramingError{Code: framingInvalidContentLength, Fatal: true, Message: "Content-Length must be an unsigned decimal integer"}
+		}
+	}
+	parsed, err := strconv.ParseUint(value, 10, 63)
+	if err != nil {
+		return 0, &FramingError{Code: framingInvalidContentLength, Fatal: true, Message: "Content-Length overflows the supported range"}
+	}
+	return int64(parsed), nil
 }
 
 func writeMessage(writer io.Writer, payload []byte) error {

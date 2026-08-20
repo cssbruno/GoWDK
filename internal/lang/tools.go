@@ -15,6 +15,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/parser"
+	"github.com/cssbruno/gowdk/internal/projectcompile"
 	"github.com/cssbruno/gowdk/internal/source"
 )
 
@@ -327,52 +328,32 @@ func CheckFilesWithOptions(config gowdk.Config, paths []string, options CheckOpt
 	if diagnostics.HasErrors() {
 		return CheckResult{}, diagnostics
 	}
-	analyzed, err := compiler.AnalyzeProgram(config, sources)
-	result := CheckResult{Analyzed: analyzed, IR: analyzed.Program()}
+	mode := projectcompile.ProjectMode
+	if len(paths) == 1 {
+		mode = projectcompile.SourceMode
+	}
+	snapshot, compileDiagnostics, err := projectcompile.Compile(config, sources, projectcompile.Options{
+		ProjectRoot: options.ProjectRoot, Mode: mode, ScanContracts: true,
+	})
+	result := CheckResult{Analyzed: snapshot.Analyzed, IR: snapshot.Analyzed.Program(), Bindings: snapshot.Analyzed.BackendBindings()}
 	if err != nil {
 		diagnostics = append(diagnostics, compilerDiagnostics(err, result.IR)...)
 		return result, diagnostics
 	}
-	result.Bindings = analyzed.BackendBindings()
-	if len(paths) == 1 {
-		// A single file can never satisfy cross-file checks (use packages,
-		// component references), so validate it in source mode to avoid
-		// false project-level errors.
-		diagnostics = append(diagnostics, compilerDiagnostics(compiler.ValidateSourceProgramReport(config, result.IR), result.IR)...)
-	} else {
-		var validated compiler.ValidatedProgram
-		var report compiler.ValidationErrors
-		validated, report = compiler.ValidateAnalyzedProgramReport(config, analyzed)
-		diagnostics = append(diagnostics, compilerDiagnostics(report, result.IR)...)
-		if !report.HasErrors() {
-			result.Validated = &validated
-		}
+	for _, item := range compileDiagnostics {
+		diagnostics = append(diagnostics, Diagnostic{
+			File: item.Source, Code: item.Code,
+			Pos:   Position{Line: item.Line, Column: item.Column},
+			Range: sourceSpanRange(item.Span), Severity: item.Severity,
+			Message: item.Message, Suggestion: diagnosticSuggestionFor(item.Code, item.Message), Related: relatedLocations(item.Related),
+		})
 	}
-	if len(paths) == 1 {
-		bindingDiagnostics := compiler.BackendBindingDiagnostics(result.Bindings)
-		diagnostics = append(diagnostics, compilerDiagnostics(compiler.ValidationErrors(bindingDiagnostics), result.IR)...)
+	if mode == projectcompile.ProjectMode && !compileDiagnostics.HasErrors() {
+		validated := snapshot.Validated
+		result.Validated = &validated
 	}
 	diagnostics = append(diagnostics, accessibilityDiagnostics(result.IR)...)
-	if !diagnostics.HasErrors() {
-		diagnostics = append(diagnostics, validateContractReferences(config, result.IR, options.ProjectRoot)...)
-	}
 	return result, diagnostics
-}
-
-func validateContractReferences(config gowdk.Config, ir gwdkir.Program, projectRoot string) Diagnostics {
-	if strings.TrimSpace(projectRoot) == "" {
-		projectRoot = "."
-	}
-	report, err := contractscan.Scan(projectRoot)
-	if err != nil {
-		return Diagnostics{{Severity: "error", Message: fmt.Sprintf("scan Go contracts: %v", err)}}
-	}
-	diagnostics := contractScanDiagnostics(report.Diagnostics)
-	if len(ir.ContractRefs) == 0 && len(ir.RealtimeSubscriptions) == 0 {
-		return diagnostics
-	}
-	diagnostics = append(diagnostics, validateLinkedContractReferences(config, ir, report)...)
-	return diagnostics
 }
 
 func validateContractReferenceBindings(config gowdk.Config, ir gwdkir.Program, projectRoot string) Diagnostics {
@@ -417,20 +398,6 @@ func validateLinkedContractReferences(config gowdk.Config, ir gwdkir.Program, re
 		return compilerDiagnostics(err, ir)
 	}
 	return nil
-}
-
-func contractScanDiagnostics(scanDiagnostics []contractscan.Diagnostic) Diagnostics {
-	diagnostics := make(Diagnostics, 0, len(scanDiagnostics))
-	for _, item := range scanDiagnostics {
-		diagnostics = append(diagnostics, Diagnostic{
-			File:     item.Source,
-			Code:     item.Code,
-			Pos:      Position{Line: item.Line, Column: item.Column},
-			Severity: item.Severity,
-			Message:  item.Message,
-		})
-	}
-	return diagnostics
 }
 
 // CheckSource parses and validates one in-memory .gwdk source buffer.
@@ -576,8 +543,14 @@ func compilerDiagnostics(err error, ir gwdkir.Program) Diagnostics {
 }
 
 func diagnosticSuggestion(validation compiler.ValidationError) string {
-	message := validation.Message
-	switch validation.Code {
+	// Use the rendered diagnostic because some compiler adapters carry the
+	// owning component/page prefix outside Message while preserving it in Error.
+	message := validation.Error()
+	return diagnosticSuggestionFor(validation.Code, message)
+}
+
+func diagnosticSuggestionFor(code, message string) string {
+	switch code {
 	case "missing_package_declaration":
 		return "Add package <name> before metadata, imports, and blocks."
 	case "package_mismatch":
@@ -636,7 +609,7 @@ func diagnosticSuggestion(validation compiler.ValidationError) string {
 			return "Declare a matching fn in client { ... } or use a supported inline state expression."
 		}
 		if strings.Contains(message, "g:for must use") {
-			return "Use g:for={item in Items} or g:for={item, index in Items}."
+			return `Use g:for={item in Items} g:lane="client" or g:for={item, index in Items} g:lane="client". Use g:lane="server" when the collection is request-time data.`
 		}
 		if strings.Contains(message, "g:for requires g:key") {
 			return "Add g:key with a stable scalar expression, such as g:key={item.ID}."

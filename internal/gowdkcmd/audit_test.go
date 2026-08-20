@@ -379,6 +379,7 @@ view {
 
 func TestAuditCommandRunSupportsActorExpectationsAgainstGeneratedApp(t *testing.T) {
 	root := t.TempDir()
+	t.Setenv("GOWDK_AUTH_SESSION_SECRET", strings.Repeat("s", 32))
 	config := writeAuditCLIConfigWithSSR(t, root)
 	writeCLITestModule(t, root, "example.com/gowdk-audit-run-actor")
 	pagePath := filepath.Join(root, "admin.page.gwdk")
@@ -415,7 +416,7 @@ test admin {
 	}
 }
 
-func TestAuditCommandRunReportsMissingCustomGuardFixtures(t *testing.T) {
+func TestAuditCommandRejectsMissingCustomGuardRegistration(t *testing.T) {
 	root := t.TempDir()
 	config := writeAuditCLIConfigWithSSR(t, root)
 	writeCLITestModule(t, root, "example.com/gowdk-audit-run-custom-guard")
@@ -424,7 +425,7 @@ func TestAuditCommandRunReportsMissingCustomGuardFixtures(t *testing.T) {
 
 page admin
 route "/admin"
-guard auth.required
+guard session
 
 go server {
 }
@@ -437,15 +438,12 @@ view {
 	stdout, stderr, err := captureCLIOutput(t, func() error {
 		return run([]string{"audit", "--config", config, "--run", pagePath})
 	})
-	if err != nil {
-		t.Fatalf("expected missing custom guard fixtures to report as a finding, got error: %v\nstderr:\n%s", err, stderr)
+	if err == nil {
+		t.Fatalf("expected missing custom guard registration to fail before generation; output:\n%s\n%s", stdout, stderr)
 	}
 	output := stdout + "\n" + stderr
-	if strings.Contains(output, "audit generated app tests passed:") {
-		t.Fatalf("custom guard audit run must not claim runtime verification, got %q", output)
-	}
-	if !strings.Contains(output, "audit_guard_unverified") || !strings.Contains(output, "auth.required") || !strings.Contains(output, "explicit fixtures") {
-		t.Fatalf("expected unresolved custom guard finding, got %q", output)
+	if !strings.Contains(output, "custom guards require") || !strings.Contains(output, "RegisterGuards") {
+		t.Fatalf("expected early typed-registration diagnostic, got %q", output)
 	}
 }
 
@@ -806,6 +804,7 @@ import (
 )
 
 var Config = gowdk.Config{
+	Features: gowdk.FeatureConfig{Auth: gowdk.AuthFeatureConfig{Enabled: true}},
 	Addons: []gowdk.Addon{ssr.Addon()},
 }
 `)

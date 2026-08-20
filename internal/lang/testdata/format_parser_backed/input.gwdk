@@ -34,10 +34,10 @@ type="text"
 name="email"
 value={email}
 />
-<button g:if={ready}>Save</button>
+<button g:if={ready} g:lane="client">Save</button>
 </form>
 <ul>
-<li g:for={item in items} g:key={item.ID}>{item.Name}</li>
+<li g:for={item in items} g:lane="client" g:key={item.ID}>{item.Name}</li>
 </ul>
 </section>
 <Footer year={year} />

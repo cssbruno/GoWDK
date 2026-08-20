@@ -7,5 +7,5 @@ const ImportPath = "github.com/cssbruno/gowdk/addons/partial"
 
 // Addon enables server fragments and partial swaps.
 func Addon() gowdk.Addon {
-	return gowdk.NewAddon("partial", gowdk.FeaturePartial)
+	return gowdk.NewBuiltinAddon("partial", gowdk.FeaturePartial)
 }

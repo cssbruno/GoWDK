@@ -27,6 +27,36 @@ type explanationDetail struct {
 }
 
 var explanationDetails = map[string]explanationDetail{
+	"directive_lane_required": {
+		Details:   "Every g:for and g:if must declare whether it executes against server-rendered or browser-owned data. The explicit lane prevents a later refactor from silently moving data across the request/client boundary.",
+		NextSteps: []string{"Add g:lane=\"server\" for request/build data.", "Add g:lane=\"client\" for stores and other browser-owned state."},
+		Invalid:   `<li g:for="item in items">{item}</li>`,
+		Fixed:     `<li g:for="item in items" g:lane="server">{item}</li>`,
+	},
+	"directive_lane_invalid": {
+		Details:   "g:lane accepts only server or client and is meaningful only beside g:for or g:if.",
+		NextSteps: []string{"Use g:lane=\"server\" or g:lane=\"client\".", "Remove g:lane when the element has no structural directive."},
+		Invalid:   `<p g:lane="both">Hello</p>`,
+		Fixed:     `<p>Hello</p>`,
+	},
+	"directive_lane_mismatch": {
+		Details:   "The declared structural-directive lane conflicts with the expression's data owner. Server data cannot be evaluated only in the browser, and browser stores do not exist during request/build rendering.",
+		NextSteps: []string{"Change g:lane to match the referenced data.", "Move the expression to data owned by the intended lane."},
+		Invalid:   `<li g:for="item in cart.items" g:lane="server">{item}</li>`,
+		Fixed:     `<li g:for="item in cart.items" g:lane="client">{item}</li>`,
+	},
+	"missing_load_registration": {
+		Details:   "A server {} page delegates loading to application Go, but no typed load registration identifies the function. GOWDK no longer discovers loads from magic function names.",
+		NextSteps: []string{"Add gowdk.RegisterLoad(pageID, package.LoadFunction) to Config.Interop.Loads.", "Use go server {} when the implementation is intentionally inline."},
+	},
+	"missing_guard_registration": {
+		Details:   "The source names a custom guard, but generated startup has no typed guard-registry provider.",
+		NextSteps: []string{"Add Config.Interop.Guards = gowdk.RegisterGuards(package.Guards).", "Use public or a built-in auth guard when no custom registry is needed."},
+	},
+	"missing_auth_registration": {
+		Details:   "A role: or permission: guard needs an auth provider, but neither the auth feature nor a typed provider registration supplies one.",
+		NextSteps: []string{"Enable the auth feature.", "Or add Config.Interop.AuthProvider = gowdk.RegisterAuthProvider(package.AuthProvider)."},
+	},
 	"page_store_persist_key_conflict": {
 		Details: "Two pages declare a persisted store with the same name but different struct shapes. Persistence is keyed by store name (gowdk:store:<name>), so both pages read and write the same browser storage slot. Because their embedded schema hashes differ, navigating from one page to the other discards the saved value every time. Either rename one store so each owns its own key, or give them the same shape so sharing is intentional.",
 		NextSteps: []string{

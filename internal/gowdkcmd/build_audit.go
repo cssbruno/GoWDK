@@ -340,6 +340,9 @@ func finalBuildArtifactPaths(result buildgen.Result) []string {
 	add(result.OpenAPIPath)
 	add(result.SecurityManifestPath)
 	add(result.BuildReportPath)
+	for _, path := range result.AdditionalOutputPaths {
+		add(path)
+	}
 	return paths
 }
 

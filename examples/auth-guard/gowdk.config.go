@@ -6,6 +6,7 @@ import (
 	"github.com/cssbruno/gowdk"
 	authaddon "github.com/cssbruno/gowdk/addons/auth"
 	"github.com/cssbruno/gowdk/addons/ssr"
+	authguard "github.com/cssbruno/gowdk/examples/auth-guard/src/authguard"
 )
 
 var Config = gowdk.Config{
@@ -13,6 +14,9 @@ var Config = gowdk.Config{
 	Source: gowdk.SourceConfig{
 		Include: []string{"src/**/*.gwdk"},
 	},
+	Interop: gowdk.InteropConfig{Loads: []gowdk.LoadRegistration{
+		gowdk.RegisterLoad("dashboard", authguard.LoadDashboard),
+	}},
 	Env: gowdk.EnvConfig{
 		Secrets: []gowdk.SecretEnv{
 			{Name: "GOWDK_AUTH_SESSION_SECRET", Required: true, MinBytes: 32},

@@ -71,7 +71,7 @@ func buildSSRRegionArtifact(t *testing.T, loadBody, view string) SSRArtifact {
 			ViewBody:   view,
 		},
 	}}}
-	artifacts, err := SSRArtifacts(gowdk.Config{Addons: []gowdk.Addon{gowdk.NewAddon("ssr", gowdk.FeatureSSR)}}, app, t.TempDir())
+	artifacts, err := SSRArtifacts(ssrTestConfig("board"), app, t.TempDir())
 	if err != nil {
 		t.Fatalf("build SSR artifacts: %v", err)
 	}

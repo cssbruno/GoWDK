@@ -25,7 +25,7 @@ func EnrichProgram(config gowdk.Config, program *gwdkir.Program) ([]source.Backe
 	if err := DiscoverGoEndpoints(config, program); err != nil {
 		return nil, err
 	}
-	return BindBackendHandlers(program), nil
+	return BindBackendHandlersWithConfig(config, program), nil
 }
 
 // AssembleProgram builds the canonical compiler IR from parsed sources and runs

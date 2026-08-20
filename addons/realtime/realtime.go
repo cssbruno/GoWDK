@@ -27,7 +27,7 @@ type SSEStats = runtimerealtime.SSEStats
 
 // Addon enables realtime presentation-event fanout support.
 func Addon() gowdk.Addon {
-	return gowdk.NewAddon("realtime", gowdk.FeatureRealtime)
+	return gowdk.NewBuiltinAddon("realtime", gowdk.FeatureRealtime)
 }
 
 // NewSSE creates a dependency-free server-sent events presentation fanout hub.

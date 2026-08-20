@@ -29,6 +29,7 @@ func appPackageSource(options Options) (source string, err error) {
 	imports["embed"] = "embed"
 	imports["fs"] = "io/fs"
 	imports["http"] = "net/http"
+	imports["gowdki18n"] = "github.com/cssbruno/gowdk/runtime/i18n"
 	return printGoFile("gowdkapp", imports, append(appShellDecls(options), appGeneratedDecls(direct, options)...))
 }
 
@@ -311,7 +312,8 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 	if full.ProxyBackend {
 		csrfOptions = full
 	}
-	decls := actionHandlerDecls(adapter.Actions, csrfEnabled(direct), generatedUsesRateLimit(direct))
+	decls := []ast.Decl{errorCatalogDecl(full)}
+	decls = append(decls, actionHandlerDecls(adapter.Actions, csrfEnabled(direct), generatedUsesRateLimit(direct))...)
 	decls = append(decls, apiHandlerDecls(adapter.APIs, csrfEnabled(direct), generatedUsesRateLimit(direct))...)
 	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(direct)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(direct), generatedUsesRateLimit(direct), generatedRealtimeQueryInvalidationsEnabled(direct), commandPatchRenderingEnabled(direct))...)
@@ -351,7 +353,8 @@ func appGeneratedDecls(direct Options, full Options) []ast.Decl {
 
 func backendGeneratedDecls(options Options) []ast.Decl {
 	adapter := backendAdapterIR(options)
-	decls := actionHandlerDecls(adapter.Actions, csrfEnabled(options), generatedUsesRateLimit(options))
+	decls := []ast.Decl{errorCatalogDecl(options)}
+	decls = append(decls, actionHandlerDecls(adapter.Actions, csrfEnabled(options), generatedUsesRateLimit(options))...)
 	decls = append(decls, apiHandlerDecls(adapter.APIs, csrfEnabled(options), generatedUsesRateLimit(options))...)
 	decls = append(decls, fragmentFuncDecl(adapter.Fragments, generatedUsesRateLimit(options)))
 	decls = append(decls, contractHandlerDecls(adapter.ContractExposures, csrfEnabled(options), generatedUsesRateLimit(options), generatedRealtimeQueryInvalidationsEnabled(options), false)...)

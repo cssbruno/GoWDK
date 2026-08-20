@@ -116,6 +116,7 @@ func applyComponentSyntaxBlock(src []byte, component *gwdkir.Component, block gw
 		component.Blocks.View = true
 		component.Blocks.ViewBody = block.Body
 		component.Blocks.ViewNodes = append(component.Blocks.ViewNodes[:0], block.View...)
+		component.Blocks.DirectiveLanes = gwdkir.CollectDirectiveLanes(component.Blocks.ViewNodes)
 		component.Blocks.Spans.View = block.Span
 		component.Blocks.Spans.ViewBodyStart = block.BodyStart
 	case "style":

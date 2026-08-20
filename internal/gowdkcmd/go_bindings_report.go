@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go/ast"
-	"go/parser"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -51,6 +49,7 @@ type goBindingInputFieldJSON struct {
 
 func buildGoBindingsReport(config gowdk.Config, ir gwdkir.Program) goBindingsReport {
 	var bindings []goBindingJSON
+	bindings = append(bindings, interopGoBindings(config)...)
 	metadata := compiler.BuildRouteMetadataFromIR(config, ir)
 	inputFields := goBindingInputFieldsByEndpoint(ir)
 	for _, endpoint := range metadata.Endpoints {
@@ -87,6 +86,24 @@ func buildGoBindingsReport(config gowdk.Config, ir gwdkir.Program) goBindingsRep
 		return false
 	})
 	return goBindingsReport{Version: 1, Bindings: bindings}
+}
+
+func interopGoBindings(config gowdk.Config) []goBindingJSON {
+	var bindings []goBindingJSON
+	appendHook := func(kind, signature string, ref gowdk.GoHookRef) {
+		if ref.ImportPath == "" {
+			return
+		}
+		bindings = append(bindings, goBindingJSON{
+			Kind: kind, Source: ref.SourceFile, Symbol: ref.Function,
+			ExpectedSymbol: ref.Function, PackagePath: ref.ImportPath,
+			Status: "bound", Signature: signature,
+			Message: "explicit typed Config.Interop registration",
+		})
+	}
+	appendHook("guards", "func() guard.Registry", config.Interop.Guards.Hook)
+	appendHook("auth_provider", "func() auth.Provider", config.Interop.AuthProvider.Hook)
+	return bindings
 }
 
 func goBindingInputFieldsByEndpoint(ir gwdkir.Program) map[string][]source.BackendInputField {
@@ -192,22 +209,7 @@ func buildDataGoBindings(page gwdkir.Page) []goBindingJSON {
 	}
 	ref, ok := goBindingBuildDataCall(page)
 	if !ok {
-		var err error
-		ref, ok, err = parseGoBindingBuildDataCall(page.Blocks.BuildBody)
-		if err != nil {
-			return []goBindingJSON{{
-				Kind:       "build",
-				Source:     page.Source,
-				SourceSpan: endpointSourceSpanJSON(page.Blocks.Spans.Build),
-				Package:    page.Package,
-				PageID:     page.ID,
-				Status:     "invalid",
-				Message:    err.Error(),
-			}}
-		}
-		if !ok {
-			return nil
-		}
+		return nil
 	}
 	binding := goBindingJSON{
 		Kind:           "build",
@@ -257,53 +259,6 @@ func goBindingBuildDataCall(page gwdkir.Page) (goBindingBuildCallRef, bool) {
 type goBindingBuildCallRef struct {
 	Alias    string
 	Function string
-}
-
-func parseGoBindingBuildDataCall(body string) (goBindingBuildCallRef, bool, error) {
-	lines := goBindingSignificantLines(body)
-	if len(lines) != 1 {
-		return goBindingBuildCallRef{}, false, nil
-	}
-	expr, ok := strings.CutPrefix(strings.TrimSpace(lines[0]), "=>")
-	if !ok {
-		return goBindingBuildCallRef{}, false, nil
-	}
-	expr = strings.TrimSpace(expr)
-	if strings.HasPrefix(expr, "{") {
-		return goBindingBuildCallRef{}, false, nil
-	}
-	parsed, err := parser.ParseExpr(expr)
-	if err != nil {
-		return goBindingBuildCallRef{}, true, fmt.Errorf("parse build call: %w", err)
-	}
-	call, ok := parsed.(*ast.CallExpr)
-	if !ok || len(call.Args) != 0 {
-		return goBindingBuildCallRef{}, false, nil
-	}
-	switch fun := call.Fun.(type) {
-	case *ast.Ident:
-		return goBindingBuildCallRef{Function: fun.Name}, true, nil
-	case *ast.SelectorExpr:
-		alias, ok := fun.X.(*ast.Ident)
-		if !ok {
-			return goBindingBuildCallRef{}, true, fmt.Errorf("build data call receiver must be an import alias")
-		}
-		return goBindingBuildCallRef{Alias: alias.Name, Function: fun.Sel.Name}, true, nil
-	default:
-		return goBindingBuildCallRef{}, false, nil
-	}
-}
-
-func goBindingSignificantLines(body string) []string {
-	var lines []string
-	for _, line := range strings.Split(body, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "//") {
-			continue
-		}
-		lines = append(lines, line)
-	}
-	return lines
 }
 
 func findGoBindingImport(imports []gwdkir.Import, alias string) (gwdkir.Import, bool) {

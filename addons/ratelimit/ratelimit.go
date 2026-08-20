@@ -7,5 +7,5 @@ const ImportPath = "github.com/cssbruno/gowdk/addons/ratelimit"
 
 // Addon enables request-time rate limiting support.
 func Addon() gowdk.Addon {
-	return gowdk.NewAddon("ratelimit", gowdk.FeatureRateLimit)
+	return gowdk.NewBuiltinAddon("ratelimit", gowdk.FeatureRateLimit)
 }

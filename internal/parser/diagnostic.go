@@ -22,6 +22,8 @@ const (
 	DiagnosticUnsupportedLayoutMetadata    = "unsupported_layout_metadata"
 	DiagnosticInvalidComponentProp         = "invalid_component_prop"
 	DiagnosticUnsupportedComponentPropType = "unsupported_component_prop_type"
+	DiagnosticDirectiveLaneRequired        = "directive_lane_required"
+	DiagnosticDirectiveLaneInvalid         = "directive_lane_invalid"
 )
 
 // DiagnosticError carries parser diagnostic metadata without forcing callers to

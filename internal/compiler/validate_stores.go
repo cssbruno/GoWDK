@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 )
@@ -125,13 +124,10 @@ func declaredStoreNamesByPackage(pages []gwdkir.Page) map[string]map[string]bool
 func validateStoreUsesAgainst(declared map[string]map[string]bool, components []gwdkir.Component) []ValidationError {
 	var diagnostics []ValidationError
 	for _, component := range components {
-		if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" {
+		if !component.Blocks.Client || component.Blocks.ClientProgram == nil {
 			continue
 		}
-		program, err := clientlang.Parse(component.Blocks.ClientBody)
-		if err != nil {
-			continue
-		}
+		program := *component.Blocks.ClientProgram
 		usesByAlias := componentUsesByAlias(component)
 		for _, use := range program.Uses {
 			if use.PackageAlias != "" {

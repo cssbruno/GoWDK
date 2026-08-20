@@ -5,9 +5,7 @@ route "/dashboard"
 layout root, dashboard
 guard auth.required
 
-server {
-  user := auth.User(ctx)?
-  => {user}
+go server {
 }
 
 view {

@@ -11,19 +11,19 @@ import (
 )
 
 func validateComponentClient(component gwdkir.Component, stateTypes map[string]clientlang.ValueType, symbolTypes map[string]clientlang.ValueType) (map[string]clientlang.Handler, map[string]clientlang.Helper, map[string]clientlang.Ref, map[string]source.SourceSpan, map[string]clientlang.ValueType, []ValidationError) {
-	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" {
+	if !component.Blocks.Client {
 		return nil, nil, nil, nil, nil, nil
 	}
-	program, err := clientlang.Parse(component.Blocks.ClientBody)
-	if err != nil {
+	if component.Blocks.ClientProgram == nil {
 		return nil, nil, nil, nil, nil, []ValidationError{{
 			Code:          "component_client_error",
 			ComponentName: component.Name,
 			Source:        component.Source,
-			Span:          clientParseErrorSpan(component, err),
-			Message:       fmt.Sprintf("component %s client block is invalid: %v", component.Name, err),
+			Span:          firstSpan(component.Blocks.Spans.Client, component.Span),
+			Message:       fmt.Sprintf("component %s client block has no parsed program", component.Name),
 		}}
 	}
+	program := *component.Blocks.ClientProgram
 	handlers := program.HandlerMap()
 	helpers := program.HelperMap()
 	helperFuncs := helperExprFunctions(helpers)
@@ -317,14 +317,6 @@ func clientStatementErrorSpan(component gwdkir.Component, statements []string, s
 			return clientExpressionErrorSpan(component, statements[statementErr.Index], spans[statementErr.Index], statementErr.Err)
 		}
 		return clientSpan(component, spans[statementErr.Index])
-	}
-	return firstSpan(component.Blocks.Spans.Client, component.Span)
-}
-
-func clientParseErrorSpan(component gwdkir.Component, err error) source.SourceSpan {
-	var parseErr *clientlang.ParseError
-	if errors.As(err, &parseErr) && parseErr.Line > 0 {
-		return clientSpan(component, clientlang.Span{StartLine: parseErr.Line, EndLine: parseErr.Line})
 	}
 	return firstSpan(component.Blocks.Spans.Client, component.Span)
 }

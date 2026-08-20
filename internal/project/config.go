@@ -9,7 +9,9 @@ import (
 	"math"
 	"os"
 	"path"
+	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cssbruno/gowdk"
@@ -56,17 +58,17 @@ func LoadConfigFile(path string) (gowdk.Config, error) {
 				if name.Name != "Config" || index >= len(valueSpec.Values) {
 					continue
 				}
-				config, needsExecutableLoad, ok, err := parseConfigLiteral(valueSpec.Values[index], importNames(file))
+				config, executablePath, ok, err := parseConfigLiteral(valueSpec.Values[index], importNames(file), nil)
 				if err != nil {
 					return gowdk.Config{}, err
 				}
 				if !ok {
 					return gowdk.Config{}, fmt.Errorf("%s must assign Config to a gowdk.Config literal", path)
 				}
-				if needsExecutableLoad {
-					config, err := loadExecutableConfig(path)
+				if executablePath != "" {
+					config, err := loadExecutableConfig(path, nil)
 					if err != nil {
-						return gowdk.Config{}, fmt.Errorf("%s contains config expressions outside the AST-only subset: %w", path, err)
+						return gowdk.Config{}, fmt.Errorf("%s contains config expression at %s that requires executable evaluation: %w", path, executablePath, err)
 					}
 					if err := validateLoadedConfig(path, config); err != nil {
 						return gowdk.Config{}, err
@@ -84,23 +86,11 @@ func LoadConfigFile(path string) (gowdk.Config, error) {
 }
 
 func validateLoadedConfig(path string, config gowdk.Config) error {
+	if err := config.ValidateStructural(); err != nil {
+		return fmt.Errorf("%s config: %w", path, err)
+	}
 	if err := config.Env.Validate(os.LookupEnv); err != nil {
 		return fmt.Errorf("%s env contract: %w", path, err)
-	}
-	if err := config.Lifecycle.Validate(); err != nil {
-		return fmt.Errorf("%s lifecycle contract: %w", path, err)
-	}
-	if err := config.I18N.Validate(); err != nil {
-		return fmt.Errorf("%s i18n policy: %w", path, err)
-	}
-	if err := config.Build.CORS.Validate(); err != nil {
-		return fmt.Errorf("%s CORS policy: %w", path, err)
-	}
-	if err := config.Build.CSRF.Validate(); err != nil {
-		return fmt.Errorf("%s CSRF policy: %w", path, err)
-	}
-	if err := gowdk.ValidateAddons(config.Addons); err != nil {
-		return fmt.Errorf("%s addons: %w", path, err)
 	}
 	return nil
 }
@@ -120,18 +110,27 @@ func LoadConfig(path string) (gowdk.Config, error) {
 	return LoadConfigFile(DefaultConfigFile)
 }
 
-func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.Config, bool, bool, error) {
+func parseConfigLiteral(expression ast.Expr, imports map[string]string, environment []string) (gowdk.Config, string, bool, error) {
 	literal, ok := expression.(*ast.CompositeLit)
-	if !ok || !isConfigType(literal.Type) {
-		return gowdk.Config{}, false, false, nil
+	if !ok {
+		return gowdk.Config{}, "Config", true, nil
+	}
+	executablePath, err := validateConfigExpression(expression, reflect.TypeOf(gowdk.Config{}), "Config")
+	if err != nil {
+		return gowdk.Config{}, "", false, err
 	}
 	fields, ok := configLiteralFields(expression)
 	if !ok {
-		return gowdk.Config{}, false, false, nil
+		return gowdk.Config{}, "", false, nil
+	}
+	if !isConfigType(literal.Type) && executablePath == "" {
+		// A type alias can be structurally decoded, but only normal Go type
+		// checking can prove it aliases gowdk.Config.
+		executablePath = "Config"
 	}
 
 	var config gowdk.Config
-	var needsExecutableLoad bool
+	needsExecutableLoad := executablePath != ""
 	for _, field := range fields {
 		switch field.Name {
 		case "AppName":
@@ -166,6 +165,25 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 				continue
 			}
 			config.CSS = parseCSSConfig(field.Value)
+		case "Features":
+			if needsConfigExpressionEvaluation(field.Value) {
+				needsExecutableLoad = true
+				continue
+			}
+			features, ok := parseFeatureConfig(field.Value, imports)
+			if !ok {
+				needsExecutableLoad = true
+				continue
+			}
+			config.Features = features
+		case "Extensions":
+			// Interface values are behaviorful and can only be reconstructed by
+			// the versioned executable-config host.
+			needsExecutableLoad = true
+		case "Interop":
+			// Typed registrations contain function values and must be resolved by
+			// the versioned executable-config host.
+			needsExecutableLoad = true
 		case "Render":
 			if needsConfigExpressionEvaluation(field.Value) {
 				needsExecutableLoad = true
@@ -173,7 +191,7 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 			}
 			render, err := parseRenderConfig(field.Value)
 			if err != nil {
-				return gowdk.Config{}, false, false, err
+				return gowdk.Config{}, "", false, err
 			}
 			config.Render = render
 		case "I18N":
@@ -190,7 +208,7 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 			var err error
 			config.Env, err = parseEnvConfig(field.Value)
 			if err != nil {
-				return gowdk.Config{}, false, false, err
+				return gowdk.Config{}, "", false, err
 			}
 		case "Lifecycle":
 			if needsConfigExpressionEvaluation(field.Value) {
@@ -203,25 +221,316 @@ func parseConfigLiteral(expression ast.Expr, imports map[string]string) (gowdk.C
 			config.Addons = addons
 			needsExecutableLoad = needsExecutableLoad || addonsNeedExecutableLoad
 		default:
-			return gowdk.Config{}, false, false, fmt.Errorf("unsupported Config field %q", field.Name)
+			return gowdk.Config{}, "", false, fmt.Errorf("config_unknown_field: Config.%s is unknown", field.Name)
 		}
 	}
-	return config, needsExecutableLoad, true, nil
+	if needsExecutableLoad && executablePath == "" {
+		executablePath = "Config"
+	}
+	return config, executablePath, true, nil
+}
+
+// validateConfigExpression checks the complete literal shape before any
+// permissive AST decoding occurs. It returns the first field path that needs
+// normal Go execution; structural mistakes fail immediately with that path.
+func validateConfigExpression(expression ast.Expr, expected reflect.Type, fieldPath string) (string, error) {
+	for expected.Kind() == reflect.Pointer {
+		expected = expected.Elem()
+	}
+	if identifier, ok := expression.(*ast.Ident); ok && identifier.Name == "nil" {
+		switch expected.Kind() {
+		case reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.Func:
+			return "", nil
+		default:
+			return "", fmt.Errorf("%s: nil is not valid for %s", fieldPath, expected)
+		}
+	}
+
+	switch expected.Kind() {
+	case reflect.Struct:
+		literal, ok := expression.(*ast.CompositeLit)
+		if !ok {
+			return fieldPath, nil
+		}
+		seen := map[string]bool{}
+		firstExecutable := ""
+		for index, element := range literal.Elts {
+			keyValue, ok := element.(*ast.KeyValueExpr)
+			if !ok {
+				return "", fmt.Errorf("%s[%d]: unkeyed struct literals are not supported", fieldPath, index)
+			}
+			identifier, ok := keyValue.Key.(*ast.Ident)
+			if !ok {
+				return "", fmt.Errorf("%s[%d]: config field name must be an identifier", fieldPath, index)
+			}
+			childPath := fieldPath + "." + identifier.Name
+			if seen[identifier.Name] {
+				return "", fmt.Errorf("%s: duplicate field", childPath)
+			}
+			seen[identifier.Name] = true
+			field, ok := expected.FieldByName(identifier.Name)
+			if !ok || field.PkgPath != "" {
+				if fieldPath == "Config" {
+					return "", fmt.Errorf("unsupported Config field %q (%s)", identifier.Name, childPath)
+				}
+				if strings.Contains(fieldPath, "Config.Env.Secrets[") && identifier.Name == "Default" {
+					return "", fmt.Errorf("Env.Secrets entries cannot declare Default (%s)", childPath)
+				}
+				return "", fmt.Errorf("%s: unknown field", childPath)
+			}
+			path, err := validateConfigExpression(keyValue.Value, field.Type, childPath)
+			if err != nil {
+				return "", err
+			}
+			if firstExecutable == "" {
+				firstExecutable = path
+			}
+		}
+		return firstExecutable, nil
+	case reflect.Slice, reflect.Array:
+		literal, ok := expression.(*ast.CompositeLit)
+		if !ok {
+			return fieldPath, nil
+		}
+		firstExecutable := ""
+		for index, element := range literal.Elts {
+			path, err := validateConfigExpression(element, expected.Elem(), fmt.Sprintf("%s[%d]", fieldPath, index))
+			if err != nil {
+				return "", err
+			}
+			if firstExecutable == "" {
+				firstExecutable = path
+			}
+		}
+		return firstExecutable, nil
+	case reflect.Map:
+		literal, ok := expression.(*ast.CompositeLit)
+		if !ok {
+			return fieldPath, nil
+		}
+		firstExecutable := ""
+		for index, element := range literal.Elts {
+			keyValue, ok := element.(*ast.KeyValueExpr)
+			if !ok {
+				return "", fmt.Errorf("%s[%d]: map entry must use key: value syntax", fieldPath, index)
+			}
+			if _, err := validateConfigExpression(keyValue.Key, expected.Key(), fmt.Sprintf("%s key %d", fieldPath, index)); err != nil {
+				return "", err
+			}
+			path, err := validateConfigExpression(keyValue.Value, expected.Elem(), fmt.Sprintf("%s[%d]", fieldPath, index))
+			if err != nil {
+				return "", err
+			}
+			if firstExecutable == "" {
+				firstExecutable = path
+			}
+		}
+		return firstExecutable, nil
+	case reflect.Interface:
+		// Built-in addon constructor calls have a dedicated AST decoder. Unknown
+		// addon values still request executable loading from parseAddons.
+		if strings.HasPrefix(fieldPath, "Config.Addons[") {
+			return "", nil
+		}
+		return fieldPath, nil
+	case reflect.Func:
+		return fieldPath, nil
+	case reflect.String:
+		if literal, ok := expression.(*ast.BasicLit); ok {
+			if literal.Kind != token.STRING {
+				return "", fmt.Errorf("%s: expected string literal", fieldPath)
+			}
+			return "", nil
+		}
+		if isStaticConfigEnum(expected, expression) {
+			return "", nil
+		}
+		return fieldPath, nil
+	case reflect.Bool:
+		if identifier, ok := expression.(*ast.Ident); ok && (identifier.Name == "true" || identifier.Name == "false") {
+			return "", nil
+		}
+		return fieldPath, nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if _, ok := parseLiteralInt64(expression); ok {
+			return "", nil
+		}
+		return fieldPath, nil
+	default:
+		return fieldPath, nil
+	}
+}
+
+func isStaticConfigEnum(expected reflect.Type, expression ast.Expr) bool {
+	switch expected.Name() {
+	case "RenderMode", "BuildMode", "AssetMode":
+		switch expression.(type) {
+		case *ast.Ident, *ast.SelectorExpr:
+			return true
+		}
+	}
+	return false
 }
 
 func supportedConfigLiteralFields() map[string]bool {
 	return map[string]bool{
-		"AppName":   true,
-		"Source":    true,
-		"Modules":   true,
-		"Render":    true,
-		"I18N":      true,
-		"Env":       true,
-		"Lifecycle": true,
-		"Build":     true,
-		"CSS":       true,
-		"Addons":    true,
+		"AppName":    true,
+		"Source":     true,
+		"Modules":    true,
+		"Render":     true,
+		"I18N":       true,
+		"Env":        true,
+		"Lifecycle":  true,
+		"Build":      true,
+		"CSS":        true,
+		"Features":   true,
+		"Extensions": true,
+		"Interop":    true,
+		"Addons":     true,
 	}
+}
+
+func parseFeatureConfig(expression ast.Expr, imports map[string]string) (gowdk.FeatureConfig, bool) {
+	fields, ok := strictConfigLiteralFields(expression)
+	if !ok {
+		return gowdk.FeatureConfig{}, false
+	}
+	var config gowdk.FeatureConfig
+	for _, field := range fields {
+		switch field.Name {
+		case "SPA":
+			config.SPA, ok = parseLiteralBool(field.Value)
+		case "Actions":
+			config.Actions, ok = parseLiteralBool(field.Value)
+		case "Partial":
+			config.Partial, ok = parseLiteralBool(field.Value)
+		case "SSR":
+			config.SSR, ok = parseLiteralBool(field.Value)
+		case "API":
+			config.API, ok = parseLiteralBool(field.Value)
+		case "Embed":
+			config.Embed, ok = parseLiteralBool(field.Value)
+		case "CSS":
+			config.CSS, ok = parseLiteralBool(field.Value)
+		case "RateLimit":
+			config.RateLimit, ok = parseLiteralBool(field.Value)
+		case "Contracts":
+			config.Contracts, ok = parseLiteralBool(field.Value)
+		case "Realtime":
+			config.Realtime, ok = parseLiteralBool(field.Value)
+		case "DB":
+			config.DB, ok = parseLiteralBool(field.Value)
+		case "Observability":
+			config.Observability, ok = parseLiteralBool(field.Value)
+		case "Auth":
+			config.Auth, ok = parseAuthFeatureConfig(field.Value, imports)
+		case "SEO":
+			config.SEO, ok = parseSEOFeatureConfig(field.Value, imports)
+		default:
+			return gowdk.FeatureConfig{}, false
+		}
+		if !ok {
+			return gowdk.FeatureConfig{}, false
+		}
+	}
+	return config, true
+}
+
+func parseAuthFeatureConfig(expression ast.Expr, imports map[string]string) (gowdk.AuthFeatureConfig, bool) {
+	fields, ok := strictConfigLiteralFields(expression)
+	if !ok {
+		return gowdk.AuthFeatureConfig{}, false
+	}
+	var config gowdk.AuthFeatureConfig
+	for _, field := range fields {
+		switch field.Name {
+		case "Enabled":
+			config.Enabled, ok = parseLiteralBool(field.Value)
+		case "Session":
+			config.Session, ok = parseAuthSessionOptions(field.Value, imports)
+		default:
+			return gowdk.AuthFeatureConfig{}, false
+		}
+		if !ok {
+			return gowdk.AuthFeatureConfig{}, false
+		}
+	}
+	return config, true
+}
+
+func parseAuthSessionOptions(expression ast.Expr, imports map[string]string) (gowdk.AuthSessionOptions, bool) {
+	fields, ok := strictConfigLiteralFields(expression)
+	if !ok {
+		return gowdk.AuthSessionOptions{}, false
+	}
+	var options gowdk.AuthSessionOptions
+	for _, field := range fields {
+		switch field.Name {
+		case "SecretEnv":
+			options.SecretEnv, ok = parseLiteralString(field.Value)
+		case "CookieName":
+			options.CookieName, ok = parseLiteralString(field.Value)
+		case "TTL":
+			options.TTL, ok = parseDuration(field.Value, imports)
+		case "Insecure":
+			options.Insecure, ok = parseLiteralBool(field.Value)
+		default:
+			return gowdk.AuthSessionOptions{}, false
+		}
+		if !ok {
+			return gowdk.AuthSessionOptions{}, false
+		}
+	}
+	return options, true
+}
+
+func parseSEOFeatureConfig(expression ast.Expr, imports map[string]string) (gowdk.SEOFeatureConfig, bool) {
+	fields, ok := strictConfigLiteralFields(expression)
+	if !ok {
+		return gowdk.SEOFeatureConfig{}, false
+	}
+	var config gowdk.SEOFeatureConfig
+	for _, field := range fields {
+		switch field.Name {
+		case "Enabled":
+			config.Enabled, ok = parseLiteralBool(field.Value)
+		case "Options":
+			config.Options, ok = parseBuiltinSEOOptions(field.Value, imports)
+		default:
+			return gowdk.SEOFeatureConfig{}, false
+		}
+		if !ok {
+			return gowdk.SEOFeatureConfig{}, false
+		}
+	}
+	return config, true
+}
+
+func parseBuiltinSEOOptions(expression ast.Expr, imports map[string]string) (gowdk.SEOOptions, bool) {
+	fields, ok := strictConfigLiteralFields(expression)
+	if !ok {
+		return gowdk.SEOOptions{}, false
+	}
+	var options gowdk.SEOOptions
+	for _, field := range fields {
+		switch field.Name {
+		case "BaseURL":
+			options.BaseURL, ok = parseLiteralString(field.Value)
+		case "Disallow":
+			options.Disallow, ok = parseLiteralStringList(field.Value)
+		case "ExtraURLs":
+			options.ExtraURLs, ok = parseSEOURLList(field.Value, imports)
+		case "DynamicSitemap":
+			options.DynamicSitemap, ok = parseSEODynamicSitemap(field.Value, imports)
+		default:
+			return gowdk.SEOOptions{}, false
+		}
+		if !ok {
+			return gowdk.SEOOptions{}, false
+		}
+	}
+	return options, true
 }
 
 func needsConfigExpressionEvaluation(expression ast.Expr) bool {
@@ -770,8 +1079,6 @@ func parseCSRFConfig(expression ast.Expr) gowdk.CSRFConfig {
 	var csrf gowdk.CSRFConfig
 	for _, field := range fields {
 		switch field.Name {
-		case "Enabled":
-			csrf.Enabled = parseBool(field.Value)
 		case "Disabled":
 			csrf.Disabled = parseBool(field.Value)
 		case "SecretEnv":

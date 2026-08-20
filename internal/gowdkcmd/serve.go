@@ -308,7 +308,7 @@ const liveReloadScriptTemplate = `<script>
     if (Number.isNaN(date.getTime())) return value;
     return date.toLocaleString();
   };
-  const DEV_UPDATE_VERSION = 1;
+  const DEV_UPDATE_VERSION = 2;
   const selectorValue = (value) => String(value || "").replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
   const normalizeDevUpdate = (payload, fallbackAction) => {
     payload = typeof payload === "string" ? parsePayload(payload) : (payload || {});
@@ -424,6 +424,7 @@ const liveReloadScriptTemplate = `<script>
       window.location.reload();
       return;
     }
+	syncDocumentHead(next);
     let replaced = 0;
     for (const component of components) {
       const selector = componentSelectors(component);
@@ -449,6 +450,70 @@ const liveReloadScriptTemplate = `<script>
     if (typeof window.__gowdkMountClientGoBlocks === "function") window.__gowdkMountClientGoBlocks();
     document.dispatchEvent(new CustomEvent("gowdk:component-hmr", { detail: payload }));
   };
+  const storeShapes = (root) => {
+    const shapes = new Map();
+    root.querySelectorAll('script[data-gowdk-store]').forEach((seed) => {
+      shapes.set(seed.getAttribute('data-gowdk-store') || '', seed.getAttribute('data-gowdk-store-shape') || '');
+    });
+    return shapes;
+  };
+	const carryDocumentIslandState = (next) => {
+	  const current = new Map();
+	  document.querySelectorAll('gowdk-island[data-gowdk-runtime="js"]').forEach((root) => {
+	    const identity = root.getAttribute("data-gowdk-component-id") || root.getAttribute("data-gowdk-component") || "";
+	    if (!identity) return;
+	    if (!current.has(identity)) current.set(identity, []);
+	    current.get(identity).push(root);
+	  });
+	  next.querySelectorAll('gowdk-island[data-gowdk-runtime="js"]').forEach((replacement) => {
+	    const identity = replacement.getAttribute("data-gowdk-component-id") || replacement.getAttribute("data-gowdk-component") || "";
+	    const roots = current.get(identity) || [];
+	    const root = roots.shift();
+	    if (root) carryCompatibleIslandState(root, replacement);
+	  });
+	};
+  const syncDocumentHead = (next) => {
+    document.title = next.title;
+    const selector = 'meta[name],meta[property],link[rel="canonical"],link[rel="stylesheet"],script[data-gowdk-store]';
+    document.head.querySelectorAll(selector).forEach((node) => node.remove());
+    next.head.querySelectorAll(selector).forEach((node) => document.head.appendChild(node.cloneNode(true)));
+  };
+  const applyDocumentPatch = async (payload) => {
+    const routes = Array.isArray(payload.routes) ? payload.routes : [];
+    if (routes.length > 0 && !routes.some((route) => pathMatchesRoute(route, window.location.pathname))) return;
+    let next;
+    try { next = await fetchFreshDocument(); } catch (_) { window.location.reload(); return; }
+    if (!next.body) { window.location.reload(); return; }
+    const currentShapes = storeShapes(document);
+    const nextShapes = storeShapes(next);
+	const active = document.activeElement;
+	const focusID = active && active.id ? active.id : "";
+	const focusName = active && active.getAttribute ? (active.getAttribute("name") || "") : "";
+    const incompatible = [];
+    nextShapes.forEach((shape, name) => {
+      if (!name || !currentShapes.has(name) || currentShapes.get(name) !== shape) incompatible.push(name);
+    });
+	currentShapes.forEach((_, name) => {
+	  if (name && !nextShapes.has(name)) incompatible.push(name);
+	});
+	carryDocumentIslandState(next);
+    if (typeof window.__gowdkDestroyIslands === "function") window.__gowdkDestroyIslands(document.body, true);
+    syncDocumentHead(next);
+    document.body.replaceChildren(...Array.from(next.body.childNodes).map((node) => document.importNode(node, true)));
+    if (window.__gowdkStores) {
+      for (const name of incompatible) {
+        if (typeof window.__gowdkStores.clear === "function") window.__gowdkStores.clear(name);
+      }
+      if (typeof window.__gowdkStores.hydrate === "function") window.__gowdkStores.hydrate();
+    }
+    if (typeof window.__gowdkMountIslands === "function") window.__gowdkMountIslands();
+    if (typeof window.__gowdkMountClientGoBlocks === "function") window.__gowdkMountClientGoBlocks();
+	const focusTarget = Array.from(document.querySelectorAll("[id],[name]")).find((node) =>
+	  (focusID && node.id === focusID) || (focusName && node.getAttribute("name") === focusName)
+	);
+	if (focusTarget && typeof focusTarget.focus === "function") focusTarget.focus({ preventScroll: true });
+	document.dispatchEvent(new CustomEvent("gowdk:page-hmr", { detail: payload }));
+  };
   const applyDevUpdate = async (payload) => {
     payload = normalizeDevUpdate(payload, "reload");
     removeOverlay();
@@ -459,6 +524,10 @@ const liveReloadScriptTemplate = `<script>
     }
     if (payload.action === "component-remount") {
       await applyComponentHMR(payload);
+      return;
+    }
+	if (payload.action === "patch") {
+      await applyDocumentPatch(payload);
       return;
     }
     if (payload.action === "reload") {

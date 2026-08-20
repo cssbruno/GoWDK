@@ -116,7 +116,7 @@ func TestFormatPreservesNestedViewMarkupDepth(t *testing.T) {
 <section class="panel">
 <p>FlowBoard</p>
 <form g:post={Login}>
-<div g:if={Count > 0}>
+<div g:if={Count > 0} g:lane="client">
 <label for="email">Email</label>
 <input id="email" />
 </div>
@@ -131,7 +131,7 @@ func TestFormatPreservesNestedViewMarkupDepth(t *testing.T) {
     <section class="panel">
       <p>FlowBoard</p>
       <form g:post={Login}>
-        <div g:if={Count > 0}>
+        <div g:if={Count > 0} g:lane="client">
           <label for="email">Email</label>
           <input id="email" />
         </div>

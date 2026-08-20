@@ -260,6 +260,9 @@ func formMethodPath(node viewmodel.Element) (string, string) {
 	method := "POST"
 	path := ""
 	for _, attr := range node.Attrs {
+		if attr.Name == "g:lane" {
+			continue
+		}
 		if attr.Expression {
 			continue
 		}
@@ -295,6 +298,9 @@ func elementDirectiveValues(node viewmodel.Element) (viewDirectives, error) {
 	var directives viewDirectives
 	for _, attr := range node.Attrs {
 		if !strings.HasPrefix(attr.Name, "g:") {
+			continue
+		}
+		if attr.Name == "g:lane" {
 			continue
 		}
 		if strings.HasPrefix(attr.Name, "g:on:") {

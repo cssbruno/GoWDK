@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/viewmodel"
 )
@@ -140,28 +141,39 @@ type HeadResource struct {
 }
 
 type Blocks struct {
-	Paths        bool
-	PathsBody    string
-	PathsRecords []LiteralRecord `json:"-"`
-	Build        bool
-	BuildBody    string
-	BuildRecords []LiteralRecord `json:"-"`
-	BuildCall    *BuildCall      `json:"-"`
-	Server       bool
-	ServerBody   string
-	ServerFields []string `json:"-"`
-	Client       bool
-	ClientBody   string
-	GoBlocks     []GoBlock
-	View         bool
-	ViewBody     string
-	ViewNodes    []viewmodel.Node `json:"-"`
-	Style        bool
-	StyleBody    string
-	Actions      []Action
-	APIs         []API
-	Fragments    []FragmentEndpoint
-	Spans        BlockSpans
+	Paths          bool
+	PathsBody      string
+	PathsRecords   []LiteralRecord `json:"-"`
+	Build          bool
+	BuildBody      string
+	BuildRecords   []LiteralRecord `json:"-"`
+	BuildCall      *BuildCall      `json:"-"`
+	Server         bool
+	ServerBody     string
+	ServerFields   []string `json:"-"`
+	Client         bool
+	ClientBody     string
+	ClientProgram  *clientlang.Program `json:"-"`
+	GoBlocks       []GoBlock
+	View           bool
+	ViewBody       string
+	ViewNodes      []viewmodel.Node `json:"-"`
+	DirectiveLanes []DirectiveLane
+	Style          bool
+	StyleBody      string
+	Actions        []Action
+	APIs           []API
+	Fragments      []FragmentEndpoint
+	Spans          BlockSpans
+}
+
+// DirectiveLane records the explicit execution lane of one structural view
+// directive for inspect, LSP, and generator consumers.
+type DirectiveLane struct {
+	Path       string `json:"path"`
+	Directive  string `json:"directive"`
+	Lane       string `json:"lane"`
+	Expression string `json:"expression"`
 }
 
 // LiteralRecord is a parsed literal record from paths {} or build {}.
@@ -250,6 +262,7 @@ type Action struct {
 type Fragment struct {
 	Target string
 	Body   string
+	Nodes  []viewmodel.Node `json:"-"`
 	Span   source.SourceSpan
 }
 
@@ -259,6 +272,7 @@ type FragmentEndpoint struct {
 	Route       string
 	Target      string
 	Body        string
+	Nodes       []viewmodel.Node `json:"-"`
 	Span        source.SourceSpan
 	RouteSpan   source.SourceSpan
 	TargetSpan  source.SourceSpan
@@ -673,13 +687,15 @@ type AuditTest struct {
 	Span source.SourceSpan
 }
 
-// ClientBehavior records a compiler-owned client block. The body is retained
-// until the client language has a dedicated full AST.
+// ClientBehavior records a compiler-owned, parsed client block. Body is kept
+// only for diagnostics, formatting, source maps, and inspection; Program is
+// the semantic representation consumed after lowering.
 type ClientBehavior struct {
 	Component string
 	Package   string
 	Source    string
 	Body      string
+	Program   clientlang.Program `json:"-"`
 	Span      source.SourceSpan
 }
 

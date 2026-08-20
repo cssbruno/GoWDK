@@ -8,7 +8,7 @@ const ImportPath = "github.com/cssbruno/gowdk/addons/css"
 
 // Addon enables compile-time CSS processing.
 func Addon() gowdk.Addon {
-	return gowdk.NewAddon("css", gowdk.FeatureCSS)
+	return gowdk.NewBuiltinAddon("css", gowdk.FeatureCSS)
 }
 
 // Processor is the compile-time CSS plugin contract.

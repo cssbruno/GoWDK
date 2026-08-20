@@ -31,17 +31,7 @@ func validatePageServerLists(page gwdkir.Page) []ValidationError {
 }
 
 func pageViewNodes(page gwdkir.Page) []viewmodel.Node {
-	if len(page.Blocks.ViewNodes) > 0 {
-		return page.Blocks.ViewNodes
-	}
-	if strings.TrimSpace(page.Blocks.ViewBody) == "" {
-		return nil
-	}
-	nodes, err := viewparse.Parse(page.Blocks.ViewBody)
-	if err != nil {
-		return nil
-	}
-	return nodes
+	return page.Blocks.ViewNodes
 }
 
 // pageLoads describes a page's declared server {} fields. fields holds the exact

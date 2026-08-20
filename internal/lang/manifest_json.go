@@ -506,31 +506,17 @@ func htmlArtifactPath(route string) string {
 }
 
 func pageComponents(page gwdkir.Page) []string {
-	if !page.Blocks.View || page.Blocks.ViewBody == "" {
+	if !page.Blocks.View || len(page.Blocks.ViewNodes) == 0 {
 		return nil
 	}
-	if len(page.Blocks.ViewNodes) > 0 {
-		return viewanalysis.ComponentReferencesFromNodes(page.Blocks.ViewNodes)
-	}
-	components, err := viewanalysis.ComponentReferences(page.Blocks.ViewBody)
-	if err != nil {
-		return nil
-	}
-	return components
+	return viewanalysis.ComponentReferencesFromNodes(page.Blocks.ViewNodes)
 }
 
 func pageDependencies(page gwdkir.Page) viewanalysis.Dependencies {
-	if !page.Blocks.View || page.Blocks.ViewBody == "" {
+	if !page.Blocks.View || len(page.Blocks.ViewNodes) == 0 {
 		return viewanalysis.Dependencies{}
 	}
-	if len(page.Blocks.ViewNodes) > 0 {
-		return viewanalysis.ViewDependenciesFromNodes(page.Blocks.ViewNodes)
-	}
-	dependencies, err := viewanalysis.ViewDependencies(page.Blocks.ViewBody)
-	if err != nil {
-		return viewanalysis.Dependencies{}
-	}
-	return dependencies
+	return viewanalysis.ViewDependenciesFromNodes(page.Blocks.ViewNodes)
 }
 
 func componentsJSON(components []gwdkir.Component) map[string]componentJSON {

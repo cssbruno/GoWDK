@@ -3,7 +3,9 @@ package validation
 // Error describes one validation failure.
 type Error struct {
 	Field   string
+	Code    string
 	Message string
+	Vars    map[string]string
 }
 
 // Result collects validation errors for generated actions.
@@ -13,7 +15,26 @@ type Result struct {
 
 // Add records a validation failure.
 func (result *Result) Add(field, message string) {
-	result.Errors = append(result.Errors, Error{Field: field, Message: message})
+	result.AddCode(field, "validation_error", message, nil)
+}
+
+// AddCode records a stable validation code with safe default text and vars.
+func (result *Result) AddCode(field, code, message string, vars map[string]string) {
+	if code == "" {
+		code = "validation_error"
+	}
+	result.Errors = append(result.Errors, Error{Field: field, Code: code, Message: message, Vars: cloneVars(vars)})
+}
+
+func cloneVars(vars map[string]string) map[string]string {
+	if len(vars) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(vars))
+	for key, value := range vars {
+		out[key] = value
+	}
+	return out
 }
 
 // OK reports whether no validation failures were recorded.

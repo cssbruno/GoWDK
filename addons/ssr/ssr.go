@@ -7,5 +7,5 @@ const ImportPath = "github.com/cssbruno/gowdk/addons/ssr"
 
 // Addon enables request-time full-page rendering.
 func Addon() gowdk.Addon {
-	return gowdk.NewAddon("ssr", gowdk.FeatureSSR)
+	return gowdk.NewBuiltinAddon("ssr", gowdk.FeatureSSR)
 }

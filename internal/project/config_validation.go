@@ -14,6 +14,12 @@ import (
 // schema and compiler-facing policy. Required runtime values are deliberately
 // checked later by generated-app startup or ValidateRuntimeEnvironment.
 func LoadConfigFileStructural(path string) (gowdk.Config, error) {
+	return LoadConfigFileStructuralWithEnvironment(path, nil)
+}
+
+// LoadConfigFileStructuralWithEnvironment loads config with an explicit child
+// process environment. It never mutates the compiler process environment.
+func LoadConfigFileStructuralWithEnvironment(path string, environment []string) (gowdk.Config, error) {
 	fileSet := token.NewFileSet()
 	file, err := parser.ParseFile(fileSet, path, nil, 0)
 	if err != nil {
@@ -34,17 +40,17 @@ func LoadConfigFileStructural(path string) (gowdk.Config, error) {
 				if name.Name != "Config" || index >= len(valueSpec.Values) {
 					continue
 				}
-				config, needsExecutableLoad, ok, err := parseConfigLiteral(valueSpec.Values[index], importNames(file))
+				config, executablePath, ok, err := parseConfigLiteral(valueSpec.Values[index], importNames(file), environment)
 				if err != nil {
 					return gowdk.Config{}, err
 				}
 				if !ok {
 					return gowdk.Config{}, fmt.Errorf("%s must assign Config to a gowdk.Config literal", path)
 				}
-				if needsExecutableLoad {
-					config, err = loadExecutableConfig(path)
+				if executablePath != "" {
+					config, err = loadExecutableConfig(path, environment)
 					if err != nil {
-						return gowdk.Config{}, fmt.Errorf("%s contains config expressions outside the AST-only subset: %w", path, err)
+						return gowdk.Config{}, fmt.Errorf("%s contains config expression at %s that requires executable evaluation: %w", path, executablePath, err)
 					}
 				}
 				if err := validateLoadedConfigStructure(path, config); err != nil {
@@ -80,23 +86,8 @@ func ValidateRuntimeEnvironment(config gowdk.Config, lookup func(string) (string
 }
 
 func validateLoadedConfigStructure(path string, config gowdk.Config) error {
-	if err := config.Env.Validate(nil); err != nil {
-		return fmt.Errorf("%s env contract: %w", path, err)
-	}
-	if err := config.Lifecycle.Validate(); err != nil {
-		return fmt.Errorf("%s lifecycle contract: %w", path, err)
-	}
-	if err := config.I18N.Validate(); err != nil {
-		return fmt.Errorf("%s i18n policy: %w", path, err)
-	}
-	if err := config.Build.CORS.Validate(); err != nil {
-		return fmt.Errorf("%s CORS policy: %w", path, err)
-	}
-	if err := config.Build.CSRF.Validate(); err != nil {
-		return fmt.Errorf("%s CSRF policy: %w", path, err)
-	}
-	if err := gowdk.ValidateAddons(config.Addons); err != nil {
-		return fmt.Errorf("%s addons: %w", path, err)
+	if err := config.ValidateStructural(); err != nil {
+		return fmt.Errorf("%s config: %w", path, err)
 	}
 	return nil
 }

@@ -22,7 +22,7 @@ page dashboard
 route "/dashboard"
 guard public
 
-server {
+go server {
 }
 
 view {
@@ -1073,7 +1073,7 @@ component Nested
 state ui.NestedState = ui.NewNestedState()
 
 view {
-  <ul><li g:for={item of Items}>{item.Name}</li></ul>
+  <ul><li g:for={item of Items} g:lane="client">{item.Name}</li></ul>
 }
 `)
 
@@ -1085,10 +1085,10 @@ view {
 	if diagnostic.Code != "component_field_error" {
 		t.Fatalf("expected component_field_error, got %#v\n%s", diagnostic, payload)
 	}
-	if !strings.Contains(diagnostic.Suggestion, `g:for={item in Items}`) {
+	if !strings.Contains(diagnostic.Suggestion, `g:for={item in Items} g:lane="client"`) {
 		t.Fatalf("expected g:for suggestion, got %#v\n%s", diagnostic, payload)
 	}
-	if !strings.Contains(string(payload), `"suggestion": "Use g:for={item in Items}`) {
+	if !strings.Contains(string(payload), `"suggestion": "Use g:for={item in Items} g:lane=\"client\"`) {
 		t.Fatalf("expected suggestion in JSON payload, got: %s", payload)
 	}
 }

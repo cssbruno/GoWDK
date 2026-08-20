@@ -117,7 +117,11 @@ func (ctx *renderContext) forDirectiveLane(node Element) (directiveLane, error) 
 		if !ok {
 			return laneClient, nil
 		}
-		return ctx.resolveDirectiveLane(exprRootName(loop.Collection))
+		resolved, err := ctx.resolveDirectiveLane(exprRootName(loop.Collection))
+		if err != nil {
+			return laneClient, err
+		}
+		return validateDeclaredDirectiveLane(node, "g:for", resolved)
 	}
 	return laneClient, nil
 }
@@ -139,9 +143,54 @@ func (ctx *renderContext) ifDirectiveLane(node Element) (directiveLane, error) {
 		}
 		expr := strings.TrimSpace(attr.Value)
 		expr = strings.TrimSpace(strings.TrimPrefix(expr, "!"))
-		return ctx.resolveDirectiveLane(exprRootName(expr))
+		resolved, err := ctx.resolveDirectiveLane(exprRootName(expr))
+		if err != nil {
+			return laneClient, err
+		}
+		return validateDeclaredDirectiveLane(node, "g:if", resolved)
 	}
 	return laneClient, nil
+}
+
+func validateDeclaredDirectiveLane(node Element, directive string, resolved directiveLane) (directiveLane, error) {
+	found := false
+	declared := laneClient
+	for _, attr := range node.Attrs {
+		if attr.Name != "g:lane" {
+			continue
+		}
+		if found {
+			return laneClient, fmt.Errorf("element declares multiple g:lane attributes")
+		}
+		found = true
+		if attr.Boolean || attr.Expression {
+			return laneClient, fmt.Errorf("g:lane must be the string literal \"server\" or \"client\"")
+		}
+		switch strings.TrimSpace(attr.Value) {
+		case "server":
+			declared = laneServer
+		case "client":
+			declared = laneClient
+		default:
+			return laneClient, fmt.Errorf("g:lane must be the string literal \"server\" or \"client\"")
+		}
+	}
+	if !found {
+		// Programmatic renderer callers created before explicit lanes remain usable;
+		// .gwdk parsing requires the declaration before IR is created.
+		return resolved, nil
+	}
+	if declared != resolved {
+		return laneClient, fmt.Errorf("%s declares g:lane=%q but its data resolves to the %s lane", directive, directiveLaneName(declared), directiveLaneName(resolved))
+	}
+	return declared, nil
+}
+
+func directiveLaneName(lane directiveLane) string {
+	if lane == laneServer {
+		return "server"
+	}
+	return "client"
 }
 
 func elementHasAttr(node Element, name string) bool {

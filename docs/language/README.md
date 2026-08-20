@@ -32,6 +32,8 @@ view {
 - [Semantics](semantics.md) documents validation and render-mode rules.
 - [Specification](spec.md) is the compact language overview.
 - [Stability](stability.md) records construct stability and deprecation tiers.
+- [V1 Language Budget](v1-budget.md) defines what stays core, experimental, or
+  outside the language and gates new syntax proposals.
 
 When prose and parser behavior disagree, fix the prose and the conformance
 coverage in the same change. Do not treat a planned form in a topic page as
@@ -72,7 +74,8 @@ capability is complete. Check the relevant topic page and
 
 A public language change must update:
 
-1. The relevant topic page and grammar or syntax page.
+1. Its classification and proposal answers in the v1 language budget, then the
+   relevant topic page and grammar or syntax page.
 2. The accept/reject conformance corpus or named integration coverage.
 3. Stable diagnostics and the
    [Diagnostic Code Reference](../reference/diagnostic-codes.md), when applicable.

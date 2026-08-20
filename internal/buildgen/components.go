@@ -38,8 +38,8 @@ func buildComponents(components []gwdkir.Component) (map[string]view.Component, 
 			failures = append(failures, fmt.Sprintf("component %s missing view {}", component.Name))
 			continue
 		}
-		if strings.TrimSpace(component.Blocks.ViewBody) == "" {
-			failures = append(failures, fmt.Sprintf("component %s view {} is empty", component.Name))
+		if len(component.Blocks.ViewNodes) == 0 {
+			failures = append(failures, fmt.Sprintf("component %s view {} has no parsed nodes", component.Name))
 			continue
 		}
 
@@ -98,7 +98,6 @@ func buildComponents(components []gwdkir.Component) (map[string]view.Component, 
 			Emits:         emits,
 			Exports:       exports,
 			Computed:      computeds,
-			Body:          component.Blocks.ViewBody,
 			Nodes:         append([]view.Node(nil), component.Blocks.ViewNodes...),
 		}
 		registry[key] = compiled
@@ -175,13 +174,13 @@ func componentUses(uses []gwdkir.Use) map[string]string {
 }
 
 func componentClientComputeds(component gwdkir.Component) ([]clientlang.Computed, []string) {
-	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" {
+	if !component.Blocks.Client {
 		return nil, nil
 	}
-	program, err := clientlang.Parse(component.Blocks.ClientBody)
-	if err != nil {
-		return nil, []string{fmt.Sprintf("component %s client: %v", component.Name, err)}
+	if component.Blocks.ClientProgram == nil {
+		return nil, []string{fmt.Sprintf("component %s client: parsed program is missing", component.Name)}
 	}
+	program := *component.Blocks.ClientProgram
 	computeds, err := program.OrderedComputed()
 	if err != nil {
 		return nil, []string{fmt.Sprintf("component %s computed dependency graph: %v", component.Name, err)}
@@ -190,32 +189,33 @@ func componentClientComputeds(component gwdkir.Component) ([]clientlang.Computed
 }
 
 func componentClientRefs(component gwdkir.Component) (map[string]clientlang.Ref, []string) {
-	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" {
+	if !component.Blocks.Client {
 		return nil, nil
 	}
-	program, err := clientlang.Parse(component.Blocks.ClientBody)
-	if err != nil {
-		return nil, []string{fmt.Sprintf("component %s client: %v", component.Name, err)}
+	if component.Blocks.ClientProgram == nil {
+		return nil, []string{fmt.Sprintf("component %s client: parsed program is missing", component.Name)}
 	}
+	program := *component.Blocks.ClientProgram
 	return program.RefMap(), nil
 }
 
 func componentClientHandlers(component gwdkir.Component, exports []string) (map[string]clientlang.Handler, string, error) {
 	emits := componentEmits(component)
-	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" && len(emits) == 0 && len(exports) == 0 {
+	if !component.Blocks.Client && len(emits) == 0 && len(exports) == 0 {
 		return nil, "", nil
 	}
-	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" {
+	if !component.Blocks.Client {
 		payload, err := json.Marshal(clientlang.Bootstrap{Emits: emits, Exports: exports})
 		if err != nil {
 			return nil, "", err
 		}
 		return nil, string(payload), nil
 	}
-	program, err := clientlang.Parse(component.Blocks.ClientBody)
-	if err != nil {
-		return nil, "", err
+	if component.Blocks.ClientProgram == nil {
+		return nil, "", fmt.Errorf("parsed client program is missing")
 	}
+	program := *component.Blocks.ClientProgram
+	var err error
 	handlers := program.HandlerMap()
 	helpers := program.HelperMap()
 	if len(handlers) == 0 && len(helpers) == 0 && !program.NeedsBootstrap() && len(emits) == 0 && len(exports) == 0 {
@@ -425,13 +425,10 @@ func componentInitialState(component gwdkir.Component) (map[string]string, map[s
 // re-marshal the seed JSON. Type-resolution failures are reported by contract
 // validation, so they are swallowed here.
 func mergeComponentStoreSeed(component gwdkir.Component, state map[string]string, stateTypes map[string]clientlang.ValueType, raw map[string]any) bool {
-	if strings.TrimSpace(component.Blocks.ClientBody) == "" {
+	if !component.Blocks.Client || component.Blocks.ClientProgram == nil {
 		return false
 	}
-	program, err := clientlang.Parse(component.Blocks.ClientBody)
-	if err != nil {
-		return false
-	}
+	program := *component.Blocks.ClientProgram
 	added := false
 	for _, use := range program.Uses {
 		if use.Type == "" {
@@ -517,8 +514,8 @@ func buildLayouts(layouts []gwdkir.Layout) (map[string]gwdkir.Layout, []string) 
 			failures = append(failures, fmt.Sprintf("layout %s missing view {}", layout.ID))
 			continue
 		}
-		if strings.TrimSpace(layout.Blocks.ViewBody) == "" {
-			failures = append(failures, fmt.Sprintf("layout %s view {} is empty", layout.ID))
+		if len(layout.Blocks.ViewNodes) == 0 {
+			failures = append(failures, fmt.Sprintf("layout %s view {} has no parsed nodes", layout.ID))
 			continue
 		}
 		registry[key] = layout

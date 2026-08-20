@@ -45,10 +45,63 @@ type Server struct {
 	projectRoot             string
 	moduleNames             []string
 	documents               map[string]document
+	openDocumentBytes       int64
+	limits                  Limits
 	projectCache            projectIRCache
 	workspaceComponentCache workspaceComponentDefinitionCache
 	shutdown                bool
 	log                     io.Writer
+}
+
+// Limits bounds one LSP session. Byte limits count UTF-8 bytes, matching LSP
+// transport framing and Go string storage rather than Unicode code points.
+type Limits struct {
+	MaxHeaderBytes       int64
+	MaxHeaderLineBytes   int
+	MaxHeaderCount       int
+	MaxMessageBytes      int64
+	MaxDocumentBytes     int64
+	MaxOpenDocumentBytes int64
+	MaxOpenDocuments     int
+}
+
+// DefaultLimits returns generous finite defaults for ordinary GOWDK projects.
+func DefaultLimits() Limits {
+	return Limits{
+		MaxHeaderBytes:       64 << 10,
+		MaxHeaderLineBytes:   8 << 10,
+		MaxHeaderCount:       64,
+		MaxMessageBytes:      16 << 20,
+		MaxDocumentBytes:     8 << 20,
+		MaxOpenDocumentBytes: 64 << 20,
+		MaxOpenDocuments:     256,
+	}
+}
+
+func (limits Limits) normalized() Limits {
+	defaults := DefaultLimits()
+	if limits.MaxHeaderBytes <= 0 {
+		limits.MaxHeaderBytes = defaults.MaxHeaderBytes
+	}
+	if limits.MaxHeaderLineBytes <= 0 {
+		limits.MaxHeaderLineBytes = defaults.MaxHeaderLineBytes
+	}
+	if limits.MaxHeaderCount <= 0 {
+		limits.MaxHeaderCount = defaults.MaxHeaderCount
+	}
+	if limits.MaxMessageBytes <= 0 {
+		limits.MaxMessageBytes = defaults.MaxMessageBytes
+	}
+	if limits.MaxDocumentBytes <= 0 {
+		limits.MaxDocumentBytes = defaults.MaxDocumentBytes
+	}
+	if limits.MaxOpenDocumentBytes <= 0 {
+		limits.MaxOpenDocumentBytes = defaults.MaxOpenDocumentBytes
+	}
+	if limits.MaxOpenDocuments <= 0 {
+		limits.MaxOpenDocuments = defaults.MaxOpenDocuments
+	}
+	return limits
 }
 
 type document struct {
@@ -62,6 +115,7 @@ type document struct {
 type ProjectOptions struct {
 	Root    string
 	Modules []string
+	Limits  Limits
 }
 
 // NewServer returns a language server using the provided compiler config.
@@ -76,6 +130,7 @@ func NewProjectServer(config gowdk.Config, options ProjectOptions) *Server {
 		projectRoot: options.Root,
 		moduleNames: append([]string(nil), options.Modules...),
 		documents:   map[string]document{},
+		limits:      options.Limits.normalized(),
 		log:         os.Stderr,
 	}
 }
@@ -84,10 +139,14 @@ func NewProjectServer(config gowdk.Config, options ProjectOptions) *Server {
 func (server *Server) Serve(in io.Reader, out io.Writer) error {
 	reader := bufio.NewReader(in)
 	for {
-		body, err := readMessage(reader)
+		body, err := readMessageWithLimits(reader, server.limits)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return nil
+			}
+			var framing *FramingError
+			if errors.As(err, &framing) {
+				server.logf("lsp framing rejected code=%s actual=%d limit=%d", framing.Code, framing.Actual, framing.Limit)
 			}
 			return err
 		}

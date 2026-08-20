@@ -16,9 +16,16 @@ func Canonical(source string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return CanonicalNodes(nodes), nil
+}
+
+// CanonicalNodes returns the deterministic representation of an already
+// lowered view tree. Compiler passes use this form so raw view source is not
+// reparsed after analysis.
+func CanonicalNodes(nodes []viewmodel.Node) string {
 	var out strings.Builder
 	writeCanonicalNodes(&out, nodes)
-	return out.String(), nil
+	return out.String()
 }
 
 func writeCanonicalNodes(out *strings.Builder, nodes []viewmodel.Node) {
@@ -30,8 +37,12 @@ func writeCanonicalNodes(out *strings.Builder, nodes []viewmodel.Node) {
 func writeCanonicalNode(out *strings.Builder, node viewmodel.Node) {
 	switch typed := node.(type) {
 	case viewmodel.Text:
+		value := stripLineComments(typed.Value)
+		if strings.TrimSpace(value) == "" {
+			return
+		}
 		out.WriteString("text(")
-		out.WriteString(strconv.Quote(strings.Join(strings.Fields(typed.Value), " ")))
+		out.WriteString(strconv.Quote(strings.Join(strings.Fields(value), " ")))
 		out.WriteByte(')')
 	case viewmodel.Element:
 		out.WriteString("element(")

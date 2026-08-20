@@ -6,7 +6,6 @@ import (
 	"go/ast"
 	"go/token"
 	"net/url"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -164,6 +163,15 @@ func validateDynamicSitemap(options gowdk.SEODynamicSitemap) error {
 func seoOptionsFromConfig(config gowdk.Config) (gowdk.SEOOptions, bool, error) {
 	var found bool
 	var options gowdk.SEOOptions
+	if config.Features.SEO.Enabled {
+		return config.Features.SEO.Options, true, nil
+	}
+	for _, extension := range config.Extensions {
+		provider := gowdk.ResolveExtensionCapabilities(extension).SEOProvider
+		if provider != nil {
+			return provider.SEOOptions(), true, nil
+		}
+	}
 	for _, addon := range config.Addons {
 		if !addonHasFeature(addon, gowdk.FeatureSEO) {
 			continue
@@ -423,23 +431,6 @@ func seoExclusions(config gowdk.Config, ir gwdkir.Program, artifacts []Artifact,
 		return excluded[i].Route < excluded[j].Route
 	})
 	return excluded
-}
-
-func writeSEOArtifacts(outputDir string, plan seoPlan) (string, string, bool, bool, error) {
-	if !plan.Enabled {
-		return "", "", false, false, nil
-	}
-	sitemapPath := filepath.Join(outputDir, sitemapFile)
-	sitemapWrote, err := writeFileIfChangedStatus(sitemapPath, plan.Sitemap)
-	if err != nil {
-		return "", "", false, false, err
-	}
-	robotsPath := filepath.Join(outputDir, robotsFile)
-	robotsWrote, err := writeFileIfChangedStatus(robotsPath, plan.Robots)
-	if err != nil {
-		return "", "", false, false, err
-	}
-	return sitemapPath, robotsPath, sitemapWrote, robotsWrote, nil
 }
 
 func reportSEOExclusions(reporter *buildReporter, exclusions []seoExclusion) {

@@ -8,6 +8,21 @@ This example shows the first localization slice:
   catalog without hand-maintained source line metadata.
 - `home.page.gwdk` calls a Go build helper that reads
   `gowdk.BuildParams.LocaleCode()`.
+- `Config.I18N.Errors` reuses `runtime/i18n` typed catalogs for stable runtime
+  error codes. Handlers return a code, safe default, and variables; generated
+  action/API/guard/fragment rendering chooses the localized message.
+
+Application handlers do not hard-code translated text:
+
+```go
+return gowdkresponse.Response{}, gowdkresponse.NewExpectedCode(
+    gowdkresponse.ErrorValidation,
+    "patient_missing",
+    "Patient {id} was not found",
+    map[string]string{"id": patientID},
+    err,
+)
+```
 
 Build it from the repository root:
 

@@ -82,7 +82,7 @@ func (server *Server) projectCompletions(currentURI string) []completionItem {
 			for _, prop := range component.Props {
 				items = append(items, completionItem{Label: prop.Name, Kind: completionItemKindProperty, Detail: "component prop"})
 			}
-			for _, field := range inferredComponentFields(component.Blocks.ViewBody, component.Blocks.ClientBody) {
+			for _, field := range inferredComponentFields(component.Blocks.ViewNodes, component.Blocks.ClientProgram) {
 				items = append(items, completionItem{Label: field, Kind: completionItemKindProperty, Detail: "component state/value"})
 			}
 		}

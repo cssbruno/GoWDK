@@ -245,6 +245,12 @@ func assignBackendAliases(options *Options) {
 			paths[route.LoadBinding.ImportPath] = route.LoadBinding.PackageName
 		}
 	}
+	if ref := options.Config.Interop.Guards.Hook; ref.ImportPath != "" {
+		paths[ref.ImportPath] = path.Base(ref.ImportPath)
+	}
+	if ref := options.Config.Interop.AuthProvider.Hook; ref.ImportPath != "" {
+		paths[ref.ImportPath] = path.Base(ref.ImportPath)
+	}
 	if len(paths) == 0 {
 		return
 	}
@@ -277,6 +283,8 @@ func assignBackendAliases(options *Options) {
 	for index := range options.SSR {
 		options.SSR[index].LoadBackendAlias = aliases[options.SSR[index].LoadBinding.ImportPath]
 	}
+	options.guardHookAlias = aliases[options.Config.Interop.Guards.Hook.ImportPath]
+	options.authHookAlias = aliases[options.Config.Interop.AuthProvider.Hook.ImportPath]
 }
 
 func generatedImportAliasUseCounts() map[string]int {

@@ -30,7 +30,6 @@ import (
 	"github.com/cssbruno/gowdk/internal/securitytext"
 	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/viewmodel"
-	"github.com/cssbruno/gowdk/internal/viewparse"
 )
 
 // SchemaVersion is the gowdk-security.json schema version.
@@ -687,7 +686,7 @@ func bundleLeaks(ir gwdkir.Program) []BundleLeak {
 		if !page.Blocks.Build {
 			continue
 		}
-		if kind, ok := securitytext.FirstSecretKind(page.Blocks.BuildBody); ok {
+		if kind, ok := securitytext.FirstSecretKind(typedBuildSecurityText(page.Blocks)); ok {
 			leaks = append(leaks, BundleLeak{
 				Source: sourceRef(page.Source, page.Blocks.Spans.Build),
 				Kind:   "build-data:" + kind,
@@ -695,6 +694,23 @@ func bundleLeaks(ir gwdkir.Program) []BundleLeak {
 		}
 	}
 	return leaks
+}
+
+func typedBuildSecurityText(blocks gwdkir.Blocks) string {
+	var values []string
+	for _, record := range blocks.BuildRecords {
+		for _, name := range record.FieldOrder {
+			if expression, ok := record.Expressions[name]; ok {
+				values = append(values, name+": "+expression)
+				continue
+			}
+			values = append(values, name+": "+record.Fields[name])
+		}
+	}
+	if blocks.BuildCall != nil {
+		values = append(values, blocks.BuildCall.Alias, blocks.BuildCall.Function)
+	}
+	return strings.Join(values, "\n")
 }
 
 func readSourceAsset(asset gwdkir.Asset) (string, bool) {
@@ -715,15 +731,7 @@ func readSourceAsset(asset gwdkir.Asset) (string, bool) {
 func rawHTMLSinks(ir gwdkir.Program) []RawHTMLSink {
 	var sinks []RawHTMLSink
 	for _, template := range ir.Templates {
-		nodes := template.Nodes
-		if len(nodes) == 0 {
-			var err error
-			nodes, err = viewparse.Parse(template.Body)
-			if err != nil {
-				continue
-			}
-		}
-		sinks = append(sinks, rawHTMLSinksForNodes(nodes, template)...)
+		sinks = append(sinks, rawHTMLSinksForNodes(template.Nodes, template)...)
 	}
 	return sinks
 }

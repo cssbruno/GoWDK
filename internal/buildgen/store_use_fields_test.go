@@ -24,6 +24,7 @@ func TestComponentInitialStateSeedsTypedUseStoreFields(t *testing.T) {
 			ViewBody:   "<span>{Count}</span>",
 		},
 	}
+	component = irComponent(component)
 
 	state, stateTypes, stateJSON, err := componentInitialState(component)
 	if err != nil {
@@ -56,6 +57,7 @@ func TestComponentInitialStateUntypedUseAddsNoFields(t *testing.T) {
 			ViewBody:   "<span>x</span>",
 		},
 	}
+	component = irComponent(component)
 
 	state, _, stateJSON, err := componentInitialState(component)
 	if err != nil {

@@ -6,6 +6,10 @@ language contract.
 
 ## Required Path
 
+Before starting, pass the seven-question proposal gate in
+[V1 Language Budget](../language/v1-budget.md). A construct must be classified
+as stable, experimental, planned, or deprecated before parser work begins.
+
 1. Update the source contract first:
    - `docs/language/` for public syntax or semantics.
    - `docs/reference/diagnostic-codes.md` for new or changed diagnostic codes.

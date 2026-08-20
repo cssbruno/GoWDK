@@ -33,6 +33,22 @@ var homeMessages = gowdki18n.NewBundle("en", map[string]gowdki18n.Catalog[messag
 	}),
 })
 
+const (
+	ErrorInvalidForm        gowdki18n.ErrorCode = "invalid_form"
+	ErrorValidationRequired gowdki18n.ErrorCode = "validation_required"
+)
+
+var runtimeErrorMessages = gowdki18n.NewErrorBundle("en", map[string]gowdki18n.Catalog[gowdki18n.ErrorCode]{
+	"en": gowdki18n.NewCatalog("en", map[gowdki18n.ErrorCode]string{
+		ErrorInvalidForm:        "The submitted form is invalid.",
+		ErrorValidationRequired: "{field} is required.",
+	}),
+	"pt": gowdki18n.NewCatalog("pt", map[gowdki18n.ErrorCode]string{
+		ErrorInvalidForm:        "O formulário enviado é inválido.",
+		ErrorValidationRequired: "{field} é obrigatório.",
+	}),
+})
+
 func HomeCopyForBuild(params gowdk.BuildParams) HomeCopy {
 	locale := params.LocaleCode()
 	if locale == "" {

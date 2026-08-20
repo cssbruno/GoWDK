@@ -33,14 +33,17 @@ route "/dashboard"
 layout root, dashboard
 guard auth.required
 
-server {
+go server {
 }
 
 view {
 }
 `)
 
-	payload, diagnostics := SiteMapJSON(gowdk.Config{Addons: []gowdk.Addon{ssr.Addon()}}, []string{home, dashboard})
+	payload, diagnostics := SiteMapJSON(gowdk.Config{
+		Features: gowdk.FeatureConfig{Auth: gowdk.AuthFeatureConfig{Enabled: true}},
+		Addons:   []gowdk.Addon{ssr.Addon()},
+	}, []string{home, dashboard})
 	if diagnostics.HasErrors() {
 		t.Fatal(diagnostics)
 	}
@@ -165,7 +168,7 @@ func TestSiteMapJSONIncludesContractReferenceEndpoints(t *testing.T) {
 		`"handler": "contracts.command.patients.CreatePatient"`,
 		`"handler": "contracts.query.patients.GetPatientPage"`,
 		`"contract": {`,
-		`"status": "unknown"`,
+		`"status": "bound"`,
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected %q in sitemap JSON:\n%s", expected, output)

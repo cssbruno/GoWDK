@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/gotypes"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/viewanalysis"
@@ -84,22 +83,14 @@ func componentStateFingerprint(component gwdkir.Component) string {
 }
 
 func componentViewFingerprint(component gwdkir.Component) string {
-	canonical, err := viewanalysis.Canonical(component.Blocks.ViewBody)
-	if err == nil {
-		return canonical
-	}
-	return strings.Join(strings.Fields(component.Blocks.ViewBody), " ")
+	return viewanalysis.CanonicalNodes(component.Blocks.ViewNodes)
 }
 
 func componentClientFingerprint(component gwdkir.Component) string {
-	if !component.Blocks.Client && strings.TrimSpace(component.Blocks.ClientBody) == "" {
+	if !component.Blocks.Client || component.Blocks.ClientProgram == nil {
 		return ""
 	}
-	program, err := clientlang.Parse(component.Blocks.ClientBody)
-	if err == nil {
-		return program.Canonical()
-	}
-	return strings.Join(strings.Fields(component.Blocks.ClientBody), " ")
+	return component.Blocks.ClientProgram.Canonical()
 }
 
 func canonicalGoType(imports []gwdkir.Import, ref gwdkir.GoRef) string {

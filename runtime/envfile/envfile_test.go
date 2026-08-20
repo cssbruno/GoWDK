@@ -142,32 +142,35 @@ func TestLoadIntoEnvPreservesProcessValues(t *testing.T) {
 	}
 }
 
-func TestLoadIntoEnvUpdatesValuesItPreviouslyApplied(t *testing.T) {
+func TestLoadReloadsOverlayWithoutMutatingProcess(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, ".env")
 	name := "GOWDK_TEST_FILE_RELOAD"
 	_ = os.Unsetenv(name)
-	t.Cleanup(func() {
-		_ = os.Unsetenv(name)
-		appliedMu.Lock()
-		delete(appliedValues, name)
-		appliedMu.Unlock()
-	})
+	t.Cleanup(func() { _ = os.Unsetenv(name) })
 
 	if err := os.WriteFile(path, []byte(name+"=first\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadIntoEnv(path, false); err != nil {
+	first, _, err := Load(path, false, os.Environ())
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, []byte(name+"=second\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadIntoEnv(path, false); err != nil {
+	second, _, err := Load(path, false, os.Environ())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if got := os.Getenv(name); got != "second" {
-		t.Fatalf("expected file-applied value to update, got %q", got)
+	if got, _ := first.Lookup(name); got != "first" {
+		t.Fatalf("expected immutable first overlay, got %q", got)
+	}
+	if got, _ := second.Lookup(name); got != "second" {
+		t.Fatalf("expected reloaded overlay value, got %q", got)
+	}
+	if _, exists := os.LookupEnv(name); exists {
+		t.Fatalf("Load must not mutate the process environment")
 	}
 }
 
@@ -176,12 +179,7 @@ func TestLoadIntoEnvDoesNotOverrideManualValueAfterLoad(t *testing.T) {
 	path := filepath.Join(root, ".env")
 	name := "GOWDK_TEST_MANUAL_OVERRIDE"
 	_ = os.Unsetenv(name)
-	t.Cleanup(func() {
-		_ = os.Unsetenv(name)
-		appliedMu.Lock()
-		delete(appliedValues, name)
-		appliedMu.Unlock()
-	})
+	t.Cleanup(func() { _ = os.Unsetenv(name) })
 
 	if err := os.WriteFile(path, []byte(name+"=from-file\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -207,6 +205,25 @@ func TestLoadIntoEnvDoesNotOverrideManualValueAfterLoad(t *testing.T) {
 	}
 	if !reflect.DeepEqual(result.Skipped, []string{name}) {
 		t.Fatalf("expected %q skipped on reload, got %#v", name, result)
+	}
+}
+
+func TestEnvironmentKeepsConcurrentProjectsIsolated(t *testing.T) {
+	process := []string{"PROCESS=kept"}
+	first := NewEnvironment(process, []Entry{{Name: "PROJECT", Value: "one"}, {Name: "PROCESS", Value: "file"}})
+	second := NewEnvironment(process, []Entry{{Name: "PROJECT", Value: "two"}})
+
+	if got, _ := first.Lookup("PROJECT"); got != "one" {
+		t.Fatalf("unexpected first project value %q", got)
+	}
+	if got, _ := second.Lookup("PROJECT"); got != "two" {
+		t.Fatalf("unexpected second project value %q", got)
+	}
+	if got, _ := first.Lookup("PROCESS"); got != "kept" {
+		t.Fatalf("process value must win, got %q", got)
+	}
+	if got := strings.Join(first.ForSubprocess(process), "|"); got != "PROCESS=kept|PROJECT=one" {
+		t.Fatalf("unexpected deterministic child environment %q", got)
 	}
 }
 

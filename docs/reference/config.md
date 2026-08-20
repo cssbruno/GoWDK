@@ -13,9 +13,17 @@ type Config struct {
 	Build     BuildConfig
 	CSS       CSSConfig
 	I18N      I18NConfig
+	Features  FeatureConfig
+	Extensions []Extension
 	Addons    []Addon
 }
 ```
+
+The public surface is organized by ownership: `config.go` owns the root and
+source/render selection, `config_build.go` owns packaging and runtime policy,
+`config_css.go` owns CSS input/output, and `config_validation.go` owns the
+fail-fast cross-field contract. `Config.ValidateStructural` is the canonical
+entry point used by project loading.
 
 ## Source
 
@@ -222,6 +230,7 @@ type I18NConfig struct {
 	Locales           []LocaleConfig
 	DefaultLocale     string
 	OmitDefaultPrefix bool
+	Errors            i18n.ErrorBundle
 }
 
 type LocaleConfig struct {
@@ -256,6 +265,9 @@ Typed message catalogs live in `runtime/i18n`. The package provides:
 - `FormatPlural`, `FormatNumber`, `FormatDate`, and `FormatTime` for bounded,
   dependency-free formatting. These helpers are deterministic core helpers, not
   a CLDR or ICU MessageFormat replacement.
+- `ErrorBundle`, `ErrorCode`, and `UserMessage` bridge stable generated/runtime
+  error codes to those same catalogs. Missing translations fall back to the
+  safe default carried by the error.
 
 ## Generated API CORS
 
@@ -332,32 +344,38 @@ listeners, protocol bridges, and app-owned servers. MCP adapters belong in app
 code or an external package that returns lifecycle services; GOWDK does not
 ship a core MCP addon or runtime package.
 
-## Generated App Request Guards
+## Explicit Go Interop
 
-When generated SSR, action, API, or fragment routes declare `guard`, the
-generated app package can expose guard registration hooks. If `auth.Addon` is
-configured, generated startup registers the default `auth.required` guard and a
-session-backed provider for native `role:` / `permission:` guard IDs from the
-addon options.
-
-Custom guard IDs still require a generated app hook:
+`Config.Interop` connects request-time loads, custom guards, and native RBAC to
+real exported Go functions. The registration constructors accept function
+values, so Go rename/find-references tooling sees every edge and the compiler
+can report a missing binding before generated app compilation.
 
 ```go
-package gowdkapp
-
-import gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
-
-func GOWDKGuardRegistry() gowdkguard.Registry {
-	return gowdkguard.Registry{
-		"auth.required": func(ctx gowdkguard.Context) error {
-			return nil
-		},
-	}
-}
+Interop: gowdk.InteropConfig{
+	Loads: []gowdk.LoadRegistration{
+		gowdk.RegisterLoad("dashboard", dashboard.Load),
+	},
+	Guards:       gowdk.RegisterGuards(security.Guards),
+	AuthProvider: gowdk.RegisterAuthProvider(security.AuthProvider),
+},
 ```
 
-Native RBAC guard IDs such as `role:admin` and `permission:patients.read` use
-an application-owned principal source instead of a custom guard function:
+Provider signatures:
+
+```go
+func Load(ssr.LoadContext) (DashboardData, error)
+func Guards() guard.Registry
+func AuthProvider() auth.Provider
+```
+
+`RegisterLoad` supports the same map or typed-struct load return signatures as
+the SSR contract. Page renames do not silently change a `Load<PageID>` symbol;
+the page ID is explicit in the registration. `inspect go-bindings --json`
+reports page-load, guard, and auth references.
+
+Native RBAC guard IDs such as `role:admin` and `permission:patients.read` use an
+application-owned principal source:
 
 ```go
 import (
@@ -366,17 +384,18 @@ import (
 	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
 )
 
-func GOWDKAuthProvider() gowdkauth.Provider {
+func AuthProvider() gowdkauth.Provider {
 	return gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
 		return &gowdkauth.Principal{ID: "user-1", Roles: []string{"admin"}}, nil
 	})
 }
 ```
 
-This file belongs with generated app startup code, not inside feature packages
-that declare handlers. Missing required backing functions fail the generated app
-Go build when no addon supplies them. Guard errors still return HTTP 403 before
-SSR load functions, action decoding, API handlers, or user business logic run.
+These functions belong in normal feature or integration packages; they do not
+import the generated `gowdkapp` package. Missing registrations produce
+`missing_load_registration`, `missing_guard_registration`, or
+`missing_auth_registration`. Guard errors still return HTTP 403 before user
+logic runs.
 
 Native RBAC guards are a defense-in-depth redundancy layer for generated
 route/page access. They must never replace backend authorization inside
@@ -498,9 +517,13 @@ gowdk build --env-file .env.production
 
 If `--env-file` is omitted, GOWDK auto-loads `.env.<GOWDK_ENV>` from the
 project root when `GOWDK_ENV` is set and the file exists, otherwise `.env` when
-present. Process environment values always win over file values. The file is
-only a value source for the same validation contract; it does not bypass
-`Required` or `MinBytes`.
+present. Project loading parses the file into a workspace-scoped overlay; it
+does not call `os.Setenv` or retain package-global values. Process environment
+values always win, and config helpers/build subprocesses receive a derived
+environment explicitly. Reloading or concurrently loading another project
+therefore cannot leak file values between workspaces. The file is only a value
+source for the same validation contract; it does not bypass `Required` or
+`MinBytes`.
 
 Environment files accept `NAME=value` assignment lines up to 1 MiB (1,048,576
 bytes), excluding the line ending; multiline continuation is not supported.
@@ -545,6 +568,7 @@ type BuildConfig struct {
 	ObfuscateAssets     bool
 	Head                gowdk.HeadConfig
 	CSRF                gowdk.CSRFConfig
+	CORS                gowdk.CORSConfig
 	SecurityHeaders     gowdk.SecurityHeadersConfig
 	BodyLimits          gowdk.BodyLimitsConfig
 	AllowMissingBackend bool
@@ -563,7 +587,6 @@ type HeadConfig struct {
 }
 
 type CSRFConfig struct {
-	Enabled                bool
 	Disabled               bool
 	SecretEnv              string
 	VerificationSecretEnvs []string
@@ -671,9 +694,11 @@ signing secret from `SecretEnv` or `GOWDK_CSRF_SECRET`, inject a hidden token
 field into served HTML POST forms, and validate POSTs before generated decoding
 or user handlers run. Invalid or missing tokens return HTTP 403 with
 `invalid csrf token` and `Cache-Control: no-store`. Set `Disabled: true` only
-for an intentional non-production/test opt-out. `Enabled` is retained for older
-configs but is no longer required. `CookieName`, `FieldName`, and `HeaderName`
-override the generated token transport names.
+for an intentional non-production/test opt-out. The old `Enabled` compatibility
+field was removed because the zero value already means enabled; using it now
+fails config loading as an unknown field. `Disabled` cannot be combined with
+secret, token-name, or insecure-cookie fields. `CookieName`, `FieldName`, and
+`HeaderName` override the generated token transport names.
 `Insecure` is for local HTTP development only: it disables the Secure cookie
 flag, uses the default cookie name `gowdk-csrf` instead of
 `__Host-gowdk-csrf`, and rejects explicit `__Host-`/`__Secure-` cookie names
@@ -704,8 +729,8 @@ checks and generated errors. Use it for app-owned headers such as
 `X-Frame-Options`. Keep TLS-boundary headers such as `Strict-Transport-Security`
 at the HTTPS edge unless the generated app is directly responsible for TLS.
 
-`BodyLimits` controls generated request body caps in bytes. Omitted or
-non-positive values use the default 1 MiB cap. `ActionBytes` applies to
+`BodyLimits` controls generated request body caps in bytes. Zero uses the
+default 1 MiB cap; negative limits fail configuration validation. `ActionBytes` applies to
 generated action POST handlers and web command form adapters before form
 decoding, including multipart action forms. Per-file upload policy is declared
 on file controls with `g:max-file-size`, `g:max-files`, and MIME `accept`.
@@ -762,9 +787,43 @@ uses `global.css` as the default CSS input when present.
 `css`. Generated page CSS defaults to `assets/gowdk/<page-id>.css` and hrefs
 under `/assets/gowdk/`.
 
-## Addons
+## Built-in features
 
-`Addons` registers optional features such as spa, actions, partial, SSR, API,
+Use `Features` for compiler-owned behavior in new configurations:
+
+```go
+var Config = gowdk.Config{
+	Features: gowdk.FeatureConfig{
+		SPA: true,
+		Actions: true,
+		SSR: true,
+		Auth: gowdk.AuthFeatureConfig{
+			Enabled: true,
+			Session: gowdk.AuthSessionOptions{SecretEnv: "GOWDK_AUTH_SESSION_SECRET"},
+		},
+		SEO: gowdk.SEOFeatureConfig{
+			Enabled: true,
+			Options: gowdk.SEOOptions{BaseURL: "https://example.com"},
+		},
+	},
+}
+```
+
+Typed feature configuration is separate from executable compiler extensions.
+An extension in `Config.Extensions` must declare an
+`ExtensionDescriptor` with protocol version `gowdk.ExtensionProtocolVersion`,
+the phases it participates in, and required or optional versioned
+capabilities. The executable config host performs a version handshake, reuses
+the process within a command, applies request deadlines and payload limits, and
+rejects generated paths that are absolute, duplicate, or escape their output
+root.
+
+Extensions are build-time compiler participants, not runtime plugins. Runtime
+services continue to use generated app hooks and runtime packages.
+
+## Addons compatibility
+
+`Addons` is the deprecated 0.x compatibility lane for optional features such as spa, actions, partial, SSR, API,
 embed, CSS, contracts, realtime, auth, DB helpers, rate limiting, and SEO
 output. Current validation uses feature registration for render-mode,
 realtime, and other compiler checks; SPA builds invoke addons that implement
@@ -788,7 +847,7 @@ constructor into `gowdk.config.go`. `gowdk add seo` requires
 command rewrites literal `Config.Addons` lists only; if `Addons` is computed by
 Go code, edit the config manually.
 
-The config helper executes addon constructors as normal Go. Tooling that edits
+Existing addon configs remain supported. The config helper executes addon constructors as normal Go. Tooling that edits
 `Config.Addons` recognizes built-in addon constructors when they are imported
 from their canonical package paths. Most are no-argument constructors;
 `addons/auth` accepts the generated-app-safe session options subset

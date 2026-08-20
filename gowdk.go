@@ -1,6 +1,7 @@
 package gowdk
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -8,50 +9,9 @@ import (
 	"unicode"
 
 	"github.com/cssbruno/gowdk/runtime/corsorigin"
+	gowdki18n "github.com/cssbruno/gowdk/runtime/i18n"
 	runtimeseo "github.com/cssbruno/gowdk/runtime/seo"
 )
-
-// Config describes how a GOWDK application should be discovered, compiled,
-// and packaged.
-type Config struct {
-	AppName   string
-	Source    SourceConfig
-	Modules   []ModuleConfig
-	Render    RenderConfig
-	I18N      I18NConfig
-	Env       EnvConfig
-	Lifecycle LifecycleConfig
-	Build     BuildConfig
-	CSS       CSSConfig
-	Addons    []Addon
-}
-
-// SourceConfig selects portable .gwdk files for discovery.
-type SourceConfig struct {
-	Include []string
-	Exclude []string
-}
-
-// ModuleConfig names a source group inside a GOWDK app. Build discovery uses
-// selected module sources to decide what gets compiled into output, generated
-// apps, and generated binaries. Type is user-defined metadata.
-type ModuleConfig struct {
-	Name   string
-	Type   string
-	Source SourceConfig
-}
-
-// RenderConfig controls default render behavior. SPA is the default when
-// omitted.
-type RenderConfig struct {
-	Default RenderMode
-}
-
-// BuildParams carries compile-time route values into Go build helpers.
-type BuildParams struct {
-	Route  map[string]string `json:"route,omitempty"`
-	Locale string            `json:"locale,omitempty"`
-}
 
 // Param returns a declared dynamic route param by name.
 func (params BuildParams) Param(name string) (string, bool) {
@@ -95,6 +55,9 @@ type I18NConfig struct {
 	Locales           []LocaleConfig
 	DefaultLocale     string
 	OmitDefaultPrefix bool
+	// Errors localizes stable runtime error codes. Missing entries use each
+	// error's safe default message.
+	Errors gowdki18n.ErrorBundle
 }
 
 // LocaleConfig declares one locale available to build-time and request-time
@@ -453,55 +416,6 @@ func (config LifecycleConfig) Validate() error {
 	return nil
 }
 
-// BuildConfig controls output artifacts and frontend asset packaging.
-type BuildConfig struct {
-	Output              string
-	Mode                BuildMode
-	Assets              AssetMode
-	ObfuscateAssets     bool
-	Head                HeadConfig
-	CSRF                CSRFConfig
-	CORS                CORSConfig
-	SecurityHeaders     SecurityHeadersConfig
-	BodyLimits          BodyLimitsConfig
-	AllowMissingBackend bool
-	Stylesheets         []Stylesheet
-	Scripts             []Script
-	Worker              ContractWorkerConfig
-	Cron                ContractCronConfig
-	Targets             []BuildTargetConfig
-}
-
-// HeadConfig controls app-level document head tags emitted around page
-// metadata.
-type HeadConfig struct {
-	SiteName    string
-	Favicon     string
-	Image       string
-	TwitterCard string
-}
-
-// SecurityHeadersConfig declares generated runtime response headers. Audit
-// policy can require these headers statically, and generated audit tests can
-// verify that the handler emits them.
-type SecurityHeadersConfig struct {
-	Enabled bool
-	Headers map[string]string
-}
-
-// CORSConfig controls generated CORS headers and preflight handling for API
-// and web contract endpoints. It is disabled by default, so generated
-// endpoints remain same-origin unless a policy is declared.
-type CORSConfig struct {
-	Enabled          bool
-	AllowedOrigins   []string
-	AllowedMethods   []string
-	AllowedHeaders   []string
-	ExposedHeaders   []string
-	AllowCredentials bool
-	MaxAgeSeconds    int
-}
-
 // EnabledForGeneratedAPIs reports whether generated API/contract routes should
 // install CORS handling.
 func (config CORSConfig) EnabledForGeneratedAPIs() bool {
@@ -511,6 +425,9 @@ func (config CORSConfig) EnabledForGeneratedAPIs() bool {
 // Validate checks structural safety rules for the generated CORS policy.
 func (config CORSConfig) Validate() error {
 	if !config.Enabled {
+		if len(config.AllowedOrigins) > 0 || len(config.AllowedMethods) > 0 || len(config.AllowedHeaders) > 0 || len(config.ExposedHeaders) > 0 || config.AllowCredentials || config.MaxAgeSeconds != 0 {
+			return fmt.Errorf("Build.CORS policy fields require Enabled = true")
+		}
 		return nil
 	}
 	if config.MaxAgeSeconds < 0 {
@@ -576,23 +493,9 @@ func isHTTPToken(value string) bool {
 
 const DefaultCSRFSecretEnv = "GOWDK_CSRF_SECRET"
 
-// CSRFConfig controls generated CSRF token wiring for browser-reachable
-// state-changing endpoints.
-type CSRFConfig struct {
-	Enabled                bool
-	Disabled               bool
-	SecretEnv              string
-	VerificationSecretEnvs []string
-	CookieName             string
-	FieldName              string
-	HeaderName             string
-	Insecure               bool
-}
-
 // EnabledForGeneratedEndpoints reports whether generated state-changing
 // endpoints should emit CSRF token injection and validation. CSRF is on by
-// default; Disabled is the explicit opt-out. Enabled is retained for older
-// configs that already set it.
+// default; Disabled is the single explicit opt-out.
 func (config CSRFConfig) EnabledForGeneratedEndpoints() bool {
 	return !config.Disabled
 }
@@ -625,6 +528,9 @@ func (config CSRFConfig) SecretEnvNames() []string {
 // Validate checks the structural CSRF configuration without reading secret
 // values from the runtime environment.
 func (config CSRFConfig) Validate() error {
+	if config.Disabled && (strings.TrimSpace(config.SecretEnv) != "" || len(config.VerificationSecretEnvs) > 0 || strings.TrimSpace(config.CookieName) != "" || strings.TrimSpace(config.FieldName) != "" || strings.TrimSpace(config.HeaderName) != "" || config.Insecure) {
+		return fmt.Errorf("Build.CSRF.Disabled cannot be combined with CSRF secret, token-name, or Insecure fields")
+	}
 	seen := map[string]bool{config.SecretEnvName(): true}
 	for index, name := range config.VerificationSecretEnvNames() {
 		if name == "" {
@@ -642,13 +548,6 @@ func (config CSRFConfig) Validate() error {
 // action and API endpoints.
 const DefaultRequestBodyLimitBytes int64 = 1 << 20
 
-// BodyLimitsConfig controls generated request body caps. Omitted or non-positive
-// values use the default 1 MiB cap.
-type BodyLimitsConfig struct {
-	ActionBytes int64
-	APIBytes    int64
-}
-
 // ActionLimitBytes returns the configured action body cap or the default cap.
 func (config BodyLimitsConfig) ActionLimitBytes() int64 {
 	if config.ActionBytes > 0 {
@@ -664,84 +563,6 @@ func (config BodyLimitsConfig) APILimitBytes() int64 {
 	}
 	return DefaultRequestBodyLimitBytes
 }
-
-// BuildTargetConfig declares one configured build target. Modules selects the
-// configured source modules compiled into Output, App, Binary, WASM, BackendApp,
-// BackendBinary, and optional deployment recipes.
-type BuildTargetConfig struct {
-	Name          string
-	Modules       []string
-	Output        string
-	App           string
-	Binary        string
-	WASM          string
-	BackendApp    string
-	BackendBinary string
-	WorkerApp     string
-	WorkerBinary  string
-	Worker        ContractWorkerConfig
-	CronApp       string
-	CronBinary    string
-	Cron          ContractCronConfig
-	DeployRecipes []string
-}
-
-// ContractWorkerConfig controls generated standalone contract worker targets.
-// EventSource is required and must name a function returning
-// (contracts.EventSource, error). SeenStore and Backoff are optional provider
-// hooks returning (contracts.SeenStore, error) and
-// (contracts.EventWorkerBackoff, error).
-type ContractWorkerConfig struct {
-	EventSource ServiceRef
-	SeenStore   ServiceRef
-	Backoff     ServiceRef
-}
-
-// ContractCronConfig controls generated standalone scheduled job targets.
-type ContractCronConfig struct {
-	Jobs []ContractCronJobConfig
-}
-
-// ContractCronJobConfig declares one generated cron role job. Type accepts the
-// scanned job type name, package-qualified name, or full import-path-qualified
-// name. Schedule currently supports @once and @every <duration>.
-type ContractCronJobConfig struct {
-	Type            string
-	Schedule        string
-	OverlapPolicy   string
-	MissedRunPolicy string
-}
-
-// CSSConfig controls discovered CSS inputs and page CSS output.
-type CSSConfig struct {
-	Include []string
-	Exclude []string
-	Default []string
-	Output  CSSOutputConfig
-}
-
-// CSSOutputConfig controls generated page stylesheet locations.
-type CSSOutputConfig struct {
-	Dir        string
-	HrefPrefix string
-}
-
-// AssetMode controls how frontend artifacts are shipped.
-type AssetMode string
-
-const (
-	AssetExternal AssetMode = "external"
-	Embed         AssetMode = "embed"
-)
-
-// BuildMode controls whether generated frontend artifacts include development
-// metadata such as source maps. Development is the default when omitted.
-type BuildMode string
-
-const (
-	Development BuildMode = "development"
-	Production  BuildMode = "production"
-)
 
 // DebugAssets reports whether generated frontend artifacts should include
 // debugging metadata.
@@ -790,7 +611,8 @@ func (mode RenderMode) IsBuildTime() bool {
 	return mode == SPA
 }
 
-// Feature names a compiler or generator capability selected from Config.Addons.
+// Feature names a compiler or generator capability selected from Config.Features
+// or the deprecated Config.Addons compatibility lane.
 // A feature flag enables GOWDK-owned behavior; it does not by itself mean the
 // addon object runs request-time application code.
 type Feature string
@@ -811,6 +633,99 @@ const (
 	FeatureSEO           Feature = "seo"
 	FeatureObservability Feature = "observability"
 )
+
+// FeatureConfig selects built-in compiler behavior through typed config.
+type FeatureConfig struct {
+	SPA           bool
+	Actions       bool
+	Partial       bool
+	SSR           bool
+	API           bool
+	Embed         bool
+	CSS           bool
+	RateLimit     bool
+	Contracts     bool
+	Realtime      bool
+	Auth          AuthFeatureConfig
+	DB            bool
+	SEO           SEOFeatureConfig
+	Observability bool
+}
+
+// AuthFeatureConfig owns built-in auth feature selection and its typed session
+// configuration.
+type AuthFeatureConfig struct {
+	Enabled bool
+	Session AuthSessionOptions
+}
+
+// SEOFeatureConfig owns built-in SEO feature selection and options.
+type SEOFeatureConfig struct {
+	Enabled bool
+	Options SEOOptions
+}
+
+func (config FeatureConfig) enabled() FeatureSet {
+	features := FeatureSet{}
+	for feature, enabled := range map[Feature]bool{
+		FeatureSPA: config.SPA, FeatureActions: config.Actions,
+		FeaturePartial: config.Partial, FeatureSSR: config.SSR,
+		FeatureAPI: config.API, FeatureEmbed: config.Embed,
+		FeatureCSS: config.CSS, FeatureRateLimit: config.RateLimit,
+		FeatureContracts: config.Contracts, FeatureRealtime: config.Realtime,
+		FeatureAuth: config.Auth.Enabled, FeatureDB: config.DB,
+		FeatureSEO: config.SEO.Enabled, FeatureObservability: config.Observability,
+	} {
+		if enabled {
+			features[feature] = true
+		}
+	}
+	return features
+}
+
+// ExtensionProtocolVersion is the executable build-time extension contract
+// supported by this GOWDK release.
+const ExtensionProtocolVersion = 1
+
+const (
+	ExtensionCapabilityCSSProcessor    = "gowdk.css-processor"
+	ExtensionCapabilityGoBlockConsumer = "gowdk.go-block-consumer"
+	ExtensionCapabilitySEOProvider     = "gowdk.seo-provider"
+	ExtensionCapabilityAuthSession     = "gowdk.auth-session-provider"
+)
+
+// ExtensionPhase names an explicit compiler phase an extension participates in.
+type ExtensionPhase string
+
+const (
+	ExtensionPhaseValidate      ExtensionPhase = "validate"
+	ExtensionPhasePlan          ExtensionPhase = "plan"
+	ExtensionPhaseGeneratedGo   ExtensionPhase = "generated-go"
+	ExtensionPhaseCSS           ExtensionPhase = "css"
+	ExtensionPhaseBuildMetadata ExtensionPhase = "build-metadata"
+)
+
+// ExtensionCapabilityDescriptor declares one versioned host capability.
+type ExtensionCapabilityDescriptor struct {
+	Name     string
+	Version  int
+	Required bool
+}
+
+// ExtensionDescriptor identifies a behaviorful build-time extension.
+type ExtensionDescriptor struct {
+	Name            string
+	ProtocolVersion int
+	Phases          []ExtensionPhase
+	Capabilities    []ExtensionCapabilityDescriptor
+}
+
+// Extension is distinct from built-in feature selection. Optional compiler
+// capabilities are exposed through ExtensionCapabilityProvider.
+type Extension interface {
+	Name() string
+	Descriptor() ExtensionDescriptor
+}
 
 // Addon is a config declaration for a named feature set. Some addons also
 // implement build-time extension interfaces such as CSSProcessor, SEOProvider,
@@ -879,6 +794,13 @@ type GoBlockConsumer interface {
 	GeneratedGo(target GoBlockTarget, context GoBlockContext) ([]GoBlockFile, error)
 }
 
+// GoBlockConsumerContext is the cancellable form used by executable hosts.
+type GoBlockConsumerContext interface {
+	GoBlockConsumer
+	ValidateGoBlockContext(context.Context, GoBlockTarget, GoBlockContext) []GoBlockDiagnostic
+	GeneratedGoContext(context.Context, GoBlockTarget, GoBlockContext) ([]GoBlockFile, error)
+}
+
 // GoBlockTarget describes one parsed go block passed to an addon.
 type GoBlockTarget struct {
 	Target       string
@@ -928,9 +850,20 @@ type addon struct {
 	features []Feature
 }
 
-// NewAddon creates a simple config marker for feature checks.
+type builtinAddon struct{ addon }
+
+// NewAddon creates the legacy built-in feature marker. New configuration should
+// prefer Config.Features; the constructor remains trusted for 0.x compatibility.
 func NewAddon(name string, features ...Feature) Addon {
-	return addon{name: name, features: append([]Feature(nil), features...)}
+	return NewBuiltinAddon(name, features...)
+}
+
+// NewBuiltinAddon creates the deprecated constructor adapter used by bundled
+// feature packages. The concrete marker is sealed so ordinary custom Addon
+// implementations cannot claim compiler-owned features without implementing a
+// matching executable capability.
+func NewBuiltinAddon(name string, features ...Feature) Addon {
+	return builtinAddon{addon{name: name, features: append([]Feature(nil), features...)}}
 }
 
 func (a addon) Name() string {
@@ -963,6 +896,9 @@ func ValidateAddons(addons []Addon) error {
 		if len(addonFeatures) == 0 {
 			return fmt.Errorf("addons[%d] %q must declare at least one feature", index, name)
 		}
+		if err := validateAddonFeatureContracts(index, name, addon, addonFeatures); err != nil {
+			return err
+		}
 		for featureIndex, feature := range addonFeatures {
 			if strings.TrimSpace(string(feature)) == "" {
 				return fmt.Errorf("addons[%d] %q declares empty feature at index %d", index, name, featureIndex)
@@ -973,12 +909,43 @@ func ValidateAddons(addons []Addon) error {
 			if _, ok := features[feature]; !ok {
 				features[feature] = index
 			}
-		}
-		if err := validateAddonFeatureContracts(index, name, addon, addonFeatures); err != nil {
-			return err
+			if isCoreFeature(feature) && !isBuiltinAddon(addon) && !legacyExecutableFeature(addon, feature) {
+				return fmt.Errorf("addons[%d] %q cannot claim built-in feature %q; use Config.Features or migrate executable behavior to Config.Extensions", index, name, feature)
+			}
 		}
 	}
 	return nil
+}
+
+func isBuiltinAddon(value Addon) bool {
+	_, ok := value.(builtinAddon)
+	return ok
+}
+
+func isCoreFeature(feature Feature) bool {
+	switch feature {
+	case FeatureSPA, FeatureActions, FeaturePartial, FeatureSSR, FeatureAPI,
+		FeatureEmbed, FeatureCSS, FeatureRateLimit, FeatureContracts,
+		FeatureRealtime, FeatureAuth, FeatureDB, FeatureSEO,
+		FeatureObservability:
+		return true
+	default:
+		return false
+	}
+}
+
+func legacyExecutableFeature(addon Addon, feature Feature) bool {
+	capabilities := ResolveAddonCapabilities(addon)
+	switch feature {
+	case FeatureCSS:
+		return capabilities.CSSProcessor != nil
+	case FeatureSEO:
+		return capabilities.SEOProvider != nil
+	case FeatureAuth:
+		return capabilities.AuthSessionProvider != nil
+	default:
+		return false
+	}
 }
 
 func validateAddonFeatureContracts(index int, name string, addon Addon, features []Feature) error {
@@ -1018,9 +985,10 @@ func duplicateFeatureAllowed(feature Feature) bool {
 // FeatureSet is a lookup table of enabled compiler/generator capabilities.
 type FeatureSet map[Feature]bool
 
-// EnabledFeatures returns the feature flags declared by Config.Addons.
+// EnabledFeatures returns built-in feature selection plus deprecated addon
+// compatibility markers. Executable extensions cannot claim built-in features.
 func EnabledFeatures(config Config) FeatureSet {
-	features := FeatureSet{}
+	features := config.Features.enabled()
 	for _, addon := range config.Addons {
 		if addonIsNil(addon) {
 			continue
@@ -1037,7 +1005,7 @@ func (features FeatureSet) Has(feature Feature) bool {
 	return features[feature]
 }
 
-// HasFeature reports whether Config.Addons declares a feature flag.
+// HasFeature reports whether typed or compatibility config selects a feature.
 func (config Config) HasFeature(feature Feature) bool {
 	return EnabledFeatures(config).Has(feature)
 }
@@ -1093,6 +1061,12 @@ type CSSProcessor interface {
 	ProcessCSS(CSSContext) (CSSResult, error)
 }
 
+// CSSProcessorContext is the cancellable form used by executable hosts.
+type CSSProcessorContext interface {
+	CSSProcessor
+	ProcessCSSContext(context.Context, CSSContext) (CSSResult, error)
+}
+
 // AddonCapabilities describes the optional compiler and generated-output
 // capabilities exposed by an addon. Executable config bridges use this
 // descriptor because Go interface method sets cannot be reconstructed
@@ -1109,6 +1083,91 @@ type AddonCapabilities struct {
 // directly; bridges and adapters should implement this descriptor instead.
 type AddonCapabilityProvider interface {
 	AddonCapabilities() AddonCapabilities
+}
+
+// ExtensionCapabilityProvider exposes the executable capabilities of an
+// Extension independently from built-in feature selection.
+type ExtensionCapabilityProvider interface {
+	ExtensionCapabilities() AddonCapabilities
+}
+
+// ResolveExtensionCapabilities returns the explicit capabilities of an
+// executable extension.
+func ResolveExtensionCapabilities(extension Extension) AddonCapabilities {
+	if extension == nil {
+		return AddonCapabilities{}
+	}
+	provider, ok := extension.(ExtensionCapabilityProvider)
+	if !ok {
+		return AddonCapabilities{}
+	}
+	return provider.ExtensionCapabilities()
+}
+
+// ValidateExtensions checks protocol, identity, phases, and capability
+// descriptors without executing extension operations.
+func ValidateExtensions(extensions []Extension) error {
+	names := map[string]int{}
+	for index, extension := range extensions {
+		if extension == nil {
+			return fmt.Errorf("extensions[%d] is nil", index)
+		}
+		descriptor := extension.Descriptor()
+		name := strings.TrimSpace(extension.Name())
+		if name == "" || strings.TrimSpace(descriptor.Name) != name {
+			return fmt.Errorf("extensions[%d] has inconsistent name %q", index, name)
+		}
+		if previous, ok := names[name]; ok {
+			return fmt.Errorf("extensions[%d] %q duplicates extensions[%d]", index, name, previous)
+		}
+		names[name] = index
+		if descriptor.ProtocolVersion != ExtensionProtocolVersion {
+			return fmt.Errorf("extensions[%d] %q requires protocol %d; GOWDK supports %d", index, name, descriptor.ProtocolVersion, ExtensionProtocolVersion)
+		}
+		phases := map[ExtensionPhase]bool{}
+		for phaseIndex, phase := range descriptor.Phases {
+			switch phase {
+			case ExtensionPhaseValidate, ExtensionPhasePlan, ExtensionPhaseGeneratedGo, ExtensionPhaseCSS, ExtensionPhaseBuildMetadata:
+			default:
+				return fmt.Errorf("extensions[%d] %q has unknown phase %q at index %d", index, name, phase, phaseIndex)
+			}
+			if phases[phase] {
+				return fmt.Errorf("extensions[%d] %q repeats phase %q", index, name, phase)
+			}
+			phases[phase] = true
+		}
+		resolved := ResolveExtensionCapabilities(extension)
+		capabilityNames := map[string]bool{}
+		for capabilityIndex, capability := range descriptor.Capabilities {
+			if strings.TrimSpace(capability.Name) == "" || capability.Version <= 0 {
+				return fmt.Errorf("extensions[%d] %q has invalid capability at index %d", index, name, capabilityIndex)
+			}
+			if capabilityNames[capability.Name] {
+				return fmt.Errorf("extensions[%d] %q repeats capability %q", index, name, capability.Name)
+			}
+			capabilityNames[capability.Name] = true
+			if capability.Version != 1 && capability.Required {
+				return fmt.Errorf("extensions[%d] %q requires unsupported capability %q version %d", index, name, capability.Name, capability.Version)
+			}
+			available := true
+			switch capability.Name {
+			case ExtensionCapabilityCSSProcessor:
+				available = resolved.CSSProcessor != nil
+			case ExtensionCapabilityGoBlockConsumer:
+				available = resolved.GoBlockConsumer != nil
+			case ExtensionCapabilitySEOProvider:
+				available = resolved.SEOProvider != nil
+			case ExtensionCapabilityAuthSession:
+				available = resolved.AuthSessionProvider != nil
+			default:
+				available = false
+			}
+			if capability.Required && !available {
+				return fmt.Errorf("extensions[%d] %q requires unavailable capability %q", index, name, capability.Name)
+			}
+		}
+	}
+	return nil
 }
 
 // ResolveAddonCapabilities returns explicit addon capabilities when available,

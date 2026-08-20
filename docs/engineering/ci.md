@@ -11,8 +11,9 @@ Required pull-request lanes:
 
 - `PR title`: conventional commit title check for pull requests.
 - `Verify`: the consolidated command gate. It runs supply-chain pins, Go module
-  tests, CLI build, VS Code extension checks, documentation checks, docs-site
-  compile, example reports, and the login example build smoke.
+  tests, CLI build, broad Go static analysis, VS Code extension checks,
+  documentation checks, docs-site compile, example reports, and the login
+  example build smoke.
 
 The consolidated `Verify` job intentionally favors quick signal and fewer PR
 status checks over broad coverage. Keep expensive or niche gates out of routine
@@ -37,6 +38,7 @@ Run the same local checks before handoff when relevant:
   scripts/check-root-deps.sh
   scripts/check-supply-chain-pins.sh
   scripts/test-go-modules.sh
+  scripts/check-static-analysis.sh
   scripts/vulncheck-go-modules.sh
   go build ./cmd/gowdk
   scripts/check-dead-code.sh
@@ -129,7 +131,25 @@ does not multiply runner cost:
 If one of these reveals nondeterministic output, either fix the generator in
 the same change or open a narrower issue naming the unstable file/report.
 
-## Dead Code
+## Broad Static Analysis
+
+`scripts/check-static-analysis.sh` discovers the root module and every nested
+module through `scripts/go-modules.sh`. For each module it runs:
+
+```sh
+go vet ./...
+go run honnef.co/go/tools/cmd/staticcheck@v0.7.0 ./...
+```
+
+The command is a required hosted-CI gate. Its per-module headings make a
+failure actionable without recreating the matrix locally. Staticcheck uses its
+full default correctness, simplification, performance, and style set; it is no
+longer limited to `U1000` or a starter package list. Platform-specific files
+remain covered by their native build constraints. Add a narrow, explained
+source suppression only when a diagnostic is intentionally inapplicable; this
+gate has no package or diagnostic exclusions.
+
+## Focused Dead Code
 
 `scripts/check-dead-code.sh` runs two pinned analyzers over reviewed starter
 package sets:

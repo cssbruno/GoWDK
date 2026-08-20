@@ -414,8 +414,9 @@ fragment handler metadata today. Typed SSR load result structs are supported for
 declared `server {}` data. Typed action-result data accessors are deferred until
 action result contracts are stable.
 
-`server { => { field, user.name } }` execution calls same-package Go
-`Load<PageID>` functions at request time through `ssr.LoadContext`. Returned
+`server { => { field, user.name } }` execution calls the Go function explicitly
+mapped with `gowdk.RegisterLoad(pageID, package.Function)` at request time
+through `ssr.LoadContext`. Returned
 declared identifiers and dotted paths are resolved from nested maps with string
 keys, typed result structs, pointers, interfaces, exported Go field names, and
 `json` tag names, then HTML-escaped into generated placeholders.

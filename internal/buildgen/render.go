@@ -36,8 +36,8 @@ func renderPage(config gowdk.Config, page gwdkir.Page, route string, components 
 	if !page.Blocks.View {
 		return "", ssrRegions{}, fmt.Errorf("%s: missing view {}", page.ID)
 	}
-	if strings.TrimSpace(page.Blocks.ViewBody) == "" {
-		return "", ssrRegions{}, fmt.Errorf("%s: view {} is empty", page.ID)
+	if len(page.Blocks.ViewNodes) == 0 {
+		return "", ssrRegions{}, fmt.Errorf("%s: view {} has no parsed nodes", page.ID)
 	}
 	viewNodes, err := composePageViewNodes(page, layouts)
 	if err != nil {
@@ -171,9 +171,6 @@ func requestTimeTaintedFields(page gwdkir.Page, policy renderModePolicy) map[str
 
 func composePageViewNodes(page gwdkir.Page, layouts map[string]gwdkir.Layout) ([]view.Node, error) {
 	nodes := cloneViewNodes(page.Blocks.ViewNodes)
-	if len(nodes) == 0 && strings.TrimSpace(page.Blocks.ViewBody) != "" {
-		return nil, fmt.Errorf("view {} has source body but no parsed nodes")
-	}
 	if len(layouts) == 0 {
 		return nodes, nil
 	}
@@ -253,8 +250,8 @@ func resolvePageLayout(page gwdkir.Page, layouts map[string]gwdkir.Layout, layou
 }
 
 func composeLayoutNodes(layout gwdkir.Layout, child []view.Node) ([]view.Node, error) {
-	if len(layout.Blocks.ViewNodes) == 0 && strings.TrimSpace(layout.Blocks.ViewBody) != "" {
-		return nil, fmt.Errorf("layout %s has source body but no parsed nodes", layout.ID)
+	if len(layout.Blocks.ViewNodes) == 0 {
+		return nil, fmt.Errorf("layout %s has no parsed view nodes", layout.ID)
 	}
 	nodes, slots := replaceLayoutSlotNodes(layout.Blocks.ViewNodes, child)
 	if slots != 1 {
@@ -568,6 +565,7 @@ func isInternalNavigationHref(value string) bool {
 type pageStoreSeed struct {
 	Name    string
 	JSON    string
+	Shape   string
 	Persist *storePersistSeed
 }
 
@@ -594,12 +592,12 @@ func pageStoreSeeds(page gwdkir.Page) ([]pageStoreSeed, error) {
 		if err != nil {
 			return nil, fmt.Errorf("store %s init: %w", store.Name, err)
 		}
-		seed := pageStoreSeed{Name: store.Name, JSON: string(payload)}
+		resolved, err := gotypes.ResolveStruct(page.Imports, store.Type)
+		if err != nil {
+			return nil, fmt.Errorf("store %s shape: %w", store.Name, err)
+		}
+		seed := pageStoreSeed{Name: store.Name, JSON: string(payload), Shape: storeSchemaHash(resolved, string(payload))}
 		if store.Persist == "local" || store.Persist == "session" {
-			resolved, err := gotypes.ResolveStruct(page.Imports, store.Type)
-			if err != nil {
-				return nil, fmt.Errorf("store %s persist: %w", store.Name, err)
-			}
 			seed.Persist = &storePersistSeed{
 				Scope:   store.Persist,
 				Key:     "gowdk:store:" + store.Name,
@@ -722,6 +720,7 @@ func document(config gowdk.Config, page gwdkir.Page, route string, body string, 
 			continue
 		}
 		attrs := gowhtml.Attr("data-gowdk-store", seed.Name)
+		attrs += gowhtml.Attr("data-gowdk-store-shape", seed.Shape)
 		if seed.Persist != nil {
 			attrs += gowhtml.Attr("data-gowdk-persist", seed.Persist.Scope)
 			attrs += gowhtml.Attr("data-gowdk-persist-key", seed.Persist.Key)

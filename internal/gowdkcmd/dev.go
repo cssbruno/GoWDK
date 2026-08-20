@@ -235,21 +235,24 @@ func (state devBuildState) configChanged(change inputChange) bool {
 }
 
 type devServeState struct {
-	addr      string
-	reload    *liveReloadBroker
-	server    *http.Server
-	staticDir string
-	process   *devRuntimeProcess
+	addr        string
+	reload      *liveReloadBroker
+	server      *http.Server
+	staticDir   string
+	process     *devRuntimeProcess
+	environment []string
 }
 
 func newDevServeState(addr string) *devServeState {
 	return &devServeState{
-		addr:   addr,
-		reload: newLiveReloadBroker(),
+		addr:        addr,
+		reload:      newLiveReloadBroker(),
+		environment: os.Environ(),
 	}
 }
 
 func (serve *devServeState) apply(state devBuildState, absDir string) error {
+	serve.environment = state.plan.Options.ProjectEnvironment.ForSubprocess(os.Environ())
 	if state.runtime.Enabled {
 		return serve.useRuntime(state.runtime)
 	}
@@ -279,7 +282,7 @@ func (serve *devServeState) useStatic(absDir string) error {
 }
 
 func (serve *devServeState) useRuntime(runtime devRuntime) error {
-	if _, err := appgen.BuildBinary(runtime.AppDir, runtime.BinaryPath); err != nil {
+	if _, err := appgen.BuildBinaryWithOptions(runtime.AppDir, runtime.BinaryPath, appgen.PackagingOptions{Environment: serve.environment}); err != nil {
 		return err
 	}
 	if serve.server != nil && serve.process == nil {
@@ -314,6 +317,7 @@ func (serve *devServeState) useRuntime(runtime devRuntime) error {
 		serve.process.stop()
 		serve.process.plan = runtime
 	}
+	serve.process.environment = append([]string(nil), serve.environment...)
 	return serve.process.restart()
 }
 
@@ -460,18 +464,19 @@ func freeDevRuntimeAddr() (string, error) {
 }
 
 type devRuntimeProcess struct {
-	plan     devRuntime
-	addr     string
-	listener net.Listener
-	mu       sync.Mutex
-	cmd      *exec.Cmd
-	waitDone chan error
+	plan        devRuntime
+	addr        string
+	listener    net.Listener
+	environment []string
+	mu          sync.Mutex
+	cmd         *exec.Cmd
+	waitDone    chan error
 }
 
 func (process *devRuntimeProcess) restart() error {
 	process.stop()
 	command := exec.Command(process.plan.BinaryPath)
-	command.Env = append(os.Environ(), "GOWDK_ADDR="+process.addr)
+	command.Env = append(append([]string(nil), process.environment...), "GOWDK_ADDR="+process.addr)
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
 	if process.listener != nil {

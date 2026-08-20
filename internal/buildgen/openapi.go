@@ -2,7 +2,6 @@ package buildgen
 
 import (
 	"encoding/json"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -94,18 +93,6 @@ type openAPIGOWDKExtension struct {
 	Signature      string   `json:"signature,omitempty"`
 	InputType      string   `json:"inputType,omitempty"`
 	Roles          []string `json:"roles,omitempty"`
-}
-
-func writeOpenAPI(outputDir string, config gowdk.Config, ir gwdkir.Program) (string, error) {
-	payload, err := openAPIPayload(config, ir)
-	if err != nil {
-		return "", err
-	}
-	path := filepath.Join(outputDir, openAPIFile)
-	if err := writeFileIfChanged(path, payload); err != nil {
-		return "", err
-	}
-	return path, nil
 }
 
 func openAPIPayload(config gowdk.Config, ir gwdkir.Program) ([]byte, error) {

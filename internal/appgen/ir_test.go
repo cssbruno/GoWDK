@@ -138,12 +138,20 @@ func TestAPIEndpointsFromIR(t *testing.T) {
 }
 
 func TestFragmentEndpointsFromIR(t *testing.T) {
+	componentNodes, err := view.Parse(`<article>{name}</article>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fragmentNodes, err := view.Parse(`<section><ui.PatientCard name="Updated & safe" /></section>`)
+	if err != nil {
+		t.Fatal(err)
+	}
 	endpoints, err := fragmentEndpointsFromIR(gwdkir.Program{
 		Components: []gwdkir.Component{{
 			Name:    "PatientCard",
 			Package: "components",
 			Props:   []gwdkir.Prop{{Name: "name", Type: "string"}},
-			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<article>{name}</article>`},
+			Blocks:  gwdkir.Blocks{View: true, ViewBody: `<article>{name}</article>`, ViewNodes: componentNodes},
 		}},
 		Pages: []gwdkir.Page{{
 			ID:      "patients",
@@ -158,6 +166,7 @@ func TestFragmentEndpointsFromIR(t *testing.T) {
 					Route:  "/patients/list",
 					Target: "#patients",
 					Body:   `<section><ui.PatientCard name="Updated & safe" /></section>`,
+					Nodes:  fragmentNodes,
 				}},
 			},
 		}},

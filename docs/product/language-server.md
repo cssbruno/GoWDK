@@ -72,10 +72,32 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
 ### Non-Functional
 
 - Performance: validate one open buffer quickly enough for interactive editing.
-- Reliability: malformed protocol messages should return JSON-RPC errors instead of crashing.
+- Reliability: malformed JSON inside a valid frame returns a JSON-RPC parse
+  error and the session continues. Ambiguous, truncated, or oversized framing
+  terminates the stdio session because the next frame boundary is not safe to
+  infer.
 - Accessibility: editor clients should receive standard diagnostics and completion metadata.
 - Security/privacy: no network access and no external process execution inside the language server.
 - Observability: protocol errors should be written to stderr.
+
+The default per-session limits are finite and embedding callers can override
+them through `lsp.ProjectOptions.Limits` without mutable global state:
+
+| Input | Default limit |
+| --- | ---: |
+| One header line | 8 KiB |
+| All headers | 64 KiB |
+| Header count | 64 |
+| One JSON-RPC body | 16 MiB |
+| One open document | 8 MiB |
+| All retained open-document text | 64 MiB |
+| Open documents | 256 |
+
+`Content-Length` is an unsigned decimal byte count. Identical duplicate values
+are tolerated; conflicting duplicates, overflow, signs, missing values, and
+values above the body limit are fatal framing errors. Logs include only a
+stable rejection code and byte/count metadata, never the raw body or source
+text.
 
 ## Acceptance Criteria
 
@@ -100,6 +122,10 @@ Developers editing `.gwdk` files need live feedback from the same language tooli
       recursive-descent outline pass over the shared tokenizer (ADR 0010).
 - [x] `gowdk/tree` returns the versioned inspect tree projection for open
       project documents.
+- [x] Header lines, aggregate headers, header count, message bodies, document
+      size, retained text, and open-document count have tested finite limits.
+- [x] An over-limit full-text change preserves the last valid document snapshot
+      and sends an editor-facing `window/showMessage` notification.
 - [x] `go test ./...` and `go build ./cmd/gowdk` pass.
 
 ## Edge Cases

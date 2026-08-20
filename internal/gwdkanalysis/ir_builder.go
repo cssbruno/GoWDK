@@ -1,14 +1,17 @@
 package gwdkanalysis
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/cssbruno/gowdk"
+	"github.com/cssbruno/gowdk/internal/clientlang"
 	"github.com/cssbruno/gowdk/internal/cssscope"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
+	"github.com/cssbruno/gowdk/internal/parser"
 	"github.com/cssbruno/gowdk/internal/source"
 	"github.com/cssbruno/gowdk/internal/viewmodel"
 	"github.com/cssbruno/gowdk/internal/viewparse"
@@ -80,8 +83,10 @@ func (builder *irBuilder) addAuditSpec(audit gwdkir.AuditSpec) {
 }
 
 func (builder *irBuilder) addPage(page gwdkir.Page) {
+	builder.ensureCompileTimeRecords(page.ID, page.Source, &page.Blocks)
 	builder.ensureViewNodes("page", page.ID, page.Source, page.Blocks.Spans.View, &page.Blocks)
 	builder.ensureServerFields(page.ID, page.Source, &page.Blocks)
+	builder.ensureFragmentNodes(page.ID, page.Source, &page.Blocks)
 	// Normalize route params once at program assembly: explicit declarations
 	// win, otherwise they are derived from the route pattern, and untyped
 	// params default to string.
@@ -114,6 +119,45 @@ func (builder *irBuilder) addPage(page gwdkir.Page) {
 	builder.addPageTemplate(page)
 	builder.addPageAssets(page)
 	builder.addPageEndpoints(page)
+}
+
+func (builder *irBuilder) ensureCompileTimeRecords(id, src string, blocks *gwdkir.Blocks) {
+	if strings.TrimSpace(blocks.PathsBody) != "" {
+		blocks.Paths = true
+	}
+	if strings.TrimSpace(blocks.BuildBody) != "" {
+		blocks.Build = true
+	}
+	needsPaths := blocks.Paths && len(blocks.PathsRecords) == 0 && strings.TrimSpace(blocks.PathsBody) != ""
+	needsBuild := blocks.Build && len(blocks.BuildRecords) == 0 && blocks.BuildCall == nil && strings.TrimSpace(blocks.BuildBody) != ""
+	if !needsPaths && !needsBuild {
+		return
+	}
+	var synthetic strings.Builder
+	synthetic.WriteString("page fixture\nroute \"/\"\n")
+	if needsPaths {
+		synthetic.WriteString("paths {\n")
+		synthetic.WriteString(blocks.PathsBody)
+		synthetic.WriteString("\n}\n")
+	}
+	if needsBuild {
+		synthetic.WriteString("build {\n")
+		synthetic.WriteString(blocks.BuildBody)
+		synthetic.WriteString("\n}\n")
+	}
+	synthetic.WriteString("view {\n<main></main>\n}\n")
+	lowered, err := parser.ParsePage([]byte(synthetic.String()))
+	if err != nil {
+		builder.program.Diagnostics = append(builder.program.Diagnostics, gwdkir.Diagnostic{Code: "compile_time_block_parse_error", Source: src, Message: id + ": " + err.Error()})
+		return
+	}
+	if needsPaths {
+		blocks.PathsRecords = lowered.Blocks.PathsRecords
+	}
+	if needsBuild {
+		blocks.BuildRecords = lowered.Blocks.BuildRecords
+		blocks.BuildCall = lowered.Blocks.BuildCall
+	}
 }
 
 func (builder *irBuilder) ensureServerFields(id, src string, blocks *gwdkir.Blocks) {
@@ -463,6 +507,7 @@ func (builder *irBuilder) addPageEndpoints(page gwdkir.Page) {
 
 func (builder *irBuilder) addComponent(component gwdkir.Component) {
 	builder.ensureViewNodes("component", component.Name, component.Source, component.Blocks.Spans.View, &component.Blocks)
+	builder.ensureClientProgram(component.Name, component.Source, &component.Blocks)
 	builder.program.Components = append(builder.program.Components, component)
 	pkg := builder.ensurePackage(component.Package, component.Source)
 	pkg.Files = append(pkg.Files, gwdkir.SourceFile{Path: component.Source, Kind: gwdkir.SourceComponent, Package: component.Package, Name: component.Name, Span: component.Span})
@@ -471,11 +516,16 @@ func (builder *irBuilder) addComponent(component gwdkir.Component) {
 	builder.addComponentAssets(component)
 	builder.addComponentTemplate(component)
 	if component.Blocks.Client {
+		program := clientlang.Program{}
+		if component.Blocks.ClientProgram != nil {
+			program = *component.Blocks.ClientProgram
+		}
 		builder.program.ClientBehaviors = append(builder.program.ClientBehaviors, gwdkir.ClientBehavior{
 			Component: component.Name,
 			Package:   component.Package,
 			Source:    component.Source,
 			Body:      component.Blocks.ClientBody,
+			Program:   program,
 			Span:      component.Blocks.Spans.Client,
 		})
 	}
@@ -488,6 +538,69 @@ func (builder *irBuilder) addComponent(component gwdkir.Component) {
 			Path:    component.WASM.Package,
 			Span:    component.WASM.Span,
 		})
+	}
+}
+
+func (builder *irBuilder) ensureClientProgram(id, src string, blocks *gwdkir.Blocks) {
+	if !blocks.Client || blocks.ClientProgram != nil {
+		return
+	}
+	program, err := clientlang.Parse(blocks.ClientBody)
+	if err != nil {
+		span := blocks.Spans.Client
+		var parseErr *clientlang.ParseError
+		if errors.As(err, &parseErr) && parseErr.Line > 0 && span.Start.Line > 0 {
+			line := span.Start.Line + parseErr.Line
+			span.Start.Line, span.Start.Column = line, 1
+			span.End.Line, span.End.Column = line, 2
+		}
+		builder.program.Diagnostics = append(builder.program.Diagnostics, gwdkir.Diagnostic{
+			Code:    "component_client_error",
+			Source:  src,
+			Span:    span,
+			Message: id + ": " + err.Error(),
+		})
+		return
+	}
+	blocks.ClientProgram = &program
+}
+
+func (builder *irBuilder) ensureFragmentNodes(pageID, src string, blocks *gwdkir.Blocks) {
+	for actionIndex := range blocks.Actions {
+		for fragmentIndex := range blocks.Actions[actionIndex].Fragments {
+			fragment := &blocks.Actions[actionIndex].Fragments[fragmentIndex]
+			if len(fragment.Nodes) > 0 || strings.TrimSpace(fragment.Body) == "" {
+				continue
+			}
+			nodes, err := viewparse.Parse(fragment.Body)
+			if err != nil {
+				builder.program.Diagnostics = append(builder.program.Diagnostics, gwdkir.Diagnostic{
+					Code:    "view_parse_error",
+					Source:  src,
+					Span:    fragment.Span,
+					Message: fmt.Sprintf("%s.%s fragment %s: %v", pageID, blocks.Actions[actionIndex].Name, fragment.Target, err),
+				})
+				continue
+			}
+			fragment.Nodes = nodes
+		}
+	}
+	for index := range blocks.Fragments {
+		fragment := &blocks.Fragments[index]
+		if len(fragment.Nodes) > 0 || strings.TrimSpace(fragment.Body) == "" {
+			continue
+		}
+		nodes, err := viewparse.Parse(fragment.Body)
+		if err != nil {
+			builder.program.Diagnostics = append(builder.program.Diagnostics, gwdkir.Diagnostic{
+				Code:    "view_parse_error",
+				Source:  src,
+				Span:    fragment.Span,
+				Message: fmt.Sprintf("%s.%s fragment %s: %v", pageID, fragment.Name, fragment.Target, err),
+			})
+			continue
+		}
+		fragment.Nodes = nodes
 	}
 }
 
@@ -601,6 +714,7 @@ func (builder *irBuilder) ensureViewNodes(kind, id, src string, span source.Sour
 		return
 	}
 	blocks.ViewNodes = nodes
+	blocks.DirectiveLanes = gwdkir.CollectDirectiveLanes(nodes)
 }
 
 func cloneEndpointCORS(cors gwdkir.EndpointCORS) gwdkir.EndpointCORS {

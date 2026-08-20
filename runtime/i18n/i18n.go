@@ -17,6 +17,49 @@ type Catalog[K comparable] struct {
 	Messages map[K]string
 }
 
+// ErrorCode is a stable user-facing runtime error identifier. It is separate
+// from compiler diagnostic codes.
+type ErrorCode string
+
+// UserMessage carries a stable code, safe default text, and interpolation data.
+type UserMessage struct {
+	Code    ErrorCode         `json:"code"`
+	Default string            `json:"default"`
+	Vars    map[string]string `json:"vars,omitempty"`
+}
+
+// ErrorBundle is the existing typed bundle specialized for runtime errors.
+type ErrorBundle struct{ Bundle[ErrorCode] }
+
+// NewErrorBundle creates a typed runtime error catalog bundle.
+func NewErrorBundle(defaultLocale string, catalogs map[string]Catalog[ErrorCode]) ErrorBundle {
+	return ErrorBundle{Bundle: NewBundle(defaultLocale, catalogs)}
+}
+
+// NewErrorBundleStrings is a config/code-generation bridge for string-keyed
+// catalog data. It still resolves through Catalog[ErrorCode] and Bundle.
+func NewErrorBundleStrings(defaultLocale string, catalogs map[string]map[string]string) ErrorBundle {
+	typed := make(map[string]Catalog[ErrorCode], len(catalogs))
+	for locale, messages := range catalogs {
+		values := make(map[ErrorCode]string, len(messages))
+		for code, message := range messages {
+			values[ErrorCode(code)] = message
+		}
+		typed[locale] = NewCatalog(locale, values)
+	}
+	return NewErrorBundle(defaultLocale, typed)
+}
+
+// Resolve returns localized safe text, falling back to UserMessage.Default.
+func (bundle ErrorBundle) Resolve(locale string, message UserMessage) string {
+	if catalog, ok := bundle.Catalog(locale); ok {
+		if localized, found := catalog.Format(message.Code, message.Vars); found {
+			return localized
+		}
+	}
+	return Format(message.Default, message.Vars)
+}
+
 // MessageReference records one expected message key and, optionally, where it
 // was declared or used. Apps can keep these references beside build helpers or
 // generated extraction output and check catalogs in ordinary Go tests.

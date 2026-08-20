@@ -59,9 +59,10 @@ api Health GET "/api/health"
   `go client {}` runs on the client only when it
   declares a `//go:wasmexport GOWDKMount<PageID>` function; that browser lane is
   compiled with `GOOS=js GOARCH=wasm` and mounted by the generated page loader.
-  `go server {}` is
-  request-time and requires SSR or explicit hybrid request-time behavior;
-  current generated apps can bind `Load<PageID>` from `go server {}`.
+  `go server {}` is request-time and requires SSR or explicit hybrid
+  request-time behavior. Page load functions now live in ordinary Go packages
+  and are mapped through `Config.Interop.Loads`; move older inline
+  `Load<PageID>` functions before registering them.
   Generated app source writes default `go {}` and `go server {}` blocks as
   normal Go packages under `gowdk_go/`. `go addon.<name> {}`
   is reserved for addon-owned validation and generated app file emission.

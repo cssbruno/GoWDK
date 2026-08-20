@@ -134,19 +134,10 @@ func validateComponentUses(component gwdkir.Component, usesByAlias map[string]gw
 }
 
 func validatePageQualifiedComponentRefs(page gwdkir.Page, usesByAlias map[string]gwdkir.Use, componentPackages map[string]bool, componentByPackageName map[string]bool, sourcePackages map[string]bool, crossFile bool) []ValidationError {
-	if !page.Blocks.View || strings.TrimSpace(page.Blocks.ViewBody) == "" {
+	if !page.Blocks.View || len(page.Blocks.ViewNodes) == 0 {
 		return nil
 	}
-	refs, err := viewanalysis.ComponentReferenceSpans(page.Blocks.ViewBody)
-	if err != nil {
-		return []ValidationError{{
-			Code:    "view_parse_error",
-			PageID:  page.ID,
-			Source:  page.Source,
-			Span:    firstSpan(page.Blocks.Spans.View, page.Spans.Page),
-			Message: fmt.Sprintf("%s view cannot be parsed: %v", page.ID, err),
-		}}
-	}
+	refs := viewanalysis.ComponentReferenceSpansFromNodes(page.Blocks.ViewNodes)
 	var diagnostics []ValidationError
 	for _, ref := range refs {
 		alias, name, ok := strings.Cut(ref.Name, ".")
@@ -212,19 +203,10 @@ func validatePageQualifiedComponentRefs(page gwdkir.Page, usesByAlias map[string
 }
 
 func validateComponentQualifiedComponentRefs(component gwdkir.Component, usesByAlias map[string]gwdkir.Use, componentPackages map[string]bool, componentByPackageName map[string]bool, sourcePackages map[string]bool, crossFile bool) []ValidationError {
-	if !component.Blocks.View || strings.TrimSpace(component.Blocks.ViewBody) == "" {
+	if !component.Blocks.View || len(component.Blocks.ViewNodes) == 0 {
 		return nil
 	}
-	refs, err := viewanalysis.ComponentReferenceSpans(component.Blocks.ViewBody)
-	if err != nil {
-		return []ValidationError{{
-			Code:          "view_parse_error",
-			ComponentName: component.Name,
-			Source:        component.Source,
-			Span:          firstSpan(component.Blocks.Spans.View, component.Span),
-			Message:       fmt.Sprintf("component %s view cannot be parsed: %v", component.Name, err),
-		}}
-	}
+	refs := viewanalysis.ComponentReferenceSpansFromNodes(component.Blocks.ViewNodes)
 	var diagnostics []ValidationError
 	for _, ref := range refs {
 		alias, name, ok := strings.Cut(ref.Name, ".")

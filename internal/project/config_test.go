@@ -2,6 +2,8 @@ package project
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"go/parser"
 	"go/token"
 	"net/http"
@@ -16,6 +18,23 @@ import (
 	"github.com/cssbruno/gowdk/addons/seo"
 	"github.com/cssbruno/gowdk/addons/tailwind"
 )
+
+func TestExecutableBridgeBoundsRequestsAndRedactsEnvironmentValues(t *testing.T) {
+	var bridge configBridge
+	_, err := bridge.request(context.Background(), "oversized", 0, make([]byte, executableBridgeMaxPayload+1))
+	var bridgeErr *ExecutableBridgeError
+	if !errors.As(err, &bridgeErr) || bridgeErr.Code != "request_too_large" || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("oversized request error = %v", err)
+	}
+	const secret = "private-value-123"
+	redacted := redactBridgeOutput("helper failed with "+secret, []string{"VENDOR_TOKEN=" + secret})
+	if strings.Contains(redacted, secret) || !strings.Contains(redacted, "[REDACTED]") {
+		t.Fatalf("bridge diagnostic was not redacted: %q", redacted)
+	}
+	if got := redactBridgeOutput("token=abc", []string{"API_TOKEN=abc"}); strings.Contains(got, "abc") {
+		t.Fatalf("short secret leaked from bridge diagnostic: %q", got)
+	}
+}
 
 func TestSupportedConfigLiteralFieldsMatchConfigStruct(t *testing.T) {
 	supported := supportedConfigLiteralFields()
@@ -79,8 +98,6 @@ var Config = gowdk.Config{
 			TwitterCard: "summary_large_image",
 		},
 		CSRF: gowdk.CSRFConfig{
-			Enabled:                true,
-			Disabled:               true,
 			SecretEnv:              "EXAMPLE_CSRF_SECRET",
 			VerificationSecretEnvs: []string{"EXAMPLE_NEXT_CSRF_SECRET", "EXAMPLE_OLD_CSRF_SECRET"},
 			CookieName:             "__Host-example-csrf",
@@ -242,7 +259,7 @@ var Config = gowdk.Config{
 	if config.Build.Head.SiteName != "Example" || config.Build.Head.Favicon != "/favicon.ico" || config.Build.Head.Image != "https://example.com/social.png" || config.Build.Head.TwitterCard != "summary_large_image" {
 		t.Fatalf("unexpected build head config: %#v", config.Build.Head)
 	}
-	if !config.Build.CSRF.Enabled || !config.Build.CSRF.Disabled || config.Build.CSRF.SecretEnv != "EXAMPLE_CSRF_SECRET" || strings.Join(config.Build.CSRF.VerificationSecretEnvs, ",") != "EXAMPLE_NEXT_CSRF_SECRET,EXAMPLE_OLD_CSRF_SECRET" || config.Build.CSRF.CookieName != "__Host-example-csrf" || config.Build.CSRF.FieldName != "_example_csrf" || config.Build.CSRF.HeaderName != "X-Example-CSRF" || !config.Build.CSRF.Insecure {
+	if config.Build.CSRF.Disabled || config.Build.CSRF.SecretEnv != "EXAMPLE_CSRF_SECRET" || strings.Join(config.Build.CSRF.VerificationSecretEnvs, ",") != "EXAMPLE_NEXT_CSRF_SECRET,EXAMPLE_OLD_CSRF_SECRET" || config.Build.CSRF.CookieName != "__Host-example-csrf" || config.Build.CSRF.FieldName != "_example_csrf" || config.Build.CSRF.HeaderName != "X-Example-CSRF" || !config.Build.CSRF.Insecure {
 		t.Fatalf("unexpected build csrf config: %#v", config.Build.CSRF)
 	}
 	if !config.Build.CORS.Enabled || strings.Join(config.Build.CORS.AllowedOrigins, ",") != "https://app.example" || strings.Join(config.Build.CORS.AllowedMethods, ",") != "GET,POST" || strings.Join(config.Build.CORS.AllowedHeaders, ",") != "Content-Type,X-CSRF" || strings.Join(config.Build.CORS.ExposedHeaders, ",") != "X-Total-Count" || !config.Build.CORS.AllowCredentials || config.Build.CORS.MaxAgeSeconds != 600 {
@@ -653,6 +670,90 @@ var Config = gowdk.Config{
 	}
 	if !strings.Contains(err.Error(), `unsupported Config field "Experimental"`) {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfigFileFailsClosedForNestedLiteralShape(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  string
+		message string
+	}{
+		{
+			name: "misspelled nested field",
+			config: `gowdk.Config{Source: gowdk.SourceConfig{
+				Incldue: []string{"src/**/*.gwdk"},
+			}}`,
+			message: "Config.Source.Incldue: unknown field",
+		},
+		{
+			name:    "unkeyed nested literal",
+			config:  `gowdk.Config{Source: gowdk.SourceConfig{[]string{"src/**/*.gwdk"}, nil}}`,
+			message: "Config.Source[0]: unkeyed struct literals are not supported",
+		},
+		{
+			name:    "duplicate nested field",
+			config:  `gowdk.Config{Source: gowdk.SourceConfig{Include: nil, Include: []string{"src/**/*.gwdk"}}}`,
+			message: "Config.Source.Include: duplicate field",
+		},
+		{
+			name:    "wrong literal type",
+			config:  `gowdk.Config{AppName: 42}`,
+			message: "Config.AppName: expected string literal",
+		},
+		{
+			name:    "removed csrf enabled toggle",
+			config:  `gowdk.Config{Build: gowdk.BuildConfig{CSRF: gowdk.CSRFConfig{Enabled: true}}}`,
+			message: "Config.Build.CSRF.Enabled: unknown field",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, DefaultConfigFile)
+			writeTestFile(t, path, "package app\n\nimport \"github.com/cssbruno/gowdk\"\n\nvar Config = "+test.config+"\n")
+			_, err := LoadConfigFile(path)
+			if err == nil || !strings.Contains(err.Error(), test.message) {
+				t.Fatalf("expected %q, got %v", test.message, err)
+			}
+		})
+	}
+}
+
+func TestLoadConfigFileTypeChecksAliasAndSelectorExpressions(t *testing.T) {
+	root := t.TempDir()
+	repoRoot := repositoryRoot(t)
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/aliasconfig
+
+go 1.22
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+repoRoot+`
+`)
+	writeTestFile(t, filepath.Join(root, "constants", "constants.go"), `package constants
+
+const Name = "alias app"
+`)
+	path := filepath.Join(root, DefaultConfigFile)
+	writeTestFile(t, path, `package app
+
+import (
+	"example.com/aliasconfig/constants"
+	"github.com/cssbruno/gowdk"
+)
+
+type AppConfig = gowdk.Config
+
+var Config = AppConfig{AppName: constants.Name}
+`)
+	tidyTestModule(t, root)
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.AppName != "alias app" {
+		t.Fatalf("selector expression silently changed value: %#v", config)
 	}
 }
 
@@ -1076,6 +1177,31 @@ var Config = gowdk.Config{
 	if options.BaseURL != "https://dynamic.example.com/docs" || len(options.Disallow) != 1 || options.Disallow[0] != "/admin" {
 		t.Fatalf("unexpected executable SEO options: %#v", options)
 	}
+	first := activeExecutableBridgeForTest(t, path)
+	if _, err := LoadConfigFile(path); err != nil {
+		t.Fatalf("reload executable config: %v", err)
+	}
+	second := activeExecutableBridgeForTest(t, path)
+	if first != second {
+		t.Fatal("repeated executable config request started a different host")
+	}
+}
+
+func activeExecutableBridgeForTest(t *testing.T, configPath string) *configBridge {
+	t.Helper()
+	absolute, err := filepath.Abs(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	executableBridges.Lock()
+	defer executableBridges.Unlock()
+	for _, bridge := range executableBridges.items {
+		if bridge != nil && bridge.configPath == absolute && !bridge.dead {
+			return bridge
+		}
+	}
+	t.Fatalf("no active executable bridge for %s", absolute)
+	return nil
 }
 
 func TestLoadConfigFileFallsBackForDynamicSitemapIntegerOptions(t *testing.T) {
@@ -1499,6 +1625,11 @@ var Config = gowdk.Config{
 	if len(files) != 1 || files[0].Path != "brand/home.go" || !strings.Contains(files[0].Source, `const Render = "hybrid"`) {
 		t.Fatalf("unexpected brand generated files: %#v", files)
 	}
+	if _, err := brandConsumer.GeneratedGo(gowdk.GoBlockTarget{
+		Target: "addon.brand", OwnerID: "../../escape",
+	}, gowdk.GoBlockContext{}); err == nil || !strings.Contains(err.Error(), "unsafe path") {
+		t.Fatalf("expected generated path confinement error, got %v", err)
+	}
 	markerDiagnostics := markerConsumer.ValidateGoBlock(gowdk.GoBlockTarget{
 		Target:       "addon.marker",
 		OwnerPackage: "pages",
@@ -1673,7 +1804,7 @@ func TestConfigFromExecutableWirePreservesEveryCapabilityCombination(t *testing.
 			name = "none"
 		}
 		t.Run(name, func(t *testing.T) {
-			config, err := configFromExecutableWire("/project/gowdk.config.go", executableConfig{
+			config, err := configFromExecutableWire("/project/gowdk.config.go", nil, executableConfig{
 				Addons: []executableAddonDetails{{
 					Name:         "combo",
 					Features:     []gowdk.Feature{gowdk.Feature("combo")},
@@ -1733,7 +1864,7 @@ func TestConfigFromExecutableWirePreservesEveryCapabilityCombination(t *testing.
 }
 
 func TestConfigFromExecutableWireHandlesUnknownCapabilitiesByRequirement(t *testing.T) {
-	optional, err := configFromExecutableWire("/project/gowdk.config.go", executableConfig{
+	optional, err := configFromExecutableWire("/project/gowdk.config.go", nil, executableConfig{
 		Addons: []executableAddonDetails{{
 			Name:     "optional",
 			Features: []gowdk.Feature{gowdk.Feature("optional")},
@@ -1749,7 +1880,7 @@ func TestConfigFromExecutableWireHandlesUnknownCapabilitiesByRequirement(t *test
 		t.Fatalf("unexpected optional addon result: %#v", optional.Addons)
 	}
 
-	_, err = configFromExecutableWire("/project/gowdk.config.go", executableConfig{
+	_, err = configFromExecutableWire("/project/gowdk.config.go", nil, executableConfig{
 		Addons: []executableAddonDetails{{
 			Name:     "required",
 			Features: []gowdk.Feature{gowdk.Feature("required")},
@@ -1761,6 +1892,121 @@ func TestConfigFromExecutableWireHandlesUnknownCapabilitiesByRequirement(t *test
 	})
 	if err == nil || !strings.Contains(err.Error(), `addon "required" requires unsupported executable capability "example.future-capability"`) {
 		t.Fatalf("expected unsupported required capability error, got %v", err)
+	}
+}
+
+func TestConfigFromExecutableWireKeepsExtensionsOutOfBuiltInFeatures(t *testing.T) {
+	config, err := configFromExecutableWire("/project/gowdk.config.go", nil, executableConfig{
+		Features: gowdk.FeatureConfig{SPA: true},
+		Extensions: []executableExtensionDetails{{
+			Descriptor: gowdk.ExtensionDescriptor{
+				Name: "vendor.css", ProtocolVersion: gowdk.ExtensionProtocolVersion,
+				Phases:       []gowdk.ExtensionPhase{gowdk.ExtensionPhaseCSS},
+				Capabilities: []gowdk.ExtensionCapabilityDescriptor{{Name: gowdk.ExtensionCapabilityCSSProcessor, Version: 1, Required: true}},
+			},
+			Capabilities: []executableAddonCapability{{Name: executableCapabilityCSSProcessor, Required: true}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !config.HasFeature(gowdk.FeatureSPA) || config.HasFeature(gowdk.FeatureCSS) {
+		t.Fatalf("extension leaked into built-in feature selection: %#v", gowdk.EnabledFeatures(config))
+	}
+	if len(config.Extensions) != 1 {
+		t.Fatalf("extensions = %#v", config.Extensions)
+	}
+	if err := gowdk.ValidateExtensions(config.Extensions); err != nil {
+		t.Fatalf("executable extension descriptor rejected: %v", err)
+	}
+	capabilities := gowdk.ResolveExtensionCapabilities(config.Extensions[0])
+	if capabilities.CSSProcessor == nil {
+		t.Fatal("executable extension lost CSS capability")
+	}
+}
+
+func TestLoadConfigFileRunsVersionedExecutableExtension(t *testing.T) {
+	root := t.TempDir()
+	repoRoot := repositoryRoot(t)
+	writeTestFile(t, filepath.Join(root, "go.mod"), `module example.com/versioned-extension
+
+go 1.22
+
+require github.com/cssbruno/gowdk v0.0.0
+
+replace github.com/cssbruno/gowdk => `+repoRoot+`
+`)
+	path := filepath.Join(root, DefaultConfigFile)
+	writeTestFile(t, path, `package app
+
+import (
+	"os"
+
+	"github.com/cssbruno/gowdk"
+)
+
+type extension struct{}
+
+func (extension) Name() string { return "vendor.theme" }
+func (extension) Features() []gowdk.Feature { return nil }
+func (extension) Descriptor() gowdk.ExtensionDescriptor {
+	return gowdk.ExtensionDescriptor{
+		Name: "vendor.theme",
+		ProtocolVersion: gowdk.ExtensionProtocolVersion,
+		Phases: []gowdk.ExtensionPhase{gowdk.ExtensionPhaseCSS},
+		Capabilities: []gowdk.ExtensionCapabilityDescriptor{{
+			Name: gowdk.ExtensionCapabilityCSSProcessor,
+			Version: 1,
+			Required: true,
+		}},
+	}
+}
+func (extension) ExtensionCapabilities() gowdk.AddonCapabilities {
+	return gowdk.AddonCapabilities{CSSProcessor: extension{}}
+}
+func (extension) ProcessCSS(context gowdk.CSSContext) (gowdk.CSSResult, error) {
+	return gowdk.CSSResult{Assets: []gowdk.CSSAsset{{Path: "assets/theme.css", Contents: []byte(context.OutputDir)}}}, nil
+}
+
+var Config = gowdk.Config{
+	AppName: os.Getenv("GOWDK_EXTENSION_APP_NAME"),
+	Features: gowdk.FeatureConfig{SPA: true},
+	Extensions: []gowdk.Extension{extension{}},
+}
+`)
+	tidyTestModule(t, root)
+	t.Setenv("GOWDK_EXTENSION_APP_NAME", "Versioned extension")
+	config, err := LoadConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.AppName != "Versioned extension" || len(config.Extensions) != 1 || !config.HasFeature(gowdk.FeatureSPA) {
+		t.Fatalf("unexpected executable extension config: %#v", config)
+	}
+	if err := gowdk.ValidateExtensions(config.Extensions); err != nil {
+		t.Fatal(err)
+	}
+	processor := gowdk.ResolveExtensionCapabilities(config.Extensions[0]).CSSProcessor
+	if processor == nil {
+		t.Fatal("missing executable extension CSS capability")
+	}
+	result, err := processor.ProcessCSS(gowdk.CSSContext{OutputDir: "dist"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Assets) != 1 || result.Assets[0].Path != "assets/theme.css" || string(result.Assets[0].Contents) != "dist" {
+		t.Fatalf("unexpected extension output: %#v", result)
+	}
+	contextProcessor, ok := processor.(gowdk.CSSProcessorContext)
+	if !ok {
+		t.Fatalf("executable extension capability is not cancellable: %T", processor)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = contextProcessor.ProcessCSSContext(ctx, gowdk.CSSContext{})
+	var bridgeErr *ExecutableBridgeError
+	if !errors.As(err, &bridgeErr) || bridgeErr.Code != "deadline_exceeded" {
+		t.Fatalf("canceled extension request error = %v", err)
 	}
 }
 

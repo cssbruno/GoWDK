@@ -103,6 +103,8 @@ func validateProgram(config gowdk.Config, ir gwdkir.Program, crossFile bool) Val
 	diagnostics = append(diagnostics, validateLayoutReferences(ir.Layouts)...)
 	diagnostics = append(diagnostics, validatePageLayoutReferences(ir.Pages, ir.Layouts)...)
 	diagnostics = append(diagnostics, validateGoBlocks(config, ir)...)
+	diagnostics = append(diagnostics, validateDirectiveLanes(ir)...)
+	diagnostics = append(diagnostics, validateInteropRegistrations(config, ir)...)
 	diagnostics = append(diagnostics, validateUniquePageRoutes(config, ir.Pages)...)
 	diagnostics = append(diagnostics, validateAmbiguousDynamicPageRoutes(config, ir.Pages, ir.Endpoints, ir.SourceMap, ir.ContractRefs)...)
 	diagnostics = append(diagnostics, validateRouteMethodConflicts(config, ir.Pages, ir.Endpoints, ir.SourceMap, ir.ContractRefs)...)

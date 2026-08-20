@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cssbruno/gowdk/runtime/i18n"
 	"github.com/cssbruno/gowdk/runtime/response"
 )
 
@@ -69,6 +70,16 @@ func Error(status int, code string, message string) (response.Response, error) {
 			Message: message,
 		},
 	})
+}
+
+// LocalizedError resolves code/default/vars through the existing typed catalog.
+func LocalizedError(status int, code, message string, vars map[string]string, bundle i18n.ErrorBundle, locale string) (response.Response, error) {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		code = "api_error"
+	}
+	resolved := bundle.Resolve(locale, i18n.UserMessage{Code: i18n.ErrorCode(code), Default: message, Vars: vars})
+	return Error(status, code, resolved)
 }
 
 // NoContent creates an empty successful API response.

@@ -95,6 +95,9 @@ func renderComponentCall(node ComponentCall, ctx *renderContext, out *renderOutp
 			continue
 		}
 		if strings.HasPrefix(attr.Name, "g:") {
+			if attr.Name == "g:lane" {
+				continue
+			}
 			if attr.Name == "g:island" {
 				continue
 			}

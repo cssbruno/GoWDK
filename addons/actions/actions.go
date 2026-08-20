@@ -7,5 +7,5 @@ const ImportPath = "github.com/cssbruno/gowdk/addons/actions"
 
 // Addon enables typed backend actions and form handling.
 func Addon() gowdk.Addon {
-	return gowdk.NewAddon("actions", gowdk.FeatureActions)
+	return gowdk.NewBuiltinAddon("actions", gowdk.FeatureActions)
 }

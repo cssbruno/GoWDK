@@ -100,10 +100,15 @@ func CheckInvariants(program Program) error {
 	for _, page := range program.Pages {
 		reportViewBlockNodes("page", page.ID, page.Blocks, report)
 		reportServerBlockFields(page.ID, page.Blocks, report)
+		reportLiteralBlockRecords(page.ID, page.Blocks, report)
+		reportFragmentNodes(page.ID, page.Blocks, report)
 	}
 
 	for _, component := range program.Components {
 		reportViewBlockNodes("component", component.Name, component.Blocks, report)
+		if component.Blocks.Client && component.Blocks.ClientProgram == nil {
+			report("component %q has client block but no parsed client program", component.Name)
+		}
 	}
 
 	for _, layout := range program.Layouts {
@@ -206,10 +211,41 @@ func reportServerBlockFields(id string, blocks Blocks, report func(string, ...an
 }
 
 func reportViewBlockNodes(kind, id string, blocks Blocks, report func(string, ...any)) {
-	if !blocks.View || strings.TrimSpace(blocks.ViewBody) == "" || len(blocks.ViewNodes) > 0 {
-		return
+	if blocks.View && strings.TrimSpace(blocks.ViewBody) != "" && len(blocks.ViewNodes) == 0 {
+		report("%s %q has view body but no parsed nodes", kind, id)
 	}
-	report("%s %q has view body but no parsed nodes", kind, id)
+	for _, directive := range blocks.DirectiveLanes {
+		if directive.Directive != "g:for" && directive.Directive != "g:if" {
+			report("%s %q has unknown structural directive %q", kind, id, directive.Directive)
+		}
+		if directive.Lane != "" && directive.Lane != "server" && directive.Lane != "client" {
+			report("%s %q directive %q has unknown lane %q", kind, id, directive.Directive, directive.Lane)
+		}
+	}
+}
+
+func reportLiteralBlockRecords(id string, blocks Blocks, report func(string, ...any)) {
+	if blocks.Paths && strings.TrimSpace(blocks.PathsBody) != "" && len(blocks.PathsRecords) == 0 {
+		report("page %q has paths body but no typed path records", id)
+	}
+	if blocks.Build && strings.TrimSpace(blocks.BuildBody) != "" && blocks.BuildCall == nil && len(blocks.BuildRecords) == 0 {
+		report("page %q has build body but no typed build records or call", id)
+	}
+}
+
+func reportFragmentNodes(id string, blocks Blocks, report func(string, ...any)) {
+	for _, action := range blocks.Actions {
+		for _, fragment := range action.Fragments {
+			if strings.TrimSpace(fragment.Body) != "" && len(fragment.Nodes) == 0 {
+				report("page %q action %q fragment %q has body but no parsed nodes", id, action.Name, fragment.Target)
+			}
+		}
+	}
+	for _, fragment := range blocks.Fragments {
+		if strings.TrimSpace(fragment.Body) != "" && len(fragment.Nodes) == 0 {
+			report("page %q fragment %q has body but no parsed nodes", id, fragment.Name)
+		}
+	}
 }
 
 func reportOwnerReference(what string, kind SourceKind, ownerID string, pages, components, layouts map[string]bool, report func(string, ...any)) {

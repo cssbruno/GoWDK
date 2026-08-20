@@ -86,7 +86,7 @@ func islandScriptHrefsForView(source string, nodes []view.Node, components map[s
 		case "wasm":
 			href = "/" + islandWASMLoaderAssetPath(component.Package, component.Name)
 		case "":
-			if component.StateJSON != "" || component.HandlersJSON != "" || len(component.Emits) > 0 || len(component.Exports) > 0 || usage.call.ReactiveProps || componentViewHasAwait(component.Body, component.Nodes) {
+			if component.StateJSON != "" || component.HandlersJSON != "" || len(component.Emits) > 0 || len(component.Exports) > 0 || usage.call.ReactiveProps || nodesHaveAwait(component.Nodes) {
 				needsSharedRuntime = true
 				href = "/" + islandJSAssetPath(component.Package, component.Name)
 			}
@@ -159,19 +159,9 @@ func recursiveComponentCallUsagesForView[T any](source string, nodes []view.Node
 	visiting := map[string]bool{}
 	var walk func(string, []view.Node, string, map[string]string) error
 	walk = func(source string, nodes []view.Node, ownerPackage string, uses map[string]string) error {
-		var direct []viewanalysis.ComponentCallUsage
-		if len(nodes) > 0 {
-			var err error
-			direct, err = viewanalysis.ComponentCallUsagesFromNodes(nodes)
-			if err != nil {
-				return err
-			}
-		} else {
-			var err error
-			direct, err = viewanalysis.ComponentCallUsages(source)
-			if err != nil {
-				return err
-			}
+		direct, err := viewanalysis.ComponentCallUsagesFromNodes(nodes)
+		if err != nil {
+			return err
 		}
 		for _, usage := range direct {
 			component, ok := lookupComponent(components, usage.Component, ownerPackage, uses)
@@ -184,7 +174,11 @@ func recursiveComponentCallUsagesForView[T any](source string, nodes []view.Node
 				continue
 			}
 			visiting[identity] = true
-			if err := walk(resolver.Body(component), resolver.Nodes(component), resolver.Package(component), resolver.Uses(component)); err != nil {
+			componentNodes := resolver.Nodes(component)
+			if len(componentNodes) == 0 && strings.TrimSpace(resolver.Body(component)) != "" {
+				return fmt.Errorf("component %q has raw view source but no typed view nodes", identity)
+			}
+			if err := walk("", componentNodes, resolver.Package(component), resolver.Uses(component)); err != nil {
 				return err
 			}
 			delete(visiting, identity)
@@ -220,17 +214,7 @@ func lookupComponent[T any](components map[string]T, name string, ownerPackage s
 }
 
 func componentNeedsJSIsland(component gwdkir.Component) bool {
-	return component.State.Type.Name != "" || component.Blocks.Client || len(component.Emits) > 0 || componentViewHasAwait(component.Blocks.ViewBody, component.Blocks.ViewNodes)
-}
-
-func componentViewHasAwait(source string, nodes []view.Node) bool {
-	if len(nodes) == 0 && strings.TrimSpace(source) != "" {
-		parsed, err := view.Parse(source)
-		if err == nil {
-			nodes = parsed
-		}
-	}
-	return nodesHaveAwait(nodes)
+	return component.State.Type.Name != "" || component.Blocks.Client || len(component.Emits) > 0 || nodesHaveAwait(component.Blocks.ViewNodes)
 }
 
 func nodesHaveAwait(nodes []view.Node) bool {

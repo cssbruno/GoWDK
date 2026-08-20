@@ -526,6 +526,9 @@ func finishSyntaxBlock(block SyntaxBlock, body []syntaxBodyLine) (SyntaxBlock, e
 		if err != nil {
 			return SyntaxBlock{}, fmt.Errorf("line %d: view body: %w", block.Span.Start.Line, err)
 		}
+		if err := validateDirectiveLaneDeclarations(nodes, block.Span); err != nil {
+			return SyntaxBlock{}, err
+		}
 		block.View = nodes
 	case "style":
 		block.StyleBody = block.Body

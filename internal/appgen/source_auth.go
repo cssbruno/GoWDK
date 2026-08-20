@@ -77,6 +77,15 @@ func authSetupStmts(options Options) []ast.Stmt {
 }
 
 func authSessionOptions(config gowdk.Config) gowdk.AuthSessionOptions {
+	if config.Features.Auth.Enabled {
+		return config.Features.Auth.Session
+	}
+	for _, extension := range config.Extensions {
+		provider := gowdk.ResolveExtensionCapabilities(extension).AuthSessionProvider
+		if provider != nil {
+			return provider.AuthSessionOptions()
+		}
+	}
 	for _, addon := range config.Addons {
 		provider := gowdk.ResolveAddonCapabilities(addon).AuthSessionProvider
 		if provider != nil {

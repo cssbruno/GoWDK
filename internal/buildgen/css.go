@@ -1,6 +1,7 @@
 package buildgen
 
 import (
+	contextpkg "context"
 	"fmt"
 	"os"
 	"path"
@@ -47,12 +48,24 @@ func planCSS(config gowdk.Config, ir gwdkir.Program, outputDir string, component
 		Build:       config.Build,
 		CSS:         config.CSS,
 	}
+	processors := make([]gowdk.CSSProcessor, 0, len(config.Addons)+len(config.Extensions))
 	for _, addon := range config.Addons {
-		processor := gowdk.ResolveAddonCapabilities(addon).CSSProcessor
+		processors = append(processors, gowdk.ResolveAddonCapabilities(addon).CSSProcessor)
+	}
+	for _, extension := range config.Extensions {
+		processors = append(processors, gowdk.ResolveExtensionCapabilities(extension).CSSProcessor)
+	}
+	for _, processor := range processors {
 		if processor == nil {
 			continue
 		}
-		result, err := processor.ProcessCSS(context)
+		var result gowdk.CSSResult
+		var err error
+		if cancellable, ok := processor.(gowdk.CSSProcessorContext); ok {
+			result, err = cancellable.ProcessCSSContext(contextpkg.Background(), context)
+		} else {
+			result, err = processor.ProcessCSS(context)
+		}
 		if err != nil {
 			failures = append(failures, fmt.Sprintf("css processor %s failed: %v", processor.Name(), err))
 			continue

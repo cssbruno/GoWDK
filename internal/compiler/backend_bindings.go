@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cssbruno/gowdk"
 	"github.com/cssbruno/gowdk/internal/gwdkanalysis"
 	"github.com/cssbruno/gowdk/internal/gwdkir"
 	"github.com/cssbruno/gowdk/internal/source"
@@ -24,10 +25,23 @@ func BindBackendHandlers(ir *gwdkir.Program) []source.BackendBinding {
 	return bindings
 }
 
+// BindBackendHandlersWithConfig is the canonical project binding path. Server
+// loads must be explicitly registered in Config.Interop; the config-free
+// helper remains for low-level IR tests and embedders migrating old programs.
+func BindBackendHandlersWithConfig(config gowdk.Config, ir *gwdkir.Program) []source.BackendBinding {
+	bindings := computeBackendBindingsWithConfig(*ir, &config)
+	gwdkanalysis.AttachBackendBindings(ir, bindings)
+	return bindings
+}
+
 // computeBackendBindings derives the binding records without mutating the
 // program, for callers that only need the records (e.g. the production binding
 // policy check on an unbound program).
 func computeBackendBindings(ir gwdkir.Program) []source.BackendBinding {
+	return computeBackendBindingsWithConfig(ir, nil)
+}
+
+func computeBackendBindingsWithConfig(ir gwdkir.Program, config *gowdk.Config) []source.BackendBinding {
 	var bindings []source.BackendBinding
 	cache := map[string]featurePackage{}
 	for _, page := range ir.Pages {
@@ -50,7 +64,11 @@ func computeBackendBindings(ir gwdkir.Program) []source.BackendBinding {
 			return inlinePkg
 		}
 		if page.Blocks.Server {
-			bindings = append(bindings, bindLoad(page, pkg))
+			if config == nil {
+				bindings = append(bindings, bindLoad(page, pkg))
+			} else {
+				bindings = append(bindings, bindRegisteredLoad(page, *config, pkg))
+			}
 		}
 		for _, action := range page.Blocks.Actions {
 			inlinePkg := defaultInlinePkg()
@@ -101,6 +119,28 @@ func computeBackendBindings(ir gwdkir.Program) []source.BackendBinding {
 		return bindings[i].Source < bindings[j].Source
 	})
 	return bindings
+}
+
+func bindRegisteredLoad(page gwdkir.Page, config gowdk.Config, legacyPackage featurePackage) source.BackendBinding {
+	registration, ok := config.Interop.LoadForPage(page.ID)
+	if !ok {
+		functionName := loadFunctionName(page.ID)
+		binding := baseBackendBinding(page, loadHandlerKind, functionName, "GET", page.Route, page.Blocks.Spans.Server, legacyPackage)
+		binding.Status = source.BackendBindingMissing
+		binding.ExplicitRegistrationRequired = true
+		binding.Message = fmt.Sprintf("GOWDK SSR load for page %s is not explicitly registered; add gowdk.RegisterLoad(%q, package.%s) to Config.Interop.Loads", page.ID, page.ID, functionName)
+		return binding
+	}
+	pkg := inspectFeaturePackage(filepath.Dir(registration.Hook.SourceFile))
+	functionName := registration.Hook.Function
+	binding := bindLoadFromPackage(page, functionName, pkg)
+	if binding.ImportPath == "" {
+		binding.ImportPath = registration.Hook.ImportPath
+	}
+	if binding.Status == source.BackendBindingMissing {
+		binding.Message = fmt.Sprintf("registered GOWDK SSR load %s.%s for page %s could not be inspected: %s", registration.Hook.ImportPath, functionName, page.ID, binding.Message)
+	}
+	return binding
 }
 
 func bindLoad(page gwdkir.Page, pkg featurePackage) source.BackendBinding {

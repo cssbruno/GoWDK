@@ -41,6 +41,7 @@ var integrationCoverage = map[string]string{
 	"g:else":        "../viewrender/view_test.go",
 	"g:for":         "../viewrender/server_list_test.go",
 	"g:key":         "../viewrender/view_test.go",
+	"g:lane":        "../parser/directive_lanes_test.go",
 	"g:unsafe-html": "../viewrender/view_test.go",
 	"g:on:*":        "../viewrender/view_test.go",
 

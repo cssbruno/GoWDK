@@ -118,7 +118,7 @@ Implemented today:
   or one Go-style `if` return followed by a fallback return.
   Computed values are read-only, can depend on props, state, and earlier
   computed values, and update dependent bindings after state changes.
-- `g:if={boolExpr}`, `g:else-if={boolExpr}`, and `g:else` on sibling elements
+- `g:if={boolExpr} g:lane="client"`, `g:else-if={boolExpr}`, and `g:else` on sibling elements
   inside stateful components. The static first render may mark inactive
   branches with `hidden`; after island mount, generated JavaScript mounts the
   active branch and unmounts inactive branches.
@@ -162,12 +162,11 @@ Implemented today:
 - Island expressions can choose values with the Go-ish conditional expression
   `if Open { "open" } else { "closed" }`.
 - Elements inside stateful components can render Go-typed slice state with
-  `g:for={item in Items}` or `g:for={item, i in Items}` and a required scalar
+  `g:for={item in Items} g:lane="client"` or `g:for={item, i in Items} g:lane="client"` and a required scalar
   `g:key={item.ID}`. The first slice supports item field interpolation such as
   `{item.Name}`, index interpolation such as `{i}`, and keyed row reuse/reorder
-  during island render passes. Over component `state`/`store` this `g:for` is a
-  **client island**; over a `server {}` field the same `g:for` is a server list
-  (next item). The compiler infers the lane from the operand's data source.
+  during island render passes. The explicit client lane is checked against the
+  component state/store data source.
 - `g:transition="name"` on the same element as a client `g:if`,
   `g:else-if`, `g:else`, or keyed client `g:for` row. The runtime toggles
   `gowdk-transition`, `gowdk-transition-name`, `gowdk-transition-enter`,
@@ -179,15 +178,16 @@ Implemented today:
   keyed row is reused at a different index, the runtime toggles `gowdk-animate`,
   `gowdk-animate-name`, and `gowdk-animate-move`. The value must be a literal
   CSS-safe identifier.
-- `g:for`/`g:if` over a **`server {}` request-time field** render **server-side**.
-  `g:for={item in field}` (or `g:for={item, i in field}`) renders rows with
+- `g:for`/`g:if` with `g:lane="server"` over a **`server {}` request-time
+  field** render **server-side**.
+  `g:for={item in field} g:lane="server"` (or `g:for={item, i in field} g:lane="server"`) renders rows with
   escape-by-default interpolation (`{item.Name}`, `{i}`); server lists nest — a
-  nested `g:for={child in item.children}` resolves its slice per parent row.
-  `g:if={field}` / `g:if={!field}` conditionally renders a branch, and a
+  nested `g:for={child in item.children} g:lane="server"` resolves its slice per parent row.
+  `g:if={field} g:lane="server"` / `g:if={!field} g:lane="server"` conditionally renders a branch, and a
   top-level server `g:if` accepts a full bool expression
-  (`g:if={count > 0 && status == "open"}`) evaluated at request time. The lane is
-  chosen by the data source — a declared `server {}` field is server-rendered;
-  `state`/`store` is a client island. See [ssr.md](ssr.md) for the full
+  (`g:if={count > 0 && status == "open"} g:lane="server"`) evaluated at request
+  time. The compiler rejects a lane that disagrees with data ownership. See
+  [ssr.md](ssr.md) for the full
   server-region contract. (`g:each`/`g:when` were unified into `g:for`/`g:if`; the old names parse to a migration nudge.) <!-- removed-syntax-ok: documents the g:each/g:when -> g:for/g:if rename -->
 - Client handlers can mutate state arrays with compiler-owned built-ins:
   `append(Items, { Field: expr })`, `remove(Items, index)`, and
@@ -211,7 +211,7 @@ Implemented today:
     <p>Loading</p>
   {:then results}
     <ul>
-      <li g:for={item in results} g:key={item.ID}>{item.Name}</li>
+      <li g:for={item in results} g:lane="client" g:key={item.ID}>{item.Name}</li>
     </ul>
   {:catch err}
     <p>{err.message}</p>
@@ -249,9 +249,9 @@ These are the supported `g:` directives in `view {}` markup:
   modifiers are `.prevent`, `.stop`, `.once`, `.capture`,
   `.debounce(duration)`, and `.throttle(duration)`.
 - `g:ref={name}` inside stateful components.
-- `g:if={boolExpr}`, `g:else-if={boolExpr}`, and `g:else` inside stateful
+- `g:if={boolExpr} g:lane="client"`, `g:else-if={boolExpr}`, and `g:else` inside stateful
   components.
-- `g:for={item in Items}` or `g:for={item, i in Items}` with required
+- `g:for={item in Items} g:lane="client"` or `g:for={item, i in Items} g:lane="client"` with required
   `g:key={scalarExpr}` inside stateful components.
 - `g:transition="name"` on client `g:if` branches or keyed client `g:for` rows.
 - `g:animate="name"` on keyed client `g:for` rows.
@@ -282,8 +282,8 @@ authors provide CSS:
 
 ```gwdk
 view {
-  <section g:if={Open} g:transition="fade">Details</section>
-  <li g:for={item in Items} g:key={item.ID} g:transition="fade" g:animate="reorder">
+  <section g:if={Open} g:lane="client" g:transition="fade">Details</section>
+  <li g:for={item in Items} g:lane="client" g:key={item.ID} g:transition="fade" g:animate="reorder">
     {item.Name}
   </li>
 }

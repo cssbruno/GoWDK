@@ -81,7 +81,7 @@ func TestStabilityTableMatchesRegistry(t *testing.T) {
 		}
 	}
 
-	for _, tier := range []StabilityTier{TierStable, TierPartial, TierPlanned, TierDeprecated} {
+	for _, tier := range []StabilityTier{TierStable, TierExperimental, TierPlanned, TierDeprecated} {
 		if !strings.Contains(strings.ToLower(doc), string(tier)) {
 			t.Errorf("stability tier %q is not documented in %s", tier, path)
 		}

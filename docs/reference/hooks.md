@@ -116,17 +116,22 @@ native `role:` / `permission:` guard IDs. Non-public page guards also require
 request-time page rendering for the page GET route; build-time SPA pages emit
 static HTML and cannot enforce frontend access.
 
-Custom guard IDs still belong in generated app startup code:
+Custom guard IDs are registered from ordinary application packages through
+`Config.Interop`:
 
 ```go
-import gowdkguard "github.com/cssbruno/gowdk/runtime/guard"
-
-func GOWDKGuardRegistry() gowdkguard.Registry {
+func Guards() gowdkguard.Registry {
 	return gowdkguard.Registry{
 		"auth.required": func(ctx gowdkguard.Context) error {
 			return nil
 		},
 	}
+}
+
+var Config = gowdk.Config{
+	Interop: gowdk.InteropConfig{
+		Guards: gowdk.RegisterGuards(Guards),
+	},
 }
 ```
 
@@ -143,10 +148,10 @@ With `auth.Addon`, generated startup resolves those IDs through the configured
 session manager. App handlers can issue or clear the same session cookie through
 `auth.DefaultSessions()`.
 
-Without `auth.Addon`, generated app packages with native RBAC guard IDs require:
+Without `auth.Addon`, register an application-owned provider factory:
 
 ```go
-func GOWDKAuthProvider() auth.Provider
+AuthProvider: gowdk.RegisterAuthProvider(AuthProvider)
 ```
 
 Define the application-owned principal source from generated app startup code:
@@ -158,7 +163,7 @@ import (
 	gowdkauth "github.com/cssbruno/gowdk/runtime/auth"
 )
 
-func GOWDKAuthProvider() gowdkauth.Provider {
+func AuthProvider() gowdkauth.Provider {
 	return gowdkauth.ProviderFunc(func(request *http.Request) (*gowdkauth.Principal, error) {
 		return &gowdkauth.Principal{
 			ID:          "user-1",
@@ -175,8 +180,8 @@ RBAC guard behavior:
 - `permission:<name>` requires the principal to have that permission.
 - Multiple guard IDs are enforced in declaration order, so multiple RBAC guards
   are an AND check.
-- A missing `GOWDKAuthProvider` function fails at Go compile time when no auth
-  addon provider is configured. A nil principal, provider error, or missing
+- A missing typed auth registration is a compiler diagnostic before app
+  generation. A nil principal, provider error, or missing
   role/permission fails closed with HTTP 403.
 - GOWDK does not manage users, passwords, OAuth, sessions, tenants, or storage.
   The auth provider adapts application-owned identity into `auth.Principal`.
@@ -196,7 +201,7 @@ contract):
   add `server {}` or `go server {}` with the SSR addon when the page itself is
   protected.
 - Guards run in declaration order.
-- Missing custom guard backing code fails at Go compile time.
+- Missing custom guard registration is a compiler diagnostic before generation.
 - Guard errors fail closed with HTTP 403.
 - Guards run before action decoding, API handler calls, fragment hooks, SSR
   `server {}`, and user business logic.
@@ -216,7 +221,7 @@ import (
 	gowdkresponse "github.com/cssbruno/gowdk/runtime/response"
 )
 
-func GOWDKGuardRegistry() gowdkguard.Registry {
+func Guards() gowdkguard.Registry {
 	return gowdkguard.Registry{
 		"auth.required": func(ctx gowdkguard.Context) error {
 			return gowdkguard.RedirectTo("/login")
@@ -227,6 +232,8 @@ func GOWDKGuardRegistry() gowdkguard.Registry {
 	}
 }
 ```
+
+Register it with `gowdk.RegisterGuards(Guards)` in `Config.Interop`.
 
 Guard redirects must be local absolute paths. Protocol-relative URLs,
 backslashes, newlines, and non-3xx redirect statuses are rejected before the

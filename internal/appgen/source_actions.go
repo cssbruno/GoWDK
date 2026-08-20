@@ -89,15 +89,6 @@ func actionUsesPartialAddon(action BackendActionAdapter) bool {
 	return action.Binding.Status == "" && len(action.Fragments) > 0
 }
 
-func actionsParseForm(actions []BackendActionAdapter) bool {
-	for _, action := range actions {
-		if action.Binding.Status != source.BackendBindingMissing && action.Binding.Status != source.BackendBindingUnsupportedSignature {
-			return true
-		}
-	}
-	return false
-}
-
 func actionsUseStringHelpers(actions []BackendActionAdapter) bool {
 	for _, action := range actions {
 		if endpointDeniedByOmission(action.Guards) {
@@ -418,7 +409,7 @@ func actionRequiredValidationStmts(action BackendActionAdapter) []ast.Stmt {
 		}
 		stmts = append(stmts, &ast.IfStmt{
 			Cond: &ast.UnaryExpr{Op: token.NOT, X: call(selExpr(submission, "HasSubmitted"), stringLit(field))},
-			Body: block(exprStmt(call(selExpr(id("validation"), "Add"), stringLit(field), stringLit(actionValidationMessage(action.RequiredMessages[field], "required"))))),
+			Body: block(exprStmt(call(selExpr(id("validation"), "AddCode"), stringLit(field), stringLit("validation_required"), stringLit(actionValidationMessage(action.RequiredMessages[field], "required")), id("nil")))),
 		})
 	}
 	for _, rule := range action.ValidationRules {
@@ -453,7 +444,7 @@ func actionRequiredValidationStmts(action BackendActionAdapter) []ast.Stmt {
 						},
 					},
 					Body: block(
-						writeNoStoreHTTPStmt(call(sel("gowdkresponse", "ValidationFragment"), id("validationTarget"), id("validation"))),
+						writeNoStoreHTTPStmt(call(sel("gowdkresponse", "LocalizedValidationFragment"), id("validationTarget"), id("validation"), id("userErrorCatalog"), requestLocaleExpr())),
 						returnBool(true),
 					),
 				},
@@ -474,7 +465,7 @@ func actionValidationRuleStmt(rule ActionValidationRule) ast.Stmt {
 				Op: token.LSS,
 				Y:  intLit(rule.MinLength),
 			},
-			Body: block(exprStmt(call(selExpr(id("validation"), "Add"), stringLit(rule.Field), stringLit(actionValidationMessage(rule.MinLengthMessage, "minlength"))))),
+			Body: block(exprStmt(call(selExpr(id("validation"), "AddCode"), stringLit(rule.Field), stringLit("validation_min_length"), stringLit(actionValidationMessage(rule.MinLengthMessage, "minlength")), id("nil")))),
 		})
 	}
 	if rule.MaxLength > 0 {
@@ -484,7 +475,7 @@ func actionValidationRuleStmt(rule ActionValidationRule) ast.Stmt {
 				Op: token.GTR,
 				Y:  intLit(rule.MaxLength),
 			},
-			Body: block(exprStmt(call(selExpr(id("validation"), "Add"), stringLit(rule.Field), stringLit(actionValidationMessage(rule.MaxLengthMessage, "maxlength"))))),
+			Body: block(exprStmt(call(selExpr(id("validation"), "AddCode"), stringLit(rule.Field), stringLit("validation_max_length"), stringLit(actionValidationMessage(rule.MaxLengthMessage, "maxlength")), id("nil")))),
 		})
 	}
 	if rule.Pattern != "" {
@@ -495,7 +486,7 @@ func actionValidationRuleStmt(rule ActionValidationRule) ast.Stmt {
 				Op: token.LOR,
 				Y:  &ast.UnaryExpr{Op: token.NOT, X: id("matched")},
 			},
-			Body: block(exprStmt(call(selExpr(id("validation"), "Add"), stringLit(rule.Field), stringLit(actionValidationMessage(rule.PatternMessage, "pattern"))))),
+			Body: block(exprStmt(call(selExpr(id("validation"), "AddCode"), stringLit(rule.Field), stringLit("validation_pattern"), stringLit(actionValidationMessage(rule.PatternMessage, "pattern")), id("nil")))),
 		})
 	}
 	return block(
@@ -884,31 +875,39 @@ func backendNotImplementedStmts(binding source.BackendBinding, kind string) []as
 	if message == "" {
 		message = "GOWDK " + kind + " handler is not implemented"
 	}
-	return []ast.Stmt{writeNoStoreErrorStmt(sel("http", "StatusNotImplemented"), message)}
+	return []ast.Stmt{writeNoStoreErrorExprStmt(sel("http", "StatusNotImplemented"), stringLit("handler_not_implemented"), stringLit(message))}
+}
+
+func backendNotImplementedJSONStmts(binding source.BackendBinding, kind string) []ast.Stmt {
+	message := strings.TrimSpace(binding.Message)
+	if message == "" {
+		message = "GOWDK " + kind + " handler is not implemented"
+	}
+	return []ast.Stmt{exprStmt(call(sel("gowdkresponse", "WriteNoStoreLocalizedJSONUserError"), id("response"), sel("http", "StatusNotImplemented"), stringLit("handler_not_implemented"), stringLit(message), id("nil"), id("userErrorCatalog"), requestLocaleExpr()))}
 }
 
 func writeNoStoreErrorStmt(status ast.Expr, message string) ast.Stmt {
-	return writeNoStoreErrorExprStmt(status, stringLit(message))
+	return writeNoStoreErrorExprStmt(status, stringLit(generatedErrorCode(message)), stringLit(message))
 }
 
-func writeNoStoreErrorExprStmt(status ast.Expr, message ast.Expr) ast.Stmt {
-	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreError"), id("response"), status, message))
+func writeNoStoreErrorExprStmt(status ast.Expr, code ast.Expr, message ast.Expr) ast.Stmt {
+	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreLocalizedUserError"), id("response"), status, code, message, id("nil"), id("userErrorCatalog"), requestLocaleExpr()))
 }
 
 func writeNoStoreHandlerErrorExprStmt(err ast.Expr, fallbackStatus ast.Expr) ast.Stmt {
-	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreHandlerError"), id("response"), err, fallbackStatus))
+	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreLocalizedHandlerError"), id("response"), err, fallbackStatus, id("userErrorCatalog"), requestLocaleExpr()))
 }
 
 func writeNoStoreJSONErrorStmt(status ast.Expr, message string) ast.Stmt {
-	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreJSONError"), id("response"), status, stringLit(message)))
+	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreLocalizedJSONUserError"), id("response"), status, stringLit(generatedErrorCode(message)), stringLit(message), id("nil"), id("userErrorCatalog"), requestLocaleExpr()))
 }
 
 func writeNoStoreHandlerJSONErrorExprStmt(err ast.Expr, fallbackStatus ast.Expr) ast.Stmt {
-	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreHandlerJSONError"), id("response"), err, fallbackStatus))
+	return exprStmt(call(sel("gowdkresponse", "WriteNoStoreLocalizedHandlerJSONError"), id("response"), err, fallbackStatus, id("userErrorCatalog"), requestLocaleExpr()))
 }
 
 func handlerErrorMessageExpr(err ast.Expr, fallbackStatus ast.Expr) ast.Expr {
-	return call(sel("gowdkresponse", "HandlerErrorMessage"), err, fallbackStatus)
+	return call(sel("gowdkresponse", "LocalizedHandlerErrorMessage"), err, fallbackStatus, id("userErrorCatalog"), requestLocaleExpr())
 }
 
 func writeNoStoreHTTPStmt(result ast.Expr) ast.Stmt {

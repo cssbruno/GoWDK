@@ -7,7 +7,7 @@ page does the same for the language constructs themselves, so a user or tooling
 author can tell which syntax is safe to depend on and which is still moving.
 
 It complements, and is pinned by, the machine-checked
-[Conformance Corpus](conformance.md): a `Stable` or `Partial` construct should
+[Conformance Corpus](conformance.md): a `Stable` or `Experimental` construct should
 have an `accept/` case, and a `Planned`/`Deprecated` construct should have a
 `reject/` case asserting the diagnostic code named below.
 
@@ -15,7 +15,7 @@ have an `accept/` case, and a `Planned`/`Deprecated` construct should have a
 
 - **Stable**: accepted by the current compiler and not expected to change shape
   within 0.x without a deprecation step.
-- **Partial**: accepted for a narrower slice than the final contract; the syntax
+- **Experimental**: accepted for a narrower slice than the final contract; the syntax
   is real but its capability will grow.
 - **Planned**: not accepted as source behavior yet; using it is rejected with
   the listed diagnostic code so it cannot become accidental behavior.
@@ -36,14 +36,14 @@ neither the table nor the registry can drift without failing a test.
 | `package` | Stable | Required first declaration. |
 | `import` | Stable | Go import for colocated blocks. |
 | `use` | Stable | Package-scoped component import. |
-| `paths {}` | Partial | Literal `=> { field: "value" }` records only. |
-| `build {}` | Partial | Literal records and no-argument Go calls. |
-| `server {}` | Partial | Request-time server-lane data; requires the SSR addon. |
+| `paths {}` | Experimental | Literal `=> { field: "value" }` records only. |
+| `build {}` | Experimental | Literal records and no-argument Go calls. |
+| `server {}` | Experimental | Request-time server-lane data; requires the SSR addon. |
 | `view {}` | Stable | Markup; see directives below. |
 | `style {}` | Stable | Scoped CSS body. |
-| `client {}` | Partial | Bounded component client language. |
-| `go {}` / `go build {}` / `go server {}` / `go client {}` / `go addon.* {}` | Partial | Colocated Go lanes. |
-| `store` / `props` / `state` / `emits` | Partial | Component contracts. |
+| `client {}` | Experimental | Bounded component client language. |
+| `go {}` / `go build {}` / `go server {}` / `go client {}` / `go addon.* {}` | Experimental | Colocated Go lanes. |
+| `store` / `props` / `state` / `emits` | Experimental | Component contracts. |
 | Unknown top-level block | Planned | Rejected with `unsupported_top_level_block`. |
 
 ## Metadata Keywords
@@ -60,7 +60,7 @@ All metadata keywords are **Stable**. The canonical list is `lang.MetadataKeywor
 | `image` | Stable |
 | `robots` | Stable |
 | `noindex` | Stable |
-| `jsonld` | Partial |
+| `jsonld` | Experimental |
 | `preload` | Stable |
 | `prefetch` | Stable |
 | `layout` | Stable |
@@ -83,22 +83,23 @@ Supported exact-name directives (the closed set in
 
 | Directive | Tier | Notes |
 | --- | --- | --- |
-| `g:if` | Stable | Conditional render. Server-side over a `server {}` field; a client island over state/store. `g:else-if`/`g:else` are client-only chains. |
-| `g:for` / `g:key` | Stable | List render. Server-side over a `server {}` field; a client island over state/store. The lane is inferred from the operand. |
-| `g:bind:value` / `g:bind:checked` | Partial | Two-way bindings. |
-| `g:on:*` | Partial | Event handlers with `.prevent`/`.stop`/`.once`/`.capture`/`.debounce`/`.throttle`. |
-| `g:post` / `g:target` / `g:swap` | Partial | Progressive form/fragment submission. |
-| `g:max-file-size` / `g:max-files` | Partial | Server-side upload policy for multipart action forms. |
-| `g:message:*` | Partial | `required`, `minlength`, `maxlength`, `pattern`. |
-| `g:island` | Partial | `js` or `wasm` island. |
-| `g:command` / `g:query` | Partial | Contract web adapters. |
-| `g:subscribe` | Partial | Realtime presentation-event subscription metadata on query-owned elements. |
-| `g:event` | Partial | Parses to explain backend-owned domain events. |
+| `g:if` | Stable | Conditional render. Requires `g:lane="server"` over `server {}` data or `g:lane="client"` over state/store. `g:else-if`/`g:else` are client-only chains. |
+| `g:for` / `g:key` | Stable | List render. Requires an explicit `g:lane` on the `g:for` element. |
+| `g:lane` | Stable | String literal `server` or `client` beside every `g:for`/`g:if`; declarations that disagree with data ownership fail. |
+| `g:bind:value` / `g:bind:checked` | Experimental | Two-way bindings. |
+| `g:on:*` | Experimental | Event handlers with `.prevent`/`.stop`/`.once`/`.capture`/`.debounce`/`.throttle`. |
+| `g:post` / `g:target` / `g:swap` | Experimental | Progressive form/fragment submission. |
+| `g:max-file-size` / `g:max-files` | Experimental | Server-side upload policy for multipart action forms. |
+| `g:message:*` | Experimental | `required`, `minlength`, `maxlength`, `pattern`. |
+| `g:island` | Experimental | `js` or `wasm` island. |
+| `g:command` / `g:query` | Experimental | Contract web adapters. |
+| `g:subscribe` | Experimental | Realtime presentation-event subscription metadata on query-owned elements. |
+| `g:event` | Experimental | Parses to explain backend-owned domain events. |
 | `g:unsafe-html` | Stable | Raw HTML escape hatch; `unsafe_raw_html` is reported. |
-| `g:ref` | Partial | Client reference. |
-| `g:slot` | Partial | Named/scoped slot. |
-| `g:transition` | Partial | CSS class/state hooks for client `g:if` branches and keyed client `g:for` rows. |
-| `g:animate` | Partial | CSS class/state hooks for keyed client `g:for` row moves. |
+| `g:ref` | Experimental | Client reference. |
+| `g:slot` | Experimental | Named/scoped slot. |
+| `g:transition` | Experimental | CSS class/state hooks for client `g:if` branches and keyed client `g:for` rows. |
+| `g:animate` | Experimental | CSS class/state hooks for keyed client `g:for` row moves. |
 
 Component calls also accept `g:bind:<ExportedState>` for exported child state
 fields. HTML elements remain limited to `g:bind:value` and `g:bind:checked`.
@@ -107,7 +108,7 @@ fields. HTML elements remain limited to `g:bind:value` and `g:bind:checked`.
 
 | Construct | Tier | Notes |
 | --- | --- | --- |
-| `{#await}` | Partial | Client-island async placeholder for `fetchJSON[T](urlExpr)` with pending, `{:then name}`, and optional `{:catch err}` branches. |
+| `{#await}` | Experimental | Client-island async placeholder for `fetchJSON[T](urlExpr)` with pending, `{:then name}`, and optional `{:catch err}` branches. |
 
 Planned directives are rejected. They currently surface as the generic
 `parse_error` rather than the intended `unsupported_markup_directive` code; that
@@ -130,6 +131,6 @@ and likewise currently surfaces as `parse_error` (intended:
 | --- | --- | --- |
 | `act` | Stable | `act <Name> POST "<path>"`; POST only today. |
 | `api` | Stable | `api <Name> <METHOD> "<path>"`; GET/POST/PUT/PATCH/DELETE. |
-| `fragment` | Partial | First-slice partial updates. |
+| `fragment` | Experimental | First-slice partial updates. |
 | `act` block form | Deprecated | `act <name> { ... }`; rejected with `old_action_block_syntax`. |
 | `api` block form | Deprecated | `api <name> { ... }`; rejected with `old_api_block_syntax`. |

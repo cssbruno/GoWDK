@@ -21,6 +21,7 @@ var supportedDirectiveNames = map[string]bool{
 	"g:if":            true,
 	"g:island":        true,
 	"g:key":           true,
+	"g:lane":          true,
 	"g:max-file-size": true,
 	"g:max-files":     true,
 	"g:transition":    true,

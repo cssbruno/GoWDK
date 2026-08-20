@@ -10,6 +10,7 @@ import (
 	"github.com/cssbruno/gowdk/internal/compiler"
 	"github.com/cssbruno/gowdk/internal/diagnostics"
 	"github.com/cssbruno/gowdk/internal/lang"
+	"github.com/cssbruno/gowdk/internal/projectcompile"
 )
 
 type OperationError struct {
@@ -100,6 +101,24 @@ func operationErrorFromCause(cause error) error {
 	var compilerDiagnostics compiler.ValidationErrors
 	if errors.As(cause, &compilerDiagnostics) {
 		return operationErrorFromCompiler(summary, compilerDiagnostics, cause)
+	}
+	var projectDiagnostics projectcompile.Diagnostics
+	if errors.As(cause, &projectDiagnostics) {
+		out := make([]devOverlayDiagnostic, 0, len(projectDiagnostics))
+		for _, diagnostic := range projectDiagnostics {
+			item := devOverlayDiagnostic{
+				Code: diagnostic.Code, Severity: diagnostic.Severity,
+				Message: diagnostic.Message, File: diagnostic.Source,
+			}
+			if diagnostic.Span.Start.Line > 0 {
+				item.Range = &devOverlayRange{
+					Start: devOverlayPosition{Line: diagnostic.Span.Start.Line, Column: diagnostic.Span.Start.Column},
+					End:   devOverlayPosition{Line: diagnostic.Span.End.Line, Column: diagnostic.Span.End.Column},
+				}
+			}
+			out = append(out, item)
+		}
+		return &OperationError{Summary: summary, Diagnostics: out, Cause: cause}
 	}
 	var buildErr *buildgen.BuildError
 	if errors.As(cause, &buildErr) {

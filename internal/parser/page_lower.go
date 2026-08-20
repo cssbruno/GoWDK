@@ -266,6 +266,7 @@ func applyPageSyntaxBlock(page *gwdkir.Page, block gwdkast.Block) {
 		page.Blocks.View = true
 		page.Blocks.ViewBody = block.Body
 		page.Blocks.ViewNodes = append(page.Blocks.ViewNodes[:0], block.View...)
+		page.Blocks.DirectiveLanes = gwdkir.CollectDirectiveLanes(page.Blocks.ViewNodes)
 		page.Blocks.Spans.View = block.Span
 		page.Blocks.Spans.ViewBodyStart = block.BodyStart
 	case "style":

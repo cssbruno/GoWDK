@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -99,11 +99,15 @@ func TestSandboxIsolation(t *testing.T) {
 	if err := os.WriteFile(secret, []byte("TOP-SECRET"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	goRootOutput, err := exec.Command("go", "env", "GOROOT").Output()
+	if err != nil {
+		t.Fatalf("resolve go root: %v", err)
+	}
 
 	spec := SandboxSpec{
 		WorkspaceRoot: workspace,
 		OutputDir:     output,
-		GoRoot:        runtime.GOROOT(),
+		GoRoot:        strings.TrimSpace(string(goRootOutput)),
 		GoModCache:    modcache,
 		MaxOpenFiles:  4096,
 		MaxTmpfsBytes: 64 << 20, // exercise the size-bounded tmpfs mount path

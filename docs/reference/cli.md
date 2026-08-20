@@ -1,5 +1,9 @@
 # CLI Reference
 
+The generated [CLI command schema](cli-schema.md) is the exact recursive
+command/help surface used for shell completion. Regenerate it with
+`scripts/generate-cli-schema.sh`; CI rejects drift.
+
 The current CLI includes language tooling, an initial build-output command,
 generated embedded app output, and a local output-serving command for
 development.
@@ -159,8 +163,9 @@ gowdk lsp [--config <file>] [--project-root <dir>] [--module <name>] [--ssr]
   `gowdk.config.go`, including `check`, `doctor`, `test`, `audit`, `manifest`,
   `sitemap`, `routes`, `endpoints`, `inspect`, `generate stubs`, and `build`;
   forwarded through `dev` and `preview` as a build flag. Values from the file
-  are applied only when the process environment does not already define the
-  name. Without the flag, commands auto-load `.env.<GOWDK_ENV>` from the
+  form an explicit per-project subprocess overlay and never mutate the CLI
+  process; an existing process value still wins. Without the flag, commands
+  auto-load `.env.<GOWDK_ENV>` from the
   project root when `GOWDK_ENV` is set and that file exists, otherwise `.env`
   when present. Secret values are never printed; `doctor --json` reports only
   the env-file path and variable names for file/process sources.

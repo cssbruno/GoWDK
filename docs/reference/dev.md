@@ -82,13 +82,14 @@ Dev rebuild complete: generated app restarted: proxy http://<addr> -> http://<in
 
 ## HMR
 
-`gowdk dev` supports conservative component-aware HMR for generated JavaScript
-islands in plain SPA/static serving. Successful rebuilds are sent to the browser
-as a versioned `dev-update` SSE payload:
+`gowdk dev` supports component and document HMR in plain SPA/static serving.
+Successful rebuilds are sent to the browser as a versioned `dev-update` SSE
+payload:
 
-- `version: 1`
+- `version: 2`
 - `action: "component-remount"` for mapped JavaScript island roots
-- `action: "reload"` for route-scoped or full-page reload boundaries
+- `action: "patch"` for compatible page, layout, and WASM-island remounts
+- `action: "reload"` for unsupported, unattributed, or runtime boundaries
 
 When a changed component source maps to the current page and the browser can
 find matching `<gowdk-island>` roots, the dev bridge fetches the fresh document,
@@ -102,21 +103,25 @@ into the fresh root only when the old and new markers match. A missing or
 changed marker remounts from the fresh document seed instead of preserving
 potentially incompatible local state.
 
-Layout-only incremental SPA rebuilds send a route-scoped `reload` payload for
-the pages that use the changed layout. Browser tabs outside those routes do not
-reload.
+Compatible page and layout rebuilds fetch one fresh document, replace stale
+body content, synchronize managed title/meta/canonical/stylesheet/store-seed
+head nodes, and remount current islands. Compatible page stores and JavaScript
+island state remain in memory; changed shape markers reset from the fresh seed.
+Focus is restored by stable `id` or `name` when possible. Browser tabs outside
+the affected routes do not patch.
 
-The dev bridge falls back to one full-page reload for page changes, source-set
-changes, added or removed inputs, generated app/runtime mode, WASM output or
-component WASM islands, and component changes that cannot be mapped to matching
-island boundaries on the current page. Broader cross-component state transfer,
-WASM state transfer, and page/layout DOM patching remain outside the current
-HMR contract.
+Changed WASM component roots use a document patch so the old instance is
+destroyed and the new instance mounts without opaque WASM state transfer. The
+dev bridge falls back to one full-page reload for source-set changes, added or
+removed inputs, generated app/runtime mode, standalone WASM output, or changes
+that cannot be mapped safely.
 
 Generated-app rebuild and runtime 5xx overlay delivery use the dev-only proxy
 bridge. Unsupported HMR cases continue to use the full-page reload fallback
 described above. The dev-update bridge is injected only by `gowdk dev`; normal
-production-generated assets are unchanged by enabling the dev loop.
+production-generated assets are unchanged by enabling the dev loop. Successful
+updates emit `gowdk:dev-update` and either `gowdk:component-hmr` or
+`gowdk:page-hmr`.
 
 ## Browser Overlay
 

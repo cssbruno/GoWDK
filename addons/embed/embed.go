@@ -7,5 +7,5 @@ const ImportPath = "github.com/cssbruno/gowdk/addons/embed"
 
 // Addon enables one-binary embedded asset serving.
 func Addon() gowdk.Addon {
-	return gowdk.NewAddon("embed", gowdk.FeatureEmbed)
+	return gowdk.NewBuiltinAddon("embed", gowdk.FeatureEmbed)
 }

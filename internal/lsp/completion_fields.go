@@ -1,17 +1,66 @@
 package lsp
 
-import "strings"
+import (
+	"strings"
 
-func inferredComponentFields(viewBody, clientBody string) []string {
+	"github.com/cssbruno/gowdk/internal/clientlang"
+	"github.com/cssbruno/gowdk/internal/viewmodel"
+)
+
+func inferredComponentFields(nodes []viewmodel.Node, program *clientlang.Program) []string {
 	fields := map[string]bool{}
-	collectInterpolationFields(viewBody, fields)
-	collectBindingFields(viewBody, fields)
-	collectAssignmentFields(clientBody, fields)
+	collectViewNodeFields(nodes, fields)
+	if program != nil {
+		for _, function := range program.Functions {
+			for _, statement := range function.Statements {
+				collectAssignmentFields(statement, fields)
+			}
+		}
+		for _, statement := range program.Mount {
+			collectAssignmentFields(statement, fields)
+		}
+		for _, effect := range program.Effects {
+			for _, statement := range effect.Statements {
+				collectAssignmentFields(statement, fields)
+			}
+		}
+	}
 	out := make([]string, 0, len(fields))
 	for field := range fields {
 		out = append(out, field)
 	}
 	return out
+}
+
+func collectViewNodeFields(nodes []viewmodel.Node, fields map[string]bool) {
+	for _, node := range nodes {
+		switch typed := node.(type) {
+		case viewmodel.Text:
+			collectInterpolationFields(typed.Value, fields)
+		case viewmodel.Element:
+			collectViewAttrs(typed.Attrs, fields)
+			collectViewNodeFields(typed.Children, fields)
+		case viewmodel.ComponentCall:
+			collectViewAttrs(typed.Attrs, fields)
+			collectViewNodeFields(typed.Children, fields)
+		case viewmodel.AwaitBlock:
+			collectViewNodeFields(typed.Pending, fields)
+			collectViewNodeFields(typed.Then, fields)
+			collectViewNodeFields(typed.Catch, fields)
+		}
+	}
+}
+
+func collectViewAttrs(attrs []viewmodel.Attr, fields map[string]bool) {
+	for _, attr := range attrs {
+		collectInterpolationFields(attr.Value, fields)
+		if attr.Name == "g:bind:value" || attr.Name == "g:bind:checked" {
+			name := strings.Trim(strings.TrimSpace(attr.Value), "{}")
+			if isLSPIdentifier(name) {
+				fields[name] = true
+			}
+		}
+	}
 }
 
 func collectInterpolationFields(source string, fields map[string]bool) {
@@ -29,45 +78,6 @@ func collectInterpolationFields(source string, fields map[string]bool) {
 			fields[name] = true
 		}
 		index = end
-	}
-}
-
-func collectBindingFields(source string, fields map[string]bool) {
-	for cursor := 0; cursor < len(source); {
-		index := strings.Index(source[cursor:], "g:bind:")
-		if index < 0 {
-			return
-		}
-		index += cursor
-		rest := source[index+len("g:bind:"):]
-		switch {
-		case strings.HasPrefix(rest, "value"):
-			rest = rest[len("value"):]
-		case strings.HasPrefix(rest, "checked"):
-			rest = rest[len("checked"):]
-		default:
-			cursor = index + len("g:bind:")
-			continue
-		}
-		rest = strings.TrimLeftFunc(rest, isLSPSpace)
-		if !strings.HasPrefix(rest, "=") {
-			cursor = index + len("g:bind:")
-			continue
-		}
-		rest = strings.TrimLeftFunc(rest[1:], isLSPSpace)
-		if !strings.HasPrefix(rest, "{") {
-			cursor = index + len("g:bind:")
-			continue
-		}
-		end := strings.IndexByte(rest[1:], '}')
-		if end < 0 {
-			return
-		}
-		name := strings.TrimSpace(rest[1 : end+1])
-		if isLSPIdentifier(name) {
-			fields[name] = true
-		}
-		cursor = index + len("g:bind:")
 	}
 }
 

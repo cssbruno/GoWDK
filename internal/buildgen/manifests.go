@@ -47,19 +47,6 @@ type routeManifestParam struct {
 	Type string `json:"type,omitempty"`
 }
 
-func writeRouteManifest(outputDir string, artifacts []Artifact, endpoints []compiler.EndpointBinding) (string, error) {
-	payload, err := routeManifestPayload(outputDir, artifacts, endpoints)
-	if err != nil {
-		return "", err
-	}
-
-	manifestPath := filepath.Join(outputDir, routeManifestFile)
-	if err := writeFileIfChanged(manifestPath, payload); err != nil {
-		return "", err
-	}
-	return manifestPath, nil
-}
-
 func routeManifestPayload(outputDir string, artifacts []Artifact, endpoints []compiler.EndpointBinding) ([]byte, error) {
 	routes := make([]routeManifestEntry, 0, len(artifacts))
 	for _, artifact := range artifacts {
@@ -150,129 +137,6 @@ func routeManifestParams(params []source.RouteParam) []routeManifestParam {
 	return out
 }
 
-func readRouteManifestIfExists(outputDir string) (routeManifest, error) {
-	manifestPath := filepath.Join(outputDir, routeManifestFile)
-	payload, err := os.ReadFile(manifestPath)
-	if os.IsNotExist(err) {
-		return routeManifest{}, nil
-	}
-	if err != nil {
-		return routeManifest{}, err
-	}
-	var manifest routeManifest
-	if err := json.Unmarshal(payload, &manifest); err != nil {
-		return routeManifest{}, fmt.Errorf("read existing route manifest: %w", err)
-	}
-	return manifest, nil
-}
-
-func readAssetManifestIfExists(outputDir string) (runtimeasset.Manifest, error) {
-	manifestPath := filepath.Join(outputDir, assetManifestFile)
-	payload, err := os.ReadFile(manifestPath)
-	if os.IsNotExist(err) {
-		return runtimeasset.Manifest{}, nil
-	}
-	if err != nil {
-		return runtimeasset.Manifest{}, err
-	}
-	var manifest runtimeasset.Manifest
-	if err := json.Unmarshal(payload, &manifest); err != nil {
-		return runtimeasset.Manifest{}, fmt.Errorf("read existing asset manifest: %w", err)
-	}
-	return manifest, nil
-}
-
-func removeStaleChangedPageArtifacts(outputDir string, previous routeManifest, current []Artifact, changedPageIDs map[string]bool) error {
-	if len(previous.Routes) == 0 || len(changedPageIDs) == 0 {
-		return nil
-	}
-	keep := map[string]bool{}
-	for _, artifact := range current {
-		if !changedPageIDs[artifact.PageID] {
-			continue
-		}
-		rel, err := relativeOutputPath(outputDir, artifact.Path)
-		if err != nil {
-			return err
-		}
-		keep[rel] = true
-	}
-	for _, route := range previous.Routes {
-		if !changedPageIDs[route.PageID] || keep[route.Path] {
-			continue
-		}
-		filePath, err := outputFilePath(outputDir, route.Path)
-		if err != nil {
-			return err
-		}
-		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	return nil
-}
-
-func removeStaleAssetManifestFiles(outputDir string, previous runtimeasset.Manifest, cssArtifacts []CSSArtifact, assetArtifacts []AssetArtifact) error {
-	if len(previous.Files) == 0 {
-		return nil
-	}
-	keep := map[string]bool{}
-	for _, artifact := range cssArtifacts {
-		rel, err := relativeOutputPath(outputDir, artifact.Path)
-		if err != nil {
-			return err
-		}
-		keep[rel] = true
-	}
-	for _, artifact := range assetArtifacts {
-		rel, err := relativeOutputPath(outputDir, artifact.Path)
-		if err != nil {
-			return err
-		}
-		keep[rel] = true
-	}
-	for _, rel := range previous.Files {
-		if keep[rel] {
-			continue
-		}
-		filePath, err := outputFilePath(outputDir, rel)
-		if err != nil {
-			return err
-		}
-		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	return nil
-}
-
-func outputFilePath(outputDir, rel string) (string, error) {
-	if strings.TrimSpace(rel) == "" {
-		return "", fmt.Errorf("route manifest path is required")
-	}
-	if filepath.IsAbs(rel) {
-		return "", fmt.Errorf("route manifest path %q must be relative", rel)
-	}
-	clean := filepath.Clean(filepath.FromSlash(rel))
-	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("route manifest path %q must stay inside output directory", rel)
-	}
-	return filepath.Join(outputDir, clean), nil
-}
-
-func writeAssetManifest(outputDir string, pageArtifacts []Artifact, cssArtifacts []CSSArtifact, assetArtifacts []AssetArtifact) (string, error) {
-	payload, err := assetManifestPayload(outputDir, pageArtifacts, cssArtifacts, assetArtifacts)
-	if err != nil {
-		return "", err
-	}
-
-	manifestPath := filepath.Join(outputDir, assetManifestFile)
-	if err := writeFileIfChanged(manifestPath, payload); err != nil {
-		return "", err
-	}
-	return manifestPath, nil
-}
-
 func assetManifestPayload(outputDir string, pageArtifacts []Artifact, cssArtifacts []CSSArtifact, assetArtifacts []AssetArtifact) ([]byte, error) {
 	files := make(map[string]string, len(cssArtifacts)+len(assetArtifacts))
 	hashes := make(map[string]string, len(cssArtifacts)+len(assetArtifacts))
@@ -359,11 +223,6 @@ func artifactLogicalPath(logicalPath string, fallback string) string {
 		return fallback
 	}
 	return logical
-}
-
-func writeFileIfChanged(filePath string, contents []byte) error {
-	_, err := writeFileIfChangedStatus(filePath, contents)
-	return err
 }
 
 func writeFileIfChangedStatus(filePath string, contents []byte) (bool, error) {

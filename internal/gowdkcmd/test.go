@@ -42,6 +42,7 @@ type testOptions struct {
 	KeepWorkdir    bool
 	BrowserCommand string
 	SSR            bool
+	Environment    []string
 }
 
 type testWorkdir struct {
@@ -73,6 +74,7 @@ func gowdkTest(args []string) error {
 	if err := loadProjectConfig(&cli, options.ConfigPath); err != nil {
 		return err
 	}
+	options.Environment = cli.ProjectEnvironment.ForSubprocess(os.Environ())
 	modules, err := testSelectedModules(cli, options)
 	if err != nil {
 		return err
@@ -413,7 +415,7 @@ func testBinaryName() string {
 }
 
 func runBinaryTestStage(projectRoot string, work *testWorkdir, stage string, options testOptions) error {
-	process, err := startTestBinary(work.BinaryPath)
+	process, err := startTestBinary(work.BinaryPath, options.Environment)
 	if err != nil {
 		return err
 	}
@@ -422,7 +424,7 @@ func runBinaryTestStage(projectRoot string, work *testWorkdir, stage string, opt
 }
 
 func runBrowserTestStage(projectRoot string, work *testWorkdir, options testOptions) error {
-	process, err := startTestBinary(work.BinaryPath)
+	process, err := startTestBinary(work.BinaryPath, options.Environment)
 	if err != nil {
 		return err
 	}
@@ -436,7 +438,7 @@ func runBrowserTestStage(projectRoot string, work *testWorkdir, options testOpti
 	fmt.Fprintf(os.Stderr, "gowdk test [browser]: %s\n", options.BrowserCommand)
 	command := shellCommand(options.BrowserCommand)
 	command.Dir = projectRoot
-	command.Env = append(os.Environ(), env...)
+	command.Env = append(append([]string(nil), options.Environment...), env...)
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
 	if err := command.Run(); err != nil {
@@ -467,7 +469,7 @@ func runGoTestStage(projectRoot string, stage string, options testOptions, env [
 	fmt.Fprintf(os.Stderr, "gowdk test [%s]: go %s\n", stage, strings.Join(args, " "))
 	command := exec.Command("go", args...)
 	command.Dir = projectRoot
-	command.Env = append(os.Environ(), env...)
+	command.Env = append(append([]string(nil), options.Environment...), env...)
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
 	if err := command.Run(); err != nil {
@@ -493,14 +495,14 @@ func testEnv(work *testWorkdir, stage string, baseURL string) []string {
 	return env
 }
 
-func startTestBinary(binaryPath string) (*testBinaryProcess, error) {
+func startTestBinary(binaryPath string, environment []string) (*testBinaryProcess, error) {
 	addr, err := freeTestAddr()
 	if err != nil {
 		return nil, err
 	}
 	output := &boundedBuffer{limit: defaultAuditRunOutputLimit}
 	command := exec.Command(binaryPath)
-	command.Env = append(os.Environ(), "GOWDK_ADDR="+addr)
+	command.Env = append(append([]string(nil), environment...), "GOWDK_ADDR="+addr)
 	command.Stdout = output
 	command.Stderr = output
 	if err := command.Start(); err != nil {

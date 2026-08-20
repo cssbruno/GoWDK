@@ -15,7 +15,7 @@ func parsePathDeclarations(body string) ([]map[string]string, error) {
 
 func parsePathDeclarationsFromBlocks(blocks gwdkir.Blocks) ([]map[string]string, error) {
 	if len(blocks.PathsRecords) == 0 {
-		return parsePathDeclarations(blocks.PathsBody)
+		return nil, nil
 	}
 	declarations := make([]map[string]string, 0, len(blocks.PathsRecords))
 	for index, record := range blocks.PathsRecords {
@@ -131,7 +131,7 @@ func parseBuildDataFromBlocks(blocks gwdkir.Blocks, routeParams map[string]strin
 		return runBuildDataCallRef(buildCallRef{Alias: blocks.BuildCall.Alias, Function: blocks.BuildCall.Function}, imports, blocks.GoBlocks, source, routeParams, locale)
 	}
 	if len(blocks.BuildRecords) == 0 {
-		return parseBuildData(blocks.BuildBody, routeParams, locale, imports, blocks.GoBlocks, source)
+		return map[string]string{}, nil
 	}
 	data := map[string]buildValue{}
 	env := newBuildEnv(routeParams, data)

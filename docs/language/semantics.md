@@ -61,9 +61,8 @@
   `import interop "github.com/..."`; dynamic `paths {}` builds pass route
   params to helpers that declare one `gowdk.BuildParams` argument.
 - `server {}` runs at request time for SSR or request-time hybrid pages.
-  Generated SSR supports `=> { field, user.name }` declarations and
-  same-package Go load functions named `Load<PageID>` that receive
-  `ssr.LoadContext`.
+  Generated SSR supports `=> { field, user.name }` declarations and explicit
+  `Config.Interop.Loads` functions that receive `ssr.LoadContext`.
 - `view {}` records block presence and raw body text for the current app-shell HTML
   subset. SPA builds interpolate route params and component props in text and
   attribute values, escaping the result.

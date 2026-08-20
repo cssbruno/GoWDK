@@ -94,6 +94,13 @@ Current report events include:
   role app.
 - `contract_role_binary_built`: emitted when a worker or cron role binary is
   compiled.
+- `binary_built`, `backend_binary_built`, `wasm_built`, and
+  `contract_role_binary_built` include the packaging envelope in `data`:
+  `goVersion`, `goos`, `goarch`, `cgoEnabled`, `trimpath`, `buildVCS`,
+  `moduleMode`, explicit `tags`, and `artifactSHA256`. This records the inputs
+  GOWDK controls without claiming bit-for-bit reproducibility across different
+  toolchains, operating systems, architectures, CGO toolchains, or dependency
+  graphs.
 
 ## CLI Debug Output
 

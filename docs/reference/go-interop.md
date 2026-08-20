@@ -105,8 +105,14 @@ by `go_package_error`.
 
 ## Load Functions
 
-Request-time pages with `server {}` bind same-package functions named
-`Load<PageID>`:
+Request-time pages with `server {}` bind an explicit function from
+`Config.Interop.Loads`:
+
+```go
+gowdk.RegisterLoad("dashboard", dashboard.LoadDashboard)
+```
+
+The registered function supports these signatures:
 
 ```go
 func LoadDashboard(ssr.LoadContext) map[string]any
@@ -115,7 +121,7 @@ func LoadDashboard(ssr.LoadContext) DashboardData
 func LoadDashboard(ssr.LoadContext) (DashboardData, error)
 ```
 
-Typed load result structs must be exported same-package structs. Exported
+Typed load result structs must be exported structs. Exported
 fields are visible to `server {}` declarations by Go field name or `json` tag
 name, and `json:"-"` hides a field.
 

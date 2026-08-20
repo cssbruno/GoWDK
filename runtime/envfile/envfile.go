@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
-	"sync"
 )
 
 const (
@@ -50,12 +50,81 @@ type LoadResult struct {
 	Explicit bool
 }
 
-// appliedValues records the value this loader last wrote for each name, so a
-// reload can tell its own previous value apart from an external override.
-var (
-	appliedMu     sync.Mutex
-	appliedValues = map[string]string{}
-)
+// Environment is an explicit environment overlay. Process values win over
+// file values. Constructors and accessors make defensive copies so project
+// loading can pass environments between concurrent workspaces without global
+// mutable state.
+type Environment struct {
+	Process map[string]string
+	File    map[string]string
+}
+
+// NewEnvironment constructs an overlay from a process-style NAME=value slice
+// and parsed file entries.
+func NewEnvironment(process []string, entries []Entry) Environment {
+	env := Environment{Process: environmentMap(process), File: map[string]string{}}
+	for _, entry := range entries {
+		if _, exists := env.Process[entry.Name]; exists {
+			continue
+		}
+		env.File[entry.Name] = entry.Value
+	}
+	return env
+}
+
+// Lookup returns a process value first, then a file overlay value.
+func (env Environment) Lookup(name string) (string, bool) {
+	if value, ok := env.Process[name]; ok {
+		return value, true
+	}
+	value, ok := env.File[name]
+	return value, ok
+}
+
+// ForSubprocess applies the file overlay to base without replacing explicitly
+// supplied base values. Overlay-only names are appended in sorted order for
+// deterministic tests and command construction.
+func (env Environment) ForSubprocess(base []string) []string {
+	result := append([]string(nil), base...)
+	seen := environmentMap(base)
+	if base == nil {
+		names := sortedEnvironmentNames(env.Process)
+		for _, name := range names {
+			result = append(result, name+"="+env.Process[name])
+			seen[name] = env.Process[name]
+		}
+	}
+	for _, name := range sortedEnvironmentNames(env.File) {
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		result = append(result, name+"="+env.File[name])
+	}
+	return result
+}
+
+// Load parses path into an explicit environment overlay without mutating the
+// process environment.
+func Load(path string, explicit bool, process []string) (Environment, LoadResult, error) {
+	result := LoadResult{Path: path, Explicit: explicit}
+	if strings.TrimSpace(path) == "" {
+		return NewEnvironment(process, nil), result, nil
+	}
+	values, err := ParseFile(path)
+	if err != nil {
+		return Environment{}, result, err
+	}
+	result.Loaded = true
+	env := NewEnvironment(process, values)
+	for _, entry := range values {
+		if _, exists := env.Process[entry.Name]; exists {
+			result.Skipped = append(result.Skipped, entry.Name)
+		} else {
+			result.Applied = append(result.Applied, entry.Name)
+		}
+	}
+	return env, result, nil
+}
 
 // LookupPath resolves the env file for a project root. explicit wins. Without
 // an explicit path, .env.<GOWDK_ENV> wins over .env when it exists.
@@ -87,41 +156,40 @@ func LookupPath(projectRoot string, explicit string) (string, bool, error) {
 	return "", false, nil
 }
 
-// LoadIntoEnv loads path and sets only names that are not already present in
-// the process environment. Existing process values always win, including a
-// value changed with os.Setenv after a previous load: a reload only overwrites
-// a name whose current value is still the one this loader last applied.
+// LoadIntoEnv is retained for generated application startup compatibility.
+// Compiler/project loading must use Load and pass the returned overlay
+// explicitly. Existing process values always win.
 func LoadIntoEnv(path string, explicit bool) (LoadResult, error) {
-	appliedMu.Lock()
-	defer appliedMu.Unlock()
-
-	result := LoadResult{Path: path, Explicit: explicit}
-	if strings.TrimSpace(path) == "" {
-		return result, nil
-	}
-	values, err := ParseFile(path)
+	env, result, err := Load(path, explicit, os.Environ())
 	if err != nil {
 		return result, err
 	}
-	result.Loaded = true
-	for _, entry := range values {
-		if current, ok := os.LookupEnv(entry.Name); ok {
-			// A value already in the environment wins, unless this loader set
-			// it on a previous load and nothing has changed it since. If the
-			// current value differs from what we last applied, it is an
-			// external/manual override and must not be clobbered.
-			if applied, mine := appliedValues[entry.Name]; !mine || applied != current {
-				result.Skipped = append(result.Skipped, entry.Name)
-				continue
-			}
-		}
-		if err := os.Setenv(entry.Name, entry.Value); err != nil {
+	for _, name := range result.Applied {
+		if err := os.Setenv(name, env.File[name]); err != nil {
 			return result, err
 		}
-		appliedValues[entry.Name] = entry.Value
-		result.Applied = append(result.Applied, entry.Name)
 	}
 	return result, nil
+}
+
+func environmentMap(entries []string) map[string]string {
+	values := make(map[string]string, len(entries))
+	for _, entry := range entries {
+		name, value, ok := strings.Cut(entry, "=")
+		if ok && name != "" {
+			values[name] = value
+		}
+	}
+	return values
+}
+
+func sortedEnvironmentNames(values map[string]string) []string {
+	names := make([]string, 0, len(values))
+	for name := range values {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // Entry is one parsed env-file assignment.

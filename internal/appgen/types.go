@@ -37,8 +37,10 @@ type Options struct {
 	Program      *compiler.ValidatedProgram
 	// IR is the legacy raw-IR option path. Production auto-routing should pass
 	// Program so generation receives a compiler-validated phase token.
-	IR      *gwdkir.Program
-	Sitemap buildgen.RuntimeSitemapPlan
+	IR             *gwdkir.Program
+	Sitemap        buildgen.RuntimeSitemapPlan
+	guardHookAlias string
+	authHookAlias  string
 }
 
 // ApplicationPlan is the normalized generated-application plan consumed by

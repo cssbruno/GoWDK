@@ -66,7 +66,7 @@ same-package Go handlers. `gowdk build` parses the first literal `paths {}` and
 ```text
 literalReturn = "=>" whitespace* "{" literalField ("," literalField)* "}"
 literalField  = ident ":" buildExpr
-buildCall     = "=>" whitespace* ident "." ident "()"
+buildCall     = "=>" whitespace* [ ident "." ] ident "()"
 ```
 
 A `build {}` field value is a `buildExpr` whose raw text is captured at parse

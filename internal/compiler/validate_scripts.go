@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	contextpkg "context"
 	"fmt"
 	"go/parser"
 	"go/token"
@@ -13,7 +14,7 @@ import (
 
 func validateGoBlocks(config gowdk.Config, app gwdkir.Program) []ValidationError {
 	var diagnostics []ValidationError
-	enabledAddons := addonsByName(config)
+	enabledAddons := goBlockConsumersByName(config)
 	for _, page := range app.Pages {
 		mode := page.RenderMode(config.Render.DefaultMode())
 		for _, block := range page.Blocks.GoBlocks {
@@ -57,7 +58,7 @@ func validateGoBlockSyntax(packageName string, sourcePath string, pageID string,
 	}}
 }
 
-func validateGoBlockTarget(enabledAddons map[string]gowdk.Addon, pageID string, componentName string, sourcePath string, packageName string, mode gowdk.RenderMode, block gwdkir.GoBlock) []ValidationError {
+func validateGoBlockTarget(enabledAddons map[string]gowdk.GoBlockConsumer, pageID string, componentName string, sourcePath string, packageName string, mode gowdk.RenderMode, block gwdkir.GoBlock) []ValidationError {
 	target := strings.TrimSpace(block.Target)
 	switch {
 	case target == "" || target == "client":
@@ -106,7 +107,7 @@ func renamedGoServerTarget(pageID, componentName, sourcePath string, block gwdki
 	}
 }
 
-func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.Addon, pageID string, componentName string, sourcePath string, packageName string, block gwdkir.GoBlock) []ValidationError {
+func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]gowdk.GoBlockConsumer, pageID string, componentName string, sourcePath string, packageName string, block gwdkir.GoBlock) []ValidationError {
 	target := strings.TrimSpace(block.Target)
 	switch {
 	case target == "":
@@ -150,11 +151,10 @@ func validateNonPageGoBlockTarget(config gowdk.Config, enabledAddons map[string]
 	}
 }
 
-func validateAddonGoBlockTarget(enabledAddons map[string]gowdk.Addon, pageID string, componentName string, sourcePath string, packageName string, render gowdk.RenderMode, block gwdkir.GoBlock) []ValidationError {
+func validateAddonGoBlockTarget(enabledAddons map[string]gowdk.GoBlockConsumer, pageID string, componentName string, sourcePath string, packageName string, render gowdk.RenderMode, block gwdkir.GoBlock) []ValidationError {
 	name := strings.TrimPrefix(strings.TrimSpace(block.Target), "addon.")
-	addon, ok := enabledAddons[name]
+	consumer, ok := enabledAddons[name]
 	if name != "" && ok {
-		consumer := gowdk.ResolveAddonCapabilities(addon).GoBlockConsumer
 		if consumer == nil {
 			return []ValidationError{{
 				Code:          "unsupported_addon_go_block_target",
@@ -200,7 +200,11 @@ func addonGoBlockDiagnostics(consumer gowdk.GoBlockConsumer, pageID string, comp
 	target := gowdkGoBlockTarget(pageID, componentName, sourcePath, packageName, block)
 	context := gowdk.GoBlockContext{Render: render}
 	var diagnostics []ValidationError
-	for _, diagnostic := range consumer.ValidateGoBlock(target, context) {
+	pluginDiagnostics := consumer.ValidateGoBlock(target, context)
+	if cancellable, ok := consumer.(gowdk.GoBlockConsumerContext); ok {
+		pluginDiagnostics = cancellable.ValidateGoBlockContext(contextpkg.Background(), target, context)
+	}
+	for _, diagnostic := range pluginDiagnostics {
 		span := block.Span
 		if diagnostic.Span.Start.Line != 0 || diagnostic.Span.End.Line != 0 {
 			span = manifestSpan(diagnostic.Span)
@@ -221,10 +225,13 @@ func addonGoBlockDiagnostics(consumer gowdk.GoBlockConsumer, pageID string, comp
 	return diagnostics
 }
 
-func addonsByName(config gowdk.Config) map[string]gowdk.Addon {
-	names := map[string]gowdk.Addon{}
+func goBlockConsumersByName(config gowdk.Config) map[string]gowdk.GoBlockConsumer {
+	names := map[string]gowdk.GoBlockConsumer{}
 	for _, addon := range config.Addons {
-		names[addon.Name()] = addon
+		names[addon.Name()] = gowdk.ResolveAddonCapabilities(addon).GoBlockConsumer
+	}
+	for _, extension := range config.Extensions {
+		names[extension.Name()] = gowdk.ResolveExtensionCapabilities(extension).GoBlockConsumer
 	}
 	return names
 }

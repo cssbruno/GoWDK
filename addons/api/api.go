@@ -7,5 +7,5 @@ const ImportPath = "github.com/cssbruno/gowdk/addons/api"
 
 // Addon enables generated API handlers.
 func Addon() gowdk.Addon {
-	return gowdk.NewAddon("api", gowdk.FeatureAPI)
+	return gowdk.NewBuiltinAddon("api", gowdk.FeatureAPI)
 }

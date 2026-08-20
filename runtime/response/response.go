@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cssbruno/gowdk/runtime/i18n"
 	"github.com/cssbruno/gowdk/runtime/validation"
 )
 
@@ -79,12 +80,30 @@ func (err HandlerError) Unwrap() error {
 
 // NewHandlerError creates an error suitable for generated handlers.
 func NewHandlerError(status int, message string, cause error) error {
-	return HandlerError{Status: status, Message: message, Cause: cause}
+	return NewCodedHandlerError(status, "handler_error", message, nil, cause)
+}
+
+// NewCodedHandlerError creates an expected handler failure with a stable code.
+func NewCodedHandlerError(status int, code, message string, vars map[string]string, cause error) error {
+	return codedHandlerError{HandlerError: HandlerError{Status: status, Message: message, Cause: cause}, code: normalizedErrorCode(code), vars: cloneStringMap(vars)}
+}
+
+type codedHandlerError struct {
+	HandlerError
+	code string
+	vars map[string]string
+}
+
+func (err codedHandlerError) Unwrap() error { return err.HandlerError }
+func (err codedHandlerError) UserMessage() i18n.UserMessage {
+	return i18n.UserMessage{Code: i18n.ErrorCode(err.code), Default: err.HandlerError.Message, Vars: cloneStringMap(err.vars)}
 }
 
 type expectedError struct {
 	HandlerError
 	kind ErrorKind
+	code string
+	vars map[string]string
 }
 
 func (err expectedError) Error() string {
@@ -106,7 +125,21 @@ func NewExpectedError(kind ErrorKind, message string, cause error) error {
 	return expectedError{
 		HandlerError: HandlerError{Status: status, Message: message, Cause: cause},
 		kind:         kind,
+		code:         string(kind),
 	}
+}
+
+// NewExpectedCode creates an expected typed error with an app-owned stable code.
+func NewExpectedCode(kind ErrorKind, code, message string, vars map[string]string, cause error) error {
+	status := expectedErrorStatus(kind)
+	if message == "" {
+		message = http.StatusText(status)
+	}
+	return expectedError{HandlerError: HandlerError{Status: status, Message: message, Cause: cause}, kind: kind, code: normalizedErrorCode(code), vars: cloneStringMap(vars)}
+}
+
+func (err expectedError) UserMessage() i18n.UserMessage {
+	return i18n.UserMessage{Code: i18n.ErrorCode(err.code), Default: err.HandlerError.Message, Vars: cloneStringMap(err.vars)}
 }
 
 // NotFound creates an expected HTTP 404 error for generated boundaries.
@@ -187,6 +220,34 @@ func HandlerErrorMessage(err error, status int) string {
 	return "request failed"
 }
 
+// HandlerUserMessage returns the stable code/default/vars payload for err.
+func HandlerUserMessage(err error, status int) i18n.UserMessage {
+	message := HandlerErrorMessage(err, status)
+	code := "request_failed"
+	var coded interface{ UserMessage() i18n.UserMessage }
+	if errors.As(err, &coded) {
+		userMessage := coded.UserMessage()
+		userMessage.Default = message
+		return userMessage
+	}
+	return i18n.UserMessage{Code: i18n.ErrorCode(code), Default: message}
+}
+
+// LocalizedHandlerErrorMessage resolves an expected handler error through bundle.
+func LocalizedHandlerErrorMessage(err error, status int, bundle i18n.ErrorBundle, locale string) string {
+	return bundle.Resolve(locale, HandlerUserMessage(err, status))
+}
+
+// LocalizeValidation resolves validation messages through the typed catalog.
+func LocalizeValidation(result validation.Result, bundle i18n.ErrorBundle, locale string) validation.Result {
+	out := validation.Result{Errors: make([]validation.Error, len(result.Errors))}
+	for index, item := range result.Errors {
+		out.Errors[index] = item
+		out.Errors[index].Message = bundle.Resolve(locale, i18n.UserMessage{Code: i18n.ErrorCode(item.Code), Default: item.Message, Vars: item.Vars})
+	}
+	return out
+}
+
 // WriteNoStoreHandlerError writes a generated handler error using the
 // client-safe HandlerErrorMessage policy.
 func WriteNoStoreHandlerError(writer http.ResponseWriter, err error, fallbackStatus int) {
@@ -198,7 +259,22 @@ func WriteNoStoreHandlerError(writer http.ResponseWriter, err error, fallbackSta
 // JSON shape used by contract web adapters.
 func WriteNoStoreHandlerJSONError(writer http.ResponseWriter, err error, fallbackStatus int) {
 	status := HandlerStatus(err, fallbackStatus)
-	WriteNoStoreJSONError(writer, status, HandlerErrorMessage(err, status))
+	message := HandlerUserMessage(err, status)
+	WriteNoStoreJSONUserError(writer, status, string(message.Code), message.Default)
+}
+
+// WriteNoStoreLocalizedHandlerError localizes an expected handler error.
+func WriteNoStoreLocalizedHandlerError(writer http.ResponseWriter, err error, fallbackStatus int, bundle i18n.ErrorBundle, locale string) {
+	status := HandlerStatus(err, fallbackStatus)
+	message := HandlerUserMessage(err, status)
+	WriteNoStoreUserError(writer, status, string(message.Code), bundle.Resolve(locale, message))
+}
+
+// WriteNoStoreLocalizedHandlerJSONError is the structured JSON counterpart.
+func WriteNoStoreLocalizedHandlerJSONError(writer http.ResponseWriter, err error, fallbackStatus int, bundle i18n.ErrorBundle, locale string) {
+	status := HandlerStatus(err, fallbackStatus)
+	message := HandlerUserMessage(err, status)
+	WriteNoStoreJSONUserError(writer, status, string(message.Code), bundle.Resolve(locale, message))
 }
 
 // HTMLBody creates a full HTML response.
@@ -263,6 +339,11 @@ func ValidationJSON(result validation.Result) (Response, error) {
 // the returned fragment with the current client runtime.
 func ValidationFragment(target string, result validation.Result) Response {
 	return FragmentFor(target, ValidationHTML(result))
+}
+
+// LocalizedValidationFragment resolves coded field errors before rendering.
+func LocalizedValidationFragment(target string, result validation.Result, bundle i18n.ErrorBundle, locale string) Response {
+	return ValidationFragment(target, LocalizeValidation(result, bundle, locale))
 }
 
 // ValidationHTML renders a small escaped validation message block.
@@ -365,21 +446,71 @@ func WriteHTML(writer http.ResponseWriter, request *http.Request, body string, c
 
 // WriteNoStoreError writes an HTTP error that must not be cached.
 func WriteNoStoreError(writer http.ResponseWriter, status int, message string) {
+	WriteNoStoreUserError(writer, status, "request_failed", message)
+}
+
+// WriteNoStoreUserError writes safe text and exposes its stable code in a
+// response header for non-JSON clients.
+func WriteNoStoreUserError(writer http.ResponseWriter, status int, code, message string) {
 	writer.Header().Set("Cache-Control", "no-store")
+	writer.Header().Set("X-GOWDK-Error-Code", normalizedErrorCode(code))
 	http.Error(writer, message, status)
+}
+
+// WriteNoStoreLocalizedUserError resolves a coded default through bundle.
+func WriteNoStoreLocalizedUserError(writer http.ResponseWriter, status int, code, message string, vars map[string]string, bundle i18n.ErrorBundle, locale string) {
+	resolved := bundle.Resolve(locale, i18n.UserMessage{Code: i18n.ErrorCode(normalizedErrorCode(code)), Default: message, Vars: vars})
+	WriteNoStoreUserError(writer, status, code, resolved)
 }
 
 // WriteNoStoreJSONError writes the stable generated JSON error shape.
 func WriteNoStoreJSONError(writer http.ResponseWriter, status int, message string) {
+	WriteNoStoreJSONUserError(writer, status, "request_failed", message)
+}
+
+// WriteNoStoreJSONUserError writes the stable code/message JSON error shape.
+func WriteNoStoreJSONUserError(writer http.ResponseWriter, status int, code, message string) {
 	writer.Header().Set("Cache-Control", "no-store")
-	result, err := JSONValue(status, struct {
-		Error string `json:"error"`
-	}{Error: message})
+	payload := struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}{OK: false}
+	payload.Error.Code = normalizedErrorCode(code)
+	payload.Error.Message = message
+	result, err := JSONValue(status, payload)
 	if err != nil {
 		WriteNoStoreError(writer, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 	_ = WriteHTTP(writer, result)
+}
+
+// WriteNoStoreLocalizedJSONUserError resolves a coded JSON error through bundle.
+func WriteNoStoreLocalizedJSONUserError(writer http.ResponseWriter, status int, code, message string, vars map[string]string, bundle i18n.ErrorBundle, locale string) {
+	resolved := bundle.Resolve(locale, i18n.UserMessage{Code: i18n.ErrorCode(normalizedErrorCode(code)), Default: message, Vars: vars})
+	WriteNoStoreJSONUserError(writer, status, code, resolved)
+}
+
+func normalizedErrorCode(code string) string {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return "request_failed"
+	}
+	return code
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(values))
+	for key, value := range values {
+		out[key] = value
+	}
+	return out
 }
 
 func statusOrDefault(result Response) int {

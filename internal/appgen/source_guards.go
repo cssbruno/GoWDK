@@ -89,11 +89,11 @@ func registerAuthProviderDecl() ast.Decl {
 
 func requiredGuardBackingInitDecl(options Options) ast.Decl {
 	var stmts []ast.Stmt
-	if generatedRequiresAppGuardRegistry(options) {
-		stmts = append(stmts, exprStmt(call(sel("RegisterGuards"), call(id("GOWDKGuardRegistry")))))
+	if generatedRequiresAppGuardRegistry(options) && options.guardHookAlias != "" {
+		stmts = append(stmts, exprStmt(call(sel("RegisterGuards"), call(sel(options.guardHookAlias, options.Config.Interop.Guards.Hook.Function)))))
 	}
-	if generatedUsesNativeRBACGuards(options) && !generatedUsesAuthAddon(options) {
-		stmts = append(stmts, exprStmt(call(sel("RegisterAuthProvider"), call(id("GOWDKAuthProvider")))))
+	if generatedUsesNativeRBACGuards(options) && !generatedUsesAuthAddon(options) && options.authHookAlias != "" {
+		stmts = append(stmts, exprStmt(call(sel("RegisterAuthProvider"), call(sel(options.authHookAlias, options.Config.Interop.AuthProvider.Hook.Function)))))
 	}
 	if len(stmts) == 0 {
 		return nil
@@ -116,7 +116,7 @@ func runGuardsDecl() ast.Decl {
 			Init: define([]ast.Expr{id("err")}, call(sel("gowdkguard", "RunGuardsWithAuth"), id("guardContext"), id("guards"), id("guardRegistry"), id("authProvider"))),
 			Cond: notNil("err"),
 			Body: block(
-				exprStmt(call(sel("gowdkguard", "WriteNoStoreFailure"), id("response"), id("err"))),
+				exprStmt(call(sel("gowdkguard", "WriteNoStoreLocalizedFailure"), id("response"), id("err"), id("userErrorCatalog"), requestLocaleExpr())),
 				returnBool(false),
 			),
 		},

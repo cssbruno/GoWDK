@@ -11,7 +11,7 @@ import (
 	"github.com/cssbruno/gowdk/runtime/envfile"
 )
 
-const version = "0.12.3" // x-release-please-version
+const version = "0.13.0" // x-release-please-version
 
 // Main runs the gowdk command-line program and exits with the documented code.
 func Main() {

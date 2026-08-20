@@ -66,6 +66,9 @@ jobs:
       - name: Build CLI
         run: go build ./cmd/gowdk
 
+      - name: Run broad Go static analysis
+        run: scripts/check-static-analysis.sh
+
       - name: Check VS Code extension
         run: |
           node editors/vscode/scripts/sync-version.js --check
@@ -75,6 +78,8 @@ jobs:
 
       - name: Check documentation
         run: |
+          sh scripts/check-cli-schema.sh
+          sh scripts/check-language-budget.sh
           sh scripts/check-docs-links.sh
           sh scripts/check-docs-style.sh
           sh scripts/check-removed-syntax.sh
@@ -92,6 +97,9 @@ jobs:
 
       - name: Check example reports
         run: sh scripts/check-example-reports.sh
+
+      - name: Check build-iteration contract
+        run: sh scripts/check-build-iteration-example.sh
 
       - name: Build login example
         run: |

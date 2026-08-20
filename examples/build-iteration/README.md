@@ -19,6 +19,11 @@ shape **lists** declaratively at build time and reduce them back to scalars that
 
 ## Contract
 
+This example uses only the public build-data grammar pinned in
+[`docs/language/syntax.md`](../../docs/language/syntax.md). CI runs
+`scripts/check-build-iteration-example.sh` so the example cannot drift beyond
+that compiler contract.
+
 - Bracket forms (`[...]` list literals and comprehensions, `{...}` object
   literals) are whole field-value forms. Compose multi-step transforms by binding
   an intermediate list field and reading it back with `field("name")` — exactly
